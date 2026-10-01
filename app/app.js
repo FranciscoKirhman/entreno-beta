@@ -317,7 +317,7 @@ function ir(vista, extra) {
   E.vista = vista; guardar();
   $('nav').hidden = !E.plan || E.plan.bloqueado;
   document.querySelectorAll('#nav [data-ir]').forEach(b => b.setAttribute('aria-current', String(b.dataset.ir === (vista === 'checkin' ? 'semana' : vista))));
-  $('modo').textContent = nube.conectado() ? (nube.correo() || 'Cuenta') : 'Sin cuenta';
+  pintarModo();
   const vistas = {
     inicio: vistaInicio, cuestionario: () => pintarSeccion(), hoy: () => vistaHoy(ir), semana: () => vistaSemana(ir),
     coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), progreso: () => vistaProgreso(ir), mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar }),
@@ -328,6 +328,17 @@ function ir(vista, extra) {
   programarAvisos(); // recordatorios de hoy con lo último (sesión hecha, suplemento tomado)
 }
 $('nav').addEventListener('click', e => { const b = e.target.closest('[data-ir]'); if (b) ir(b.dataset.ir); });
+
+/** Encabezado: sin señal (lo anotado se guarda igual) o, con cuenta, el correo. En la versión de prueba, nada. */
+function pintarModo() {
+  const m = $('modo');
+  const texto = !navigator.onLine ? 'Sin señal · se guarda igual' : nube.conectado() ? (nube.correo() || 'Cuenta') : nube.hay() ? 'Sin cuenta' : '';
+  m.textContent = texto;
+  m.hidden = !texto;
+  m.classList.toggle('sin-senal', !navigator.onLine);
+}
+addEventListener('online', pintarModo);
+addEventListener('offline', pintarModo);
 
 // Respuestas de ejemplo: una persona inventada, intermedia, con molestia de codo y prioridad en glúteo.
 const EJEMPLO = {

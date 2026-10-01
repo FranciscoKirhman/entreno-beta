@@ -13,14 +13,35 @@ export const ahora = () => new Date().toLocaleString('sv-SE', { timeZone: 'Ameri
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const $ = id => document.getElementById(id);
 export const fechaCorta = iso => new Date(iso + 'T12:00:00Z').toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
-export const presc = e => `${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? `–${e.reps_max}` : ''}${e.unidad === 'seg' ? ' s' : ''} · RIR ${e.rir}${e.carga_kg ? ` · ${String(e.carga_kg).replace('.', ',')} kg` : ''}`;
+export const presc = e => `${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? `–${e.reps_max}` : ''}${e.unidad === 'seg' ? ' s' : ''} · RIR ${e.rir}${e.carga_kg ? ` · ${peso(e.carga_kg)}` : ''}`;
+
+// ── Unidad de peso: se guarda siempre en kilos; se muestra y se escribe en la unidad de la persona ─
+const LB = 0.45359237;
+export const unidadPeso = () => (E.respuestas?.unidad === 'lb' ? 'lb' : 'kg');
+/** Kilos guardados → número en la unidad de la persona (las libras, redondeadas a media). */
+export const enUnidad = kg => (kg == null || kg === '' ? null : unidadPeso() === 'lb' ? Math.round((kg / LB) * 2) / 2 : Number(kg));
+/** Número escrito en la unidad de la persona → kilos para guardar. */
+export const aKilos = v => (v == null ? null : unidadPeso() === 'lb' ? Math.round(v * LB * 100) / 100 : v);
+/** "42,5 kg" o "93,5 lb". */
+export const peso = kg => (kg == null || kg === '' ? '' : `${String(enUnidad(kg)).replace('.', ',')} ${unidadPeso()}`);
+/** "40 kg × 10, 10 · 42,5 kg × 8": series agrupadas por peso, en la unidad de la persona. */
+export function seriesTexto(series) {
+  const partes = [];
+  for (const s of series) {
+    if (!partes.length || partes.at(-1).carga !== s.carga_kg) partes.push({ carga: s.carga_kg, reps: [] });
+    partes.at(-1).reps.push(s.reps ?? '?');
+  }
+  return partes.map(p => `${p.carga ? `${peso(p.carga)} × ` : ''}${p.reps.join(', ')}`).join(' · ');
+}
+/** Volumen grande con separador de miles: "1.240 kg". */
+export const volumenTexto = kg => `${Math.round(enUnidad(kg) || 0).toLocaleString('es-CL')} ${unidadPeso()}`;
 
 // ── Estado guardado en este navegador ───────────────────────────────────────
 const CLAVE = 'entreno-v2';
 const VACIO = () => ({
   vista: 'inicio', seccion: 0, respuestas: {}, plan: null, semana: 1,
   bienestar: {}, registro: {}, notas: {}, sesiones: [], chat: [], consentimientos: {},
-  suplementos: [], tomas: [], indicaciones: [], checkins: {}, macro: null, descargaNo: {}, pedido: '', mensaje: null,
+  suplementos: [], tomas: [], indicaciones: [], checkins: {}, macro: null, descargaNo: {}, filas: {}, descansos: {}, pedido: '', mensaje: null,
 });
 export let E = VACIO();
 try {

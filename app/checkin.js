@@ -1,10 +1,10 @@
 // Check-in semanal: cómo te fue en cada ejercicio y cuánto sube, se mantiene o baja la carga de la semana
 // siguiente (nucleo/semanal.js). Nada cambia hasta que la persona confirma.
-import { E, guardar, R, K, esc, $, hoy, indice, fechaCorta, cambiarPlan } from './comun.js';
+import { E, guardar, R, K, esc, $, hoy, indice, fechaCorta, cambiarPlan, peso, seriesTexto } from './comun.js';
 import { semanaParaCheckin, proponerCheckin, aplicarCheckin } from '../nucleo/semanal.js';
 import * as nube from './nube.js';
 
-const kg = x => `${String(x).replace('.', ',')} kg`;
+const kg = peso;
 const claveDe = semana => `${E.plan.inicio}|${semana}`;
 
 /** Fechas con al menos una serie anotada (terminada o marcada como hecha). */
@@ -48,15 +48,7 @@ function propuestaTexto(it) {
 }
 
 /** "50 kg × 12, 12, 11 · llegaste al fallo" */
-function hechasTexto(hechas) {
-  const partes = [];
-  for (const s of hechas) {
-    if (!partes.length || partes.at(-1).carga !== s.carga_kg) partes.push({ carga: s.carga_kg, reps: [] });
-    partes.at(-1).reps.push(s.reps ?? '?');
-  }
-  const fallo = hechas.some(s => s.rir === 0);
-  return partes.map(p => `${p.carga ? `${kg(p.carga)} × ` : ''}${p.reps.join(', ')}`).join(' · ') + (fallo ? ' · llegaste al fallo' : '');
-}
+const hechasTexto = hechas => seriesTexto(hechas) + (hechas.some(s => s.rir === 0) ? ' · llegaste al fallo' : '');
 
 const ETIQUETA = { subir: 'Sube', mantener: 'Mantiene', bajar: 'Baja' };
 

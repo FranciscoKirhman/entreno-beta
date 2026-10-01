@@ -6,6 +6,7 @@ import { e1rm } from './motor-plan.js';
 import { conReservaReportada, doloresDeNotas } from './notas.js';
 import { detectarBanderas } from './checkin.js';
 import { sumarDias, diaSemana } from './agenda.js';
+import { esDeTrabajo, esDeTrabajoGuardada, tipoDe as tipoSerie } from './registro.js';
 
 const lunesDe = iso => sumarDias(iso, -((diaSemana(iso) + 6) % 7));
 const ZONA = { hombro: 'el hombro', codo: 'el codo', muneca: 'la muñeca', lumbar: 'la zona lumbar', cadera: 'la cadera', rodilla: 'la rodilla', tobillo: 'el tobillo', cuello: 'el cuello' };
@@ -57,16 +58,17 @@ export function semanaParaCheckin(plan, hoy, { hechos = {}, entrenadas = new Set
 export function datosDeLaSemana({ plan, semana, sesiones = [], registro = {}, notas = {} }) {
   const registros = [], notasSemana = [], dias = [];
   for (const dia of plan.dias.filter(d => d.semana === semana)) {
-    const ses = sesiones.find(s => s.fecha === dia.fecha);
+    // La sesión de la app manda; si ese día solo hay una importada (Hevy), se usa esa.
+    const ses = sesiones.find(s => s.fecha === dia.fecha && !s.origen) || sesiones.find(s => s.fecha === dia.fecha);
     let series = [];
     if (ses) {
-      series = (ses.series || []).filter(s => s.ejercicio_id && s.tipo !== 'calentamiento')
+      series = (ses.series || []).filter(s => s.ejercicio_id && esDeTrabajoGuardada(s))
         .map(s => ({ ejercicio_id: s.ejercicio_id, carga_kg: s.carga_kg ?? null, reps: s.reps ?? null, rir: s.tipo === 'fallo' ? 0 : s.rir ?? null, rpe: s.rpe ?? null }));
     } else {
       for (const e of dia.ejercicios.filter(x => x.ejercicio_id)) {
-        for (const x of (registro[dia.fecha]?.[e.ejercicio_id] || []).filter(y => y?.hecho)) {
+        for (const x of (registro[dia.fecha]?.[e.ejercicio_id] || []).filter(y => y?.hecho && esDeTrabajo(y))) {
           series.push({ ejercicio_id: e.ejercicio_id, carga_kg: e.unidad === 'seg' ? null : x.kg ?? null, reps: x.reps ?? null,
-            rpe: x.rpe ?? null, rir: x.fallo ? 0 : x.rpe != null ? 10 - x.rpe : null });
+            rpe: x.rpe ?? null, rir: tipoSerie(x) === 'fallo' ? 0 : x.rpe != null ? 10 - x.rpe : null });
         }
       }
     }
@@ -95,13 +97,13 @@ export function seriesAnotadas(sesiones = [], registro = {}, desde = '') {
   const conSesion = new Set(sesiones.map(s => s.fecha));
   for (const ses of sesiones) {
     if (ses.fecha < desde) continue;
-    for (const s of ses.series || []) if (s.ejercicio_id) out.push({ fecha: ses.fecha, ejercicio_id: s.ejercicio_id, carga_kg: s.carga_kg ?? null, reps: s.reps ?? null, rir: s.tipo === 'fallo' ? 0 : s.rir ?? null, rpe: s.rpe ?? null });
+    for (const s of ses.series || []) if (s.ejercicio_id && esDeTrabajoGuardada(s)) out.push({ fecha: ses.fecha, ejercicio_id: s.ejercicio_id, carga_kg: s.carga_kg ?? null, reps: s.reps ?? null, rir: s.tipo === 'fallo' ? 0 : s.rir ?? null, rpe: s.rpe ?? null });
   }
   for (const [fecha, porEj] of Object.entries(registro)) {
     if (fecha < desde || conSesion.has(fecha)) continue;
     for (const [id, lista] of Object.entries(porEj || {})) {
       if (/^i\d+$/.test(id)) continue; // ejercicio indicado por un profesional, sin id del catálogo
-      for (const x of (lista || []).filter(y => y?.hecho)) out.push({ fecha, ejercicio_id: id, carga_kg: x.kg ?? null, reps: x.reps ?? null, rpe: x.rpe ?? null, rir: x.fallo ? 0 : x.rpe != null ? 10 - x.rpe : null });
+      for (const x of (lista || []).filter(y => y?.hecho && esDeTrabajo(y))) out.push({ fecha, ejercicio_id: id, carga_kg: x.kg ?? null, reps: x.reps ?? null, rpe: x.rpe ?? null, rir: tipoSerie(x) === 'fallo' ? 0 : x.rpe != null ? 10 - x.rpe : null });
     }
   }
   return out.sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
@@ -124,7 +126,7 @@ export function historialPorSemana(sesiones, antesDe, cuantas = 3) {
     const l = lunesDe(ses.fecha);
     const m = porSemana.get(l) || new Map();
     for (const s of ses.series || []) {
-      if (s.ejercicio_id && Number(s.carga_kg) > 0 && Number(s.reps) > 0) m.set(s.ejercicio_id, Math.max(m.get(s.ejercicio_id) || 0, e1rm(s)));
+      if (s.ejercicio_id && esDeTrabajoGuardada(s) && Number(s.carga_kg) > 0 && Number(s.reps) > 0) m.set(s.ejercicio_id, Math.max(m.get(s.ejercicio_id) || 0, e1rm(s)));
     }
     porSemana.set(l, m);
   }

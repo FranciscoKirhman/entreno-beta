@@ -150,7 +150,7 @@ export function sesionesNuevas(ws, existentes) {
     .sort((a, b) => (a.start_time < b.start_time ? -1 : 1));
 }
 
-const TIPO_SERIE = { warmup: 'calentamiento', failure: 'fallo', dropset: 'efectiva', normal: 'efectiva' };
+const TIPO_SERIE = { warmup: 'calentamiento', failure: 'fallo', dropset: 'drop', normal: 'efectiva' };
 
 /** Una sesión de Hevy → filas para las tablas sesiones y series. */
 export function aFilas(w, indice, origen = 'hevy_csv') {

@@ -4,6 +4,6 @@ export const CONFIG = {
   supabaseAnonKey: null,
   funcionesUrl: null,
   versionConsentimientos: '2026-10-01',
-  version: '2026-10-01 18:20 · c834ee8',
+  version: '2026-10-01 18:29 · 48f1398',
   sinSenal: true,
 };
