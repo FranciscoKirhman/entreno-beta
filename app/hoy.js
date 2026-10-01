@@ -1,6 +1,6 @@
 // Vista Hoy: check-in de bienestar, suplementos y la sesión del día con su registro, el "¿Por qué?" de cada
 // ejercicio y el desplegable de cómo te fue con nota para el entrenador.
-import { E, guardar, R, D, C, K, EVIDENCIA, indice, hoy, ahora, esc, $, fechaCorta, presc, escala, opcionesRadio, chk, cambiarPlan, ctxNucleo } from './comun.js';
+import { E, guardar, R, D, C, K, EVIDENCIA, indice, hoy, ahora, esc, $, fechaCorta, presc, escala, opcionesRadio, chk, cambiarPlan, ctxNucleo, numero, coma, mostrarMensaje, avisar } from './comun.js';
 import { evaluarDia, ajustarSesion, TEXTO_RECOMENDACION } from '../nucleo/bienestar.js';
 import { checklist } from '../nucleo/suplementos.js';
 import { explicarEjercicio } from '../nucleo/explicar.js';
@@ -10,6 +10,7 @@ import { ESFUERZO, prioridadEsfuerzo, consejoSerie } from '../nucleo/series.js';
 import { avisoCheckin } from './checkin.js';
 import { avisoDescargaCorto } from './temporada.js';
 import { subirACuenta } from './cola.js';
+import { iniciarDescanso, detenerDescanso } from './descanso.js';
 import * as nube from './nube.js';
 
 const app = () => $('app');
@@ -24,29 +25,43 @@ export function vistaHoy(ir) {
   const proxima = plan.dias.find(d => d.fecha > f);
   app().innerHTML = `<div id="vista-hoy">
     <h1>Hoy <span class="suave pequeno">${esc(fechaCorta(f))}</span></h1>
-    ${E.mensaje ? `<div class="aviso bien">${esc(E.mensaje)}</div>` : ''}
     ${D().mensaje_alerta ? `<div class="aviso ojo">${esc(D().mensaje_alerta)}</div>` : ''}
     ${avisoCheckin()}
     ${avisoDescargaCorto()}
-    ${b ? `<div class="tarjeta fila-resumen"><span>Cómo estás: <strong class="num">${b.puntaje}</strong>/100 · ${esc(TEXTO_RECOMENDACION[b.recomendacion])}</span><button type="button" class="enlace" id="rehacer-bienestar">Cambiar</button></div>` : formularioBienestar()}
+    ${b ? `<div class="tarjeta fila-resumen"><span>Cómo estás: <strong class="num">${b.puntaje}</strong>/100 · ${esc(TEXTO_RECOMENDACION[b.recomendacion])}</span><button type="button" class="enlace" id="rehacer-bienestar">Cambiar</button></div>`
+      : E.bienestarSaltado === f ? '<div class="tarjeta fila-resumen"><span class="suave">¿Cómo estás hoy?</span><button type="button" class="enlace" id="responder-bienestar">Responder</button></div>'
+        : formularioBienestar()}
     ${sups.length ? `<section class="tarjeta"><h3>Suplementos</h3><ul class="lista-check">${sups.map((s, i) => `<li class="${s.estado}"><button type="button" class="check" data-toma="${s.suplemento_id}" ${s.estado === 'tomada' ? 'disabled aria-pressed="true"' : 'aria-pressed="false"'} aria-label="Marcar ${esc(s.nombre)} como tomado">${s.estado === 'tomada' ? '✓' : ''}</button><span>${esc(s.nombre)}${s.dosis ? ` · ${esc(s.dosis)}` : ''}</span><span class="suave pequeno">${s.hora || ''}${s.estado === 'atrasada' ? ' · atrasado' : ''}</span></li>`).join('')}</ul></section>` : ''}
     ${dia ? sesionHoy(dia) : `<section class="tarjeta"><h3>Hoy descansas</h3>${proxima ? `<p class="suave">La próxima es ${esc(proxima.foco)}, el ${esc(fechaCorta(proxima.fecha))}.</p>` : ''}<button type="button" class="boton" id="entrenar-igual">Quiero entrenar hoy igual</button></section>`}
   </div>`;
   enlazar(ir, dia);
+  mostrarMensaje();
 }
 
 function formularioBienestar() {
+  const fila = (etiqueta, campo) => `<div class="fila-b"><span class="pequeno">${etiqueta}</span><div>${campo}</div></div>`;
   return `<form class="tarjeta" id="bienestar">
-    <h3>¿Cómo estás hoy?</h3>
-    <p class="suave pequeno">20 segundos. Con esto se ajusta la sesión de hoy y, con el tiempo, cuándo toca descargar.</p>
-    <label class="pequeno">Horas de sueño <input type="number" id="b-sueno" min="0" max="14" step="0.5" inputmode="decimal" placeholder="7"></label>
-    <span class="pequeno">Calidad del sueño</span>${escala('b-calidad', 1, 5, null, ['Muy mala', 'Muy buena'])}
-    <span class="pequeno">Cansancio</span>${escala('b-cansancio', 1, 5, null, ['Fresco', 'Agotado'])}
-    <span class="pequeno">Ánimo</span>${escala('b-animo', 1, 5, null, ['Bajo', 'Muy bueno'])}
-    <span class="pequeno">¿Estás enfermo?</span>${opcionesRadio('b-enfermo', [['no', 'No'], ['resfrio', 'Resfrío leve'], ['fiebre_o_cuerpo', 'Fiebre o cuerpo cortado']], 'no')}
+    <div class="cab-tarjeta"><h3>¿Cómo estás hoy?</h3><button type="button" class="enlace pequeno" id="saltar-bienestar">Hoy no</button></div>
+    <p class="suave pequeno">20 segundos. Ajusta la sesión de hoy y, con el tiempo, cuándo toca descargar.</p>
+    <div class="bienestar">
+      ${fila('Dormí', '<label class="horas"><input type="text" id="b-sueno" inputmode="decimal" autocomplete="off" placeholder="7" aria-label="Horas de sueño"> horas</label>')}
+      ${fila('Sueño', escala('b-calidad', 1, 5, null, ['Muy malo', 'Muy bueno']))}
+      ${fila('Cansancio', escala('b-cansancio', 1, 5, null, ['Fresco', 'Agotado']))}
+      ${fila('Ánimo', escala('b-animo', 1, 5, null, ['Bajo', 'Muy bueno']))}
+      ${fila('¿Enfermo?', opcionesRadio('b-enfermo', [['no', 'No'], ['resfrio', 'Resfrío leve'], ['fiebre_o_cuerpo', 'Fiebre o cuerpo cortado']], 'no'))}
+    </div>
     <div class="fila-botones"><button type="submit" class="boton primario">Listo</button></div>
   </form>`;
 }
+
+/** Series hechas y totales de la sesión, para el avance. */
+function avance(dia) {
+  const reg = E.registro[dia.fecha] || {};
+  const total = dia.ejercicios.reduce((a, e) => a + e.series, 0);
+  const hechas = dia.ejercicios.reduce((a, e, k) => a + (reg[e.ejercicio_id || `i${k}`] || []).slice(0, e.series).filter(x => x?.hecho).length, 0);
+  return { hechas, total };
+}
+const avanceHtml = ({ hechas, total }) => `<div class="avance" id="avance" aria-live="polite"><span class="pequeno"><strong class="num">${hechas}</strong> de ${total} series${hechas && hechas === total ? ' · ¡completa!' : ''}</span><div class="medidor" aria-hidden="true"><i style="width:${total ? Math.round((hechas / total) * 100) : 0}%"></i></div></div>`;
 
 function sesionHoy(dia) {
   const f = dia.fecha;
@@ -54,6 +69,7 @@ function sesionHoy(dia) {
   const notas = E.notas[f] || {};
   return `<section class="tarjeta dia">
     <h3>${esc(dia.foco)} ${dia.hora ? `<span class="chip">${esc(dia.hora)}</span>` : ''} <span class="chip num">~${duracionEstimada(dia.ejercicios)} min</span></h3>
+    ${dia.ejercicios.length ? avanceHtml(avance(dia)) : ''}
     <p class="suave pequeno">${esc(dia.racional || '')}</p>
     ${dia.ejercicios.length ? '' : '<p>Hoy, descanso activo: 20 a 30 minutos de caminata o bicicleta suave y movilidad.</p>'}
     <ol class="ejercicios-hoy">${dia.ejercicios.map((e, k) => ejercicioHoy(e, k, reg[e.ejercicio_id || `i${k}`] || [], notas[e.ejercicio_id || `i${k}`] || {})).join('')}</ol>
@@ -71,23 +87,23 @@ function ejercicioHoy(e, k, reg, nota) {
   const ej = indice.porId.get(e.ejercicio_id);
   const filas = Array.from({ length: e.series }, (_, i) => {
     const r = reg[i] || {};
-    return `<div class="serie${r.hecho ? ' hecha' : ''}"><span class="suave pequeno">${i + 1}</span>
-      ${e.unidad === 'seg' ? '' : `<input type="number" inputmode="decimal" step="0.5" min="0" data-ej="${id}" data-i="${i}" data-c="kg" value="${esc(r.kg ?? e.carga_kg ?? '')}" placeholder="kg" aria-label="Kilos serie ${i + 1}">`}
-      <input type="number" inputmode="numeric" min="0" data-ej="${id}" data-i="${i}" data-c="reps" value="${esc(r.reps ?? '')}" placeholder="${e.unidad === 'seg' ? 'seg' : `${e.reps_min}-${e.reps_max}`}" aria-label="${e.unidad === 'seg' ? 'Segundos' : 'Repeticiones'} serie ${i + 1}">
+    return `<div class="serie${r.hecho ? ' hecha' : ''}${r.rpe != null || r.fallo ? ' con-esfuerzo' : ''}${e.unidad === 'seg' ? ' seg' : ''}"><span class="suave pequeno">${i + 1}</span>
+      ${e.unidad === 'seg' ? '' : `<input type="text" inputmode="decimal" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="kg" value="${esc(coma(r.kg ?? e.carga_kg ?? ''))}" placeholder="kg" aria-label="Kilos serie ${i + 1}">`}
+      <input type="text" inputmode="numeric" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="reps" value="${esc(r.reps ?? '')}" placeholder="${e.unidad === 'seg' ? 'seg' : `${e.reps_min}-${e.reps_max}`}" aria-label="${e.unidad === 'seg' ? 'Segundos' : 'Repeticiones'} serie ${i + 1}">
       <button type="button" class="check" data-hecho="${id}" data-i="${i}" aria-pressed="${Boolean(r.hecho)}" aria-label="Serie ${i + 1} hecha">${r.hecho ? '✓' : ''}</button>
       ${e.unidad === 'seg' ? '' : `<div class="esfuerzo"><select data-ej="${id}" data-i="${i}" data-c="rpe" aria-label="Esfuerzo serie ${i + 1}"><option value="">Esfuerzo (RPE · RIR)</option>${ESFUERZO.map(o => `<option value="${o.rpe}"${Number(r.rpe) === o.rpe ? ' selected' : ''}>${o.etiqueta}</option>`).join('')}</select>
-        <label class="pequeno"><input type="checkbox" data-ej="${id}" data-i="${i}" data-c="fallo"${chk(r.fallo)}> Fallo</label></div>`}
+        <label class="pequeno fallo"><input type="checkbox" data-ej="${id}" data-i="${i}" data-c="fallo"${chk(r.fallo)}> Fallo</label></div>`}
       ${r.consejo ? `<p class="consejo ${r.consejo.tipo}">${esc(r.consejo.texto)}</p>` : ''}</div>`;
   }).join('');
   const preguntas = K.por_ejercicio.preguntas.filter(p => !p.mostrar_si || Object.entries(p.mostrar_si).every(([q, vals]) => vals.includes(nota[q])));
   return `<li class="ej" id="ej-${id}">
     <div class="ej-cab"><span class="nombre">${esc(e.nombre || ej?.nombre || id)}</span><span class="presc">${esc(presc(e))}</span></div>
     ${e.nota ? `<p class="pequeno suave">${esc(e.nota)}</p>` : ''}
-    ${ej && e.unidad !== 'seg' ? `<p class="prioriza pequeno">${esc(prioridadEsfuerzo(e, ej, D(), (R().lesiones || []).filter(l => l.activa !== false).map(l => l.region)).texto)}</p>` : ''}
     <div class="series">${filas}</div>
     <div class="acciones-ej">
-      ${ej ? `<button type="button" class="enlace" data-porque="${id}">¿Por qué?</button><a class="enlace" href="https://www.youtube.com/results?search_query=${encodeURIComponent(`${ej.nombre} técnica correcta`)}" target="_blank" rel="noopener">Video</a>` : '<span class="chip">Indicado por tu profesional</span>'}
+      ${ej ? `<button type="button" class="enlace" data-porque="${id}" aria-expanded="false">¿Por qué?</button>${e.unidad !== 'seg' ? `<button type="button" class="enlace" data-prioriza="${id}" aria-expanded="false">Qué priorizar</button>` : ''}<a class="enlace" href="https://www.youtube.com/results?search_query=${encodeURIComponent(`${ej.nombre} técnica correcta`)}" target="_blank" rel="noopener">Video</a>` : '<span class="chip">Indicado por tu profesional</span>'}
     </div>
+    ${ej && e.unidad !== 'seg' ? `<p class="prioriza pequeno" id="prioriza-${id}" hidden>${esc(prioridadEsfuerzo(e, ej, D(), (R().lesiones || []).filter(l => l.activa !== false).map(l => l.region)).texto)}</p>` : ''}
     <div id="porque-${id}"></div>
     <details class="extra"${Object.keys(nota).length ? ' open' : ''}><summary>Cómo te fue · nota para el entrenador</summary>
       <div class="preguntas-ej">
@@ -104,11 +120,13 @@ function ejercicioHoy(e, k, reg, nota) {
 function enlazar(ir, dia) {
   const f = hoy();
   $('rehacer-bienestar')?.addEventListener('click', () => { delete E.bienestar[f]; guardar(); vistaHoy(ir); });
+  $('saltar-bienestar')?.addEventListener('click', () => { E.bienestarSaltado = f; guardar(); vistaHoy(ir); });
+  $('responder-bienestar')?.addEventListener('click', () => { E.bienestarSaltado = null; guardar(); vistaHoy(ir); });
   $('bienestar')?.addEventListener('submit', async ev => {
     ev.preventDefault();
     const val = n => document.querySelector(`input[name="${n}"]:checked`)?.value;
     const datos = {
-      sueno_horas: $('b-sueno').value ? Number($('b-sueno').value) : null, sueno_calidad: Number(val('b-calidad')) || null,
+      sueno_horas: numero($('b-sueno').value), sueno_calidad: Number(val('b-calidad')) || null,
       cansancio: Number(val('b-cansancio')) || null, animo: Number(val('b-animo')) || null, enfermo: val('b-enfermo') || 'no',
     };
     const r = evaluarDia(datos);
@@ -150,7 +168,7 @@ function enlazar(ir, dia) {
     const t = ev.target;
     if (t.dataset.ej && t.dataset.c) {
       const lista = (reg[t.dataset.ej] ||= []);
-      lista[t.dataset.i] = { ...(lista[t.dataset.i] || {}), [t.dataset.c]: t.value === '' ? null : Number(t.value) };
+      lista[t.dataset.i] = { ...(lista[t.dataset.i] || {}), [t.dataset.c]: numero(t.value) };
       guardar();
     } else if (t.dataset.nota && t.tagName === 'TEXTAREA') guardarNota(t.dataset.nota, 'nota', t.value);
   });
@@ -158,9 +176,10 @@ function enlazar(ir, dia) {
     const lista = (reg[b.dataset.hecho] ||= []);
     const fila = b.closest('.serie');
     const r = { ...(lista[b.dataset.i] || {}) };
-    // Si no escribió nada, se anota lo indicado por el plan.
+    // Si no escribió nada, se anota lo de la serie anterior o, si no hay, lo indicado por el plan.
     const e = dia.ejercicios.find((x, k) => (x.ejercicio_id || `i${k}`) === b.dataset.hecho);
-    if (r.kg == null && e?.carga_kg) r.kg = e.carga_kg;
+    const anterior = lista[Number(b.dataset.i) - 1];
+    if (r.kg == null && e?.unidad !== 'seg') r.kg = anterior?.kg ?? e?.carga_kg ?? null;
     if (r.reps == null) r.reps = e?.reps_max ?? null;
     r.hecho = !r.hecho;
     lista[b.dataset.i] = r;
@@ -168,10 +187,18 @@ function enlazar(ir, dia) {
     fila.classList.toggle('hecha', r.hecho);
     b.setAttribute('aria-pressed', String(r.hecho));
     b.textContent = r.hecho ? '✓' : '';
-    fila.querySelector('[data-c="kg"]') && (fila.querySelector('[data-c="kg"]').value = r.kg ?? '');
+    fila.querySelector('[data-c="kg"]') && (fila.querySelector('[data-c="kg"]').value = coma(r.kg));
     fila.querySelector('[data-c="reps"]').value = r.reps ?? '';
     if (r.hecho) actualizarConsejo(b.dataset.hecho, Number(b.dataset.i));
     else { delete r.consejo; fila.querySelector('.consejo')?.remove(); guardar(); }
+    const a = avance(dia);
+    $('avance').outerHTML = avanceHtml(a);
+    // Descanso hasta la serie siguiente; con la última serie de la sesión, el aviso para guardarla.
+    if (r.hecho && a.hechas === a.total) { detenerDescanso(); avisar('¡Sesión completa! Toca "Terminar sesión" para guardarla.'); }
+    else if (r.hecho) {
+      const quedan = e.series - (lista.slice(0, e.series).filter(x => x?.hecho).length);
+      iniciarDescanso(e.descanso_seg || 90, quedan ? `Descanso · falta${quedan === 1 ? '' : 'n'} ${quedan} serie${quedan === 1 ? '' : 's'}` : 'Descanso · sigue otro ejercicio');
+    } else detenerDescanso();
   });
   // Consejo para la serie siguiente (nucleo/series.js), según reps, esfuerzo y fallo.
   function actualizarConsejo(id, i) {
@@ -213,9 +240,17 @@ function enlazar(ir, dia) {
   });
   function guardarNota(id, p, v) { ((E.notas[f] ||= {})[id] ||= {})[p] = v; guardar(); }
 
+  // Qué priorizar si no salen las repeticiones o la reserva.
+  document.querySelectorAll('[data-prioriza]').forEach(b => b.onclick = () => {
+    const p = $(`prioriza-${b.dataset.prioriza}`);
+    p.hidden = !p.hidden;
+    b.setAttribute('aria-expanded', String(!p.hidden));
+  });
+
   // ¿Por qué?
   document.querySelectorAll('[data-porque]').forEach(b => b.onclick = () => {
     const caja = $(`porque-${b.dataset.porque}`);
+    b.setAttribute('aria-expanded', String(!caja.innerHTML));
     if (caja.innerHTML) { caja.innerHTML = ''; return; }
     const e = dia.ejercicios.find(x => x.ejercicio_id === b.dataset.porque);
     const ex = explicarEjercicio({ e, dia, plan: E.plan, respuestas: R(), indice, evidencia: EVIDENCIA });
@@ -248,7 +283,8 @@ function enlazar(ir, dia) {
     const id = E.sesiones.find(s => s.fecha === f)?.id || crypto.randomUUID();
     E.sesiones = E.sesiones.filter(s => s.fecha !== f);
     E.sesiones.push({ id, fecha: f, titulo: dia.foco, series, notas });
-    E.mensaje = `Sesión guardada: ${series.length} series.`;
+    E.mensaje = `Sesión guardada: ${series.length} serie${series.length === 1 ? '' : 's'}.`;
+    detenerDescanso();
     guardar();
     if (nube.conectado()) {
       const subio = await subirACuenta('sesion', id, { fecha: f, titulo: dia.foco, series, notas });

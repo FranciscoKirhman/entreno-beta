@@ -1,6 +1,6 @@
 // Vista Progreso: fotos de progreso privadas, suplementos, indicaciones de tu médico o kinesiólogo, y lo que
 // anotaste para el entrenador.
-import { E, guardar, C, esc, $, fechaCorta, hoy, indice, cambiarPlan, opcionesRadio, chk } from './comun.js';
+import { E, guardar, C, esc, $, fechaCorta, hoy, indice, cambiarPlan, opcionesRadio, chk, mostrarMensaje } from './comun.js';
 import { constancia } from '../nucleo/suplementos.js';
 import { aplicarIndicacion } from '../nucleo/cuidado.js';
 import { resumenParaEntrenador } from '../nucleo/notas.js';
@@ -21,7 +21,6 @@ export async function vistaProgreso(ir) {
   const cola = estadoCola();
   $('app').innerHTML = `<div id="vista-progreso">
     <h1>Progreso</h1>
-    ${E.mensaje ? `<div class="aviso bien">${esc(E.mensaje)}</div>` : ''}
     <section class="tarjeta">
       <h3>Registro</h3>
       <p>${E.sesiones.length ? `${E.sesiones.length} sesión(es) registradas en la app. La última: ${esc(E.sesiones.at(-1).titulo)}, ${esc(fechaCorta(E.sesiones.at(-1).fecha))}.` : 'Todavía no terminas ninguna sesión en la app.'}</p>
@@ -133,6 +132,7 @@ export async function vistaProgreso(ir) {
     try { window.open(await nube.verArchivoIndicacion(b.dataset.verArchivo), '_blank', 'noopener'); }
     catch (e) { E.mensaje = `No se pudo abrir el documento: ${e.message}`; guardar(); vistaProgreso(ir); }
   });
+  mostrarMensaje();
 }
 
 async function pintarFotos() {

@@ -20,6 +20,8 @@
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--f-texto);-webkit-font-smoothing:antialiased}
 button,input,select,textarea{font:inherit;color:inherit}
+/* En iPhone, un campo con letra de menos de 16 px hace zoom al tocarlo. */
+input,select,textarea{font-size:16px}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 .barra{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top,0px) + 10px) 16px 10px;background:var(--bg);border-bottom:1px solid var(--border)}
@@ -141,7 +143,7 @@ pre.prompt{white-space:pre-wrap;word-break:break-word;background:var(--bg);borde
 main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 96px)}
 .serie{grid-template-columns:18px minmax(0,1fr) minmax(0,1fr) 44px}
 .serie .esfuerzo{grid-column:2 / -1;display:flex;gap:10px;align-items:center}
-.serie .esfuerzo select{min-height:36px;padding:4px 8px;font-size:13px;flex:1;min-width:0}
+.serie .esfuerzo select{min-height:36px;padding:4px 8px;font-size:16px;flex:1;min-width:0}
 .serie .consejo{grid-column:2 / -1;margin:0;font-size:12.5px;padding:6px 8px;border-radius:8px;background:var(--surface-2)}
 .consejo.bajar{background:var(--warning-soft);color:var(--warning)}
 .consejo.subir,.consejo.bien{background:var(--good-soft);color:var(--good)}
@@ -188,3 +190,43 @@ main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 96px)}
 a.boton{text-decoration:none;color:inherit}
 .casilla{display:flex;align-items:center;gap:8px;margin-top:8px}
 .casilla input{width:18px;height:18px;margin:0;accent-color:var(--accent)}
+
+/* Aviso flotante sobre el menú inferior */
+#aviso-flotante{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 76px);z-index:8;max-width:536px;margin:0 auto;
+  box-shadow:0 6px 20px rgba(0,0,0,.18);opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .2s,transform .2s;cursor:pointer}
+#aviso-flotante.visible{opacity:1;transform:none;pointer-events:auto}
+#nav[hidden] ~ #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 16px)}
+
+/* Hoy: check-in diario compacto */
+.cab-tarjeta{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.bienestar{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.fila-b{display:grid;grid-template-columns:76px minmax(0,1fr);gap:8px;align-items:center}
+.fila-b .escala label{padding:6px 0}
+.fila-b .extremos{margin-top:2px;font-size:11.5px}
+.fila-b .chips label{padding:6px 10px}
+.horas{display:flex;align-items:center;gap:8px;font-size:14px}
+.horas input{width:84px;min-height:40px}
+
+/* Hoy: avance de la sesión y series */
+.avance{display:flex;align-items:center;gap:10px;margin:8px 0 4px}
+.avance span{white-space:nowrap}
+.avance .medidor{flex:1;height:6px;border-radius:6px;background:var(--surface-2);overflow:hidden}
+.avance .medidor i{display:block;height:100%;background:var(--good);transition:width .25s}
+.serie:not(.hecha):not(.con-esfuerzo) .esfuerzo{display:none}
+.serie.seg{grid-template-columns:18px minmax(0,1fr) 44px}
+.check[aria-pressed="false"]::before{content:"✓";color:var(--border)}
+.serie .esfuerzo .fallo{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.serie .esfuerzo .fallo input{width:20px;height:20px;margin:0;accent-color:var(--accent)}
+.acciones-ej{flex-wrap:wrap;gap:4px 16px}
+
+/* Cronómetro de descanso, sobre el menú */
+#descanso{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 76px);z-index:7;max-width:536px;margin:0 auto;
+  display:none;align-items:center;gap:8px;padding:8px 8px 8px 14px;border-radius:14px;background:var(--ink);color:var(--bg);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+#descanso.visible{display:flex}
+#descanso .texto{flex:1;min-width:0;display:flex;flex-direction:column}
+#descanso .etiqueta{opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#descanso .tiempo{font-size:26px;line-height:1.15}
+#descanso .boton{min-height:40px;padding:6px 12px;background:transparent;color:inherit;border-color:color-mix(in srgb,currentColor 40%,transparent)}
+#descanso.termino{background:var(--good);color:var(--accent-ink)}
+body.con-descanso #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 144px)}
+body.con-descanso main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 170px)}

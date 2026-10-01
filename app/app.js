@@ -2,7 +2,7 @@
 // que el servidor: nucleo/*.js.
 //
 //   node herramientas/servir.mjs  →  http://127.0.0.1:5173/app/
-import { C, E, guardar, R, D, esc, $, hoy, indice } from './comun.js';
+import { C, E, guardar, R, D, esc, $, hoy, indice, numero, coma, mostrarMensaje } from './comun.js';
 import { derivar } from '../nucleo/derivar.js';
 import { generarPlan } from '../nucleo/motor-plan.js';
 import { vistaHoy } from './hoy.js';
@@ -41,7 +41,7 @@ function campo(p) {
   switch (p.tipo) {
     case 'texto': return `<input type="text" id="${id}" data-p="${p.id}" value="${esc(v)}" autocomplete="off">`;
     case 'texto_largo': return `<textarea id="${id}" data-p="${p.id}">${esc(v)}</textarea>`;
-    case 'numero': return `<input type="number" id="${id}" data-p="${p.id}" data-num min="${p.min ?? ''}" max="${p.max ?? ''}" step="${p.paso ?? 1}" value="${esc(v)}" inputmode="decimal"> <span class="suave pequeno">${esc(p.unidad || '')}</span>`;
+    case 'numero': return `<input type="text" id="${id}" data-p="${p.id}" data-num value="${esc(coma(v))}" inputmode="decimal" autocomplete="off"> <span class="suave pequeno">${esc(p.unidad || '')}</span>`;
     case 'fecha': return `<input type="date" id="${id}" data-p="${p.id}" value="${esc(v)}">`;
     case 'una': return `<div class="opciones" role="radiogroup">${p.opciones.map(([val, t]) => `<label><input type="radio" name="${p.id}" data-p="${p.id}" value="${esc(val)}"${chk(v === val)}>${esc(t)}</label>`).join('')}</div>`;
     case 'varias': return `<div class="chips">${p.opciones.map(([val, t]) => `<label><input type="checkbox" data-p="${p.id}" data-varias value="${esc(val)}"${chk((v || []).includes(val))}>${esc(t)}</label>`).join('')}</div>`;
@@ -118,7 +118,7 @@ function lugares(p, v) {
     <div class="chips">${p.equipamiento.map(([eq, n]) => `<label><input type="checkbox" data-p="${p.id}" data-lugar="${i}" data-eq value="${eq}"${chk(l.equipamiento.includes(eq))}>${esc(n)}</label>`).join('')}</div>
     ${p.por_lugar.filter(f => l.equipamiento.includes(f.mostrar_si_equipo)).map(f => f.tipo === 'una'
       ? `<label class="pequeno">${esc(f.texto)} <select data-p="${p.id}" data-lugar="${i}" data-c="${f.id}" data-num>${f.opciones.map(([o, t]) => `<option value="${o}"${String(l[f.id]) === o ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`
-      : `<label class="pequeno">${esc(f.texto)} <input type="number" data-p="${p.id}" data-lugar="${i}" data-c="${f.id}" data-num value="${esc(l[f.id])}"></label>`).join('')}
+      : `<label class="pequeno">${esc(f.texto)} <input type="text" inputmode="decimal" data-p="${p.id}" data-lugar="${i}" data-c="${f.id}" data-num value="${esc(coma(l[f.id]))}"></label>`).join('')}
   </div>`).join('') + `<button type="button" class="boton" data-otro-lugar="${p.id}">Agregar otro lugar</button>`;
 }
 
@@ -128,7 +128,7 @@ function alCambiar(ev, estructural) {
   const pid = el.dataset.p;
   if (!pid) return;
   const r = R();
-  const valor = el.dataset.bool !== undefined ? el.value === 'true' : el.dataset.num !== undefined ? (el.value === '' ? null : Number(el.value)) : el.value;
+  const valor = el.dataset.bool !== undefined ? el.value === 'true' : el.dataset.num !== undefined ? numero(el.value) : el.value;
   let reestructura = false;
   if (el.dataset.consent !== undefined) { r[pid] = el.checked; reestructura = true; }
   else if (el.dataset.varias !== undefined) { const s = new Set(r[pid] || []); el.checked ? s.add(el.value) : s.delete(el.value); r[pid] = [...s]; reestructura = true; }
@@ -293,7 +293,6 @@ function vistaInicio() {
   $('app').innerHTML = `<div id="vista-inicio">
     <h1>Tu entrenador con IA</h1>
     <p>Arma tu plan, lo agenda en tu semana, lo ajusta cuando faltas, cuando una máquina está ocupada o cuando dormiste mal, y te explica por qué de cada ejercicio, con evidencia.</p>
-    ${E.mensaje ? `<div class="aviso bien">${esc(E.mensaje)}</div>` : ''}
     ${nube.hay() && !nube.conectado() ? `<section class="tarjeta"><h3>Entrar con tu correo</h3><p class="pequeno">Tu plan y tus registros quedan guardados y el coach puede usar IA.</p><button type="button" class="boton primario" id="a-cuenta">Entrar</button></section>` : ''}
     ${nube.conectado() ? `<p class="pequeno suave">Entraste como ${esc(nube.correo())}.</p>` : ''}
     <div class="fila-botones">
@@ -307,6 +306,7 @@ function vistaInicio() {
   $('a-cuenta')?.addEventListener('click', () => ir('mas'));
   $('empezar').onclick = () => ir('cuestionario');
   $('ejemplo').onclick = () => { E.respuestas = structuredClone(EJEMPLO); armarPlan(); };
+  mostrarMensaje();
 }
 
 // ── Navegación ──────────────────────────────────────────────────────────────
@@ -323,7 +323,7 @@ function ir(vista, extra) {
     coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), progreso: () => vistaProgreso(ir), mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar }),
   };
   (vistas[vista] || vistaInicio)();
-  E.mensaje = null; guardar(); // los avisos se muestran una vez
+  mostrarMensaje(); // los avisos se muestran una vez, flotando sobre el menú
   window.scrollTo(0, 0);
   programarAvisos(); // recordatorios de hoy con lo último (sesión hecha, suplemento tomado)
 }

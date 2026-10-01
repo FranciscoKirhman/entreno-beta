@@ -57,6 +57,42 @@ export async function cambiarPlan(plan, mensaje, nube) {
   }
 }
 
+/** Número escrito por la persona: acepta coma o punto ("42,5"). Vacío o inválido → null. */
+export function numero(v) {
+  const t = String(v ?? '').trim().replace(',', '.');
+  if (t === '') return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+/** Número para mostrar en un campo, con coma decimal. */
+export const coma = x => (x == null || x === '' ? '' : String(x).replace('.', ','));
+
+// ── Avisos flotantes ────────────────────────────────────────────────────────
+let relojAviso = null;
+/** Aviso sobre el menú inferior: se ve aunque estés al final de la página. Se cierra solo o al tocarlo. */
+export function avisar(texto, tipo = /no se pudo|no pude|no se activ|bloquead|todavía no|marca al menos/i.test(texto) ? 'ojo' : 'bien') {
+  let el = document.getElementById('aviso-flotante');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'aviso-flotante';
+    el.setAttribute('role', 'status');
+    el.addEventListener('click', () => el.classList.remove('visible'));
+    document.body.append(el);
+  }
+  el.className = `aviso ${tipo}`;
+  el.textContent = texto;
+  requestAnimationFrame(() => el.classList.add('visible'));
+  clearTimeout(relojAviso);
+  relojAviso = setTimeout(() => el.classList.remove('visible'), Math.min(10000, 3500 + texto.length * 45));
+}
+/** Muestra una sola vez el mensaje que dejó la última acción (E.mensaje). */
+export function mostrarMensaje() {
+  if (!E.mensaje) return;
+  avisar(E.mensaje);
+  E.mensaje = null;
+  guardar();
+}
+
 // Formularios pequeños que se repiten.
 export const chk = c => (c ? ' checked' : '');
 export function escala(nombre, min, max, v, extremos, attrs = '') {

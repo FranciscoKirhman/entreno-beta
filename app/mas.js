@@ -1,5 +1,5 @@
 // Vista Más: cuenta, ajustar con tu propia IA (copiar y pegar), importar un plan escrito y reiniciar.
-import { E, guardar, reiniciar, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk } from './comun.js';
+import { E, guardar, reiniciar, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje } from './comun.js';
 import { soporte, configAvisos, cambiarAvisos, activarAvisos, notificar, enlaceCalendario } from './avisos.js';
 import { CONFIG } from './config.js';
 import { aplicarCambios, promptParaIA, leerRespuestaIA } from '../nucleo/cambios.js';
@@ -12,7 +12,6 @@ import * as nube from './nube.js';
 export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
   $('app').innerHTML = `<div id="vista-mas">
     <h1>Más</h1>
-    ${E.mensaje ? `<div class="aviso bien">${esc(E.mensaje)}</div>` : ''}
     <section class="tarjeta" id="cuenta">${cuentaHtml()}</section>
     ${instalada() ? '' : `<section class="tarjeta"><h3>Instalarla en el teléfono</h3>
       <p class="pequeno"><strong>iPhone:</strong> en Safari, botón Compartir y "Agregar a pantalla de inicio".<br><strong>Android:</strong> en Chrome, menú ⋮ e "Instalar app".<br>Queda con su ícono y abre sin señal en el gimnasio.</p></section>`}
@@ -139,6 +138,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     if (!b.dataset.confirmar) { b.dataset.confirmar = '1'; b.textContent = 'Toca de nuevo para borrar todo de este teléfono'; return; }
     reiniciar(); ir('inicio');
   };
+  mostrarMensaje();
 }
 
 function recordatoriosHtml() {

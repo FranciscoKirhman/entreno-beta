@@ -1,5 +1,5 @@
 // Vista Semana: el plan por semanas, mover o faltar a un día, y agendar según el calendario de Google (.ics).
-import { E, guardar, R, esc, $, fechaCorta, presc, cambiarPlan, hoy, indice } from './comun.js';
+import { E, guardar, R, esc, $, fechaCorta, presc, cambiarPlan, hoy, indice, mostrarMensaje } from './comun.js';
 import { moverSesion, intercambiar, marcarFaltada, reagendarConCalendario, sesionDe, nombreDia } from '../nucleo/agenda.js';
 import { leerIcs } from '../nucleo/ics.js';
 import { duracionEstimada } from '../nucleo/motor-plan.js';
@@ -16,7 +16,6 @@ export function vistaSemana(ir) {
   $('app').innerHTML = `<div id="vista-semana">
     <h1>Tu plan</h1>
     <p>${esc(p.justificacion || '')}</p>
-    ${E.mensaje ? `<div class="aviso bien">${esc(E.mensaje)}</div>` : ''}
     ${tarjetaDescarga()}
     ${avisoCheckin(true)}
     ${tarjetaTemporada()}
@@ -75,4 +74,5 @@ export function vistaSemana(ir) {
       <button type="button" class="boton primario" id="aplicar-ics">Aplicar al plan</button>`;
     $('aplicar-ics').onclick = async () => { await cambiarPlan(r.plan, 'Plan agendado según tu calendario.', nube); vistaSemana(ir); };
   };
+  mostrarMensaje();
 }
