@@ -22,6 +22,7 @@ body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--f-texto);-webkit
 button,input,select,textarea{font:inherit;color:inherit}
 /* En iPhone, un campo con letra de menos de 16 px hace zoom al tocarlo. */
 input,select,textarea{font-size:16px}
+input[type=file]{max-width:100%;font-size:14px}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 .barra{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top,0px) + 10px) 16px 10px;background:var(--bg);border-bottom:1px solid var(--border)}
