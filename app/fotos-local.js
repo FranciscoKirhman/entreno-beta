@@ -18,8 +18,8 @@ async function tx(modo, fn) {
     t.onerror = () => mal(t.error);
   });
 }
-export const guardarFotoLocal = ({ fecha, angulo, archivo }) =>
-  tx('readwrite', s => s.put({ id: `${fecha}-${Date.now()}`, fecha, angulo, blob: archivo }));
+export const guardarFotoLocal = ({ id, fecha, angulo, archivo }) =>
+  tx('readwrite', s => s.put({ id: id || `${fecha}-${Date.now()}`, fecha, angulo, blob: archivo }));
 export async function listarFotosLocales() {
   const filas = await tx('readonly', s => s.getAll());
   return filas.sort((a, b) => (a.fecha < b.fecha ? -1 : 1)).map(f => ({ ...f, url: URL.createObjectURL(f.blob) }));

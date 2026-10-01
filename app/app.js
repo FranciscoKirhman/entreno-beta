@@ -289,8 +289,10 @@ function vistaInicio() {
       <button type="button" class="boton ${nube.conectado() ? 'primario' : ''}" id="empezar">${Object.keys(R()).length ? 'Seguir con el cuestionario' : 'Empezar el cuestionario'}</button>
       <button type="button" class="boton" id="ejemplo">Ver un ejemplo</button>
     </div>
+    <p class="pequeno">¿Cambiaste de teléfono? <button type="button" class="enlace" id="a-respaldo">Restaurar un respaldo</button></p>
     <p class="suave pequeno" style="margin-top:24px">${esc(C.intro)}</p>
   </div>`;
+  $('a-respaldo').onclick = () => ir('mas');
   $('a-cuenta')?.addEventListener('click', () => ir('mas'));
   $('empezar').onclick = () => ir('cuestionario');
   $('ejemplo').onclick = () => { E.respuestas = structuredClone(EJEMPLO); armarPlan(); };

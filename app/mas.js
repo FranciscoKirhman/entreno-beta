@@ -6,6 +6,7 @@ import { aplicarCambios, promptParaIA, leerRespuestaIA } from '../nucleo/cambios
 import { validarPlan } from '../nucleo/validador.js';
 import { permitidos } from '../nucleo/mcp.js';
 import { leerPlanTexto, calendarizar } from '../nucleo/importar-plan.js';
+import { listarFotosLocales, guardarFotoLocal } from './fotos-local.js';
 import * as nube from './nube.js';
 
 export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
@@ -20,7 +21,8 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
 
     <section class="tarjeta">
       <h3>Respaldo</h3>
-      <p class="pequeno">${nube.conectado() ? 'Tu cuenta ya guarda todo. Igual puedes' : 'Lo que anotas queda solo en este teléfono. Cada tanto,'} descarga un respaldo: sirve para no perder nada si se borran los datos del navegador o si cambias de teléfono. Las fotos no van en el respaldo.</p>
+      <p class="pequeno">${nube.conectado() ? 'Tu cuenta ya guarda todo. Igual puedes' : 'Lo que anotas queda solo en este teléfono. Cada tanto,'} descarga un respaldo: sirve para no perder nada si se borran los datos del navegador o si cambias de teléfono.</p>
+      ${E.consentimientos.fotos_progreso ? '<label class="pequeno casilla"><input type="checkbox" id="respaldo-fotos" checked> Incluir mis fotos de progreso (el archivo pesa más)</label>' : ''}
       <div class="fila-botones"><button type="button" class="boton" id="descargar-respaldo">Descargar respaldo</button>
         <label class="boton">Restaurar un respaldo<input type="file" id="archivo-respaldo" accept="application/json,.json" hidden></label></div>
       <div id="estado-respaldo"></div>
@@ -89,16 +91,26 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
       ${v.ok ? '<button type="button" class="boton primario" id="aplicar-importado">Usar este plan</button>' : ''}`;
     $('aplicar-importado')?.addEventListener('click', async () => { await cambiarPlan(plan, 'Plan importado y agendado.', nube); ir('semana'); });
   };
-  $('descargar-respaldo').onclick = async () => {
+  $('descargar-respaldo').onclick = async ev => {
+    const boton = ev.currentTarget, estado = $('estado-respaldo');
     const nombre = `entreno-respaldo-${hoy()}.json`;
-    const archivo = new File([JSON.stringify(respaldo())], nombre, { type: 'application/json' });
+    let fotos = [];
+    if ($('respaldo-fotos')?.checked) {
+      boton.disabled = true; estado.innerHTML = '<p class="pequeno">Preparando las fotos…</p>';
+      try { fotos = await fotosParaRespaldo(); }
+      catch (e) { estado.innerHTML = `<div class="aviso alerta">No pude leer las fotos (${esc(e.message)}). Desmarca "Incluir mis fotos" para descargar el resto.</div>`; boton.disabled = false; return; }
+      finally { boton.disabled = false; }
+    }
+    const texto = JSON.stringify(respaldo(fotos));
+    estado.innerHTML = `<p class="pequeno">Respaldo listo: ${esc(megas(texto.length))}${fotos.length ? `, con ${fotos.length} foto${fotos.length === 1 ? '' : 's'}` : ''}.</p>`;
+    const archivo = new File([texto], nombre, { type: 'application/json' });
     // En el teléfono, compartir deja guardarlo en Archivos, Drive o mandarlo por correo; en el computador, se descarga.
     if (navigator.canShare?.({ files: [archivo] })) {
       try { await navigator.share({ files: [archivo], title: 'Respaldo de Entreno' }); return; }
       catch (e) { if (e.name === 'AbortError') return; }
     }
     const url = URL.createObjectURL(archivo);
-    $('estado-respaldo').innerHTML = `<a class="enlace" href="${url}" download="${nombre}">Guardar ${esc(nombre)}</a>`;
+    estado.insertAdjacentHTML('beforeend', `<a class="enlace" href="${url}" download="${nombre}">Guardar ${esc(nombre)}</a>`);
   };
   $('archivo-respaldo').onchange = async ev => {
     const f = ev.target.files[0]; if (!f) return;
@@ -106,9 +118,19 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     let r;
     try { r = JSON.parse(await f.text()); restaurarValido(r); }
     catch (e) { out.innerHTML = `<div class="aviso alerta">${esc(e.message.startsWith('Ese archivo') ? e.message : 'No pude leer ese archivo. Elige un respaldo descargado desde esta app.')}</div>`; return; }
-    out.innerHTML = `<div class="aviso ojo">Respaldo del ${esc(fechaCorta(r.creado.slice(0, 10)))}. Reemplaza todo lo que hay ahora en este teléfono.</div>
+    const nFotos = Array.isArray(r.fotos) ? r.fotos.length : 0;
+    out.innerHTML = `<div class="aviso ojo">Respaldo del ${esc(fechaCorta(r.creado.slice(0, 10)))}${nFotos ? `, con ${nFotos} foto${nFotos === 1 ? '' : 's'}` : ''}. Reemplaza lo anotado en este teléfono${nFotos ? '; las fotos se suman a las que ya tengas' : ''}.</div>
       <div class="fila-botones"><button type="button" class="boton primario" id="confirmar-respaldo">Restaurar</button></div>`;
-    $('confirmar-respaldo').onclick = () => { restaurar(r); E.mensaje = 'Respaldo restaurado.'; guardar(); ir(E.plan ? 'hoy' : 'inicio'); };
+    $('confirmar-respaldo').onclick = async ev => {
+      ev.currentTarget.disabled = true;
+      restaurar(r);
+      let fotos = 0, fallidas = 0;
+      for (const f of nFotos ? r.fotos : []) {
+        try { if (await restaurarFoto(f)) fotos++; } catch (e) { fallidas++; console.warn('Foto no restaurada', e); }
+      }
+      E.mensaje = `Respaldo restaurado${fotos ? `, con ${fotos} foto${fotos === 1 ? '' : 's'}` : ''}.${fallidas ? ` ${fallidas} foto(s) no se pudieron guardar.` : ''}`;
+      guardar(); ir(E.plan ? 'hoy' : 'inicio');
+    };
   };
   $('rehacer').onclick = () => armarPlan();
   $('cuestionario').onclick = () => { E.seccion = 0; ir('cuestionario'); };
@@ -155,6 +177,30 @@ function enlazarRecordatorios() {
   });
   $('av-probar')?.addEventListener('click', () => notificar('Entreno', 'Así se ven tus avisos.', 'prueba').catch(e => { $('av-estado').textContent = `No se pudo mostrar el aviso: ${e.message}`; }));
   $('av-apagar')?.addEventListener('click', () => { cambiarAvisos({ activos: false }); repintar(); });
+}
+
+const megas = bytes => (bytes < 1e5 ? `${Math.max(1, Math.round(bytes / 1e3))} KB` : `${(bytes / 1e6).toFixed(1).replace('.', ',')} MB`);
+const aDataUrl = blob => new Promise((ok, mal) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => mal(r.error); r.readAsDataURL(blob); });
+
+/** Fotos de progreso para el respaldo: las de este teléfono o, con cuenta, las de la cuenta. */
+async function fotosParaRespaldo() {
+  const lista = nube.conectado() ? await nube.listarFotos() : await listarFotosLocales();
+  const out = [];
+  for (const f of lista) {
+    const blob = f.blob || await fetch(f.url).then(x => { if (!x.ok) throw new Error(`foto del ${f.fecha}: ${x.status}`); return x.blob(); });
+    out.push({ id: String(f.id), fecha: f.fecha, angulo: f.angulo || null, datos: await aDataUrl(blob) });
+  }
+  return out;
+}
+
+/** Guarda una foto del respaldo (en este teléfono o, con cuenta, en la cuenta). Solo acepta imágenes. */
+async function restaurarFoto(f) {
+  if (typeof f?.datos !== 'string' || !/^data:image\/(jpeg|png|webp|heic|heif|gif);base64,/.test(f.datos) || !/^\d{4}-\d{2}-\d{2}$/.test(f.fecha || '')) return false;
+  const blob = await (await fetch(f.datos)).blob();
+  const archivo = new File([blob], `${f.fecha}.${blob.type.split('/')[1].replace('jpeg', 'jpg')}`, { type: blob.type });
+  if (nube.conectado()) await nube.subirFoto({ fecha: f.fecha, angulo: f.angulo, archivo });
+  else await guardarFotoLocal({ id: f.id, fecha: f.fecha, angulo: f.angulo, archivo }); // mismo id: restaurar dos veces no duplica
+  return true;
 }
 
 /** Ya abierta como app instalada (no en una pestaña del navegador). */

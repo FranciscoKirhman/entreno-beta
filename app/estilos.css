@@ -186,3 +186,5 @@ main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 96px)}
 .opciones-aviso input[type=checkbox]{width:20px;height:20px;margin:2px 0 0;accent-color:var(--accent)}
 .opciones-aviso input[type=time]{width:auto;min-height:36px;padding:4px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg)}
 a.boton{text-decoration:none;color:inherit}
+.casilla{display:flex;align-items:center;gap:8px;margin-top:8px}
+.casilla input{width:18px;height:18px;margin:0;accent-color:var(--accent)}

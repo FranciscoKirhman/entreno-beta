@@ -30,8 +30,8 @@ try {
 export const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(E)); } catch { /* modo privado */ } };
 export const reiniciar = () => { E = VACIO(); guardar(); };
 
-/** Respaldo de todo lo anotado en este teléfono (las fotos van aparte: pesan mucho). */
-export const respaldo = () => ({ app: 'entreno', version: 1, creado: new Date().toISOString(), estado: E });
+/** Respaldo de todo lo anotado en este teléfono. Desde la versión 2 incluye las fotos de progreso: [{id, fecha, angulo, datos}]. */
+export const respaldo = (fotos = []) => ({ app: 'entreno', version: 2, creado: new Date().toISOString(), estado: E, fotos });
 export function restaurar(r) {
   if (r?.app !== 'entreno' || !r.estado || typeof r.estado !== 'object' || Array.isArray(r.estado)) throw new Error('Ese archivo no es un respaldo de Entreno.');
   E = { ...VACIO(), ...r.estado, vista: 'hoy', mensaje: null }; guardar();
