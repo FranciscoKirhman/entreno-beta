@@ -1,10 +1,11 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
 // Red primero, con límite de tiempo, y la copia guardada como respaldo (igual que el tablero).
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-01 17:41 · e1c860c";
+const VERSION = "2026-10-01 17:48 · c17fc01";
 const ARCHIVOS = [
  "./",
  "app.js",
+ "avisos.js",
  "checkin.js",
  "coach-ui.js",
  "comun.js",
@@ -45,6 +46,7 @@ const ARCHIVOS = [
  "../nucleo/motor-plan.js",
  "../nucleo/notas.js",
  "../nucleo/progresion.js",
+ "../nucleo/recordatorios.js",
  "../nucleo/semanal.js",
  "../nucleo/series.js",
  "../nucleo/suplementos.js",
@@ -106,3 +108,10 @@ async function fuente(req) {
     return r;
   } catch { return Response.error(); }
 }
+
+// Tocar un recordatorio abre la app (o la trae al frente si ya estaba abierta).
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    .then(ventanas => (ventanas.length ? ventanas[0].focus() : self.clients.openWindow('./'))));
+});

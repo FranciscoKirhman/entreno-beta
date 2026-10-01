@@ -38,7 +38,7 @@ export async function vistaProgreso(ir) {
 
     <section class="tarjeta">
       <h3>Suplementos</h3>
-      <p class="pequeno suave">La app no recomienda suplementos: te recuerda los que tú decides tomar.</p>
+      <p class="pequeno suave">La app no recomienda suplementos: te recuerda los que tú decides tomar. Para que te avise a su hora, activa los recordatorios en <button type="button" class="enlace" data-ir-mas>Más</button>.</p>
       ${cons ? `<p class="pequeno">Racha: <strong>${cons.racha}</strong> día(s) completos${cons.porcentaje_30_dias != null ? ` · ${Math.round(cons.porcentaje_30_dias * 100)}% de los últimos 30 días` : ''}.</p>` : ''}
       <ul class="lista-simple">${E.suplementos.map(s => `<li><span>${esc(s.nombre)}${s.dosis ? ` · ${esc(s.dosis)}` : ''} · ${s.horas?.length ? s.horas.join(', ') : 'sin hora'}${s.dias?.length ? ` · ${s.dias.map(d => DIAS.find(x => x[0] === d)[1]).join('')}` : ''}</span><button type="button" class="enlace" data-borrar-sup="${s.id}">Quitar</button></li>`).join('')}</ul>
       <form id="form-sup" class="panel">
@@ -68,6 +68,7 @@ export async function vistaProgreso(ir) {
     </section>
   </div>`;
 
+  document.querySelector('[data-ir-mas]')?.addEventListener('click', () => ir('mas'));
   $('consentir-fotos')?.addEventListener('change', ev => {
     if (!ev.target.checked) return;
     E.consentimientos.fotos_progreso = true; guardar();

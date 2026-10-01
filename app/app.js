@@ -12,6 +12,7 @@ import { vistaProgreso } from './progreso.js';
 import { vistaMas } from './mas.js';
 import { vistaCheckin } from './checkin.js';
 import { historialReciente } from './temporada.js';
+import { programarAvisos } from './avisos.js';
 import * as nube from './nube.js';
 import { CONFIG } from './config.js';
 
@@ -311,6 +312,7 @@ function ir(vista, extra) {
   (vistas[vista] || vistaInicio)();
   E.mensaje = null; guardar(); // los avisos se muestran una vez
   window.scrollTo(0, 0);
+  programarAvisos(); // recordatorios de hoy con lo último (sesión hecha, suplemento tomado)
 }
 $('nav').addEventListener('click', e => { const b = e.target.closest('[data-ir]'); if (b) ir(b.dataset.ir); });
 

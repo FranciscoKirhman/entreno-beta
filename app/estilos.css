@@ -177,3 +177,12 @@ main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 96px)}
 .macro .bloque.actual span{color:var(--ink);font-weight:600}
 .bloques{padding-left:18px;margin:6px 0;display:flex;flex-direction:column;gap:6px}
 .bloques li.actual{color:var(--ink)}
+
+/* Recordatorios */
+.opciones-aviso{display:flex;flex-direction:column;gap:12px;margin:12px 0}
+.opciones-aviso .opcion{display:grid;grid-template-columns:20px minmax(0,1fr);gap:10px;align-items:start}
+.opciones-aviso label{font-weight:500;cursor:pointer}
+.opciones-aviso p{margin:2px 0 0}
+.opciones-aviso input[type=checkbox]{width:20px;height:20px;margin:2px 0 0;accent-color:var(--accent)}
+.opciones-aviso input[type=time]{width:auto;min-height:36px;padding:4px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg)}
+a.boton{text-decoration:none;color:inherit}

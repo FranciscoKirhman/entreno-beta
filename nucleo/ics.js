@@ -83,3 +83,53 @@ export function leerIcs(texto, { desde, hasta }) {
   }
   return out.sort((a, b) => (a.inicio < b.inicio ? -1 : 1));
 }
+
+// ── Escribir ────────────────────────────────────────────────────────────────
+// Para agregar recordatorios al calendario del teléfono. Las horas van "flotantes" (sin zona): el calendario
+// las toma en la hora del teléfono, que es lo que se quiere para quien entrena en Chile.
+
+const ICS_DIAS = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+const escTexto = s => String(s ?? '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+const plano = local => local.replace(/[-:]/g, '') + (local.length === 16 ? '00' : ''); // 'AAAA-MM-DDTHH:MM' → 'AAAAMMDDTHHMMSS'
+const duracionIcs = min => { const m = Math.abs(min); return `${min < 0 ? '-' : ''}PT${Math.floor(m / 60) ? `${Math.floor(m / 60)}H` : ''}${m % 60 || !Math.floor(m / 60) ? `${m % 60}M` : ''}`; };
+
+/** Líneas de más de 75 bytes se parten (RFC 5545), sin cortar una letra con tilde. */
+function plegar(linea) {
+  const partes = [];
+  let actual = '', n = 0, max = 75;
+  for (const ch of linea) {
+    const b = new TextEncoder().encode(ch).length;
+    if (n + b > max) { partes.push(actual); actual = ''; n = 0; max = 74; }
+    actual += ch; n += b;
+  }
+  partes.push(actual);
+  return partes.join('\r\n ');
+}
+
+/**
+ * @param eventos [{ uid, titulo, descripcion?, inicio: 'AAAA-MM-DDTHH:MM' | 'AAAA-MM-DD' (día completo), minutos?,
+ *                   alarmaMin? (respecto del inicio; negativo = antes), repetir?: { dias: [0..6] | null } }]
+ * @param ahora     fecha y hora de creación (para DTSTAMP)
+ */
+export function escribirIcs(eventos, { nombre = 'Entreno', ahora = new Date() } = {}) {
+  const sello = ahora.toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
+  const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Entreno//Recordatorios//ES', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', `X-WR-CALNAME:${escTexto(nombre)}`];
+  for (const e of eventos) {
+    const diaCompleto = e.inicio.length === 10;
+    L.push('BEGIN:VEVENT', `UID:${e.uid}@entreno`, `DTSTAMP:${sello}`);
+    if (diaCompleto) {
+      const fin = new Date(Date.parse(e.inicio + 'T12:00:00Z') + 864e5).toISOString().slice(0, 10);
+      L.push(`DTSTART;VALUE=DATE:${plano(e.inicio)}`, `DTEND;VALUE=DATE:${plano(fin)}`, 'TRANSP:TRANSPARENT');
+    } else {
+      const fin = new Date(Date.parse(e.inicio + ':00Z') + (e.minutos || 60) * 6e4).toISOString().slice(0, 16);
+      L.push(`DTSTART:${plano(e.inicio)}`, `DTEND:${plano(fin)}`);
+    }
+    if (e.repetir) L.push(e.repetir.dias?.length ? `RRULE:FREQ=WEEKLY;BYDAY=${e.repetir.dias.map(d => ICS_DIAS[d]).join(',')}` : 'RRULE:FREQ=DAILY');
+    L.push(`SUMMARY:${escTexto(e.titulo)}`);
+    if (e.descripcion) L.push(`DESCRIPTION:${escTexto(e.descripcion)}`);
+    if (e.alarmaMin != null) L.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${escTexto(e.titulo)}`, `TRIGGER:${duracionIcs(e.alarmaMin)}`, 'END:VALARM');
+    L.push('END:VEVENT');
+  }
+  L.push('END:VCALENDAR');
+  return L.map(plegar).join('\r\n') + '\r\n';
+}

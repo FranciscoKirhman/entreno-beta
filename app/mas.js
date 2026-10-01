@@ -1,5 +1,6 @@
 // Vista Más: cuenta, ajustar con tu propia IA (copiar y pegar), importar un plan escrito y reiniciar.
-import { E, guardar, reiniciar, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar } from './comun.js';
+import { E, guardar, reiniciar, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk } from './comun.js';
+import { soporte, configAvisos, cambiarAvisos, activarAvisos, notificar, enlaceCalendario } from './avisos.js';
 import { CONFIG } from './config.js';
 import { aplicarCambios, promptParaIA, leerRespuestaIA } from '../nucleo/cambios.js';
 import { validarPlan } from '../nucleo/validador.js';
@@ -14,6 +15,8 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     <section class="tarjeta" id="cuenta">${cuentaHtml()}</section>
     ${instalada() ? '' : `<section class="tarjeta"><h3>Instalarla en el teléfono</h3>
       <p class="pequeno"><strong>iPhone:</strong> en Safari, botón Compartir y "Agregar a pantalla de inicio".<br><strong>Android:</strong> en Chrome, menú ⋮ e "Instalar app".<br>Queda con su ícono y abre sin señal en el gimnasio.</p></section>`}
+
+    <section class="tarjeta" id="recordatorios">${recordatoriosHtml()}</section>
 
     <section class="tarjeta">
       <h3>Respaldo</h3>
@@ -51,6 +54,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     <p class="pequeno suave">Versión ${esc(CONFIG.version)}</p>
   </div>`;
   enlazarCuenta(ir, sincronizarAlEntrar);
+  enlazarRecordatorios();
   $('pedido').oninput = e => { E.pedido = e.target.value; guardar(); };
   $('copiar').onclick = async () => {
     const d = D();
@@ -113,6 +117,44 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     if (!b.dataset.confirmar) { b.dataset.confirmar = '1'; b.textContent = 'Toca de nuevo para borrar todo de este teléfono'; return; }
     reiniciar(); ir('inicio');
   };
+}
+
+function recordatoriosHtml() {
+  const s = soporte(), c = configAvisos();
+  const activos = c.activos && s.permiso === 'granted';
+  const puede = s.hay && !(s.ios && !s.instalada) && s.permiso !== 'denied';
+  const estado = s.ios && !s.instalada ? '<div class="aviso ojo">En iPhone, los avisos solo funcionan con la app instalada en la pantalla de inicio: en Safari, botón Compartir y "Agregar a pantalla de inicio". Después ábrela desde su ícono y actívalos aquí.</div>'
+    : !s.hay ? '<div class="aviso ojo">Este navegador no permite avisos. Usa el calendario, más abajo.</div>'
+      : s.permiso === 'denied' ? `<div class="aviso ojo">Los avisos están bloqueados. ${s.ios ? 'Actívalos en Ajustes → Notificaciones → Entreno B.' : 'Actívalos en los permisos del sitio (el ícono junto a la dirección) o en los ajustes de la app.'}</div>`
+        : activos ? '<div class="aviso bien">Avisos activos en este teléfono.</div>' : '';
+  return `<h3>Recordatorios</h3>
+    <p class="pequeno">Te avisa de la sesión del día y de tus suplementos a su hora.</p>
+    ${estado}
+    <div class="opciones-aviso">
+      <div class="opcion"><input type="checkbox" id="av-entrenar"${chk(c.entrenar)}><div><label for="av-entrenar">La sesión del día</label>
+        <p class="pequeno suave">1 hora antes si la sesión tiene hora; si no, a las <input type="time" id="av-hora" value="${esc(c.horaEntreno)}" aria-label="Hora del aviso de la sesión"></p></div></div>
+      <div class="opcion"><input type="checkbox" id="av-sup"${chk(c.suplementos)}><div><label for="av-sup">Suplementos</label>
+        <p class="pequeno suave">A la hora de cada uno${E.suplementos.length ? '' : ' (se agregan en Progreso)'}.</p></div></div>
+    </div>
+    ${puede || activos ? `<div class="fila-botones">${activos ? '<button type="button" class="boton" id="av-probar">Probar un aviso</button><button type="button" class="boton" id="av-apagar">Apagar avisos</button>' : '<button type="button" class="boton primario" id="av-activar">Activar avisos</button>'}</div>` : ''}
+    <p class="pequeno suave">Ojo: sin un servidor, el teléfono no puede abrir la app a una hora fija. Estos avisos llegan solo con la app abierta (en Android, también un rato después de cerrarla). Para que suenen siempre, aunque la app esté cerrada, agrégalos a tu calendario. Si cambias el plan o los suplementos, vuelve a agregarlos.</p>
+    ${E.plan?.dias ? `<div class="fila-botones">${enlaceCalendario()}</div>${s.ios ? '' : '<p class="pequeno suave">En Android, si tu calendario no abre el archivo, impórtalo en calendar.google.com → Configuración → Importar.</p>'}` : ''}
+    <p class="pequeno" id="av-estado"></p>`;
+}
+
+function enlazarRecordatorios() {
+  const repintar = () => { $('recordatorios').innerHTML = recordatoriosHtml(); enlazarRecordatorios(); };
+  $('av-entrenar').onchange = e => { cambiarAvisos({ entrenar: e.target.checked }); repintar(); };
+  $('av-sup').onchange = e => { cambiarAvisos({ suplementos: e.target.checked }); repintar(); };
+  $('av-hora').onchange = e => { if (e.target.value) { cambiarAvisos({ horaEntreno: e.target.value }); repintar(); } };
+  $('av-activar')?.addEventListener('click', async () => {
+    const permiso = await activarAvisos();
+    repintar();
+    if (permiso === 'granted') notificar('Avisos activos', 'Así te va a avisar Entreno.', 'prueba').catch(() => {});
+    else $('av-estado').textContent = 'No se activaron: el teléfono no dio permiso.';
+  });
+  $('av-probar')?.addEventListener('click', () => notificar('Entreno', 'Así se ven tus avisos.', 'prueba').catch(e => { $('av-estado').textContent = `No se pudo mostrar el aviso: ${e.message}`; }));
+  $('av-apagar')?.addEventListener('click', () => { cambiarAvisos({ activos: false }); repintar(); });
 }
 
 /** Ya abierta como app instalada (no en una pestaña del navegador). */
