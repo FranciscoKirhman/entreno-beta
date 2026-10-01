@@ -116,6 +116,11 @@ export async function registrarSesion({ fecha, hora, titulo, duracion_min, serie
   if (notas.length) ok(await supa.from('notas_ejercicio').insert(notas.map(n => ({ ...n, sesion_id: s.id, user_id: uid() }))));
   return s.id;
 }
+/** Check-in semanal: lo propuesto y lo que la persona aceptó (tabla checkins). */
+export async function guardarCheckin({ semana, plan_inicio, banderas, series, sesiones, cambios }) {
+  ok(await supa.from('checkins').insert({ user_id: uid(), tipo: 'semanal', respuestas: { semana, plan_inicio },
+    resumen_automatico: { series, sesiones }, banderas_rojas: banderas, cambios_aplicados: cambios }));
+}
 export const chat = (mensaje, historial) => funcion('coach', { cuerpo: { mensaje, historial } });
 
 // ── Suplementos ─────────────────────────────────────────────────────────────

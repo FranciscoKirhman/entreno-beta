@@ -8,6 +8,8 @@ export function calidadPermiteSubir(respuestas = {}) {
   if (respuestas.forma === 'rota') return { ok: false, motivo: 'La técnica se rompió: se repite la carga hasta que salga limpia.' };
   if (respuestas.rango === 'parcial') return { ok: false, motivo: 'El rango de movimiento quedó parcial: se repite la carga hasta completarlo.' };
   if (respuestas.molestia === 'me_preocupa' || (respuestas.dolor ?? 0) >= 4) return { ok: false, motivo: 'Hubo dolor o una molestia que preocupa: no se sube carga en este ejercicio.' };
+  // Dolor anotado en otro ejercicio que carga la misma zona (lo marca nucleo/semanal.js).
+  if (respuestas.zona_con_dolor) return { ok: false, motivo: `Esta semana anotaste dolor en ${respuestas.zona_con_dolor}: no se sube carga en lo que carga esa zona.` };
   return { ok: true, motivo: null };
 }
 

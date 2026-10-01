@@ -146,3 +146,19 @@ main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 96px)}
 .consejo.bajar{background:var(--warning-soft);color:var(--warning)}
 .consejo.subir,.consejo.bien{background:var(--good-soft);color:var(--good)}
 .prioriza{margin:4px 0 0;color:var(--ink-muted);border-left:3px solid var(--accent);padding-left:8px}
+
+/* Check-in semanal */
+.tarjeta.destacada{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.ajustes{list-style:none;padding:0;margin:6px 0 0;display:flex;flex-direction:column}
+.ajustes li{border-top:1px solid var(--line)}
+.ajuste{display:grid;grid-template-columns:24px minmax(0,1fr);gap:10px;padding:10px 0;cursor:pointer}
+.ajuste.fijo{cursor:default}
+.ajuste input{width:20px;height:20px;margin:2px 0 0;accent-color:var(--accent)}
+.ajuste .cuerpo{display:flex;flex-direction:column;gap:2px;min-width:0}
+.fila-ajuste{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.fila-ajuste .nombre{font-weight:600;min-width:0}
+.fila-ajuste .chip{white-space:nowrap;flex:0 0 auto}
+.ajuste .propuesta{font-size:14px;font-weight:500}
+.chip.subir{background:var(--good-soft);color:var(--good)}
+.chip.bajar{background:var(--warning-soft);color:var(--warning)}
+.chip.mantener{background:var(--surface-2);color:var(--ink-muted)}

@@ -10,6 +10,7 @@ import { vistaSemana } from './semana.js';
 import { vistaCoach } from './coach-ui.js';
 import { vistaProgreso } from './progreso.js';
 import { vistaMas } from './mas.js';
+import { vistaCheckin } from './checkin.js';
 import * as nube from './nube.js';
 import { CONFIG } from './config.js';
 
@@ -294,17 +295,17 @@ function vistaInicio() {
 }
 
 // ── Navegación ──────────────────────────────────────────────────────────────
-const VISTAS_CON_PLAN = ['hoy', 'semana', 'coach', 'progreso'];
+const VISTAS_CON_PLAN = ['hoy', 'semana', 'coach', 'progreso', 'checkin'];
 function ir(vista, extra) {
   if (VISTAS_CON_PLAN.includes(vista) && (!E.plan)) vista = 'inicio';
   if (VISTAS_CON_PLAN.includes(vista) && E.plan?.bloqueado) { vistaBloqueada(); return; }
   E.vista = vista; guardar();
   $('nav').hidden = !E.plan || E.plan.bloqueado;
-  document.querySelectorAll('#nav [data-ir]').forEach(b => b.setAttribute('aria-current', String(b.dataset.ir === vista)));
+  document.querySelectorAll('#nav [data-ir]').forEach(b => b.setAttribute('aria-current', String(b.dataset.ir === (vista === 'checkin' ? 'semana' : vista))));
   $('modo').textContent = nube.conectado() ? (nube.correo() || 'Cuenta') : 'Sin cuenta';
   const vistas = {
     inicio: vistaInicio, cuestionario: () => pintarSeccion(), hoy: () => vistaHoy(ir), semana: () => vistaSemana(ir),
-    coach: () => vistaCoach(ir, extra), progreso: () => vistaProgreso(ir), mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar }),
+    coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), progreso: () => vistaProgreso(ir), mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar }),
   };
   (vistas[vista] || vistaInicio)();
   E.mensaje = null; guardar(); // los avisos se muestran una vez
@@ -332,4 +333,4 @@ if (CONFIG.sinSenal && 'serviceWorker' in navigator) navigator.serviceWorker.reg
 
 await nube.iniciar();
 if (nube.entroPorEnlace()) { await sincronizarAlEntrar(); E.mensaje = `Entraste como ${nube.correo()}.`; E.vista = E.plan ? 'hoy' : 'inicio'; }
-ir(['cuestionario', 'hoy', 'semana', 'coach', 'progreso', 'mas'].includes(E.vista) ? E.vista : (E.plan ? 'hoy' : 'inicio'));
+ir(['cuestionario', 'hoy', 'semana', 'coach', 'progreso', 'mas', 'checkin'].includes(E.vista) ? E.vista : (E.plan ? 'hoy' : 'inicio'));

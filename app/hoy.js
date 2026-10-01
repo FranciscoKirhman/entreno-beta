@@ -7,6 +7,7 @@ import { explicarEjercicio } from '../nucleo/explicar.js';
 import { sesionDe } from '../nucleo/agenda.js';
 import { duracionEstimada, incrementoPara } from '../nucleo/motor-plan.js';
 import { ESFUERZO, prioridadEsfuerzo, consejoSerie } from '../nucleo/series.js';
+import { avisoCheckin } from './checkin.js';
 import * as nube from './nube.js';
 
 const app = () => $('app');
@@ -23,6 +24,7 @@ export function vistaHoy(ir) {
     <h1>Hoy <span class="suave pequeno">${esc(fechaCorta(f))}</span></h1>
     ${E.mensaje ? `<div class="aviso bien">${esc(E.mensaje)}</div>` : ''}
     ${D().mensaje_alerta ? `<div class="aviso ojo">${esc(D().mensaje_alerta)}</div>` : ''}
+    ${avisoCheckin()}
     ${b ? `<div class="tarjeta fila-resumen"><span>Cómo estás: <strong class="num">${b.puntaje}</strong>/100 · ${esc(TEXTO_RECOMENDACION[b.recomendacion])}</span><button type="button" class="enlace" id="rehacer-bienestar">Cambiar</button></div>` : formularioBienestar()}
     ${sups.length ? `<section class="tarjeta"><h3>Suplementos</h3><ul class="lista-check">${sups.map((s, i) => `<li class="${s.estado}"><button type="button" class="check" data-toma="${s.suplemento_id}" ${s.estado === 'tomada' ? 'disabled aria-pressed="true"' : 'aria-pressed="false"'} aria-label="Marcar ${esc(s.nombre)} como tomado">${s.estado === 'tomada' ? '✓' : ''}</button><span>${esc(s.nombre)}${s.dosis ? ` · ${esc(s.dosis)}` : ''}</span><span class="suave pequeno">${s.hora || ''}${s.estado === 'atrasada' ? ' · atrasado' : ''}</span></li>`).join('')}</ul></section>` : ''}
     ${dia ? sesionHoy(dia) : `<section class="tarjeta"><h3>Hoy descansas</h3>${proxima ? `<p class="suave">La próxima es ${esc(proxima.foco)}, el ${esc(fechaCorta(proxima.fecha))}.</p>` : ''}<button type="button" class="boton" id="entrenar-igual">Quiero entrenar hoy igual</button></section>`}
@@ -132,6 +134,7 @@ function enlazar(ir, dia) {
     if (nube.conectado()) nube.registrarToma(b.dataset.toma, f, ahora().slice(11)).catch(() => {});
     vistaHoy(ir);
   });
+  document.querySelectorAll('[data-ir-checkin]').forEach(b => b.onclick = () => ir('checkin', b.dataset.irCheckin));
   $('entrenar-igual')?.addEventListener('click', () => ir('coach', 'Hoy no tenía sesión pero quiero entrenar, ¿qué otra opción tienes?'));
   $('problema')?.addEventListener('click', () => ir('coach'));
   if (!dia) return;
