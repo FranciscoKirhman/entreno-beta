@@ -13,6 +13,7 @@ import { vistaMas } from './mas.js';
 import { vistaCheckin } from './checkin.js';
 import { historialReciente } from './temporada.js';
 import { programarAvisos } from './avisos.js';
+import { dejarPendiente, subirPendientes } from './cola.js';
 import * as nube from './nube.js';
 import { CONFIG } from './config.js';
 
@@ -268,7 +269,17 @@ async function sincronizarAlEntrar() {
   else if (Object.keys(R()).length) await armarPlan();
   try { E.suplementos = await nube.subirLocal({ bienestar: E.bienestar, suplementos: E.suplementos, tomas: E.tomas, consentimientos: E.consentimientos }); }
   catch (e) { console.warn('No se pudo subir lo anotado en este teléfono', e); }
+  // Sesiones e indicaciones anotadas sin cuenta: a la cola, que las sube con su id (sin duplicar).
+  for (const s of E.sesiones.filter(x => !x.enCuenta)) {
+    s.id ||= crypto.randomUUID();
+    const { id, enCuenta, ...datos } = s;
+    dejarPendiente('sesion', id, datos);
+  }
+  for (const i of E.indicaciones.filter(x => !x.enCuenta)) { i.id ||= crypto.randomUUID(); dejarPendiente('indicacion', i.id, i); }
+  try { for (const i of await nube.cargarIndicaciones()) if (!E.indicaciones.some(x => x.id === i.id)) E.indicaciones.push(i); }
+  catch (e) { console.warn('No se pudieron traer las indicaciones de la cuenta', e); }
   guardar();
+  await subirPendientes({ forzar: true });
 }
 
 function vistaBloqueada() {
@@ -337,5 +348,6 @@ const EJEMPLO = {
 if (CONFIG.sinSenal && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(e => console.warn('Sin modo sin señal', e));
 
 await nube.iniciar();
+subirPendientes(); // lo que quedó sin subir la última vez
 if (nube.entroPorEnlace()) { await sincronizarAlEntrar(); E.mensaje = `Entraste como ${nube.correo()}.`; E.vista = E.plan ? 'hoy' : 'inicio'; }
 ir(['cuestionario', 'hoy', 'semana', 'coach', 'progreso', 'mas', 'checkin'].includes(E.vista) ? E.vista : (E.plan ? 'hoy' : 'inicio'));

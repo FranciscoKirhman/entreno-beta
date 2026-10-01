@@ -9,6 +9,7 @@ import { duracionEstimada, incrementoPara } from '../nucleo/motor-plan.js';
 import { ESFUERZO, prioridadEsfuerzo, consejoSerie } from '../nucleo/series.js';
 import { avisoCheckin } from './checkin.js';
 import { avisoDescargaCorto } from './temporada.js';
+import { subirACuenta } from './cola.js';
 import * as nube from './nube.js';
 
 const app = () => $('app');
@@ -243,13 +244,15 @@ function enlazar(ir, dia) {
       }
     });
     if (!series.length) { E.mensaje = 'Marca al menos una serie como hecha.'; guardar(); return vistaHoy(ir); }
+    // El id es del teléfono y se mantiene al guardar de nuevo: así la cuenta la reemplaza en vez de duplicarla.
+    const id = E.sesiones.find(s => s.fecha === f)?.id || crypto.randomUUID();
     E.sesiones = E.sesiones.filter(s => s.fecha !== f);
-    E.sesiones.push({ fecha: f, titulo: dia.foco, series, notas });
+    E.sesiones.push({ id, fecha: f, titulo: dia.foco, series, notas });
     E.mensaje = `Sesión guardada: ${series.length} series.`;
     guardar();
     if (nube.conectado()) {
-      try { await nube.registrarSesion({ fecha: f, titulo: dia.foco, series, notas }); E.mensaje += ' También quedó en tu cuenta.'; }
-      catch (e) { E.mensaje += ` No se pudo subir a tu cuenta: ${e.message}`; }
+      const subio = await subirACuenta('sesion', id, { fecha: f, titulo: dia.foco, series, notas });
+      E.mensaje += subio ? ' También quedó en tu cuenta.' : ' Todavía no se pudo subir a tu cuenta: queda en este teléfono y se sube sola cuando vuelva la señal.';
       guardar();
     }
     vistaHoy(ir);

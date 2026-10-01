@@ -110,11 +110,44 @@ export async function cargarPlan() {
 export async function guardarBienestar(fecha, b) {
   ok(await supa.from('bienestar_diario').upsert({ user_id: uid(), fecha, ...b }));
 }
-export async function registrarSesion({ fecha, hora, titulo, duracion_min, series, notas }) {
-  const s = ok(await supa.from('sesiones').insert({ user_id: uid(), inicio: aIso(`${fecha}T${hora || '12:00'}`), titulo, duracion_min, origen: 'app' }).select('id').single());
-  if (series.length) ok(await supa.from('series').insert(series.map(x => ({ ...x, sesion_id: s.id, user_id: uid() }))));
-  if (notas.length) ok(await supa.from('notas_ejercicio').insert(notas.map(n => ({ ...n, sesion_id: s.id, user_id: uid() }))));
-  return s.id;
+/**
+ * Sube una sesión con el id que le dio el teléfono. Si ya estaba (un reintento, o "Guardar de nuevo"), se
+ * reemplazan sus series y notas: subirla dos veces no la duplica. La llama la cola (app/cola.js).
+ */
+export async function registrarSesion({ id, fecha, hora, titulo, duracion_min, series, notas }) {
+  ok(await supa.from('sesiones').upsert({ id, user_id: uid(), inicio: aIso(`${fecha}T${hora || '12:00'}`), titulo, duracion_min, origen: 'app' }, { onConflict: 'id' }));
+  ok(await supa.from('series').delete().eq('sesion_id', id));
+  if (series.length) ok(await supa.from('series').insert(series.map(x => ({ ...x, sesion_id: id, user_id: uid() }))));
+  ok(await supa.from('notas_ejercicio').delete().eq('sesion_id', id));
+  if (notas.length) ok(await supa.from('notas_ejercicio').insert(notas.map(n => ({ ...n, sesion_id: id, user_id: uid() }))));
+  return id;
+}
+
+// ── Indicaciones de tu médico o kinesiólogo (tabla y bucket privado "indicaciones") ─
+const EXTENSION = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/heic': 'heic', 'image/heif': 'heif', 'image/webp': 'webp' };
+
+/** Sube la indicación con el id del teléfono (reintentar no la duplica) y, si viene, su foto o PDF. */
+export async function guardarIndicacion(ind, archivo = null) {
+  let ruta = ind.archivo || null;
+  if (archivo) {
+    ruta = `${uid()}/${ind.id}.${EXTENSION[archivo.type] || 'bin'}`;
+    ok(await supa.storage.from('indicaciones').upload(ruta, archivo, { contentType: archivo.type, upsert: true }));
+  }
+  ok(await supa.from('indicaciones').upsert({
+    id: ind.id, user_id: uid(), profesional: ind.profesional || null, fecha: ind.fecha || null, hasta: ind.hasta || null,
+    restricciones: ind.restricciones || {}, ejercicios: ind.ejercicios || [], notas: ind.notas || null, archivo: ruta, activa: ind.activa !== false,
+  }, { onConflict: 'id' }));
+  return ruta;
+}
+export async function cargarIndicaciones() {
+  const filas = ok(await supa.from('indicaciones').select('id, profesional, fecha, hasta, restricciones, ejercicios, notas, archivo').eq('activa', true).order('creado'));
+  return filas.map(f => ({ ...f, enCuenta: true }));
+}
+/** Enlace temporal (1 hora) para ver el archivo de una indicación. */
+export async function verArchivoIndicacion(ruta) {
+  const { data, error } = await supa.storage.from('indicaciones').createSignedUrl(ruta, 3600);
+  if (error) throw error;
+  return data.signedUrl;
 }
 /** Check-in semanal: lo propuesto y lo que la persona aceptó (tabla checkins). */
 export async function guardarCheckin({ semana, plan_inicio, banderas, series, sesiones, cambios }) {
