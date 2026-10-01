@@ -1,6 +1,6 @@
 // La temporada (macrociclo, nucleo/ciclos.js) en la vista Semana: los bloques con su fase, en qué semana vas,
 // la propuesta de adelantar la descarga cuando vienes cansado y armar el bloque siguiente al terminar.
-import { E, guardar, R, D, esc, $, hoy, indice, fechaCorta, cambiarPlan } from './comun.js';
+import { E, guardar, R, D, esc, $, hoy, indice, fechaCorta, cambiarPlan, mostrarSemana } from './comun.js';
 import { macroDelPlan, semanaDe, propuestaDescarga, adelantarDescarga, aplicarFase } from '../nucleo/ciclos.js';
 import { generarPlan } from '../nucleo/motor-plan.js';
 import { validarPlan } from '../nucleo/validador.js';
@@ -90,7 +90,7 @@ export function enlazarTemporada(volver) {
     const p = propuestaDescarga(E.plan, hoy(), bienestarRegistros());
     if (!p) return volver();
     await cambiarPlan(adelantarDescarga(E.plan, p.semana), `Descarga adelantada: la semana ${p.semana} es de descarga y el bloque termina el ${fechaCorta(sumarDias(p.desde, 6))}.`, nube);
-    E.semana = p.semana; guardar(); volver();
+    mostrarSemana(p.semana); guardar(); volver();
   });
   $('bloque-siguiente')?.addEventListener('click', async () => {
     const m = macroActual();
@@ -100,7 +100,7 @@ export function enlazarTemporada(volver) {
     if (base.bloqueado) { E.mensaje = base.mensaje; guardar(); return volver(); }
     let plan = sig ? aplicarFase(base, sig, { minutos: ctx.derivados.duracion_min }) : base;
     if (sig && !validarPlan(plan, ctx).ok) plan = { ...base, bloque: sig.n }; // si la fase no cabe en tus reglas, el plan base
-    E.semana = 1;
+    mostrarSemana(1);
     await cambiarPlan(plan, sig ? `Bloque ${sig.n} armado: ${sig.nombre.toLowerCase()}. Parte el ${fechaCorta(plan.inicio)} con los pesos que anotaste.` : `Temporada nueva: parte el ${fechaCorta(plan.inicio)}.`, nube);
     volver();
   });

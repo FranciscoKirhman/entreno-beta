@@ -1,6 +1,8 @@
 // Vista Progreso: fotos de progreso privadas, suplementos, indicaciones de tu médico o kinesiólogo, y lo que
 // anotaste para el entrenador.
-import { E, guardar, C, esc, $, fechaCorta, hoy, indice, cambiarPlan, opcionesRadio, chk, mostrarMensaje } from './comun.js';
+import { E, guardar, C, esc, $, fechaCorta, hoy, indice, cambiarPlan, opcionesRadio, chk, mostrarMensaje, seriesTexto, volumenTexto } from './comun.js';
+import { tipoParaGuardar } from '../nucleo/registro.js';
+import { sesionDe, sumarDias, diaSemana } from '../nucleo/agenda.js';
 import { constancia } from '../nucleo/suplementos.js';
 import { aplicarIndicacion } from '../nucleo/cuidado.js';
 import { resumenParaEntrenador } from '../nucleo/notas.js';
@@ -10,6 +12,44 @@ import { subirACuenta, subirPendientes, estadoCola } from './cola.js';
 import * as nube from './nube.js';
 
 const DIAS = [[1, 'L'], [2, 'M'], [3, 'M'], [4, 'J'], [5, 'V'], [6, 'S'], [0, 'D']];
+const nombreEj = id => indice.porId.get(id)?.nombre || id;
+let verTodo = false;
+
+/** Sesiones para el historial: las guardadas (de la app o importadas de Hevy) y los días con series marcadas sin terminar. */
+function historial() {
+  const out = E.sesiones.map(s => ({ fecha: s.fecha, titulo: s.titulo, origen: s.origen,
+    series: (s.series || []).map(x => ({ nombre: x.ejercicio_nombre || nombreEj(x.ejercicio_id), carga_kg: x.carga_kg, reps: x.reps ?? x.duracion_seg, tipo: x.tipo })) }));
+  for (const [fecha, porEj] of Object.entries(E.registro)) {
+    if (E.sesiones.some(s => s.fecha === fecha && !s.origen)) continue;
+    const series = Object.entries(porEj || {}).flatMap(([id, l]) => (l || []).filter(x => x?.hecho)
+      .map(x => ({ nombre: nombreEj(id), carga_kg: x.kg ?? null, reps: x.reps ?? null, tipo: tipoParaGuardar(x) })));
+    if (series.length) out.push({ fecha, titulo: (E.plan && sesionDe(E.plan, fecha)?.foco) || 'Sesión', sinTerminar: true, series });
+  }
+  return out.sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0));
+}
+const deTrabajo = x => !['calentamiento', 'drop', 'descarga'].includes(x.tipo);
+const volumen = series => series.filter(x => x.tipo !== 'calentamiento').reduce((a, x) => a + (Number(x.carga_kg) || 0) * (Number(x.reps) || 0), 0);
+
+function historialHtml() {
+  const h = historial();
+  if (!h.length) return '<p class="pequeno suave">Todavía no hay sesiones. Marca tus series en Hoy, o importa tu historial de Hevy en Más.</p>';
+  const lunes = sumarDias(hoy(), -((diaSemana(hoy()) + 6) % 7));
+  const semana = h.filter(s => s.fecha >= lunes);
+  const resumen = semana.length ? `Esta semana: ${semana.length} sesión${semana.length === 1 ? '' : 'es'} · ${semana.reduce((a, s) => a + s.series.filter(deTrabajo).length, 0)} series de trabajo · volumen ${volumenTexto(semana.reduce((a, s) => a + volumen(s.series), 0))}.` : 'Esta semana todavía no entrenas.';
+  const item = s => {
+    const porEj = [];
+    for (const x of s.series) {
+      let g = porEj.find(y => y.nombre === x.nombre);
+      if (!g) porEj.push(g = { nombre: x.nombre, trabajo: [], calentamiento: 0 });
+      if (x.tipo === 'calentamiento') g.calentamiento++; else g.trabajo.push(x);
+    }
+    return `<li><details><summary><span class="fecha-h">${esc(fechaCorta(s.fecha))}</span><span class="titulo-h">${esc(s.titulo || 'Sesión')}${s.origen === 'hevy' ? ' <span class="chip">Hevy</span>' : ''}${s.sinTerminar && s.fecha === hoy() ? ' <span class="chip">en curso</span>' : ''}</span><span class="cifra-h num">${s.series.filter(deTrabajo).length} series</span></summary>
+      <ul class="pequeno detalle-h">${porEj.map(g => `<li><strong>${esc(g.nombre)}</strong>: ${esc(seriesTexto(g.trabajo) || '—')}${g.calentamiento ? ` <span class="suave">(+${g.calentamiento} de calentamiento)</span>` : ''}</li>`).join('')}</ul></details></li>`;
+  };
+  return `<p class="pequeno">${esc(resumen)}</p>
+    <ul class="historial">${(verTodo ? h : h.slice(0, 6)).map(item).join('')}</ul>
+    ${h.length > 6 ? `<button type="button" class="enlace" id="ver-todo">${verTodo ? 'Ver menos' : `Ver las ${h.length} sesiones`}</button>` : ''}`;
+}
 
 export async function vistaProgreso(ir) {
   const notas = Object.entries(E.notas).flatMap(([fecha, porEj]) => Object.entries(porEj).map(([id, n]) => {
@@ -22,8 +62,8 @@ export async function vistaProgreso(ir) {
   $('app').innerHTML = `<div id="vista-progreso">
     <h1>Progreso</h1>
     <section class="tarjeta">
-      <h3>Registro</h3>
-      <p>${E.sesiones.length ? `${E.sesiones.length} sesión(es) registradas en la app. La última: ${esc(E.sesiones.at(-1).titulo)}, ${esc(fechaCorta(E.sesiones.at(-1).fecha))}.` : 'Todavía no terminas ninguna sesión en la app.'}</p>
+      <h3>Historial</h3>
+      ${historialHtml()}
       ${nube.conectado() && cola.total ? `<div class="aviso ojo" id="cola">${cola.total} cosa${cola.total === 1 ? '' : 's'} esperando subir a tu cuenta (${[cola.sesiones && `${cola.sesiones} sesión${cola.sesiones === 1 ? '' : 'es'}`, cola.indicaciones && `${cola.indicaciones} indicación${cola.indicaciones === 1 ? '' : 'es'}`].filter(Boolean).join(', ')}). Quedan guardadas en este teléfono y se suben solas cuando hay señal.${cola.detenidos ? ` Después de varios intentos se pausó${cola.error ? ` (${esc(cola.error)})` : ''}.` : ''}
         <div class="fila-botones"><button type="button" class="boton" id="reintentar">Reintentar ahora</button></div></div>` : ''}
     </section>
@@ -36,7 +76,7 @@ export async function vistaProgreso(ir) {
         <label class="pequeno">Ángulo <select id="foto-angulo"><option value="frente">Frente</option><option value="perfil">Perfil</option><option value="espalda">Espalda</option><option value="otro">Otro</option></select></label></div>
         <input type="file" id="foto" accept="image/*" capture="environment">
         <div id="fotos" class="galeria"><p class="suave pequeno">Cargando…</p></div>`
-      : `<label class="pequeno"><input type="checkbox" id="consentir-fotos"> Acepto guardar fotos de mi cuerpo como datos personales sensibles, solo para ver mi progreso.</label>`}
+      : `<label class="pequeno casilla"><input type="checkbox" id="consentir-fotos"> Acepto guardar fotos de mi cuerpo como datos personales sensibles, solo para ver mi progreso.</label>`}
     </section>
 
     <section class="tarjeta">
@@ -44,18 +84,21 @@ export async function vistaProgreso(ir) {
       <p class="pequeno suave">La app no recomienda suplementos: te recuerda los que tú decides tomar. Para que te avise a su hora, activa los recordatorios en <button type="button" class="enlace" data-ir-mas>Más</button>.</p>
       ${cons ? `<p class="pequeno">Racha: <strong>${cons.racha}</strong> día(s) completos${cons.porcentaje_30_dias != null ? ` · ${Math.round(cons.porcentaje_30_dias * 100)}% de los últimos 30 días` : ''}.</p>` : ''}
       <ul class="lista-simple">${E.suplementos.map(s => `<li><span>${esc(s.nombre)}${s.dosis ? ` · ${esc(s.dosis)}` : ''} · ${s.horas?.length ? s.horas.join(', ') : 'sin hora'}${s.dias?.length ? ` · ${s.dias.map(d => DIAS.find(x => x[0] === d)[1]).join('')}` : ''}</span><button type="button" class="enlace" data-borrar-sup="${s.id}">Quitar</button></li>`).join('')}</ul>
+      <details class="extra"${E.suplementos.length ? '' : ' open'}><summary>Agregar un suplemento</summary>
       <form id="form-sup" class="panel">
         <div class="dos-col"><label class="pequeno">Nombre <input type="text" id="sup-nombre" placeholder="Creatina" required></label><label class="pequeno">Dosis <input type="text" id="sup-dosis" placeholder="5 g"></label></div>
         <label class="pequeno">Hora del recordatorio <input type="time" id="sup-hora" value="09:00"></label>
         <span class="pequeno">Días (ninguno = todos)</span><div class="escala">${DIAS.map(([d, t]) => `<label><input type="checkbox" class="sup-dia" value="${d}">${t}</label>`).join('')}</div>
         <button type="submit" class="boton">Agregar</button>
       </form>
+      </details>
     </section>
 
     <section class="tarjeta">
       <h3>Indicación de tu médico o kinesiólogo</h3>
       <p class="pequeno suave">Si un profesional te dio restricciones o ejercicios, anótalos: el plan los respeta y van primero.</p>
       ${E.indicaciones.map(i => `<div class="aviso ojo">${esc(i.profesional || 'Profesional')}${i.fecha ? `, ${esc(fechaCorta(i.fecha))}` : ''}: evitar ${esc((i.restricciones?.zonas || []).join(', ') || '—')}; ${esc((i.ejercicios || []).map(e => `${e.nombre} ${e.series}×${e.reps || e.segundos + ' s'} ${e.por_semana}/sem`).join('; ') || 'sin ejercicios')}${nube.conectado() ? `<span class="pequeno"> · ${i.enCuenta ? 'en tu cuenta' : 'esperando subir'}${i.archivo ? ` · <button type="button" class="enlace" data-ver-archivo="${esc(i.archivo)}">Ver el documento</button>` : ''}</span>` : ''}</div>`).join('')}
+      <details class="extra"><summary>Agregar una indicación</summary>
       <form id="form-ind" class="panel">
         <div class="dos-col"><label class="pequeno">Profesional <input type="text" id="ind-prof" placeholder="Kinesióloga, traumatólogo…"></label><label class="pequeno">Hasta <input type="date" id="ind-hasta"></label></div>
         <span class="pequeno">Zonas que no se deben cargar</span><div class="chips">${C.zonas.articulaciones.map(([z, t]) => `<label><input type="checkbox" class="ind-zona" value="${z}">${esc(t)}</label>`).join('')}</div>
@@ -64,6 +107,7 @@ export async function vistaProgreso(ir) {
         ${nube.conectado() ? '<label class="pequeno">Foto o PDF de la indicación (opcional, queda privado en tu cuenta) <input type="file" id="ind-archivo" accept="image/*,application/pdf"></label>' : ''}
         <button type="submit" class="boton">Incorporar al plan</button>
       </form>
+      </details>
     </section>
 
     <section class="tarjeta">
@@ -73,6 +117,7 @@ export async function vistaProgreso(ir) {
   </div>`;
 
   document.querySelector('[data-ir-mas]')?.addEventListener('click', () => ir('mas'));
+  $('ver-todo')?.addEventListener('click', () => { verTodo = !verTodo; const y = scrollY; vistaProgreso(ir); scrollTo(0, y); });
   $('consentir-fotos')?.addEventListener('change', ev => {
     if (!ev.target.checked) return;
     E.consentimientos.fotos_progreso = true; guardar();

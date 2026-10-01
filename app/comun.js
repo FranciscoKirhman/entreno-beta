@@ -57,6 +57,9 @@ export function restaurar(r) {
   if (r?.app !== 'entreno' || !r.estado || typeof r.estado !== 'object' || Array.isArray(r.estado)) throw new Error('Ese archivo no es un respaldo de Entreno.');
   E = { ...VACIO(), ...r.estado, vista: 'hoy', mensaje: null }; guardar();
 }
+/** Muestra esa semana del plan la próxima vez que se abra Semana (si no, se abre la semana en curso). */
+export const sesionVista = { semanaElegida: false };
+export function mostrarSemana(n) { E.semana = n; sesionVista.semanaElegida = true; }
 export const R = () => E.respuestas;
 export const D = () => derivar(R(), C, hoy());
 

@@ -286,3 +286,22 @@ body.con-descanso main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 170
 /* Menú inferior flotante */
 .nav-inferior{left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 8px);max-width:536px;margin:0 auto;padding:5px;border:1px solid var(--border);border-radius:20px;box-shadow:0 8px 24px rgba(0,0,0,.12)}
 .nav-inferior button{border-radius:15px}
+
+/* Semana */
+.resumen-plan{color:var(--ink-muted);margin-top:0}
+.semanas{align-items:center}
+.semanas > span{flex:0 0 auto;margin-right:2px}
+.semanas button{min-width:44px;min-height:40px}
+.chip.hoy{background:var(--accent);color:var(--accent-ink)}
+.tarjeta.dia.es-hoy{border-color:var(--accent)}
+
+/* Progreso: historial */
+.historial{list-style:none;margin:8px 0 4px;padding:0}
+.historial > li{border-top:1px solid var(--line)}
+.historial summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:baseline;padding:10px 0;cursor:pointer;list-style:none}
+.historial summary::-webkit-details-marker{display:none}
+.fecha-h{font-size:13px;color:var(--ink-muted);white-space:nowrap}
+.titulo-h{font-weight:500;min-width:0}
+.titulo-h .chip{white-space:nowrap;display:inline-block}
+.cifra-h{font-size:13px;color:var(--ink-muted);white-space:nowrap}
+.detalle-h{margin:0 0 10px;padding-left:18px;display:flex;flex-direction:column;gap:4px}

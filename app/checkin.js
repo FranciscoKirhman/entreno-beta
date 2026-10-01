@@ -1,6 +1,6 @@
 // Check-in semanal: cómo te fue en cada ejercicio y cuánto sube, se mantiene o baja la carga de la semana
 // siguiente (nucleo/semanal.js). Nada cambia hasta que la persona confirma.
-import { E, guardar, R, K, esc, $, hoy, indice, fechaCorta, cambiarPlan, peso, seriesTexto } from './comun.js';
+import { E, guardar, R, K, esc, $, hoy, indice, fechaCorta, cambiarPlan, peso, seriesTexto, mostrarSemana } from './comun.js';
 import { semanaParaCheckin, proponerCheckin, aplicarCheckin } from '../nucleo/semanal.js';
 import * as nube from './nube.js';
 
@@ -121,7 +121,7 @@ export function vistaCheckin(ir, semanaPedida) {
         cambios: aceptados.map(i => ({ ejercicio_id: i.ejercicio_id, plantilla: i.plantilla, accion: i.accion, regla: i.regla, carga_kg: i.carga_kg, reps_min: i.reps_min, reps_max: i.reps_max })) })
         .catch(e => console.warn('Check-in no guardado en la cuenta', e));
     }
-    E.semana = p.siguiente;
+    mostrarSemana(p.siguiente);
     guardar();
     ir('semana');
   };

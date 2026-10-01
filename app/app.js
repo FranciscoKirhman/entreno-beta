@@ -296,7 +296,7 @@ function vistaInicio() {
     ${nube.hay() && !nube.conectado() ? `<section class="tarjeta"><h3>Entrar con tu correo</h3><p class="pequeno">Tu plan y tus registros quedan guardados y el coach puede usar IA.</p><button type="button" class="boton primario" id="a-cuenta">Entrar</button></section>` : ''}
     ${nube.conectado() ? `<p class="pequeno suave">Entraste como ${esc(nube.correo())}.</p>` : ''}
     <div class="fila-botones">
-      <button type="button" class="boton ${nube.conectado() ? 'primario' : ''}" id="empezar">${Object.keys(R()).length ? 'Seguir con el cuestionario' : 'Empezar el cuestionario'}</button>
+      <button type="button" class="boton primario" id="empezar">${Object.keys(R()).length ? 'Seguir con el cuestionario' : 'Empezar el cuestionario'}</button>
       <button type="button" class="boton" id="ejemplo">Ver un ejemplo</button>
     </div>
     <p class="pequeno">¿Cambiaste de teléfono? <button type="button" class="enlace" id="a-respaldo">Restaurar un respaldo</button></p>

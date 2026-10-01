@@ -1,28 +1,41 @@
 // Vista Semana: el plan por semanas, mover o faltar a un día, y agendar según el calendario de Google (.ics).
-import { E, guardar, R, esc, $, fechaCorta, presc, cambiarPlan, hoy, indice, mostrarMensaje } from './comun.js';
+import { E, guardar, R, esc, $, fechaCorta, presc, cambiarPlan, hoy, indice, mostrarMensaje, sesionVista, mostrarSemana } from './comun.js';
 import { moverSesion, intercambiar, marcarFaltada, reagendarConCalendario, sesionDe, nombreDia } from '../nucleo/agenda.js';
 import { leerIcs } from '../nucleo/ics.js';
 import { duracionEstimada } from '../nucleo/motor-plan.js';
 import { avisoCheckin } from './checkin.js';
 import { tarjetaTemporada, tarjetaDescarga, enlazarTemporada } from './temporada.js';
+import { semanaDe } from '../nucleo/ciclos.js';
 import * as nube from './nube.js';
+
+const DIAS_CORTOS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+
+/** Si ese día ya se entrenó (sesión guardada o series marcadas). */
+const entrenado = f => E.sesiones.some(s => s.fecha === f && !s.origen) || Object.values(E.registro[f] || {}).some(l => (l || []).some(x => x?.hecho));
 
 export function vistaSemana(ir) {
   const p = E.plan;
   if (!p || p.bloqueado) return ir('inicio');
+  const f = hoy();
   const semanas = [...new Set(p.dias.map(d => d.semana))].filter(Boolean).sort((a, b) => a - b);
+  if (!sesionVista.semanaElegida) E.semana = semanaDe(p, f) || E.semana; // al entrar, la semana en curso
   if (!semanas.includes(E.semana)) E.semana = semanas[0];
   const dias = p.dias.filter(x => x.semana === E.semana);
+  const diasSemana = [...new Set(p.dias.filter(x => x.semana === semanas[0]).map(x => new Date(x.fecha + 'T12:00:00Z').getUTCDay()))];
+  // La nota "elige un peso" se repite en cada ejercicio: en el plan se dice una vez, arriba.
+  const eligePeso = dias.some(x => x.ejercicios.some(e => /^Elige un peso/.test(e.nota || '')));
   $('app').innerHTML = `<div id="vista-semana">
     <h1>Tu plan</h1>
-    <p>${esc(p.justificacion || '')}</p>
+    <p class="resumen-plan">${p.semanas} semanas · ${diasSemana.length} días: ${esc(diasSemana.map(d => DIAS_CORTOS[d]).join(', '))}</p>
+    ${p.justificacion ? `<details class="extra"><summary>Por qué está armado así</summary><p class="pequeno">${esc(p.justificacion)}</p></details>` : ''}
     ${tarjetaDescarga()}
     ${avisoCheckin(true)}
     ${tarjetaTemporada()}
-    <div class="semanas" role="group" aria-label="Semana">${semanas.map(s => `<button type="button" data-semana="${s}" aria-pressed="${s === E.semana}">Semana ${s}${s === p.semana_descarga ? ' · descarga' : ''}</button>`).join('')}</div>
-    ${dias.map(x => `<section class="tarjeta dia" id="dia-${x.fecha}">
-      <h3>${esc(fechaCorta(x.fecha))}${x.hora ? ` · ${esc(x.hora)}` : ''} · ${esc(x.foco)} <span class="chip ${x.firme ? 'firme' : ''}">${x.firme ? 'Firme' : 'Opcional'}</span> <span class="chip num">~${duracionEstimada(x.ejercicios)} min</span></h3>
-      <ul class="ejercicios">${x.ejercicios.map(e => `<li><span class="nombre">${esc(e.nombre || indice.porId.get(e.ejercicio_id)?.nombre || '')}</span><span class="presc">${esc(presc(e))}</span>${e.nota ? `<span class="detalle">${esc(e.nota)}</span>` : ''}</li>`).join('')}</ul>
+    <div class="semanas" role="group" aria-label="Semana"><span class="pequeno suave">Semana</span>${semanas.map(s => `<button type="button" data-semana="${s}" aria-pressed="${s === E.semana}"${s === p.semana_descarga ? ' aria-label="Semana ' + s + ', de descarga"' : ''}>${s}${s === p.semana_descarga ? ' · descarga' : ''}</button>`).join('')}</div>
+    ${eligePeso ? '<p class="pequeno suave">Donde no hay peso indicado, elige uno con el que te sobren las repeticiones de reserva (RIR) en la última serie. Lo anotas en Hoy y la app lo ajusta desde ahí.</p>' : ''}
+    ${dias.map(x => `<section class="tarjeta dia${x.fecha === f ? ' es-hoy' : ''}" id="dia-${x.fecha}">
+      <h3>${esc(fechaCorta(x.fecha))}${x.hora ? ` · ${esc(x.hora)}` : ''} · ${esc(x.foco)} ${x.fecha === f ? '<span class="chip hoy">Hoy</span>' : ''}${entrenado(x.fecha) ? '<span class="chip firme">Hecha ✓</span>' : `<span class="chip ${x.firme ? 'firme' : ''}">${x.firme ? 'Firme' : 'Opcional'}</span>`} <span class="chip num">~${duracionEstimada(x.ejercicios)} min</span></h3>
+      <ul class="ejercicios">${x.ejercicios.map(e => `<li><span class="nombre">${esc(e.nombre || indice.porId.get(e.ejercicio_id)?.nombre || '')}</span><span class="presc">${esc(presc(e))}</span>${e.nota && !/^Elige un peso/.test(e.nota) ? `<span class="detalle">${esc(e.nota)}</span>` : ''}</li>`).join('')}</ul>
       <details class="extra"><summary>Mover, intercambiar o marcar que faltaste</summary>
         <div class="panel">
           <label class="pequeno">Mover a <input type="date" data-mover="${x.fecha}" value="${x.fecha}"></label>
@@ -42,7 +55,7 @@ export function vistaSemana(ir) {
   const raiz = $('vista-semana');
   enlazarTemporada(() => vistaSemana(ir));
   raiz.querySelectorAll('[data-ir-checkin]').forEach(b => b.onclick = () => ir('checkin', b.dataset.irCheckin));
-  raiz.querySelectorAll('[data-semana]').forEach(b => b.onclick = () => { E.semana = Number(b.dataset.semana); guardar(); vistaSemana(ir); });
+  raiz.querySelectorAll('[data-semana]').forEach(b => b.onclick = () => { mostrarSemana(Number(b.dataset.semana)); guardar(); vistaSemana(ir); });
   raiz.querySelectorAll('[data-aplicar-mover]').forEach(b => b.onclick = async () => {
     const de = b.dataset.aplicarMover, a = raiz.querySelector(`[data-mover="${de}"]`).value;
     if (!a || a === de) return;
