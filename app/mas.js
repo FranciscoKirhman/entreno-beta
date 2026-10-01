@@ -1,5 +1,6 @@
 // Vista Más: cuenta, ajustar con tu propia IA (copiar y pegar), importar un plan escrito y reiniciar.
-import { E, guardar, reiniciar, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje } from './comun.js';
+import { E, guardar, reiniciar, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje, unidadPeso } from './comun.js';
+import { esExportacionHevy, importarParaTelefono } from '../nucleo/hevy-csv.js';
 import { soporte, configAvisos, cambiarAvisos, activarAvisos, notificar, enlaceCalendario } from './avisos.js';
 import { CONFIG } from './config.js';
 import { aplicarCambios, promptParaIA, leerRespuestaIA } from '../nucleo/cambios.js';
@@ -19,6 +20,14 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     <section class="tarjeta" id="recordatorios">${recordatoriosHtml()}</section>
 
     <section class="tarjeta">
+      <h3>Unidades</h3>
+      <div class="fila-unidad"><span>Peso</span><div class="segmentos" role="group" aria-label="Unidad de peso">${['kg', 'lb'].map(u => `<button type="button" data-unidad="${u}" aria-pressed="${unidadPeso() === u}">${u}</button>`).join('')}</div></div>
+      <p class="pequeno suave">Todo se guarda en kilos; en libras se muestra redondeado a media libra. Distancia y medidas del cuerpo se suman cuando la app las registre.</p>
+    </section>
+
+    <section class="tarjeta" id="conexiones">${conexionesHtml()}</section>
+
+    <section class="tarjeta">
       <h3>Respaldo</h3>
       <p class="pequeno">${nube.conectado() ? 'Tu cuenta ya guarda todo. Igual puedes' : 'Lo que anotas queda solo en este teléfono. Cada tanto,'} descarga un respaldo: sirve para no perder nada si se borran los datos del navegador o si cambias de teléfono.</p>
       ${E.consentimientos.fotos_progreso ? '<label class="pequeno casilla"><input type="checkbox" id="respaldo-fotos" checked> Incluir mis fotos de progreso (el archivo pesa más)</label>' : ''}
@@ -27,7 +36,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
       <div id="estado-respaldo"></div>
     </section>
 
-    <section class="tarjeta">
+    <section class="tarjeta" id="tu-ia">
       <h3>Ajustar con tu IA</h3>
       <p class="pequeno">Usa ChatGPT, Claude o Gemini. Copia el texto, pégalo en tu IA y trae de vuelta su respuesta. La app revisa todo con las mismas reglas antes de cambiar tu plan.</p>
       <textarea id="pedido" placeholder="Ej: quiero más glúteo, el martes solo tengo 40 minutos">${esc(E.pedido)}</textarea>
@@ -56,6 +65,8 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
   </div>`;
   enlazarCuenta(ir, sincronizarAlEntrar);
   enlazarRecordatorios();
+  document.querySelectorAll('[data-unidad]').forEach(b => b.onclick = () => { R().unidad = b.dataset.unidad; E.mensaje = `Peso en ${b.dataset.unidad === 'lb' ? 'libras' : 'kilos'}.`; guardar(); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); });
+  enlazarConexiones(() => vistaMas(ir, { armarPlan, sincronizarAlEntrar }));
   $('pedido').oninput = e => { E.pedido = e.target.value; guardar(); };
   $('copiar').onclick = async () => {
     const d = D();
@@ -201,6 +212,66 @@ async function restaurarFoto(f) {
   if (nube.conectado()) await nube.subirFoto({ fecha: f.fecha, angulo: f.angulo, archivo });
   else await guardarFotoLocal({ id: f.id, fecha: f.fecha, angulo: f.angulo, archivo }); // mismo id: restaurar dos veces no duplica
   return true;
+}
+
+// ── Conexiones con otras apps ───────────────────────────────────────────────
+const ICONOS = {
+  hevy: '<path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/>',
+  ia: '<path d="M12 3.5l1.8 4.7 4.7 1.8-4.7 1.8L12 16.5l-1.8-4.7L5.5 10l4.7-1.8z"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
+  strava: '<path d="M3.5 18.5l5-9 4 6 3-4.5 5 7.5"/>',
+  salud: '<path d="M12 20s-7.5-4.6-7.5-10A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 7.5 3c0 5.4-7.5 10-7.5 10z"/>',
+};
+const icono = n => `<span class="icono-app" aria-hidden="true"><svg viewBox="0 0 24 24">${ICONOS[n]}</svg></span>`;
+
+function conexionesHtml() {
+  const importadas = E.sesiones.filter(s => s.origen === 'hevy');
+  const ultima = importadas.map(s => s.fecha).sort().at(-1);
+  return `<h3>Conexiones</h3>
+    <ul class="conexiones">
+      <li>
+        <div class="cab-conexion">${icono('hevy')}<strong>Hevy</strong><label class="accion-conexion">Importar<input type="file" id="archivo-hevy" accept=".csv,text/csv" hidden></label></div>
+        <p class="pequeno suave">Trae tu historial de Hevy: la app lo usa para "la vez anterior" y para partir el plan con tus pesos reales. En Hevy: Perfil → Ajustes → Exportar e importar datos → Exportar entrenamientos; guarda el archivo y elígelo aquí.</p>
+        ${importadas.length ? `<p class="pequeno">Importadas: ${importadas.length} sesión${importadas.length === 1 ? '' : 'es'} (la última, ${esc(fechaCorta(ultima))}). <button type="button" class="enlace" id="quitar-hevy">Quitar lo importado</button></p>` : ''}
+        <div id="estado-hevy"></div>
+      </li>
+      <li>
+        <div class="cab-conexion">${icono('ia')}<strong>ChatGPT y Claude</strong><a class="accion-conexion" href="#tu-ia">Usar ahora</a></div>
+        <p class="pequeno suave">Tu IA arma o ajusta el plan y la app lo revisa con sus reglas antes de guardarlo. Hoy funciona copiando y pegando; la conexión directa llega con el servidor.</p>
+      </li>
+      <li>
+        <div class="cab-conexion">${icono('strava')}<strong>Strava</strong><span class="chip">Con el servidor</span></div>
+        <p class="pequeno suave">Publicar tus sesiones en Strava. Necesita un servidor que guarde la conexión (etapa 2).</p>
+      </li>
+      <li>
+        <div class="cab-conexion">${icono('salud')}<strong>Salud de Apple y Health Connect</strong><span class="chip">Con la app nativa</span></div>
+        <p class="pequeno suave">Guardar tus sesiones en Salud y leer peso o pulso. Solo se puede desde la app para iPhone y Android (etapa 3); una app web no tiene acceso.</p>
+      </li>
+    </ul>`;
+}
+
+function enlazarConexiones(repintar) {
+  $('archivo-hevy').onchange = async ev => {
+    const archivo = ev.target.files[0];
+    if (!archivo) return;
+    const out = $('estado-hevy');
+    const texto = await archivo.text();
+    if (!esExportacionHevy(texto)) { out.innerHTML = '<div class="aviso alerta">Ese archivo no es la exportación de entrenamientos de Hevy (workout_data.csv).</div>'; return; }
+    let r;
+    try { r = importarParaTelefono(texto, indice, E.sesiones); }
+    catch (e) { out.innerHTML = `<div class="aviso alerta">No pude leer el archivo: ${esc(e.message)}</div>`; return; }
+    E.sesiones.push(...r.nuevas);
+    E.sesiones.sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
+    E.mensaje = r.nuevas.length ? `Importé ${r.nuevas.length} sesión${r.nuevas.length === 1 ? '' : 'es'} de Hevy${r.total > r.nuevas.length ? ` (las otras ${r.total - r.nuevas.length} ya estaban)` : ''}.` : 'Esas sesiones ya estaban importadas.';
+    if (r.sinCatalogo.length) E.mensaje += ` ${r.sinCatalogo.length} ejercicio${r.sinCatalogo.length === 1 ? '' : 's'} no calza${r.sinCatalogo.length === 1 ? '' : 'n'} con el catálogo y no cuenta${r.sinCatalogo.length === 1 ? '' : 'n'} para "la vez anterior": ${r.sinCatalogo.slice(0, 4).join(', ')}${r.sinCatalogo.length > 4 ? '…' : ''}.`;
+    guardar(); repintar();
+  };
+  $('quitar-hevy')?.addEventListener('click', ev => {
+    const b = ev.currentTarget;
+    if (!b.dataset.confirmar) { b.dataset.confirmar = '1'; b.textContent = 'Toca de nuevo para quitarlo'; return; }
+    E.sesiones = E.sesiones.filter(s => s.origen !== 'hevy');
+    E.mensaje = 'Quité lo importado de Hevy. Lo anotado en la app sigue igual.';
+    guardar(); repintar();
+  });
 }
 
 /** Ya abierta como app instalada (no en una pestaña del navegador). */

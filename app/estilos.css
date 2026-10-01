@@ -265,3 +265,24 @@ body.con-descanso main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 170
 .opcion-hoja .ayuda[aria-expanded="true"]{background:var(--accent-soft);color:var(--accent)}
 .explicacion{margin:0;padding:0 16px 14px 52px;color:var(--ink-muted)}
 @media (prefers-reduced-motion:reduce){.hoja,.hoja-fondo{transition:none}}
+
+/* Unidades: botones segmentados */
+.fila-unidad{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0}
+.segmentos{display:inline-flex;padding:3px;border:1px solid var(--border);border-radius:12px;background:var(--bg)}
+.segmentos button{min-width:72px;min-height:40px;border:0;border-radius:9px;background:none;font-weight:500;cursor:pointer}
+.segmentos button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+
+/* Conexiones con otras apps */
+.conexiones{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column}
+.conexiones li{padding:12px 0;border-top:1px solid var(--line)}
+.conexiones li:first-child{border-top:0;padding-top:4px}
+.cab-conexion{display:flex;align-items:center;gap:12px}
+.cab-conexion strong{flex:1;min-width:0}
+.icono-app{width:44px;height:44px;flex:0 0 44px;border-radius:12px;border:1px solid var(--border);background:var(--surface-2);display:grid;place-items:center;color:var(--ink)}
+.icono-app svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.accion-conexion{color:var(--accent);font-weight:600;cursor:pointer;text-decoration:none}
+.conexiones .chip{white-space:nowrap}
+
+/* Menú inferior flotante */
+.nav-inferior{left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 8px);max-width:536px;margin:0 auto;padding:5px;border:1px solid var(--border);border-radius:20px;box-shadow:0 8px 24px rgba(0,0,0,.12)}
+.nav-inferior button{border-radius:15px}

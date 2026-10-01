@@ -185,3 +185,25 @@ export function aFilas(w, indice, origen = 'hevy_csv') {
     series,
   };
 }
+
+/**
+ * La exportación de Hevy → sesiones en el formato del teléfono (las que guarda la app), sin repetir las que ya se
+ * importaron antes. Sirven para "la vez anterior", el historial y para que el plan parta con los pesos reales.
+ * @param existentes sesiones del teléfono; las importadas traen origen 'hevy', id_externo y clave
+ * @returns {{nuevas, total, sinCatalogo: string[]}} sinCatalogo: ejercicios que no calzan con el catálogo
+ */
+export function importarParaTelefono(texto, indice, existentes = []) {
+  const ws = leerSesiones(texto);
+  const ya = existentes.filter(s => s.origen === 'hevy').map(s => ({ id_externo: s.id_externo, clave: s.clave }));
+  const sinCatalogo = new Set();
+  const nuevas = sesionesNuevas(ws, ya).map(w => {
+    const { sesion, series } = aFilas(w, indice);
+    series.filter(s => !s.ejercicio_id).forEach(s => sinCatalogo.add(s.ejercicio_nombre));
+    return {
+      id: `hevy-${w.id}`, origen: 'hevy', id_externo: w.id, clave: claveSesion(w), fecha: w.start_time.slice(0, 10),
+      titulo: sesion.titulo, duracion_min: sesion.duracion_min, notas: [],
+      series: series.map(s => ({ ...s, rir: s.tipo === 'fallo' ? 0 : s.rpe != null ? Math.max(0, 10 - s.rpe) : null })),
+    };
+  });
+  return { nuevas, total: ws.length, sinCatalogo: [...sinCatalogo] };
+}
