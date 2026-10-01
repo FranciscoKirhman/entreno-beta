@@ -27,8 +27,9 @@ export function derivar(r, cuestionario, hoy) {
   const pp = cuestionario.reglas.punto_de_partida;
   const errores = [];
   const anios = r.fecha_nacimiento ? edad(r.fecha_nacimiento, hoy) : null;
-  if (anios == null) errores.push('Falta la fecha de nacimiento.');
-  else if (anios < 18) errores.push('Por ahora la app es solo para mayores de 18 años.');
+  // La fecha es opcional: alcanza con confirmar que es mayor de edad (cuestionario rápido).
+  if (anios != null && anios < 18) errores.push('Por ahora la app es solo para mayores de 18 años.');
+  else if (anios == null && r.mayor_18 !== true) errores.push('Falta confirmar que tienes 18 años o más.');
 
   const niv = nivel(r);
   const conSalud = r.consentimiento_salud === true;

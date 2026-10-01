@@ -38,6 +38,7 @@ const TECNICA_DE = { sentadilla: 'sentadilla', bisagra: 'bisagra', empuje_horizo
 // Días preferidos según cuántos se entrena (0 = domingo). Se reemplazan por el más cercano si no se puede.
 const DIAS_PREFERIDOS = { 2: [1, 4], 3: [1, 3, 5], 4: [1, 2, 4, 5], 5: [1, 2, 3, 5, 6], 6: [1, 2, 3, 4, 5, 6], 7: [1, 2, 3, 4, 5, 6, 0] };
 
+const TIPO_ORDEN = { compuesto: 0, aislamiento: 1, core: 2, cardio: 3, movilidad: 3 };
 const ISOMETRICOS = new Set(['plancha', 'plancha_rodillas', 'plancha_lateral', 'plancha_lateral_elevacion', 'colgarse']);
 const DIA_MS = 864e5;
 const sumarDias = (iso, n) => new Date(Date.parse(iso + 'T12:00:00Z') + n * DIA_MS).toISOString().slice(0, 10);
@@ -198,6 +199,21 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
 
   const historialDe = id => historial.filter(s => s.ejercicio_id === id);
   const cargasRef = (r.cargas_referencia || []).map(c => ({ ejercicio_id: c.ejercicio_id, carga_kg: c.peso_kg, reps: c.repeticiones, rir: 2 }));
+  /** Un ejercicio del plan con su prescripción y, si hay historial, su carga inicial. */
+  const armar = (ej, prioridad, orden) => {
+    const pr = prescripcion(ej, prioridad, d);
+    const inc = incrementoPara(ej, lugar);
+    const maxMancuerna = ej.equipamiento.includes('mancuernas') ? Number(lugar.mancuerna_max_kg) || null : null;
+    const carga = pr.unidad === 'reps'
+      ? cargaInicial([...historialDe(ej.id), ...cargasRef.filter(c => c.ejercicio_id === ej.id)], pr.reps_min + 1, pr.rir, inc, maxMancuerna)
+      : null;
+    return {
+      ejercicio_id: ej.id, nombre: ej.nombre, orden, prioridad, ...pr, carga_kg: carga,
+      nota: carga == null && pr.unidad === 'reps' && inc
+        ? `Elige un peso con el que te sobren ${pr.rir} repeticiones en la última serie. Anótalo y la app lo ajusta desde ahí.`
+        : null,
+    };
+  };
 
   const plantillaDias = plantillas.map((t, i) => {
     const huecos = [...PLANTILLAS[t].huecos, ...(extras.get(t) || [])];
@@ -212,86 +228,173 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     }
     // Lo que no cabe en el tiempo disponible se va desde la prioridad más baja.
     ejercicios = ejercicios.slice(0, d.ejercicios_por_sesion);
-    const tipoOrden = { compuesto: 0, aislamiento: 1, core: 2, cardio: 3, movilidad: 3 };
-    ejercicios.sort((a, b) => a.prioridad - b.prioridad || tipoOrden[a.ej.tipo] - tipoOrden[b.ej.tipo]);
+    ejercicios.sort((a, b) => a.prioridad - b.prioridad || TIPO_ORDEN[a.ej.tipo] - TIPO_ORDEN[b.ej.tipo]);
     return {
       plantilla: t, foco: PLANTILLAS[t].foco, dia_semana: dias[i], firme: i < d.dias_firmes,
-      ejercicios: ejercicios.map(({ ej, prioridad }, orden) => {
-        const pr = prescripcion(ej, prioridad, d);
-        const inc = incrementoPara(ej, lugar);
-        const maxMancuerna = ej.equipamiento.includes('mancuernas') ? Number(lugar.mancuerna_max_kg) || null : null;
-        const carga = pr.unidad === 'reps'
-          ? cargaInicial([...historialDe(ej.id), ...cargasRef.filter(c => c.ejercicio_id === ej.id)], pr.reps_min + 1, pr.rir, inc, maxMancuerna)
-          : null;
-        return {
-          ejercicio_id: ej.id, nombre: ej.nombre, orden, prioridad, ...pr, carga_kg: carga,
-          nota: carga == null && pr.unidad === 'reps' && inc
-            ? `Elige un peso con el que te sobren ${pr.rir} repeticiones en la última serie. Anótalo y la app lo ajusta desde ahí.`
-            : null,
-        };
-      }),
+      ejercicios: ejercicios.map(({ ej, prioridad }, orden) => armar(ej, prioridad, orden)),
     };
   });
+
+  // Favoritos: si se pueden hacer y no quedaron en la semana (dos favoritos del mismo movimiento, o un movimiento
+  // que la semana no tiene), entran en lugar de un ejercicio parecido o se suman al día que más los necesita.
+  const sePuede = ej => ej && ej.tipo !== 'cardio' && tieneEquipo(ej, equipo) && nivelAlcanza(d.nivel, ej.nivel_minimo)
+    && !prohibidos.has(ej.id) && !cargaZonaBloqueada(ej, bloqueadas);
+  for (const id of favoritos) {
+    const ej = indice.porId.get(id);
+    if (!sePuede(ej) || plantillaDias.some(x => x.ejercicios.some(e => e.ejercicio_id === id))) continue;
+    const parecido = (e, criterio) => !favoritos.has(e.ejercicio_id) && criterio(indice.porId.get(e.ejercicio_id));
+    const reemplazo = [e2 => e2.patron === ej.patron, e2 => e2.musculos_primarios.some(m => ej.musculos_primarios.includes(m)) && e2.tipo === ej.tipo]
+      .map(c => plantillaDias.flatMap(x => x.ejercicios.filter(e => parecido(e, c) && !x.ejercicios.some(y => y.ejercicio_id === id)).map(e => ({ x, e }))))
+      .find(l => l.length);
+    if (reemplazo) {
+      const { x, e } = reemplazo.sort((a, b) => b.e.prioridad - a.e.prioridad)[0];
+      x.ejercicios[x.ejercicios.indexOf(e)] = armar(ej, e.prioridad, e.orden);
+    } else {
+      const x = [...plantillaDias].sort((a, b) => a.ejercicios.length - b.ejercicios.length)[0];
+      x.ejercicios.push(armar(ej, 2, x.ejercicios.length));
+      x.ejercicios.sort((a, b) => a.prioridad - b.prioridad || TIPO_ORDEN[indice.porId.get(a.ejercicio_id).tipo] - TIPO_ORDEN[indice.porId.get(b.ejercicio_id).tipo]);
+    }
+  }
 
   // Ajuste de volumen: subir a los músculos prioritarios hasta el tope del rango y no pasarse en ninguno.
   const porId = indice.porId;
   const [lo, hi] = d.series_rango;
   const conSemana = plantillaDias.map(x => ({ ...x, semana: 1 }));
   const CONTADOS = ['femoral', 'gluteo', 'cuadriceps', 'aductor_abductor', 'espalda', 'pecho', 'hombro', 'biceps', 'triceps'];
-  const tope = hi + 2;
-  const trabajan = m => conSemana.flatMap(x => x.ejercicios.map(e => ({ x, e })))
-    .filter(({ e }) => porId.get(e.ejercicio_id).musculos_primarios.includes(m));
-  // 1. Recortar lo que pasa el tope: primero series, después el ejercicio menos prioritario que no sea favorito.
-  for (let vuelta = 0; vuelta < 200; vuelta++) {
+  const tope = hi + 2, duro = hi + 4; // sobre `duro` el validador rechaza el plan
+  const prioritario = m => d.musculos_prioridad.includes(m);
+  const aporta = (e, m) => { const ej = porId.get(e.ejercicio_id); return ej.musculos_primarios.includes(m) ? 1 : ej.musculos_secundarios.includes(m) ? 0.5 : 0; };
+  const tocan = m => conSemana.flatMap(x => x.ejercicios.map(e => ({ x, e }))).filter(({ e }) => aporta(e, m) > 0);
+  const trabajan = m => tocan(m).filter(({ e }) => aporta(e, m) === 1);
+  const fav = ({ e }) => favoritos.has(e.ejercicio_id);
+  // 1. Recortar lo que pasa el tope, también lo que llega por músculos secundarios (el hombro en cada press):
+  //    primero series de lo que no es favorito, después sacar lo menos prioritario, al final series de favoritos.
+  //    Si aun así queda sobre el límite duro, se baja a 1 serie y se sacan ejercicios principales repetidos.
+  const atascados = new Set(); // lo que no se puede recortar más (todo es favorito): se sigue con los demás músculos
+  for (let vuelta = 0; vuelta < 400; vuelta++) {
     const v = volumenSemanal(conSemana, porId);
-    const m = CONTADOS.find(k => (v[k] || 0) > tope);
+    const m = CONTADOS.find(k => (v[k] || 0) > tope && !atascados.has(k));
     if (!m) break;
-    // Orden: series de los no favoritos, después sacar un no favorito de baja prioridad, al final series de favoritos.
-    const fav = ({ e }) => favoritos.has(e.ejercicio_id);
-    const porPrioridad = (a, b) => b.e.prioridad - a.e.prioridad;
-    const serieNoFav = trabajan(m).filter(t => !fav(t) && t.e.series > 2).sort(porPrioridad)[0];
-    const sobra = trabajan(m).filter(t => !fav(t) && t.e.prioridad >= 2 && t.x.ejercicios.length > 3).sort(porPrioridad)[0];
-    const serieFav = trabajan(m).filter(t => fav(t) && t.e.series > 2).sort(porPrioridad)[0];
+    const orden = (a, b) => aporta(b.e, m) - aporta(a.e, m) || b.e.prioridad - a.e.prioridad;
+    const t = tocan(m);
+    const serieNoFav = t.filter(x => !fav(x) && x.e.series > 2).sort(orden)[0];
+    const sobra = t.filter(x => !fav(x) && x.e.prioridad >= 2 && x.x.ejercicios.length > 2).sort((a, b) => b.e.prioridad - a.e.prioridad || aporta(b.e, m) - aporta(a.e, m))[0];
+    const serieFav = t.filter(x => fav(x) && x.e.series > 2).sort(orden)[0];
+    const duro1 = (v[m] || 0) > duro && t.filter(x => !fav(x) && x.e.series > 1).sort(orden)[0];
+    const duro2 = (v[m] || 0) > duro && t.filter(x => !fav(x) && x.x.ejercicios.length > 2).sort(orden)[0];
     if (serieNoFav) serieNoFav.e.series--;
     else if (sobra) sobra.x.ejercicios = sobra.x.ejercicios.filter(e => e !== sobra.e);
     else if (serieFav) serieFav.e.series--;
-    else break;
+    else if (duro1) duro1.e.series--;
+    else if (duro2) duro2.x.ejercicios = duro2.x.ejercicios.filter(e => e !== duro2.e);
+    else atascados.add(m);
   }
-  // 2. Subir lo que falta (hasta el piso, o hasta el tope si es prioritario) sin que otro músculo pase el suyo.
+  const agregadas = new Map(); // ejercicios sumados por zona prioritaria: primero uno a cada una, después un segundo
+  let limiteExtra = 1;
+  // 2. Subir lo que falta: hasta el piso, o hasta el tope del rango si es prioritario. Una zona prioritaria puede
+  //    llegar más alto que las demás; las no prioritarias no pasan el tope de su rango.
   for (let vuelta = 0; vuelta < 200; vuelta++) {
     const v = volumenSemanal(conSemana, porId);
     let cambio = false;
     for (const m of CONTADOS) {
-      const meta = d.musculos_prioridad.includes(m) ? hi : lo;
+      const meta = prioritario(m) ? hi : lo;
       if ((v[m] || 0) >= meta) continue;
       const cabe = ({ e }) => {
         const ej = porId.get(e.ejercicio_id);
         return e.series < 4 && [...ej.musculos_primarios, ...ej.musculos_secundarios]
-          .every(k => !CONTADOS.includes(k) || (v[k] || 0) + (ej.musculos_primarios.includes(k) ? 1 : 0.5) <= (d.musculos_prioridad.includes(k) ? hi : tope));
+          .every(k => !CONTADOS.includes(k) || (v[k] || 0) + (ej.musculos_primarios.includes(k) ? 1 : 0.5) <= (prioritario(k) ? tope : hi));
       };
       const c = trabajan(m).filter(cabe).sort((a, b) => a.e.prioridad - b.e.prioridad)[0];
       if (c) { c.e.series++; cambio = true; break; }
+      // Una zona prioritaria sin ejercicio que pueda crecer: se suma uno para ella en el día con más tiempo libre.
+      // Si no hay tiempo en ningún día, ocupa el lugar de un accesorio que no es favorito ni trabaja otra prioridad.
+      if (prioritario(m) && EXTRA_POR_MUSCULO[m] && (agregadas.get(m) || 0) < limiteExtra) {
+        agregadas.set(m, (agregadas.get(m) || 0) + 1);
+        // Primero los días que ya trabajan esa zona (la extensión de rodilla va en un día de pierna).
+        // Y no dos del mismo movimiento el mismo día.
+        const yaTiene = x => (x.ejercicios.some(e => porId.get(e.ejercicio_id).patron === EXTRA_POR_MUSCULO[m]) ? 1 : 0);
+        const laTrabaja = x => (x.ejercicios.some(e => aporta(e, m) > 0) ? 0 : 1);
+        const dias = [...conSemana].sort((a, b) => yaTiene(a) - yaTiene(b) || laTrabaja(a) - laTrabaja(b) || duracionEstimada(a.ejercicios) - duracionEstimada(b.ejercicios));
+        for (const reemplazar of [false, true]) {
+          for (const x of dias) {
+            const ej = elegir(EXTRA_POR_MUSCULO[m], new Set(x.ejercicios.map(e => e.ejercicio_id)));
+            if (!ej || !ej.musculos_primarios.includes(m) || !cabe({ e: { ejercicio_id: ej.id, series: 2 } })) continue;
+            const nuevo = { ...armar(ej, 2, x.ejercicios.length), series: 2 };
+            const sale = reemplazar && x.ejercicios.filter(e => e.prioridad >= 2 && !favoritos.has(e.ejercicio_id)
+              && !porId.get(e.ejercicio_id).musculos_primarios.some(prioritario)).sort((a, b) => b.prioridad - a.prioridad || b.orden - a.orden)[0];
+            if (reemplazar && !sale) continue;
+            const quedan = x.ejercicios.filter(e => e !== sale);
+            // Sumar tiene que caber en el tiempo; reemplazar, al menos no alargar la sesión.
+            const tope = reemplazar ? Math.max(duracionEstimada(x.ejercicios), d.duracion_min * 1.1) : d.duracion_min * 1.1;
+            if (duracionEstimada([...quedan, nuevo]) > tope) continue;
+            x.ejercicios = [...quedan, { ...nuevo, series: reemplazar ? Math.max(2, sale.series) : 2 }];
+            cambio = true;
+            break;
+          }
+          if (cambio) break;
+        }
+        if (cambio) break;
+      }
     }
+    if (!cambio && limiteExtra < 2) { limiteExtra = 2; continue; }
     if (!cambio) break;
   }
 
-  // Si una sesión no cabe en el tiempo, se quitan series y después ejercicios desde la menor prioridad.
+  // Si una sesión no cabe en el tiempo, se va sacando lo que menos cuesta perder, de a una serie o un ejercicio:
+  // primero series de lo que no es favorito ni trabaja una zona prioritaria, después esos ejercicios, y recién
+  // ahí series de lo prioritario y de los favoritos. Un ejercicio se saca antes de dejarlo en 2 series si no
+  // importa, pero no el último de la semana para una zona grande o prioritaria (que no quede sin espalda).
+  // Si aun así no cabe: descansos más cortos y, al final, menos ejercicios.
+  const importa = e => (favoritos.has(e.ejercicio_id) ? 2 : 0) + (porId.get(e.ejercicio_id).musculos_primarios.some(prioritario) ? 1 : 0);
+  const GRANDES = ['espalda', 'pecho', 'cuadriceps', 'gluteo', 'femoral', 'hombro'];
+  const ultimo = e => porId.get(e.ejercicio_id).musculos_primarios.some(m => (GRANDES.includes(m) || prioritario(m))
+    && conSemana.reduce((n, x) => n + x.ejercicios.filter(y => porId.get(y.ejercicio_id).musculos_primarios.includes(m)).length, 0) === 1);
   for (const x of conSemana) {
-    while (duracionEstimada(x.ejercicios) > d.duracion_min * 1.1 && x.ejercicios.length > 2) {
-      const e = [...x.ejercicios].sort((a, b) => b.prioridad - a.prioridad || b.orden - a.orden)[0];
-      if (e.series > 2) e.series--;
-      else x.ejercicios = x.ejercicios.filter(y => y !== e);
-    }
-    x.ejercicios.forEach((e, i) => { e.orden = i; });
+    const sobra = () => duracionEstimada(x.ejercicios) > d.duracion_min * 1.1;
+    const acciones = () => x.ejercicios.flatMap(e => [
+      ...(e.series > 2 ? [{ e, costo: importa(e) + (e.series <= 3 ? 1 : 0), hacer: () => { e.series--; } }] : []),
+      ...(x.ejercicios.length > 2 ? [{ e, costo: importa(e) + 1.5 + (ultimo(e) ? 3 : 0), hacer: () => { x.ejercicios = x.ejercicios.filter(y => y !== e); } }] : []),
+    ]).sort((a, b) => a.costo - b.costo || b.e.prioridad - a.e.prioridad || b.e.orden - a.e.orden);
+    while (sobra()) { const [a] = acciones(); if (!a) break; a.hacer(); }
+    for (const e of x.ejercicios) if (sobra()) e.descanso_seg = Math.min(e.descanso_seg, 90);
+    const menor = () => [...x.ejercicios].sort((a, b) => importa(a) - importa(b) || b.prioridad - a.prioridad || b.orden - a.orden)[0];
+    while (sobra() && x.ejercicios.length > 1) x.ejercicios = x.ejercicios.filter(y => y !== menor());
   }
+
+  // Después de recortar por tiempo, una zona prioritaria no puede quedar con menos series que el promedio de las que
+  // no lo son: se le devuelven series, o un ejercicio, en los días donde todavía queda tiempo.
+  const cabeTiempo = (x, extra) => duracionEstimada([...x.ejercicios, ...extra]) <= d.duracion_min * 1.1;
+  for (let vuelta = 0; vuelta < 40; vuelta++) {
+    const v = volumenSemanal(conSemana, porId);
+    const resto = CONTADOS.filter(k => !prioritario(k) && v[k]);
+    const prom = resto.reduce((a, k) => a + v[k], 0) / (resto.length || 1);
+    const m = CONTADOS.find(k => prioritario(k) && (v[k] || 0) > 0 && v[k] < prom && v[k] < tope);
+    if (!m) break;
+    const enTope = id => { const ej = porId.get(id); return [...ej.musculos_primarios, ...ej.musculos_secundarios]
+      .some(k => CONTADOS.includes(k) && (v[k] || 0) + (ej.musculos_primarios.includes(k) ? 1 : 0.5) > (prioritario(k) ? tope : hi)); };
+    const crece = trabajan(m).find(({ x, e }) => e.series < 4 && !enTope(e.ejercicio_id) && cabeTiempo(x, [{ ...e, series: 1 }]));
+    if (crece) { crece.e.series++; continue; }
+    let puesto = false;
+    for (const x of conSemana) {
+      const ej = EXTRA_POR_MUSCULO[m] && elegir(EXTRA_POR_MUSCULO[m], new Set(x.ejercicios.map(e => e.ejercicio_id)));
+      if (!ej || !ej.musculos_primarios.includes(m) || enTope(ej.id)) continue;
+      const nuevo = { ...armar(ej, 2, x.ejercicios.length), series: 2 };
+      if (!cabeTiempo(x, [nuevo])) continue;
+      x.ejercicios.push(nuevo);
+      puesto = true;
+      break;
+    }
+    if (!puesto) break;
+  }
+  for (const x of conSemana) x.ejercicios.forEach((e, i) => { e.orden = i; });
 
   // Calendario: 4 semanas desde el próximo lunes; la cuarta es de descarga.
   const lunes = sumarDias(hoy, (8 - diaSemana(hoy)) % 7 || 0);
   const zonasCalentar = [...new Set((r.lesiones || []).filter(l => l.activa !== false && !bloqueadas.has(l.region)).map(l => l.region))];
-  const cardio = cardioPara(r);
+  const cardio = cardioPara(r, indice, equipo);
   const diasPlan = [];
   for (let semana = 1; semana <= 4; semana++) {
-    for (const x of conSemana) {
+    for (const [i, x] of conSemana.entries()) {
       const offset = (x.dia_semana === 0 ? 7 : x.dia_semana) - 1;
       const descarga = semana === 4;
       const conservadora = semana <= d.semanas_conservadoras;
@@ -304,7 +407,7 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
           { name: 'Series de aproximación del primer ejercicio', how: 'Una serie con la mitad del peso y otra con tres cuartos, pocas repeticiones.' },
           ...zonasCalentar.map(z => CALENTAMIENTO_ZONA[z]).filter(Boolean),
         ],
-        cardio: cardio(x),
+        cardio: cardio(x, i),
         ejercicios: x.ejercicios.map(e => (descarga ? comoDescarga(e) : { ...e, rir: Math.min(5, conservadora ? Math.max(e.rir, 3) : e.rir) })),
       });
     }
@@ -332,13 +435,16 @@ function racional(x, descarga) {
   return `${x.foco}. Lo principal es ${prim.join(' y ') || 'el primer ejercicio'}. Si falta tiempo, se salta desde el final.${x.firme ? '' : ' Este día es opcional: si no alcanzas, no se pierde nada importante.'}`;
 }
 
-function cardioPara(r) {
+function cardioPara(r, indice, equipo) {
   const para = r.cardio_para;
   const hace = (r.cardio_actual || []).filter(c => c !== 'ninguno');
-  if (!hace.length && !['bajar_grasa', 'recomposicion', 'salud'].includes(r.objetivo_principal)) return () => null;
-  const tipo = hace.includes('escaladora') ? 'Escaladora' : hace.includes('bici') ? 'Bicicleta' : hace.includes('trote') ? 'Trote suave' : 'Caminata inclinada';
-  return x => {
-    if (para === 'condicion' && x.plantilla.startsWith('torso')) return 'Intervalos: 6 × 1 minuto fuerte y 1 minuto suave. Después de las pesas.';
+  // Los cardios marcados como favoritos (y que se pueden hacer ahí) mandan; si son varios, se turnan entre los días.
+  const favoritos = (r.favoritos || []).map(id => indice.porId.get(id)).filter(e => e?.tipo === 'cardio' && tieneEquipo(e, equipo));
+  if (!favoritos.length && !hace.length && !['bajar_grasa', 'recomposicion', 'salud'].includes(r.objetivo_principal)) return () => null;
+  const comun = hace.includes('escaladora') ? 'Escaladora' : hace.includes('bici') ? 'Bicicleta' : hace.includes('trote') ? 'Trote suave' : 'Caminata inclinada';
+  return (x, i) => {
+    const tipo = favoritos.length ? favoritos[i % favoritos.length].nombre : comun;
+    if (para === 'condicion' && x.plantilla.startsWith('torso')) return `${favoritos.length ? `${tipo} en intervalos` : 'Intervalos'}: 6 × 1 minuto fuerte y 1 minuto suave. Después de las pesas.`;
     if (x.plantilla.startsWith('pierna')) return `${tipo} 10 minutos suave, solo para soltar.`;
     return `${tipo} 20 a 30 minutos a ritmo moderado: puedes hablar pero no cantar. Después de las pesas.`;
   };
