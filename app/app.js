@@ -11,6 +11,7 @@ import { vistaCoach } from './coach-ui.js';
 import { vistaProgreso } from './progreso.js';
 import { vistaMas } from './mas.js';
 import { vistaCheckin } from './checkin.js';
+import { historialReciente } from './temporada.js';
 import * as nube from './nube.js';
 import { CONFIG } from './config.js';
 
@@ -253,7 +254,7 @@ async function armarPlan() {
       E.mensaje = `El servidor no respondió (${e.message}); armé el plan en este teléfono.`;
     }
   }
-  E.plan = generarPlan({ derivados: derivar(r, C, hoy()), respuestas: r, indice, hoy: hoy() });
+  E.plan = generarPlan({ derivados: derivar(r, C, hoy()), respuestas: r, indice, hoy: hoy(), historial: historialReciente() }); // parte con los pesos ya anotados
   guardar();
   ir('hoy');
 }

@@ -20,7 +20,7 @@ const CLAVE = 'entreno-v2';
 const VACIO = () => ({
   vista: 'inicio', seccion: 0, respuestas: {}, plan: null, semana: 1,
   bienestar: {}, registro: {}, notas: {}, sesiones: [], chat: [], consentimientos: {},
-  suplementos: [], tomas: [], indicaciones: [], checkins: {}, pedido: '', mensaje: null,
+  suplementos: [], tomas: [], indicaciones: [], checkins: {}, macro: null, descargaNo: {}, pedido: '', mensaje: null,
 });
 export let E = VACIO();
 try {

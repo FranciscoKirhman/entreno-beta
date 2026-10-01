@@ -305,11 +305,7 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
           ...zonasCalentar.map(z => CALENTAMIENTO_ZONA[z]).filter(Boolean),
         ],
         cardio: cardio(x),
-        ejercicios: x.ejercicios.map(e => ({
-          ...e,
-          series: descarga ? Math.max(1, Math.ceil(e.series / 2)) : e.series,
-          rir: Math.min(5, descarga ? e.rir + 2 : conservadora ? Math.max(e.rir, 3) : e.rir),
-        })),
+        ejercicios: x.ejercicios.map(e => (descarga ? comoDescarga(e) : { ...e, rir: Math.min(5, conservadora ? Math.max(e.rir, 3) : e.rir) })),
       });
     }
   }
@@ -325,8 +321,13 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
   };
 }
 
+export const TEXTO_DESCARGA = 'Semana de descarga: la mitad de las series y más repeticiones de reserva, con los mismos ejercicios. Sirve para llegar fresco al próximo bloque.';
+
+/** Una semana normal pasada a descarga: la mitad de las series y 2 repeticiones más de reserva. */
+export const comoDescarga = e => ({ ...e, series: Math.max(1, Math.ceil(e.series / 2)), rir: Math.min(5, e.rir + 2) });
+
 function racional(x, descarga) {
-  if (descarga) return 'Semana de descarga: la mitad de las series y más repeticiones de reserva, con los mismos ejercicios. Sirve para llegar fresco al próximo bloque.';
+  if (descarga) return TEXTO_DESCARGA;
   const prim = x.ejercicios.filter(e => e.prioridad === 1).map(e => e.nombre);
   return `${x.foco}. Lo principal es ${prim.join(' y ') || 'el primer ejercicio'}. Si falta tiempo, se salta desde el final.${x.firme ? '' : ' Este día es opcional: si no alcanzas, no se pierde nada importante.'}`;
 }

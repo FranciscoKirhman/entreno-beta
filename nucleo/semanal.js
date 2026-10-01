@@ -85,6 +85,28 @@ export function datosDeLaSemana({ plan, semana, sesiones = [], registro = {}, no
   return { registros, notas: notasSemana, dias };
 }
 
+/**
+ * Todas las series anotadas, de cualquier plan: las de "Terminar sesión" y, en los días sin sesión terminada, las
+ * marcadas como hechas. Es el historial que usa el motor para partir el bloque siguiente con los pesos reales.
+ * @param desde 'AAAA-MM-DD' opcional: solo desde esa fecha
+ */
+export function seriesAnotadas(sesiones = [], registro = {}, desde = '') {
+  const out = [];
+  const conSesion = new Set(sesiones.map(s => s.fecha));
+  for (const ses of sesiones) {
+    if (ses.fecha < desde) continue;
+    for (const s of ses.series || []) if (s.ejercicio_id) out.push({ fecha: ses.fecha, ejercicio_id: s.ejercicio_id, carga_kg: s.carga_kg ?? null, reps: s.reps ?? null, rir: s.tipo === 'fallo' ? 0 : s.rir ?? null, rpe: s.rpe ?? null });
+  }
+  for (const [fecha, porEj] of Object.entries(registro)) {
+    if (fecha < desde || conSesion.has(fecha)) continue;
+    for (const [id, lista] of Object.entries(porEj || {})) {
+      if (/^i\d+$/.test(id)) continue; // ejercicio indicado por un profesional, sin id del catálogo
+      for (const x of (lista || []).filter(y => y?.hecho)) out.push({ fecha, ejercicio_id: id, carga_kg: x.kg ?? null, reps: x.reps ?? null, rpe: x.rpe ?? null, rir: x.fallo ? 0 : x.rpe != null ? 10 - x.rpe : null });
+    }
+  }
+  return out.sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
+}
+
 // Lo peor de la semana en cada ejercicio manda: si una vez se rompió la técnica, no sube.
 const PEOR = { forma: ['limpias', 'algunas_feas', 'rota'], rango: ['completo', 'casi', 'parcial'], molestia: ['no', 'leve', 'me_preocupa'] };
 function juntar(a = {}, b = {}) {

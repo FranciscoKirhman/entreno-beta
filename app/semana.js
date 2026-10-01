@@ -4,6 +4,7 @@ import { moverSesion, intercambiar, marcarFaltada, reagendarConCalendario, sesio
 import { leerIcs } from '../nucleo/ics.js';
 import { duracionEstimada } from '../nucleo/motor-plan.js';
 import { avisoCheckin } from './checkin.js';
+import { tarjetaTemporada, tarjetaDescarga, enlazarTemporada } from './temporada.js';
 import * as nube from './nube.js';
 
 export function vistaSemana(ir) {
@@ -16,7 +17,9 @@ export function vistaSemana(ir) {
     <h1>Tu plan</h1>
     <p>${esc(p.justificacion || '')}</p>
     ${E.mensaje ? `<div class="aviso bien">${esc(E.mensaje)}</div>` : ''}
+    ${tarjetaDescarga()}
     ${avisoCheckin(true)}
+    ${tarjetaTemporada()}
     <div class="semanas" role="group" aria-label="Semana">${semanas.map(s => `<button type="button" data-semana="${s}" aria-pressed="${s === E.semana}">Semana ${s}${s === p.semana_descarga ? ' · descarga' : ''}</button>`).join('')}</div>
     ${dias.map(x => `<section class="tarjeta dia" id="dia-${x.fecha}">
       <h3>${esc(fechaCorta(x.fecha))}${x.hora ? ` · ${esc(x.hora)}` : ''} · ${esc(x.foco)} <span class="chip ${x.firme ? 'firme' : ''}">${x.firme ? 'Firme' : 'Opcional'}</span> <span class="chip num">~${duracionEstimada(x.ejercicios)} min</span></h3>
@@ -38,6 +41,7 @@ export function vistaSemana(ir) {
     </section>
   </div>`;
   const raiz = $('vista-semana');
+  enlazarTemporada(() => vistaSemana(ir));
   raiz.querySelectorAll('[data-ir-checkin]').forEach(b => b.onclick = () => ir('checkin', b.dataset.irCheckin));
   raiz.querySelectorAll('[data-semana]').forEach(b => b.onclick = () => { E.semana = Number(b.dataset.semana); guardar(); vistaSemana(ir); });
   raiz.querySelectorAll('[data-aplicar-mover]').forEach(b => b.onclick = async () => {
