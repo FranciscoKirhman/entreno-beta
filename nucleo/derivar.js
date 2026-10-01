@@ -11,11 +11,20 @@ export function edad(fechaNacimiento, hoy) {
   return ha - a - (hm < m || (hm === m && hd < d) ? 1 : 0);
 }
 
-export function nivel(r) {
+export const NIVELES = ['principiante', 'intermedio', 'avanzado'];
+
+/** Nivel según lo que contestó: cuánto tiempo lleva entrenando y con qué constancia. */
+export function nivelDeclarado(r) {
   const t = r.tiempo_entrenando, c = r.constancia;
-  if (t === 'nunca' || t === 'menos_6m') return 'principiante';
+  if (!t || t === 'nunca' || t === 'menos_6m') return 'principiante';
   if (t === '6_24m') return 'intermedio';
   return ['3_4', '5_mas'].includes(c) ? 'avanzado' : 'intermedio';
+}
+
+/** Nivel vigente: el declarado, o el que ganó entrenando con la app (nucleo/nivel.js), si es mayor. */
+export function nivel(r) {
+  const base = nivelDeclarado(r);
+  return NIVELES.indexOf(r.nivel_ganado) > NIVELES.indexOf(base) ? r.nivel_ganado : base;
 }
 
 /**

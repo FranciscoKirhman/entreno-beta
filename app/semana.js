@@ -27,7 +27,7 @@ export function vistaSemana(ir) {
   $('app').innerHTML = `<div id="vista-semana">
     <h1>Tu plan</h1>
     <p class="resumen-plan">${p.semanas} semanas · ${diasSemana.length} días: ${esc(diasSemana.map(d => DIAS_CORTOS[d]).join(', '))}</p>
-    ${p.justificacion ? `<details class="extra"><summary>Por qué está armado así</summary><p class="pequeno">${esc(p.justificacion)}</p></details>` : ''}
+    <button type="button" class="enlace" id="ver-plan">Ver tu plan explicado&nbsp;›</button>
     ${tarjetaDescarga()}
     ${avisoCheckin(true)}
     ${tarjetaTemporada()}
@@ -54,6 +54,7 @@ export function vistaSemana(ir) {
   </div>`;
   const raiz = $('vista-semana');
   enlazarTemporada(() => vistaSemana(ir));
+  $('ver-plan').onclick = () => ir('plan');
   raiz.querySelectorAll('[data-ir-checkin]').forEach(b => b.onclick = () => ir('checkin', b.dataset.irCheckin));
   raiz.querySelectorAll('[data-semana]').forEach(b => b.onclick = () => { mostrarSemana(Number(b.dataset.semana)); guardar(); vistaSemana(ir); });
   raiz.querySelectorAll('[data-aplicar-mover]').forEach(b => b.onclick = async () => {

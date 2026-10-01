@@ -3,6 +3,7 @@
 import { E, guardar, R, D, esc, $, hoy, indice, fechaCorta, cambiarPlan, mostrarSemana } from './comun.js';
 import { macroDelPlan, semanaDe, propuestaDescarga, adelantarDescarga, aplicarFase } from '../nucleo/ciclos.js';
 import { generarPlan } from '../nucleo/motor-plan.js';
+import { progresoNivel } from '../nucleo/nivel.js';
 import { validarPlan } from '../nucleo/validador.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { sumarDias } from '../nucleo/agenda.js';
@@ -14,6 +15,12 @@ export function macroActual() {
   if (JSON.stringify(m) !== JSON.stringify(E.macro)) { E.macro = m; guardar(); }
   return m;
 }
+
+/** Días en que se entrenó: series marcadas en Hoy y sesiones guardadas o importadas. Para el nivel (nucleo/nivel.js). */
+export const fechasEntrenadas = () => [...new Set([
+  ...Object.entries(E.registro || {}).filter(([, ejs]) => Object.values(ejs || {}).some(l => (l || []).some(x => x?.hecho))).map(([f]) => f),
+  ...(E.sesiones || []).map(x => x.fecha).filter(Boolean),
+])];
 
 /** Historial para el motor: lo anotado en las últimas 8 semanas. */
 export const historialReciente = () => seriesAnotadas(E.sesiones, E.registro, sumarDias(hoy(), -56));
@@ -95,13 +102,17 @@ export function enlazarTemporada(volver) {
   $('bloque-siguiente')?.addEventListener('click', async () => {
     const m = macroActual();
     const sig = m?.bloques.find(b => b.n === m.actual + 1);
+    // El nivel sube entre bloques, con lo que se entrenó.
+    const nv = progresoNivel({ respuestas: R(), fechas: fechasEntrenadas(), hoy: hoy() });
+    if (nv.sube) R().nivel_ganado = nv.alcanzado;
     const ctx = { derivados: D(), respuestas: R(), indice, hoy: hoy() };
     const base = generarPlan({ ...ctx, historial: historialReciente() });
     if (base.bloqueado) { E.mensaje = base.mensaje; guardar(); return volver(); }
     let plan = sig ? aplicarFase(base, sig, { minutos: ctx.derivados.duracion_min }) : base;
     if (sig && !validarPlan(plan, ctx).ok) plan = { ...base, bloque: sig.n }; // si la fase no cabe en tus reglas, el plan base
     mostrarSemana(1);
-    await cambiarPlan(plan, sig ? `Bloque ${sig.n} armado: ${sig.nombre.toLowerCase()}. Parte el ${fechaCorta(plan.inicio)} con los pesos que anotaste.` : `Temporada nueva: parte el ${fechaCorta(plan.inicio)}.`, nube);
+    const subio = nv.sube ? ` Subiste a nivel ${nv.alcanzado}: el plan sube un poco el volumen.` : '';
+    await cambiarPlan(plan, (sig ? `Bloque ${sig.n} armado: ${sig.nombre.toLowerCase()}. Parte el ${fechaCorta(plan.inicio)} con los pesos que anotaste.` : `Temporada nueva: parte el ${fechaCorta(plan.inicio)}.`) + subio, nube);
     volver();
   });
 }

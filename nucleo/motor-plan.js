@@ -450,8 +450,8 @@ function cardioPara(r, indice, equipo) {
   };
 }
 
-const NOMBRE_DIA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-const NOMBRE_ZONA = {
+export const NOMBRE_DIA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+export const NOMBRE_ZONA = {
   gluteo: 'glúteo', cuadriceps: 'cuádriceps', femoral: 'femoral', aductor_abductor: 'aductores y abductores', pecho: 'pecho',
   espalda: 'espalda', hombro: 'hombro', biceps: 'bíceps', triceps: 'tríceps', core: 'core',
   codo: 'codo', muneca: 'muñeca', lumbar: 'zona lumbar', cadera: 'cadera', rodilla: 'rodilla', tobillo: 'tobillo', cuello: 'cuello',

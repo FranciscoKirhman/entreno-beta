@@ -58,7 +58,8 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
 
     <section class="tarjeta">
       <h3>Tu plan</h3>
-      <div class="fila-botones"><button type="button" class="boton" id="rehacer">Rehacer el plan con mis respuestas</button><button type="button" class="boton" id="cuestionario">Cambiar mis respuestas</button></div>
+      <div class="fila-botones"><button type="button" class="boton primario" id="perfil">Completar mi perfil</button><button type="button" class="boton" id="ver-plan">Ver mi plan explicado</button></div>
+      <div class="fila-botones"><button type="button" class="boton" id="rehacer">Rehacer el plan con mis respuestas</button></div>
       <div class="fila-botones"><button type="button" class="boton" id="borrar-local">Borrar todo de este teléfono</button></div>
     </section>
     <p class="pequeno suave">Versión ${esc(CONFIG.version)}</p>
@@ -143,7 +144,8 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     };
   };
   $('rehacer').onclick = () => armarPlan();
-  $('cuestionario').onclick = () => { E.seccion = 0; ir('cuestionario'); };
+  $('perfil').onclick = () => ir('perfil');
+  $('ver-plan').onclick = () => ir(E.plan ? 'plan' : 'perfil');
   $('borrar-local').onclick = ev => {
     const b = ev.currentTarget;
     if (!b.dataset.confirmar) { b.dataset.confirmar = '1'; b.textContent = 'Toca de nuevo para borrar todo de este teléfono'; return; }
