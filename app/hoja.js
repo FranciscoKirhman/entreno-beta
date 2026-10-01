@@ -14,11 +14,12 @@ const teclaEscape = ev => { if (ev.key === 'Escape') cerrarHoja(); };
 
 /**
  * @param titulo   texto de arriba
+ * @param nota     explicación corta bajo el título (opcional)
  * @param opciones [{ valor, letra, clase, nombre, ayuda?, peligro? }]
  * @param alElegir (valor) => void
  * @param volver   foco a devolver al cerrar
  */
-export function abrirHoja({ titulo, opciones, alElegir, volver = null }) {
+export function abrirHoja({ titulo, nota = '', opciones, alElegir, volver = null }) {
   cerrarHoja();
   const fondo = document.createElement('div');
   fondo.id = 'hoja';
@@ -26,6 +27,7 @@ export function abrirHoja({ titulo, opciones, alElegir, volver = null }) {
   fondo.innerHTML = `<div class="hoja" role="dialog" aria-modal="true" aria-labelledby="hoja-titulo">
     <div class="asa" aria-hidden="true"></div>
     <h3 id="hoja-titulo">${esc(titulo)}</h3>
+    ${nota ? `<p class="nota-hoja pequeno suave">${esc(nota)}</p>` : ''}
     <ul class="opciones-hoja">${opciones.map(o => `<li>
       <div class="opcion-hoja">
         <button type="button" class="elegir${o.peligro ? ' peligro' : ''}" data-elegir="${esc(o.valor)}"><span class="letra ${esc(o.clase || '')}">${esc(o.letra)}</span>${esc(o.nombre)}</button>

@@ -8,6 +8,7 @@ import { progresoNivel } from '../nucleo/nivel.js';
 import { OBJETIVO_VISTA, NIVEL_VISTA } from './cuestionario.js';
 import { fechasEntrenadas } from './temporada.js';
 import { abrirHoja } from './hoja.js';
+import { grupos, etiquetaSuperserie } from '../nucleo/superseries.js';
 
 const LETRA = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 const ESTADO = { si: ['✓', 'Cumple'], parcial: ['~', 'En parte'], no: ['✕', 'No se pudo'] };
@@ -55,7 +56,7 @@ export function vistaPlan(ir, { armarPlan, nuevo = false } = {}) {
 
     <h2>Cada día</h2>
     ${s.dias.map(x => `<details class="tarjeta dia-plan"><summary><span class="dia-nombre">${esc(mayus(x.nombre_dia))}</span><span class="dia-foco">${esc(x.foco)}</span><span class="chip num">~${x.minutos} min</span></summary>
-      <ul class="ejercicios-plan">${x.ejercicios.map(e => `<li><span class="nombre">${favoritos.has(e.id) ? '<span title="Favorito" aria-label="Favorito">⭐</span> ' : ''}${esc(e.nombre)}${trabajaPrioridad(e.id) ? ' <span class="punto-prioridad" title="Trabaja una zona prioritaria" aria-label="Zona prioritaria"></span>' : ''}</span><span class="num">${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${e.unidad === 'seg' ? ' s' : ''}</span></li>`).join('')}</ul>
+      <ul class="ejercicios-plan">${x.ejercicios.map((e, k, todos) => { const g = grupos(todos)[k]; return `<li${g ? ` class="en-superserie ss-${g.letra}"` : ''}><span class="nombre">${g ? `<span class="chip-ss">${etiquetaSuperserie(g)}</span>` : ''}${favoritos.has(e.id) ? '<span title="Favorito" aria-label="Favorito">⭐</span> ' : ''}${esc(e.nombre)}${trabajaPrioridad(e.id) ? ' <span class="punto-prioridad" title="Trabaja una zona prioritaria" aria-label="Zona prioritaria"></span>' : ''}</span><span class="num">${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${e.unidad === 'seg' ? ' s' : ''}</span></li>`; }).join('')}</ul>
       ${x.cardio ? `<p class="pequeno suave">🏃 ${esc(x.cardio)}</p>` : ''}
       ${x.firme ? '' : '<p class="pequeno suave">Día opcional: si no alcanzas, no se pierde nada importante.</p>'}
     </details>`).join('')}

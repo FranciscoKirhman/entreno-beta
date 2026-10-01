@@ -1,6 +1,6 @@
 // Vista Hoy: check-in de bienestar, suplementos y la sesión del día con su registro: series con tipo (calentamiento,
-// normal, al fallo, drop set, como en Hevy), lo de la vez anterior, cronómetro de descanso, el "¿Por qué?" de cada
-// ejercicio y el desplegable de cómo te fue con nota para el entrenador.
+// normal, al fallo, drop set, como en Hevy), lo de la vez anterior, cronómetro de descanso, superseries, el
+// "¿Por qué?" de cada ejercicio y el desplegable de cómo te fue con nota para el entrenador.
 import { E, guardar, R, D, C, K, EVIDENCIA, indice, hoy, ahora, esc, $, fechaCorta, presc, escala, opcionesRadio, chk, cambiarPlan, numero, coma, mostrarMensaje, avisar, unidadPeso, enUnidad, aKilos, seriesTexto, volumenTexto } from './comun.js';
 import { evaluarDia, ajustarSesion, TEXTO_RECOMENDACION } from '../nucleo/bienestar.js';
 import { checklist } from '../nucleo/suplementos.js';
@@ -15,6 +15,7 @@ import { avisoDescargaCorto } from './temporada.js';
 import { subirACuenta } from './cola.js';
 import { iniciarDescanso, detenerDescanso } from './descanso.js';
 import { abrirHoja } from './hoja.js';
+import { grupos, unir, separar, copiarSuperseries, despuesDeSerie, etiquetaSuperserie } from '../nucleo/superseries.js';
 import * as nube from './nube.js';
 
 const app = () => $('app');
@@ -79,6 +80,9 @@ function materializar(f, e, k) {
 }
 const fijarFilas = (f, id, n) => { ((E.filas ||= {})[f] ||= {})[id] = n; };
 const descansoDe = (e, k) => E.descansos?.[idDe(e, k)] ?? e.descanso_seg ?? 90;
+/** Descanso de la vuelta de una superserie: el que eligió en el último ejercicio o, si no, el más largo del plan. */
+const descansoVuelta = (ejs, g) => { const u = ejs[g.miembros.at(-1)]; return E.descansos?.[idDe(u, g.miembros.at(-1))] ?? Math.max(...g.miembros.map(m => ejs[m].descanso_seg ?? 90)); };
+const nombreDe = e => e.nombre || indice.porId.get(e.ejercicio_id)?.nombre || '';
 const mmss = seg => (seg ? `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')}` : 'sin descanso');
 const DESCANSOS = [0, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300];
 
@@ -104,7 +108,7 @@ function sesionHoy(dia) {
     ${dia.ejercicios.length ? avanceHtml(avance(dia)) : ''}
     <p class="suave pequeno">${esc(dia.racional || '')}</p>
     ${dia.ejercicios.length ? '' : '<p>Hoy, descanso activo: 20 a 30 minutos de caminata o bicicleta suave y movilidad.</p>'}
-    <ol class="ejercicios-hoy">${dia.ejercicios.map((e, k) => ejercicioHoy(e, k, f, e.ejercicio_id ? anterior(todas, e.ejercicio_id, f) : null, notas[idDe(e, k)] || {})).join('')}</ol>
+    <ol class="ejercicios-hoy">${dia.ejercicios.map((e, k) => ejercicioHoy(e, k, f, e.ejercicio_id ? anterior(todas, e.ejercicio_id, f) : null, notas[idDe(e, k)] || {}, dia)).join('')}</ol>
     ${dia.cardio ? `<p class="pequeno"><strong>Cardio:</strong> ${esc(dia.cardio)}</p>` : ''}
     <details class="extra"><summary>Calentamiento</summary><ul class="pequeno">${(dia.calentamiento || []).map(c => `<li><strong>${esc(c.name)}</strong>. ${esc(c.how)}</li>`).join('')}</ul></details>
     <div class="fila-botones">
@@ -114,8 +118,9 @@ function sesionHoy(dia) {
   </section>`;
 }
 
-function ejercicioHoy(e, k, f, previas, nota) {
+function ejercicioHoy(e, k, f, previas, nota, dia) {
   const id = idDe(e, k);
+  const g = grupos(dia.ejercicios)[k];
   const ej = indice.porId.get(e.ejercicio_id);
   const filas = filasDe(f, e, k);
   const etiq = etiquetas(filas);
@@ -135,15 +140,19 @@ function ejercicioHoy(e, k, f, previas, nota) {
       ${r.consejo && deTrabajo(t) ? `<p class="consejo ${r.consejo.tipo}">${esc(r.consejo.texto)}</p>` : ''}</div>`;
   }).join('');
   const preguntas = K.por_ejercicio.preguntas.filter(p => !p.mostrar_si || Object.entries(p.mostrar_si).every(([q, vals]) => vals.includes(nota[q])));
-  const desc = descansoDe(e, k);
-  return `<li class="ej" id="ej-${id}">
-    <div class="ej-cab"><span class="nombre">${esc(e.nombre || ej?.nombre || id)}</span><span class="presc">${esc(presc(e))}</span></div>
+  // En una superserie, el descanso se elige en el último ejercicio y vale para la vuelta.
+  const desc = g ? descansoVuelta(dia.ejercicios, g) : descansoDe(e, k);
+  const conDescanso = !g || g.pos === g.total;
+  return `<li class="ej${g ? ` en-superserie ss-${g.letra}${g.pos === 1 ? ' ss-inicio' : ''}` : ''}" id="ej-${id}">
+    ${g?.pos === 1 ? `<p class="titulo-ss">Superserie ${g.letra} · sin descanso entre estos ${g.total}, descansas al terminar la vuelta</p>` : ''}
+    <div class="ej-cab"><span class="nombre">${g ? `<span class="chip-ss">${etiquetaSuperserie(g)}</span>` : ''}${esc(e.nombre || ej?.nombre || id)}</span><span class="presc">${esc(presc(e))}</span></div>
     ${previas ? `<p class="anterior pequeno suave">La vez anterior (${esc(fechaCorta(previas.fecha))}): ${esc(seriesTexto(previas.series))}</p>` : ''}
     ${e.nota && !(previas && /^Elige un peso/.test(e.nota)) ? `<p class="pequeno suave">${esc(e.nota)}</p>` : ''}
     <div class="series">${filasHtml}</div>
     <div class="agregar-series"><button type="button" class="enlace" data-agregar="${id}">+ Serie</button><button type="button" class="enlace" data-calentar="${id}">+ Calentamiento</button>
-      <label class="descanso-ej pequeno">Descanso <select data-descanso="${id}" aria-label="Descanso entre series de ${esc(e.nombre || ej?.nombre || 'este ejercicio')}">${[...new Set([...DESCANSOS, desc])].sort((a, b) => a - b).map(sg => `<option value="${sg}"${sg === desc ? ' selected' : ''}>${mmss(sg)}</option>`).join('')}</select></label></div>
+      ${conDescanso ? `<label class="descanso-ej pequeno">${g ? 'Descanso de la vuelta' : 'Descanso'} <select data-descanso="${id}" aria-label="${g ? `Descanso al terminar cada vuelta de la superserie ${g.letra}` : `Descanso entre series de ${esc(e.nombre || ej?.nombre || 'este ejercicio')}`}">${[...new Set([...DESCANSOS, desc])].sort((a, b) => a - b).map(sg => `<option value="${sg}"${sg === desc ? ' selected' : ''}>${mmss(sg)}</option>`).join('')}</select></label>` : '<span class="descanso-ej pequeno">Sin descanso: sigue la superserie</span>'}</div>
     <div class="acciones-ej">
+      ${e.ejercicio_id && dia.ejercicios.length > 1 ? `<button type="button" class="enlace" data-superserie="${id}">${g ? `Superserie ${g.letra}` : 'Superserie'}</button>` : ''}
       ${ej ? `<button type="button" class="enlace" data-porque="${id}" aria-expanded="${abiertos.has(`porque-${id}`)}">¿Por qué?</button>${e.unidad !== 'seg' ? `<button type="button" class="enlace" data-prioriza="${id}" aria-expanded="${abiertos.has(`prioriza-${id}`)}">Qué priorizar</button>` : ''}<a class="enlace" href="https://www.youtube.com/results?search_query=${encodeURIComponent(`${ej.nombre} técnica correcta`)}" target="_blank" rel="noopener">Video</a>` : '<span class="chip">Indicado por tu profesional</span>'}
     </div>
     ${ej && e.unidad !== 'seg' ? `<p class="prioriza pequeno" id="prioriza-${id}"${abiertos.has(`prioriza-${id}`) ? '' : ' hidden'}>${esc(prioridadEsfuerzo(e, ej, D(), (R().lesiones || []).filter(l => l.activa !== false).map(l => l.region)).texto)}</p>` : ''}
@@ -253,6 +262,32 @@ function enlazar(ir, dia) {
     });
   });
 
+  // Superserie: unir este ejercicio con otro del día (o sacarlo). Se repite en este mismo día de las semanas siguientes.
+  raiz.querySelectorAll('[data-superserie]').forEach(b => b.onclick = () => {
+    const { e, k } = ejercicioDe(b.dataset.superserie);
+    const g = grupos(dia.ejercicios);
+    const otros = dia.ejercicios.map((x, j) => ({ x, j })).filter(({ x, j }) => j !== k && x.ejercicio_id && !(g[k] && g[j]?.letra === g[k].letra));
+    abrirHoja({
+      titulo: g[k] ? `Superserie ${g[k].letra}` : 'Hacer superserie',
+      nota: 'Dos o más ejercicios seguidos, sin descanso entre ellos: descansas al terminar la vuelta. Ahorra tiempo y va mejor con ejercicios que no usan los mismos músculos, como bíceps con tríceps o pecho con espalda.',
+      volver: b,
+      opciones: [
+        ...otros.map(({ x, j }) => ({ valor: String(j), letra: g[j] ? etiquetaSuperserie(g[j]) : '+', nombre: `${g[k] ? 'Sumar' : 'Con'} ${nombreDe(x)}` })),
+        ...(g[k] ? [{ valor: 'separar', letra: '✕', clase: 'quitar', nombre: 'Sacar de la superserie', peligro: true }] : []),
+      ],
+      alElegir: async v => {
+        const nuevo = structuredClone(E.plan);
+        const d = sesionDe(nuevo, f);
+        d.ejercicios = v === 'separar' ? separar(d.ejercicios, k) : unir(d.ejercicios, k, Number(v));
+        const futuros = nuevo.dias.filter(x => x.plantilla && x.plantilla === d.plantilla && x.fecha > f);
+        for (const x of futuros) x.ejercicios = copiarSuperseries(d.ejercicios, x.ejercicios);
+        const otro = v === 'separar' ? null : nombreDe(dia.ejercicios[Number(v)]);
+        await cambiarPlan(nuevo, v === 'separar' ? `${nombreDe(e)} salió de la superserie.` : `Superserie: ${nombreDe(e)} con ${otro}${futuros.length ? ', también en las próximas semanas' : ''}.`, nube);
+        repintar();
+      },
+    });
+  });
+
   // Agregar una serie al final, o un calentamiento al principio.
   raiz.querySelectorAll('[data-agregar], [data-calentar]').forEach(b => b.onclick = () => {
     const { e, k } = ejercicioDe(b.dataset.agregar || b.dataset.calentar);
@@ -287,8 +322,20 @@ function enlazar(ir, dia) {
     else if (r.hecho) {
       const quedan = lista.slice(0, n).filter(x => !x.hecho).length;
       const seg = t === 'calentamiento' ? Math.min(60, descansoDe(e, k)) : descansoDe(e, k);
+      const g = grupos(dia.ejercicios);
       if (i + 1 < n && tipoDe(lista[i + 1]) === 'drop') detenerDescanso();
-      else if (seg) iniciarDescanso(seg, quedan ? `Descanso · falta${quedan === 1 ? '' : 'n'} ${quedan} serie${quedan === 1 ? '' : 's'}` : 'Descanso · sigue otro ejercicio');
+      else if (g[k] && t !== 'calentamiento') {
+        // Superserie: sin descanso hasta el último ejercicio de la vuelta; ahí, el descanso de la vuelta.
+        const pendientes = dia.ejercicios.map((x, j) => filasDe(f, x, j).filter(y => !y.hecho).length);
+        const sig = despuesDeSerie(dia.ejercicios, k, pendientes);
+        const quien = j => `${etiquetaSuperserie(g[j])} ${nombreDe(dia.ejercicios[j])}`;
+        const vuelta = descansoVuelta(dia.ejercicios, g[k]);
+        if (!sig.descansar) { detenerDescanso(); avisar(`Superserie: sigue con ${quien(sig.siguiente)}, sin descanso.`); }
+        else if (vuelta) {
+          document.getElementById('aviso-flotante')?.classList.remove('visible');
+          iniciarDescanso(vuelta, sig.siguiente != null ? `Descanso · vuelve a ${etiquetaSuperserie(g[sig.siguiente])}` : 'Descanso · sigue otro ejercicio');
+        }
+      } else if (seg) iniciarDescanso(seg, quedan ? `Descanso · falta${quedan === 1 ? '' : 'n'} ${quedan} serie${quedan === 1 ? '' : 's'}` : 'Descanso · sigue otro ejercicio');
     } else detenerDescanso();
     repintar();
   });

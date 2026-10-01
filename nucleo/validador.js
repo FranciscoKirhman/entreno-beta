@@ -2,6 +2,7 @@
 // Si hay errores, el plan no se guarda: se reintenta o se usa el plan de reglas.
 import { tieneEquipo, nivelAlcanza, articulacionesBloqueadas, cargaZonaBloqueada } from './catalogo.js';
 import { incrementoPara, duracionEstimada, volumenSemanal } from './motor-plan.js';
+import { grupos } from './superseries.js';
 
 const CONTADOS = ['femoral', 'gluteo', 'cuadriceps', 'aductor_abductor', 'espalda', 'pecho', 'hombro', 'biceps', 'triceps'];
 
@@ -61,6 +62,13 @@ export function validarPlan(plan, { derivados: d, respuestas: r, indice, hoy }) 
         const max = Number(lugar.mancuerna_max_kg);
         if (ej.equipamiento.includes('mancuernas') && max && e.carga_kg > max) err('mancuerna_max', `${ej.nombre}: ${e.carga_kg} kg y la mancuerna más pesada es de ${max} kg.`, en);
       }
+    }
+    // Superseries: una letra de la A a la H; si quedó suelta o separada, no se aplica (se avisa).
+    const letras = (dia.ejercicios || []).map(e => e.superserie).filter(x => x != null);
+    if (letras.some(l => !/^[A-H]$/.test(l))) err('superserie', `${dia.fecha}: superserie con una letra que no es de la A a la H.`, donde);
+    else {
+      const g = grupos(dia.ejercicios || []);
+      if ((dia.ejercicios || []).some((e, i) => e.superserie && !g[i])) adv('superserie_suelta', `${dia.fecha}: una superserie quedó con un solo ejercicio o separada; se hace como serie normal.`, donde);
     }
     const minutos = duracionEstimada(dia.ejercicios || []);
     if (minutos > d.duracion_min * 1.15) err('duracion', `${dia.fecha}: la sesión dura unos ${minutos} minutos y tienes ${d.duracion_min}.`, donde);

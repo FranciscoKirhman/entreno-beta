@@ -6,6 +6,7 @@ import { duracionEstimada } from '../nucleo/motor-plan.js';
 import { avisoCheckin } from './checkin.js';
 import { tarjetaTemporada, tarjetaDescarga, enlazarTemporada } from './temporada.js';
 import { semanaDe } from '../nucleo/ciclos.js';
+import { grupos, etiquetaSuperserie } from '../nucleo/superseries.js';
 import * as nube from './nube.js';
 
 const DIAS_CORTOS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
@@ -35,7 +36,7 @@ export function vistaSemana(ir) {
     ${eligePeso ? '<p class="pequeno suave">Donde no hay peso indicado, elige uno con el que te sobren las repeticiones de reserva (RIR) en la última serie. Lo anotas en Hoy y la app lo ajusta desde ahí.</p>' : ''}
     ${dias.map(x => `<section class="tarjeta dia${x.fecha === f ? ' es-hoy' : ''}" id="dia-${x.fecha}">
       <h3>${esc(fechaCorta(x.fecha))}${x.hora ? ` · ${esc(x.hora)}` : ''} · ${esc(x.foco)} ${x.fecha === f ? '<span class="chip hoy">Hoy</span>' : ''}${entrenado(x.fecha) ? '<span class="chip firme">Hecha ✓</span>' : `<span class="chip ${x.firme ? 'firme' : ''}">${x.firme ? 'Firme' : 'Opcional'}</span>`} <span class="chip num">~${duracionEstimada(x.ejercicios)} min</span></h3>
-      <ul class="ejercicios">${x.ejercicios.map(e => `<li><span class="nombre">${esc(e.nombre || indice.porId.get(e.ejercicio_id)?.nombre || '')}</span><span class="presc">${esc(presc(e))}</span>${e.nota && !/^Elige un peso/.test(e.nota) ? `<span class="detalle">${esc(e.nota)}</span>` : ''}</li>`).join('')}</ul>
+      <ul class="ejercicios">${x.ejercicios.map((e, k, todos) => { const g = grupos(todos)[k]; return `<li${g ? ` class="en-superserie ss-${g.letra}"` : ''}><span class="nombre">${g ? `<span class="chip-ss">${etiquetaSuperserie(g)}</span>` : ''}${esc(e.nombre || indice.porId.get(e.ejercicio_id)?.nombre || '')}</span><span class="presc">${esc(presc(e))}</span>${e.nota && !/^Elige un peso/.test(e.nota) ? `<span class="detalle">${esc(e.nota)}</span>` : ''}</li>`; }).join('')}</ul>
       <details class="extra"><summary>Mover, intercambiar o marcar que faltaste</summary>
         <div class="panel">
           <label class="pequeno">Mover a <input type="date" data-mover="${x.fecha}" value="${x.fecha}"></label>

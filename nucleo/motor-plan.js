@@ -1,5 +1,6 @@
 // Motor de reglas: arma un plan de 4 semanas sin IA. Es el plan del plan Gratis y la base que el coach
 // Pro ajusta. Todo lo que hace está explicado en contenido/evidencia/.
+import { grupos } from './superseries.js';
 import { nivelAlcanza, tieneEquipo, articulacionesBloqueadas, cargaZonaBloqueada } from './catalogo.js';
 
 // ── Plantillas de día ───────────────────────────────────────────────────────
@@ -104,13 +105,21 @@ export function prescripcion(ej, prioridad, d) {
   return { series, reps_min: reps[0], reps_max: reps[1], unidad: ISOMETRICOS.has(ej.id) ? 'seg' : 'reps', rir: Math.min(5, rir), descanso_seg: descanso };
 }
 
-/** Minutos que toma un día: calentamiento + series × (tiempo bajo tensión + descanso) + cambio de ejercicio. */
+/**
+ * Minutos que toma un día: calentamiento + series × (tiempo bajo tensión + descanso) + cambio de ejercicio.
+ * En una superserie se descansa una vez por vuelta (el descanso más largo de sus ejercicios), no después de cada uno.
+ */
 export function duracionEstimada(ejercicios) {
   let seg = 8 * 60;
-  for (const e of ejercicios) {
+  const g = grupos(ejercicios);
+  ejercicios.forEach((e, i) => {
     const trabajo = e.unidad === 'seg' ? (e.reps_min + e.reps_max) / 2 : ((e.reps_min + e.reps_max) / 2) * 4;
-    seg += e.series * (trabajo + e.descanso_seg) + 60;
-  }
+    seg += e.series * (trabajo + (g[i] ? 15 : e.descanso_seg)) + 60;
+    if (g[i]?.pos === 1) {
+      const vueltas = Math.max(...g[i].miembros.map(m => ejercicios[m].series));
+      seg += vueltas * Math.max(...g[i].miembros.map(m => ejercicios[m].descanso_seg ?? 90));
+    }
+  });
   return Math.round(seg / 60);
 }
 

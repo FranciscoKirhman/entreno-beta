@@ -32,7 +32,7 @@ export function resumenPlan({ plan, respuestas: r, derivados: d, indice, hoy }) 
   const dias = sem1.map(x => ({
     fecha: x.fecha, dia_semana: diaSem(x.fecha), nombre_dia: NOMBRE_DIA[diaSem(x.fecha)], plantilla: x.plantilla, foco: x.foco,
     firme: x.firme, minutos: duracionEstimada(x.ejercicios), cardio: x.cardio || null,
-    ejercicios: x.ejercicios.map(e => ({ id: e.ejercicio_id, nombre: e.nombre, series: e.series, reps_min: e.reps_min, reps_max: e.reps_max, unidad: e.unidad, rir: e.rir, prioridad: e.prioridad })),
+    ejercicios: x.ejercicios.map(e => ({ id: e.ejercicio_id, nombre: e.nombre, series: e.series, reps_min: e.reps_min, reps_max: e.reps_max, unidad: e.unidad, rir: e.rir, prioridad: e.prioridad, ...(e.superserie ? { superserie: e.superserie } : {}) })),
   }));
   // Semana de lunes a domingo: el día de entrenamiento o null (descanso).
   const semana = [1, 2, 3, 4, 5, 6, 0].map(n => dias.find(x => x.dia_semana === n) || null);

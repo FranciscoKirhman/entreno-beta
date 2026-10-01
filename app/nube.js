@@ -100,7 +100,7 @@ export async function cargarPlan() {
       ejercicios: d.plan_ejercicios.sort((a, b) => a.orden - b.orden).map(e => ({
         ejercicio_id: e.ejercicio_id, orden: e.orden, prioridad: e.prioridad, series: e.series, reps_min: e.reps_min, reps_max: e.reps_max,
         unidad: e.unidad, rir: e.rir, descanso_seg: e.descanso_seg, carga_kg: e.carga_kg == null ? null : Number(e.carga_kg), nota: e.nota,
-        rango_extendido: e.rango_extendido,
+        rango_extendido: e.rango_extendido, ...(e.superserie ? { superserie: e.superserie } : {}),
       })),
     })),
   };

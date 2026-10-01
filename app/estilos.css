@@ -454,3 +454,13 @@ input[type=search]{width:100%;min-height:44px;padding:9px 11px;border:1px solid 
 .nivel-tarjeta{border-color:color-mix(in srgb,var(--c) 40%,var(--border))}
 .pie-plan{display:flex;flex-direction:column;gap:8px;margin-top:20px}
 .leyenda{margin-top:4px}
+
+/* Superseries: misma letra y color, una barra al costado */
+.ss-A,.ss-E{--ss:var(--c-recomposicion)} .ss-B,.ss-F{--ss:var(--c-deporte)} .ss-C,.ss-G{--ss:var(--c-volver)} .ss-D,.ss-H{--ss:var(--c-ganar_fuerza)}
+.chip-ss{display:inline-block;min-width:26px;text-align:center;font:600 12px/1.7 var(--f-dato);padding:0 6px;border-radius:6px;background:var(--ss);color:var(--c-ink);margin-right:6px;vertical-align:1px}
+.ejercicios-hoy > li.en-superserie{border-left:3px solid var(--ss);padding-left:10px}
+.ejercicios-hoy > li.en-superserie:not(.ss-inicio){border-top:1px dashed color-mix(in srgb,var(--ss) 45%,var(--line))}
+.titulo-ss{margin:0 0 6px;font-size:12.5px;font-weight:600;color:var(--ss)}
+.ejercicios li.en-superserie,.ejercicios-plan li.en-superserie{box-shadow:inset 3px 0 0 var(--ss);padding-left:9px}
+.opcion-hoja .letra{width:auto;min-width:24px}
+.nota-hoja{text-align:center;margin:-6px 4px 12px}
