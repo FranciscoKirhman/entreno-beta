@@ -323,7 +323,7 @@ function restaurarValido(r) {
 
 function cuentaHtml() {
   if (!nube.hay()) return '<h3>Versión de prueba</h3><p class="pequeno">Todo lo que anotas queda guardado solo en este teléfono. Las cuentas, la sincronización y la IA del coach llegan con la beta.</p>';
-  if (nube.conectado()) return `<h3>Cuenta</h3><p>Entraste como <strong>${esc(nube.correo())}</strong>. Tu plan y tus sesiones guardadas se sincronizan con esta cuenta.</p>
+  if (nube.conectado()) return `<h3>Cuenta</h3><p>Entraste como <strong class="correo-cuenta">${esc(nube.correo())}</strong>. Tu plan y tus sesiones guardadas se sincronizan con esta cuenta.</p>
     ${R().demo_privada ? '<p class="pequeno">Demo privada con historial importado. El cuestionario es ficticio y las pruebas de interfaz no son entrenamientos reales.</p>' : ''}
     <p class="pequeno">El historial guardado se recupera en tus otros dispositivos. Las series todavía en curso permanecen en este teléfono hasta guardar la sesión. Las fotos y documentos locales se conservan por separado.</p>
     <button type="button" class="boton" id="sincronizar">Sincronizar ahora</button><p id="estado-sincronizacion" role="status"></p>

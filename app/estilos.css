@@ -595,3 +595,5 @@ span.ej-semana{cursor:default}
 .barras-semana li:not(:has(.img-musculo)){grid-template-columns:minmax(0,104px) minmax(0,1fr) 66px}
 .hoy-entrenas .img-musculo{width:68px;height:68px}
 .ficha-musculos{flex-direction:row;align-items:center;gap:14px}
+
+.correo-cuenta{overflow-wrap:anywhere}
