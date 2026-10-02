@@ -1,7 +1,7 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
 // Red primero, con límite de tiempo, y la copia guardada como respaldo (igual que el tablero).
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-01 19:17 · 05c792d";
+const VERSION = "2026-10-02 00:24 · e79137c";
 const ARCHIVOS = [
  "./",
  "app.js",
@@ -21,6 +21,13 @@ const ARCHIVOS = [
  "iconos/icono-192.png",
  "iconos/icono-512.png",
  "iconos/icono.svg",
+ "img/objetivos/bajar_grasa.webp",
+ "img/objetivos/deporte.webp",
+ "img/objetivos/ganar_fuerza.webp",
+ "img/objetivos/ganar_musculo.webp",
+ "img/objetivos/recomposicion.webp",
+ "img/objetivos/salud.webp",
+ "img/objetivos/volver.webp",
  "index.html",
  "manifest.webmanifest",
  "mas.js",

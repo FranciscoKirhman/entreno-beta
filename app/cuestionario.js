@@ -21,6 +21,8 @@ export const OBJETIVO_VISTA = {
   deporte: { icono: '⚽', corto: 'Mi deporte', sub: 'Rendir mejor' },
   volver: { icono: '🔄', corto: 'Volver', sub: 'Después de una pausa' },
 };
+/** Dibujo del objetivo (app/img/objetivos, hecho con ChatGPT desde docs/09-banco-de-imagenes.md). Es decorativo: el texto va al lado. */
+export const imagenObjetivo = (id, clase = 'ilustracion') => `<img class="${clase}" src="img/objetivos/${id}.webp" alt="" width="256" height="256" decoding="async">`;
 export const NIVEL_VISTA = {
   principiante: { icono: '🌱', nombre: 'Principiante' },
   intermedio: { icono: '🌿', nombre: 'Intermedio' },
@@ -57,7 +59,7 @@ function pasoObjetivo(r) {
     titulo: '¿Qué quieres lograr?', sub: 'Elige lo principal. Lo puedes cambiar cuando quieras.',
     html: `<div class="grid-opciones">${ops.map(([o]) => {
       const x = OBJETIVO_VISTA[o];
-      return `<button type="button" class="tarjeta-opcion obj-${o}" data-set="objetivo_principal" data-v="${o}" aria-pressed="${v === o}"><span class="emoji" aria-hidden="true">${x.icono}</span><strong>${esc(x.corto)}</strong><span class="pequeno">${esc(x.sub)}</span></button>`;
+      return `<button type="button" class="tarjeta-opcion obj-${o}" data-set="objetivo_principal" data-v="${o}" aria-pressed="${v === o}">${imagenObjetivo(o)}<strong>${esc(x.corto)}</strong><span class="pequeno">${esc(x.sub)}</span></button>`;
     }).join('')}</div>${extra}`,
   };
 }

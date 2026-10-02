@@ -5,7 +5,7 @@
 import { E, guardar, R, D, esc, $, hoy, indice, C, mostrarMensaje } from './comun.js';
 import { resumenPlan } from '../nucleo/resumen-plan.js';
 import { progresoNivel } from '../nucleo/nivel.js';
-import { OBJETIVO_VISTA, NIVEL_VISTA } from './cuestionario.js';
+import { OBJETIVO_VISTA, NIVEL_VISTA, imagenObjetivo } from './cuestionario.js';
 import { fechasEntrenadas } from './temporada.js';
 import { abrirHoja } from './hoja.js';
 import { grupos, etiquetaSuperserie } from '../nucleo/superseries.js';
@@ -34,7 +34,7 @@ export function vistaPlan(ir, { armarPlan, nuevo = false } = {}) {
 
   $('app').innerHTML = `<div id="vista-plan" class="obj-${s.objetivo.id}">
     <section class="heroe">
-      <span class="emoji-grande" aria-hidden="true">${o.icono}</span>
+      ${imagenObjetivo(s.objetivo.id, 'ilustracion-heroe')}
       <p class="antetitulo">${nuevo ? 'Tu plan está listo' : 'Tu plan'}</p>
       <h1>${esc(s.objetivo.nombre)}</h1>
       <div class="chips-heroe">
