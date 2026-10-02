@@ -476,24 +476,13 @@ input[type=search]{margin:6px 0 8px}
 .icono-estrella{width:15px;height:15px;fill:#FFB800;stroke:#FFB800;stroke-width:1.2;stroke-linejoin:round;vertical-align:-2px}
 .opcion-hoja .imagen-opcion{width:32px;height:32px;object-fit:contain}
 
-/* Mapa del cuerpo (app/mapa-cuerpo.js) */
-:root{--mapa-base:#D1D1D6}
-@media (prefers-color-scheme: dark){:root{--mapa-base:#4A4A4E}}
-.mapa-cuerpo{display:block;width:100%;height:auto}
-.mapa-cuerpo .z{fill:var(--mapa-base);stroke:var(--bg);stroke-width:1}
-.mapa-cuerpo .z.silueta{fill:color-mix(in srgb,var(--mapa-base) 70%,var(--bg));stroke:none}
-.mapa-cuerpo .z.p,.mapa-cuerpo .z.i4{fill:var(--accent)}
-.mapa-cuerpo .z.s,.mapa-cuerpo .z.i2{fill:color-mix(in srgb,var(--accent) 45%,var(--mapa-base))}
-.mapa-cuerpo .z.i1{fill:color-mix(in srgb,var(--accent) 25%,var(--mapa-base))}
-.mapa-cuerpo .z.i3{fill:color-mix(in srgb,var(--accent) 72%,var(--mapa-base))}
 
-/* Hoy como Hevy: cabecera con el mapa del cuerpo, una tarjeta por ejercicio y la tabla de series */
+/* Hoy como Hevy: cabecera con los músculos de hoy, una tarjeta por ejercicio y la tabla de series */
 .sesion-cab .fila-titulo{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 .sesion-cab h2{margin:0}
 .sesion-cab .fila-titulo p{margin:2px 0 0}
 .boton.chico{min-height:36px;padding:6px 12px;font-size:14px;border-radius:999px;white-space:nowrap;flex:0 0 auto}
 .boton.chico .icono{width:18px;height:18px;vertical-align:-4px}
-.hoy-entrenas{display:grid;grid-template-columns:118px minmax(0,1fr);gap:14px;align-items:center;margin:12px 0 6px}
 .hoy-entrenas .sobretitulo{margin:0 0 4px}
 .musculos-hoy{font-size:17px;font-weight:600;line-height:1.3;margin:0}
 .musculos-hoy::first-letter{text-transform:uppercase}
@@ -512,8 +501,6 @@ input[type=search]{margin:6px 0 8px}
 .boton-icono .icono{vertical-align:0}
 .miniatura{display:block;width:48px;height:48px;border-radius:12px;object-fit:cover;background:var(--surface-2)}
 .miniatura.maquina{object-fit:contain;padding:4px;background:var(--fondo-icono)}
-.miniatura.cuerpo{display:grid;place-items:center;padding:3px}
-.miniatura.cuerpo .mapa-cuerpo{width:auto;height:100%}
 .ej.tarjeta > .pequeno.suave{margin:8px 0 0}
 .tabla-series{margin-top:10px;display:flex;flex-direction:column;gap:4px}
 .cab-series,.serie{display:grid;grid-template-columns:34px minmax(0,1fr) 62px 70px 38px;gap:6px;align-items:center}
@@ -535,9 +522,12 @@ input[type=search]{margin:6px 0 8px}
 .check[aria-pressed="true"]{background:var(--good)}
 .lista-check .check{width:44px;height:40px}
 .serie .esfuerzo{grid-column:2 / -1;justify-self:end;padding:0 4px 2px 0}
-.chip-esfuerzo{min-height:30px;padding:4px 12px;border:0;border-radius:999px;background:var(--fill);color:var(--ink-muted);font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums;cursor:pointer}
-.chip-esfuerzo.con-valor{color:var(--ink)}
-.serie.hecha .chip-esfuerzo{background:color-mix(in srgb,var(--good) 14%,transparent)}
+.chip-esfuerzo{min-height:24px;padding:2px 8px;border:0;border-radius:6px;background:none;color:var(--ink-muted);font-size:12px;font-weight:600;letter-spacing:.02em;font-variant-numeric:tabular-nums;cursor:pointer;opacity:.8}
+.chip-esfuerzo.con-valor{color:var(--good);opacity:1}
+.serie .esfuerzo{margin-top:-2px}
+.opcion-hoja .letra.rpe{min-width:40px;text-align:center;font-size:18px;font-variant-numeric:tabular-nums}
+.hoja h3 .ayuda-titulo{width:24px;height:24px;margin-left:6px;vertical-align:2px;font-size:14px;border-radius:50%;border:0;background:var(--surface-2);color:var(--ink-muted);font-weight:600;cursor:pointer}
+.hoja h3 .ayuda-titulo[aria-expanded="true"]{background:var(--accent-soft);color:var(--accent)}
 .serie .consejo{margin:0 6px 2px 0}
 .agregar-serie{width:100%;min-height:38px;margin-top:8px;font-size:15px;color:var(--ink)}
 .ej.tarjeta details.extra summary{margin-top:10px}
@@ -547,11 +537,7 @@ input[type=search]{margin:6px 0 8px}
 .flecha-atras{transform:rotate(180deg);width:22px;height:22px;stroke-width:2.2}
 .ficha-dibujo{display:block;width:100%;height:auto;aspect-ratio:3/2;object-fit:contain;border-radius:16px;background:#FFFFFF;margin:8px 0 4px}
 .ficha-sub{margin:-2px 0 6px}
-.ficha-musculos{display:grid;grid-template-columns:136px minmax(0,1fr);gap:14px;align-items:center}
 .ficha-musculos .sobretitulo{margin:0 0 4px}
-.punto{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:1px}
-.punto.p{background:var(--accent)}
-.punto.s{background:color-mix(in srgb,var(--accent) 45%,var(--mapa-base))}
 .ficha-maquina{display:block;width:72px;height:72px;object-fit:contain;padding:4px;border-radius:12px;background:var(--fondo-icono);margin-top:10px}
 #vista-ficha .tarjeta h2{font-size:20px;margin:0 0 8px}
 .pasos{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px}
@@ -584,17 +570,7 @@ input[type=search]{margin:6px 0 8px}
 .opcion-hoja .icono-hoja.tipo-calentamiento{color:var(--warning)}
 .opcion-hoja .imagen-opcion{width:40px;height:40px;border-radius:8px;background:var(--fondo-icono);padding:2px}
 
-/* Progreso: la semana en el mapa del cuerpo */
-.mapa-semana{max-width:280px;margin:6px auto 4px}
-.leyenda-mapa{display:flex;align-items:center;gap:8px;margin:4px 0 0}
-.escala-mapa{display:inline-flex;gap:2px}
-.escala-mapa i{width:14px;height:10px;border-radius:3px;background:var(--mapa-base)}
-.escala-mapa .i1{background:color-mix(in srgb,var(--accent) 25%,var(--mapa-base))}
-.escala-mapa .i2{background:color-mix(in srgb,var(--accent) 45%,var(--mapa-base))}
-.escala-mapa .i3{background:color-mix(in srgb,var(--accent) 72%,var(--mapa-base))}
-.escala-mapa .i4{background:var(--accent)}
 .barras-semana{list-style:none;padding:0;margin:10px 0 0;display:flex;flex-direction:column;gap:8px}
-.barras-semana li{display:grid;grid-template-columns:minmax(0,104px) minmax(0,1fr) 66px;align-items:center;gap:8px}
 .barras-semana .pista{height:10px}
 .barras-semana .pista i{top:0;bottom:0;border-radius:10px;background:var(--accent)}
 .barras-semana .num{text-align:right;color:var(--ink-muted);white-space:nowrap}
@@ -606,3 +582,14 @@ span.ej-semana{cursor:default}
 .ej-semana .nombre{min-width:0}
 .miniatura.chica{width:36px;height:36px;flex:0 0 36px;border-radius:9px}
 .ejercicios li.con-mini .detalle{grid-column:1 / -1;padding-left:46px}
+
+/* Imágenes de músculos (app/musculos.js), sobre un fondo claro como las máquinas */
+.fila-musculos{display:flex;flex-wrap:wrap;gap:8px}
+.img-musculo{display:block;width:76px;height:76px;object-fit:contain;padding:3px;border-radius:12px;background:var(--fondo-icono)}
+.img-musculo.chica{width:32px;height:32px;padding:1px;border-radius:8px}
+.hoy-entrenas{display:flex;flex-direction:column;gap:10px;margin:12px 0 6px}
+.ficha-musculos{display:flex;flex-direction:column;gap:10px}
+.ficha-musculos .img-musculo{width:112px;height:112px}
+.miniatura.sin-imagen{display:grid;place-items:center;color:var(--ink-muted)}
+.barras-semana li{display:grid;grid-template-columns:auto minmax(0,96px) minmax(0,1fr) 66px;align-items:center;gap:8px}
+.barras-semana li:not(:has(.img-musculo)){grid-template-columns:minmax(0,104px) minmax(0,1fr) 66px}

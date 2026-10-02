@@ -2,7 +2,8 @@
 // que el servidor: nucleo/*.js.
 //
 //   node herramientas/servir.mjs  →  http://127.0.0.1:5173/app/
-import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje } from './comun.js';
+import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo } from './comun.js';
+import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
 import { derivar } from '../nucleo/derivar.js';
 import { generarPlan } from '../nucleo/motor-plan.js';
 import { vistaHoy } from './hoy.js';
@@ -155,6 +156,14 @@ const EJEMPLO = {
 // Versión de prueba en el celular: guarda la app para que abra sin señal en el gimnasio.
 if (CONFIG.sinSenal && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(e => console.warn('Sin modo sin señal', e));
 
+// Versión de prueba: cada vez que se abre la app, el cuestionario parte de cero para volver a probarlo (al
+// cambiar de pantalla o recargar, no). Lo anotado se queda y, si no hay historial, se carga uno inventado.
+if (CONFIG.modoPrueba) {
+  let nueva = true;
+  try { nueva = !sessionStorage.getItem('entreno-prueba'); sessionStorage.setItem('entreno-prueba', '1'); } catch { /* sin almacenamiento */ }
+  if (nueva) empezarDeNuevo();
+  if (!E.sesiones.length && !E.sinEjemplo) { E.sesiones = historialDeEjemplo(hoy(), indice); guardar(); }
+}
 await nube.iniciar();
 subirPendientes(); // lo que quedó sin subir la última vez
 if (nube.entroPorEnlace()) { await sincronizarAlEntrar(); E.mensaje = `Entraste como ${nube.correo()}.`; E.vista = E.plan ? 'hoy' : 'inicio'; }

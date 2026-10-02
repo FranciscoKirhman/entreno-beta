@@ -52,6 +52,13 @@ try {
 } catch { /* sin almacenamiento: se parte de cero */ }
 export const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(E)); } catch { /* modo privado */ } };
 export const reiniciar = () => { E = VACIO(); guardar(); };
+/** Versión de prueba: borra el cuestionario y el plan para volver a probarlos, y deja lo anotado (historial,
+ *  series, notas, suplementos e indicaciones). */
+export function empezarDeNuevo() {
+  const { sesiones, registro, notas, filas, descansos, suplementos, tomas, indicaciones, avisos, sinEjemplo } = E;
+  E = { ...VACIO(), sesiones, registro, notas, filas, descansos, suplementos, tomas, indicaciones, ...(avisos ? { avisos } : {}), ...(sinEjemplo ? { sinEjemplo } : {}) };
+  guardar();
+}
 
 /** Respaldo de todo lo anotado en este teléfono. Desde la versión 2 incluye las fotos de progreso: [{id, fecha, angulo, datos}]. */
 export const respaldo = (fotos = []) => ({ app: 'entreno', version: 2, creado: new Date().toISOString(), estado: E, fotos });

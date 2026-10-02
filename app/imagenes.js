@@ -1,7 +1,8 @@
 // Imágenes de los ejercicios: el dibujo de cómo se hace (cuando llega de ChatGPT) o, mientras tanto, el ícono de su
-// máquina; si no usa máquina, el mapa del cuerpo con lo que trabaja. Nunca se pide una imagen que no existe.
+// máquina; si no usa máquina, la imagen del músculo que más trabaja. Nunca se pide una imagen que no existe.
 import { IMAGENES, indice, esc } from './comun.js';
-import { mapaCuerpo, vistaPrincipal } from './mapa-cuerpo.js';
+import { imagenMusculo } from './musculos.js';
+import { icono } from './iconos.js';
 
 // La máquina que mejor representa el ejercicio va primero (la prensa dice más que "banco").
 const ORDEN_EQUIPO = ['prensa', 'extension_cuadriceps', 'curl_femoral', 'hip_thrust_maquina', 'abductora', 'kickback_maquina', 'jalon', 'smith',
@@ -31,5 +32,7 @@ export function miniatura(id, clase = 'miniatura') {
   if (hayImagen(mini)) return `<img class="${clase}" src="${mini}" alt="" width="96" height="96" decoding="async">`;
   const m = maquinaDe(ej);
   if (m) return `<img class="${clase} maquina" src="${m.src}" alt="" width="96" height="96" decoding="async">`;
-  return `<span class="${clase} cuerpo" aria-hidden="true">${mapaCuerpo({ primarios: ej.musculos_primarios, vistas: vistaPrincipal(ej.musculos_primarios), titulo: esc(ej.nombre) })}</span>`;
+  const mu = imagenMusculo(ej.musculos_primarios[0]);
+  if (mu) return `<img class="${clase} maquina" src="${mu}" alt="" width="96" height="96" decoding="async">`;
+  return `<span class="${clase} sin-imagen" aria-hidden="true">${icono('pesa')}</span>`;
 }

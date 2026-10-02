@@ -4,6 +4,8 @@ export const CONFIG = {
   supabaseAnonKey: null,
   funcionesUrl: null,
   versionConsentimientos: '2026-10-01',
-  version: '2026-10-02 01:34 · fa12f59',
+  version: '2026-10-02 10:08 · d7dc701',
   sinSenal: true,
+  // Modo prueba: el cuestionario parte de cero cada vez que se abre la app, con un historial de ejemplo.
+  modoPrueba: true,
 };

@@ -1,5 +1,5 @@
 // Vista Más: cuenta, ajustar con tu propia IA (copiar y pegar), importar un plan escrito y reiniciar.
-import { E, guardar, reiniciar, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje, unidadPeso } from './comun.js';
+import { E, guardar, reiniciar, empezarDeNuevo, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje, unidadPeso } from './comun.js';
 import { esExportacionHevy, importarParaTelefono } from '../nucleo/hevy-csv.js';
 import { soporte, configAvisos, cambiarAvisos, activarAvisos, notificar, enlaceCalendario } from './avisos.js';
 import { CONFIG } from './config.js';
@@ -8,11 +8,24 @@ import { validarPlan } from '../nucleo/validador.js';
 import { permitidos } from '../nucleo/mcp.js';
 import { leerPlanTexto, calendarizar } from '../nucleo/importar-plan.js';
 import { listarFotosLocales, guardarFotoLocal } from './fotos-local.js';
+import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
 import * as nube from './nube.js';
+
+/** Versión de prueba: volver a hacer el cuestionario y el historial de ejemplo. */
+function pruebaHtml() {
+  const hay = E.sesiones.some(x => x.origen === 'ejemplo');
+  return `<section class="tarjeta destacada">
+    <h3>Versión de prueba</h3>
+    <p class="pequeno suave">Cada vez que abres la app, el cuestionario parte de cero para que lo pruebes de nuevo. Lo que anotas se queda.${hay ? ' El historial de Progreso es de ejemplo: inventado, para probar.' : ''}</p>
+    <div class="fila-botones"><button type="button" class="boton primario" id="prueba-de-nuevo">Hacer el cuestionario de nuevo</button>
+      <button type="button" class="boton" id="prueba-ejemplo">${hay ? 'Quitar el historial de ejemplo' : 'Cargar historial de ejemplo'}</button></div>
+  </section>`;
+}
 
 export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
   $('app').innerHTML = `<div id="vista-mas">
     <h1>Más</h1>
+    ${CONFIG.modoPrueba ? pruebaHtml() : ''}
     <section class="tarjeta" id="cuenta">${cuentaHtml()}</section>
     ${instalada() ? '' : `<section class="tarjeta"><h3>Instalarla en el teléfono</h3>
       <p class="pequeno"><strong>iPhone:</strong> en Safari, botón Compartir y "Agregar a pantalla de inicio".<br><strong>Android:</strong> en Chrome, menú ⋮ e "Instalar app".<br>Queda con su ícono y abre sin señal en el gimnasio.</p></section>`}
@@ -65,6 +78,15 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     <p class="pequeno suave">Versión ${esc(CONFIG.version)}</p>
   </div>`;
   enlazarCuenta(ir, sincronizarAlEntrar);
+  $('prueba-de-nuevo')?.addEventListener('click', () => { empezarDeNuevo(); ir('cuestionario'); });
+  $('prueba-ejemplo')?.addEventListener('click', () => {
+    const hay = E.sesiones.some(x => x.origen === 'ejemplo');
+    E.sesiones = hay ? E.sesiones.filter(x => x.origen !== 'ejemplo') : [...E.sesiones, ...historialDeEjemplo(hoy(), indice)];
+    E.sinEjemplo = hay;
+    E.mensaje = hay ? 'Saqué el historial de ejemplo.' : 'Cargué 8 semanas de historial de ejemplo.';
+    guardar();
+    vistaMas(ir, { armarPlan, sincronizarAlEntrar });
+  });
   enlazarRecordatorios();
   document.querySelectorAll('[data-unidad]').forEach(b => b.onclick = () => { R().unidad = b.dataset.unidad; E.mensaje = `Peso en ${b.dataset.unidad === 'lb' ? 'libras' : 'kilos'}.`; guardar(); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); });
   enlazarConexiones(() => vistaMas(ir, { armarPlan, sincronizarAlEntrar }));

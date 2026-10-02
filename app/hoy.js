@@ -1,5 +1,5 @@
-// Vista Hoy, como en Hevy: check-in de bienestar, suplementos y la sesión del día con lo que entrenas en el mapa del
-// cuerpo, "Ajustar hoy" (poco tiempo, cansancio, no puedo, otra opción, dolor: siempre pregunta antes de cambiar) y
+// Vista Hoy, como en Hevy: check-in de bienestar, suplementos y la sesión del día con los músculos que entrenas (con
+// sus imágenes), "Ajustar hoy" (poco tiempo, cansancio, no puedo, otra opción, dolor: siempre pregunta antes de cambiar) y
 // cada ejercicio con su miniatura, su ficha (cómo se hace y por qué), el menú ⋯ y la tabla de series: tipo
 // (calentamiento, normal, al fallo, drop set), lo de la vez anterior, cronómetro de descanso y superseries.
 import { E, guardar, R, D, C, K, indice, hoy, ahora, esc, $, fechaCorta, escala, opcionesRadio, chk, cambiarPlan, numero, coma, mostrarMensaje, avisar, unidadPeso, enUnidad, aKilos, peso, volumenTexto } from './comun.js';
@@ -19,7 +19,7 @@ import { abrirHoja } from './hoja.js';
 import { grupos, unir, separar, copiarSuperseries, despuesDeSerie, etiquetaSuperserie } from '../nucleo/superseries.js';
 import { icono } from './iconos.js';
 import { miniatura } from './imagenes.js';
-import { mapaCuerpo, NOMBRE_MUSCULO, lista } from './mapa-cuerpo.js';
+import { NOMBRE_MUSCULO, lista, mayuscula, imagenesMusculos } from './musculos.js';
 import { preguntar, proponer } from './cambios-ui.js';
 import { nombreAsistente } from './cuestionario.js';
 import * as nube from './nube.js';
@@ -95,6 +95,8 @@ const descansoVuelta = (ejs, g) => { const u = ejs[g.miembros.at(-1)]; return E.
 const nombreDe = e => e.nombre || indice.porId.get(e.ejercicio_id)?.nombre || '';
 const mmss = seg => (seg ? `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')}` : 'sin descanso');
 const DESCANSOS = [0, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300];
+// Cada RPE dicho en simple: cuántas repeticiones más te salían.
+const COMO_QUEDO = { 10: 'Al fallo, no salía otra', 9.5: 'Quizás salía 1 más', 9: 'Salía 1 más', 8.5: 'Salían 1 o 2 más', 8: 'Salían 2 más', 7.5: 'Salían 2 o 3 más', 7: 'Salían 3 más', 6: 'Salían 4 o más' };
 
 // Paneles abiertos ("Cómo te fue"): siguen abiertos aunque la vista se vuelva a dibujar.
 const abiertos = new Set();
@@ -121,7 +123,7 @@ function sesionHoy(dia) {
     <div class="fila-titulo"><div><h2>${esc(dia.foco)}</h2><p class="suave pequeno">${dia.hora ? `${esc(dia.hora)} · ` : ''}~${duracionEstimada(dia.ejercicios)} min · ${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? '' : 's'}</p></div>
       <button type="button" class="boton chico" id="ajustar-hoy">${icono('ajustes')} Ajustar hoy</button></div>
     ${dia.ejercicios.length ? avanceHtml(avance(dia)) : '<p>Hoy, descanso activo: 20 a 30 minutos de caminata o bicicleta suave y movilidad.</p>'}
-    ${prim.length ? `<div class="hoy-entrenas">${mapaCuerpo({ primarios: prim, secundarios: sec, titulo: 'Lo que entrenas hoy' })}<div><p class="sobretitulo">Hoy entrenas</p><p class="musculos-hoy">${esc(lista(prim.map(m => NOMBRE_MUSCULO[m] || m)))}</p>${sec.length ? `<p class="pequeno suave">Y un poco de ${esc(lista(sec.map(m => (NOMBRE_MUSCULO[m] || m).toLowerCase())))}</p>` : ''}</div></div>` : ''}
+    ${prim.length ? `<div class="hoy-entrenas">${imagenesMusculos(prim.slice(0, 4))}<div><p class="sobretitulo">Hoy entrenas</p><p class="musculos-hoy">${esc(mayuscula(lista(prim.map(m => NOMBRE_MUSCULO[m] || m))))}</p>${sec.length ? `<p class="pequeno suave">Y un poco de ${esc(lista(sec.map(m => (NOMBRE_MUSCULO[m] || m).toLowerCase())))}</p>` : ''}</div></div>` : ''}
     <p class="suave pequeno">${esc(dia.racional || '')}</p>
     ${eligePeso ? '<p class="nota-sesion pequeno">Donde no hay peso, elige uno con el que te sobren las repeticiones de reserva (RIR) en la última serie. Lo anotas y la app ajusta desde ahí.</p>' : ''}
     <details class="extra"><summary>Calentamiento</summary><ul class="pequeno">${(dia.calentamiento || []).map(c => `<li><strong>${esc(c.name)}</strong>. ${esc(c.how)}</li>`).join('')}</ul></details>
@@ -152,7 +154,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
       ${seg ? '' : `<input type="text" inputmode="decimal" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="kg" value="${esc(coma(enUnidad(kg)))}" placeholder="${esc(prev?.carga_kg != null ? coma(enUnidad(prev.carga_kg)) : '')}" aria-label="${u === 'lb' ? 'Libras' : 'Kilos'}, serie ${etiq[i]}">`}
       <input type="text" inputmode="numeric" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="reps" value="${esc(r.reps ?? '')}" placeholder="${esc(prev?.reps ?? repsPh)}" aria-label="${seg ? 'Segundos' : 'Repeticiones'}, serie ${etiq[i]}">
       <button type="button" class="check" data-hecho="${id}" data-i="${i}" aria-pressed="${Boolean(r.hecho)}" aria-label="Serie ${etiq[i]} hecha">${r.hecho ? '✓' : ''}</button>
-      ${seg || !deTrabajo(t) ? '' : `<div class="esfuerzo"><button type="button" class="chip-esfuerzo${r.rpe != null ? ' con-valor' : ''}" data-esfuerzo="${id}" data-i="${i}" aria-label="Esfuerzo de la serie ${etiq[i]}">${esc(ESFUERZO.find(o => o.rpe === Number(r.rpe))?.etiqueta || '¿Cuánto te costó?')}</button></div>`}
+      ${seg || !deTrabajo(t) ? '' : `<div class="esfuerzo"><button type="button" class="chip-esfuerzo${r.rpe != null ? ' con-valor' : ''}" data-esfuerzo="${id}" data-i="${i}" aria-label="Esfuerzo de la serie ${etiq[i]}${r.rpe != null ? `: RPE ${coma(r.rpe)}` : ''}">${r.rpe != null ? `RPE ${esc(coma(r.rpe))}` : 'RPE'}</button></div>`}
       ${r.consejo && deTrabajo(t) ? `<p class="consejo ${r.consejo.tipo}">${esc(r.consejo.texto)}</p>` : ''}</div>`;
   }).join('');
   const preguntas = K.por_ejercicio.preguntas.filter(p => !p.mostrar_si || Object.entries(p.mostrar_si).every(([q, vals]) => vals.includes(nota[q])));
@@ -361,9 +363,9 @@ function enlazar(ir, dia) {
 
   // Esfuerzo de una serie (RPE y reserva), en una hoja. RPE 10 es una serie al fallo; bajar de 10 la deja normal.
   raiz.querySelectorAll('[data-esfuerzo]').forEach(b => b.onclick = () => abrirHoja({
-    titulo: '¿Cuánto te costó?', volver: b,
-    nota: 'RIR es cuántas repeticiones más te salían con buena técnica. RPE es lo mismo contado desde 10.',
-    opciones: [...ESFUERZO.map(o => ({ valor: String(o.rpe), letra: String(o.rir).replace('.', ','), clase: o.rpe === 10 ? 'tipo-fallo' : '', nombre: o.etiqueta })), { valor: '', letra: '', nombre: 'Sin anotar' }],
+    titulo: 'RPE de la serie', volver: b, notaOculta: true,
+    nota: 'RIR: cuántas repeticiones más te salían con buena técnica. RPE: lo mismo contado desde 10 (RPE 8 es que te quedaban 2).',
+    opciones: [...ESFUERZO.map(o => ({ valor: String(o.rpe), letra: coma(o.rpe), clase: `rpe${o.rpe === 10 ? ' tipo-fallo' : ''}`, nombre: COMO_QUEDO[o.rpe] })), { valor: '', letra: '', clase: 'rpe', nombre: 'Sin anotar' }],
     alElegir: v => {
       const { e, k } = ejercicioDe(b.dataset.esfuerzo);
       const { lista } = materializar(f, e, k);

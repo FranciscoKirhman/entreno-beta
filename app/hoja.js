@@ -15,19 +15,20 @@ const teclaEscape = ev => { if (ev.key === 'Escape') cerrarHoja(); };
 /**
  * @param titulo   texto de arriba
  * @param nota     explicación corta bajo el título (opcional)
+ * @param notaOculta la explicación queda detrás de un "?" junto al título
  * @param opciones [{ valor, letra, imagen o icono (svg de iconos.js), clase, nombre, ayuda?, peligro? }]
  * @param alElegir (valor) => void
  * @param volver   foco a devolver al cerrar
  */
-export function abrirHoja({ titulo, nota = '', opciones, alElegir, volver = null }) {
+export function abrirHoja({ titulo, nota = '', notaOculta = false, opciones, alElegir, volver = null }) {
   cerrarHoja();
   const fondo = document.createElement('div');
   fondo.id = 'hoja';
   fondo.className = 'hoja-fondo';
   fondo.innerHTML = `<div class="hoja" role="dialog" aria-modal="true" aria-labelledby="hoja-titulo">
     <div class="asa" aria-hidden="true"></div>
-    <h3 id="hoja-titulo">${esc(titulo)}</h3>
-    ${nota ? `<p class="nota-hoja pequeno${nota.length > 90 ? ' larga' : ' suave'}">${esc(nota)}</p>` : ''}
+    <h3 id="hoja-titulo">${esc(titulo)}${nota && notaOculta ? ' <button type="button" class="ayuda ayuda-titulo" data-ayuda-titulo aria-expanded="false" aria-label="¿Qué es?">?</button>' : ''}</h3>
+    ${nota ? `<p class="nota-hoja pequeno${nota.length > 90 && !notaOculta ? ' larga' : ' suave'}"${notaOculta ? ' hidden' : ''}>${esc(nota)}</p>` : ''}
     <ul class="opciones-hoja">${opciones.map(o => `<li>
       <div class="opcion-hoja">
         <button type="button" class="elegir${o.peligro ? ' peligro' : ''}" data-elegir="${esc(o.valor)}">${o.imagen ? `<img class="imagen-opcion" src="${esc(o.imagen)}" alt="" width="64" height="64">` : o.icono ? `<span class="letra icono-hoja ${esc(o.clase || '')}">${o.icono}</span>` : `<span class="letra ${esc(o.clase || '')}">${esc(o.letra)}</span>`}${esc(o.nombre)}</button>
@@ -40,6 +41,13 @@ export function abrirHoja({ titulo, nota = '', opciones, alElegir, volver = null
   alCerrar = volver ? () => volver.focus?.() : null;
   fondo.addEventListener('click', ev => {
     if (ev.target === fondo) return cerrarHoja();
+    const ayudaTitulo = ev.target.closest('[data-ayuda-titulo]');
+    if (ayudaTitulo) {
+      const p = fondo.querySelector('.nota-hoja');
+      p.hidden = !p.hidden;
+      ayudaTitulo.setAttribute('aria-expanded', String(!p.hidden));
+      return;
+    }
     const ayuda = ev.target.closest('[data-ayuda]');
     if (ayuda) {
       const p = fondo.querySelector(`[data-explica="${CSS.escape(ayuda.dataset.ayuda)}"]`);

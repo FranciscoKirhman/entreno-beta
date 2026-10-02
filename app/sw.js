@@ -1,7 +1,7 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
 // Red primero, con límite de tiempo, y la copia guardada como respaldo (igual que el tablero).
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-02 01:34 · fa12f59";
+const VERSION = "2026-10-02 10:08 · d7dc701";
 const ARCHIVOS = [
  "./",
  "app.js",
@@ -51,6 +51,18 @@ const ARCHIVOS = [
  "img/asistentes/entrenador/saludo.webp",
  "img/asistentes/entrenador/sin_senal.webp",
  "img/asistentes/entrenador.webp",
+ "img/asistentes/entrenadora/animo.webp",
+ "img/asistentes/entrenadora/calendario.webp",
+ "img/asistentes/entrenadora/celebra.webp",
+ "img/asistentes/entrenadora/cronometro.webp",
+ "img/asistentes/entrenadora/cuidado.webp",
+ "img/asistentes/entrenadora/descanso.webp",
+ "img/asistentes/entrenadora/explica.webp",
+ "img/asistentes/entrenadora/pensando.webp",
+ "img/asistentes/entrenadora/pregunta.webp",
+ "img/asistentes/entrenadora/progreso.webp",
+ "img/asistentes/entrenadora/saludo.webp",
+ "img/asistentes/entrenadora/sin_senal.webp",
  "img/asistentes/entrenadora.webp",
  "img/asistentes/mancuerna/animo.webp",
  "img/asistentes/mancuerna/calendario.webp",
@@ -155,8 +167,8 @@ const ARCHIVOS = [
  "img/objetivos/volver.webp",
  "index.html",
  "manifest.webmanifest",
- "mapa-cuerpo.js",
  "mas.js",
+ "musculos.js",
  "nube.js",
  "plan.js",
  "progreso.js",
@@ -181,6 +193,7 @@ const ARCHIVOS = [
  "../nucleo/explicar.js",
  "../nucleo/ficha.js",
  "../nucleo/hevy-csv.js",
+ "../nucleo/historial-ejemplo.js",
  "../nucleo/ics.js",
  "../nucleo/importar-plan.js",
  "../nucleo/mcp.js",

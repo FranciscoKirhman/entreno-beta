@@ -1,5 +1,5 @@
-// Ficha de un ejercicio, como en Hevy: el dibujo de cómo se hace (o su máquina), lo que trabaja en el mapa del
-// cuerpo, cómo se hace y los errores comunes, tus marcas, por qué está en tu plan (con los papers que lo respaldan)
+// Ficha de un ejercicio, como en Hevy: el dibujo de cómo se hace (o su máquina), los músculos que trabaja (con su
+// imagen), cómo se hace y los errores comunes, tus marcas, por qué está en tu plan (con los papers que lo respaldan)
 // y con qué se puede cambiar. Se abre desde la ⓘ de cada ejercicio.
 import { E, R, D, C, TECNICA, EVIDENCIA, indice, hoy, esc, $, fechaCorta, coma, enUnidad, unidadPeso, peso } from './comun.js';
 import { explicarEjercicio, enlaceVideo } from '../nucleo/explicar.js';
@@ -7,7 +7,7 @@ import { alternativas } from '../nucleo/checkin.js';
 import { articulacionesBloqueadas } from '../nucleo/catalogo.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { tecnicaDe, marcas } from '../nucleo/ficha.js';
-import { mapaCuerpo, NOMBRE_MUSCULO, lista } from './mapa-cuerpo.js';
+import { NOMBRE_MUSCULO, lista, mayuscula, imagenesMusculos } from './musculos.js';
 import { dibujoEjercicio, maquinaDe, miniatura } from './imagenes.js';
 import { icono } from './iconos.js';
 import { proponer } from './cambios-ui.js';
@@ -16,7 +16,6 @@ const VOLVER = { hoy: 'Hoy', semana: 'Semana', plan: 'Tu plan', progreso: 'Progr
 const EQUIPO = Object.fromEntries(C.secciones.flatMap(s => s.preguntas || []).find(p => p.equipamiento)?.equipamiento || []);
 const NIVEL = { principiante: 'Para todos los niveles', intermedio: 'Desde nivel intermedio', avanzado: 'Para nivel avanzado' };
 const musculos = xs => lista(xs.map(m => NOMBRE_MUSCULO[m] || m));
-const mayuscula = x => (x ? x[0].toUpperCase() + x.slice(1) : x);
 
 /** El ejercicio en tu plan: el de hoy o, si no, la próxima vez que toca (o la última). */
 function enElPlan(id) {
@@ -51,11 +50,11 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
     <p class="ficha-sub suave">${esc([...ej.equipamiento.map(q => EQUIPO[q]).filter(Boolean).slice(0, 2), NIVEL[ej.nivel_minimo]].filter(Boolean).join(' · '))}</p>
 
     <section class="tarjeta ficha-musculos">
-      ${mapaCuerpo({ primarios: ej.musculos_primarios, secundarios: ej.musculos_secundarios, titulo: `Lo que trabaja ${ej.nombre}` })}
+      ${imagenesMusculos(ej.musculos_primarios.slice(0, 2))}
       <div>
         <p class="sobretitulo">Trabaja</p>
-        <p class="musculos-hoy"><span class="punto p" aria-hidden="true"></span>${esc(mayuscula(musculos(ej.musculos_primarios)))}</p>
-        ${ej.musculos_secundarios.length ? `<p class="pequeno suave"><span class="punto s" aria-hidden="true"></span>Y en menor medida ${esc(musculos(ej.musculos_secundarios).toLowerCase())}</p>` : ''}
+        <p class="musculos-hoy">${esc(mayuscula(musculos(ej.musculos_primarios)))}</p>
+        ${ej.musculos_secundarios.length ? `<p class="pequeno suave">Y en menor medida ${esc(musculos(ej.musculos_secundarios).toLowerCase())}</p>` : ''}
         ${!dibujo && maq ? `<img class="ficha-maquina" src="${maq.src}" alt="${esc(EQUIPO[maq.id] || '')}" width="96" height="96">` : ''}
       </div>
     </section>

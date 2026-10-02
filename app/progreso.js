@@ -1,4 +1,4 @@
-// Vista Progreso: la semana en el mapa del cuerpo (series hechas contra las del plan, por músculo), el historial,
+// Vista Progreso: la semana por músculo (series hechas contra las del plan), el historial,
 // fotos de progreso privadas, suplementos, indicaciones de tu médico o kinesiólogo, y lo que anotaste para el
 // entrenador.
 import { E, guardar, C, esc, $, fechaCorta, hoy, indice, cambiarPlan, opcionesRadio, chk, mostrarMensaje, seriesTexto, volumenTexto } from './comun.js';
@@ -12,7 +12,7 @@ import { guardarFotoLocal, listarFotosLocales, borrarFotoLocal, guardarArchivoLo
 import { subirACuenta, subirPendientes, estadoCola } from './cola.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { semanaPorMusculo } from '../nucleo/volumen-semana.js';
-import { mapaCuerpo, NOMBRE_MUSCULO } from './mapa-cuerpo.js';
+import { NOMBRE_MUSCULO, mayuscula, imagenMusculo } from './musculos.js';
 import * as nube from './nube.js';
 
 const DIAS = [[1, 'L'], [2, 'M'], [3, 'M'], [4, 'J'], [5, 'V'], [6, 'S'], [0, 'D']];
@@ -31,20 +31,21 @@ function historial() {
   }
   return out.sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0));
 }
+const series = n => `${n} serie${n === 1 ? '' : 's'}`;
 const deTrabajo = x => !['calentamiento', 'drop', 'descarga'].includes(x.tipo);
 const volumen = series => series.filter(x => x.tipo !== 'calentamiento').reduce((a, x) => a + (Number(x.carga_kg) || 0) * (Number(x.reps) || 0), 0);
 
-/** Esta semana en el mapa del cuerpo: más color, más series hechas de las que tocan. */
+/** Esta semana por músculo: series hechas de las que tocan, con la imagen de cada músculo cuando llega. */
 function semanaHtml() {
   const r = semanaPorMusculo({ series: seriesAnotadas(E.sesiones, E.registro), plan: E.plan, indice, hoy: hoy() });
   if (!r.filas.length) return '';
   const n = x => String(Math.round(x)); // las series que ayudan cuentan media: se muestra redondeado
-  const nombre = m => { const t = NOMBRE_MUSCULO[m] || m; return t[0].toUpperCase() + t.slice(1); };
+  const nombre = m => mayuscula(NOMBRE_MUSCULO[m] || m);
+  const img = m => { const src = imagenMusculo(m); return src ? `<img class="img-musculo chica" src="${src}" alt="" width="64" height="64" decoding="async">` : ''; };
   return `<section class="tarjeta semana-cuerpo">
     <h3>Esta semana</h3>
-    <div class="mapa-semana">${mapaCuerpo({ intensidad: r.intensidad, titulo: 'Series de esta semana por músculo' })}</div>
-    <p class="pequeno suave leyenda-mapa"><span class="escala-mapa" aria-hidden="true"><i class="i1"></i><i class="i2"></i><i class="i3"></i><i class="i4"></i></span>Más color, más series hechas de las que tocan.</p>
-    <ul class="barras-semana">${r.filas.filter(f => f.planeadas >= 1 || f.hechas >= 1).map(f => `<li><span class="nombre-musculo">${esc(nombre(f.musculo))}</span><span class="pista" aria-hidden="true"><i style="width:${Math.round(f.avance * 100)}%"></i></span><span class="num pequeno">${n(f.hechas)}${f.planeadas ? ` de ${n(f.planeadas)}` : ''}</span></li>`).join('')}</ul>
+    <p class="pequeno suave">Series hechas de las que tocan esta semana, por músculo.</p>
+    <ul class="barras-semana">${r.filas.filter(f => f.planeadas >= 1 || f.hechas >= 1).map(f => `<li>${img(f.musculo)}<span class="nombre-musculo">${esc(nombre(f.musculo))}</span><span class="pista" aria-hidden="true"><i style="width:${Math.round(f.avance * 100)}%"></i></span><span class="num pequeno">${n(f.hechas)}${f.planeadas ? ` de ${n(f.planeadas)}` : ''}</span></li>`).join('')}</ul>
   </section>`;
 }
 
@@ -53,7 +54,7 @@ function historialHtml() {
   if (!h.length) return '<p class="pequeno suave">Todavía no hay sesiones. Marca tus series en Hoy, o importa tu historial de Hevy en Más.</p>';
   const lunes = sumarDias(hoy(), -((diaSemana(hoy()) + 6) % 7));
   const semana = h.filter(s => s.fecha >= lunes);
-  const resumen = semana.length ? `Esta semana: ${semana.length} sesión${semana.length === 1 ? '' : 'es'} · ${semana.reduce((a, s) => a + s.series.filter(deTrabajo).length, 0)} series de trabajo · volumen ${volumenTexto(semana.reduce((a, s) => a + volumen(s.series), 0))}.` : 'Esta semana todavía no entrenas.';
+  const resumen = semana.length ? `Esta semana: ${semana.length} sesión${semana.length === 1 ? '' : 'es'} · ${series(semana.reduce((a, s) => a + s.series.filter(deTrabajo).length, 0))} de trabajo · volumen ${volumenTexto(semana.reduce((a, s) => a + volumen(s.series), 0))}.` : 'Esta semana todavía no entrenas.';
   const item = s => {
     const porEj = [];
     for (const x of s.series) {
@@ -61,7 +62,7 @@ function historialHtml() {
       if (!g) porEj.push(g = { nombre: x.nombre, trabajo: [], calentamiento: 0 });
       if (x.tipo === 'calentamiento') g.calentamiento++; else g.trabajo.push(x);
     }
-    return `<li><details><summary><span class="fecha-h">${esc(fechaCorta(s.fecha))}</span><span class="titulo-h">${esc(s.titulo || 'Sesión')}${s.origen === 'hevy' ? ' <span class="chip">Hevy</span>' : ''}${s.sinTerminar && s.fecha === hoy() ? ' <span class="chip">en curso</span>' : ''}</span><span class="cifra-h num">${s.series.filter(deTrabajo).length} series</span></summary>
+    return `<li><details><summary><span class="fecha-h">${esc(fechaCorta(s.fecha))}</span><span class="titulo-h">${esc(s.titulo || 'Sesión')}${s.origen === 'hevy' ? ' <span class="chip">Hevy</span>' : s.origen === 'ejemplo' ? ' <span class="chip">Ejemplo</span>' : ''}${s.sinTerminar && s.fecha === hoy() ? ' <span class="chip">en curso</span>' : ''}</span><span class="cifra-h num">${series(s.series.filter(deTrabajo).length)}</span></summary>
       <ul class="pequeno detalle-h">${porEj.map(g => `<li><strong>${esc(g.nombre)}</strong>: ${esc(seriesTexto(g.trabajo) || 'sin series de trabajo')}${g.calentamiento ? ` <span class="suave">(+${g.calentamiento} de calentamiento)</span>` : ''}</li>`).join('')}</ul></details></li>`;
   };
   return `<p class="pequeno">${esc(resumen)}</p>
