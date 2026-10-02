@@ -583,6 +583,23 @@ details.bienestar-caja{padding:0}
 .g-aviso{position:absolute;z-index:2;padding:4px 8px;border-radius:8px;background:var(--ink);color:var(--bg);font:600 12px/1.3 var(--f-texto);white-space:nowrap;pointer-events:none}
 .cifra-grafico{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-top:12px}
 .cifra-grafico strong{font-size:15px}
+/* Calentamiento y estiramiento como pasos que se marcan, con cronómetro si van por tiempo (como el tablero). */
+.lista-pasos{list-style:none;margin:8px 0 2px;padding:0;display:flex;flex-direction:column;gap:6px}
+.paso{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:10px;align-items:start;padding:6px 0;border-top:1px solid var(--line)}
+.paso:first-child{border-top:0}
+.paso .check{justify-self:start}
+.paso-texto strong{font-weight:600;font-size:15px;line-height:1.3}
+.paso-texto p{margin:2px 0 0}
+.paso.hecho .paso-texto{opacity:.55}
+.paso .reloj-paso{align-self:center}
+details.pasos > summary{font-weight:600}
+.cardio .cab-tarjeta{align-items:center}
+/* Cardio por tramos de intensidad: una barra con un tramo por intensidad, de ancho proporcional a sus minutos. */
+.tramos-cardio{display:flex;gap:2px;margin-top:8px;border-radius:8px;overflow:hidden}
+.tramos-cardio i{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;padding:5px 2px;background:var(--surface-2);font-style:normal;font-size:11px;line-height:1.2;color:var(--ink-muted)}
+.tramos-cardio i b{font-size:13px;color:var(--ink)}
+.fila-agregar{display:flex;gap:8px;margin-top:8px}
+.fila-agregar .agregar-serie{flex:1 1 0;margin-top:0}
 .agregar-serie{width:100%;min-height:38px;margin-top:8px;font-size:15px;color:var(--ink)}
 .ej.tarjeta details.extra summary{margin-top:10px}
 

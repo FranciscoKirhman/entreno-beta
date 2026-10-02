@@ -1,7 +1,7 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
 // Red primero, con límite de tiempo, y la copia guardada como respaldo (igual que el tablero).
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-02 16:26 · 949cf28";
+const VERSION = "2026-10-02 16:30 · 6d3b866";
 const ARCHIVOS = [
  "./",
  "app.js",
@@ -454,6 +454,7 @@ const ARCHIVOS = [
  "../contenido/tecnica.json",
  "../nucleo/agenda.js",
  "../nucleo/bienestar.js",
+ "../nucleo/calentamiento.js",
  "../nucleo/cambios.js",
  "../nucleo/catalogo.js",
  "../nucleo/checkin.js",

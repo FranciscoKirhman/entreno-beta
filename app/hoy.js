@@ -15,7 +15,8 @@ import { seriesAnotadas } from '../nucleo/semanal.js';
 import { avisoCheckin } from './checkin.js';
 import { avisoDescargaCorto } from './temporada.js';
 import { subirACuenta } from './cola.js';
-import { iniciarDescanso, detenerDescanso } from './descanso.js';
+import { iniciarDescanso, detenerDescanso, iniciarTramos } from './descanso.js';
+import { tramosDePaso, tramosDeCardio, seriesDeCalentamiento } from '../nucleo/calentamiento.js';
 import { actualizarPantalla } from './pantalla.js';
 import { abrirHoja } from './hoja.js';
 import { grupos, unir, separar, copiarSuperseries, despuesDeSerie, etiquetaSuperserie } from '../nucleo/superseries.js';
@@ -185,6 +186,44 @@ const DESCANSOS = [0, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300];
 // Paneles abiertos ("Cómo te fue"): siguen abiertos aunque la vista se vuelva a dibujar.
 const abiertos = new Set();
 
+// Calentamiento y estiramiento como en el tablero: cada paso se marca y, si va por tiempo, trae su cronómetro.
+// El calentamiento empieza abierto y se pliega al completarlo; el estiramiento se abre al terminar las series.
+const pasosAbiertos = { cal: null, est: null }; // null: automático; true o false: lo eligió la persona
+const reloj = seg => `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')}`;
+function pasosHtml(pasos, tipo, f, titulo, dia) {
+  if (!pasos?.length) return '';
+  const hechos = E.pasos?.[f]?.[tipo] || [];
+  const n = pasos.filter((_, i) => hechos[i]).length;
+  const completo = n === pasos.length;
+  const a = avance(dia);
+  const automatico = tipo === 'cal' ? !completo && !a.hechas : !completo && a.total > 0 && a.hechas === a.total;
+  const abierto = pasosAbiertos[tipo] ?? automatico;
+  return `<details class="extra pasos" data-pasos="${tipo}"${abierto ? ' open' : ''}><summary>${esc(titulo)} <span class="pequeno suave">${completo ? 'hecho ✓' : n ? `${n} de ${pasos.length}` : `${pasos.length} pasos`}</span></summary>
+    <ol class="lista-pasos">${pasos.map((p, i) => {
+      const tramos = tramosDePaso(p.name);
+      const total = tramos.reduce((x, t) => x + t.seg, 0);
+      return `<li class="paso${hechos[i] ? ' hecho' : ''}">
+        <button type="button" class="check" data-paso="${tipo}" data-i="${i}" aria-pressed="${Boolean(hechos[i])}" aria-label="${esc(p.name)}: hecho">${hechos[i] ? '✓' : ''}</button>
+        <div class="paso-texto"><strong>${esc(p.name)}</strong>${p.how ? `<p class="pequeno suave">${esc(p.how)}</p>` : ''}</div>
+        ${tramos.length ? `<button type="button" class="boton chico reloj-paso" data-tramos="${esc(JSON.stringify(tramos))}" aria-label="Cronómetro de ${esc(reloj(total))}">▶ ${reloj(total)}</button>` : ''}
+      </li>`;
+    }).join('')}</ol>
+  </details>`;
+}
+
+/** Cardio: el texto del plan, su cronómetro y, si va por tramos de intensidad, una barra con cada tramo. */
+function cardioHtml(texto) {
+  if (!texto) return '';
+  const tramos = tramosDeCardio(texto);
+  const total = tramos.reduce((x, t) => x + t.seg, 0);
+  const porRpe = tramos.length > 1 && tramos.every(t => t.rpe);
+  return `<section class="tarjeta cardio">
+    <div class="cab-tarjeta"><h3>Cardio</h3>${total ? `<button type="button" class="boton chico reloj-paso" data-tramos="${esc(JSON.stringify(tramos))}" data-final="¡Cardio listo!">▶ ${reloj(total)}</button>` : ''}</div>
+    <p class="pequeno">${esc(texto)}</p>
+    ${porRpe ? `<div class="tramos-cardio" aria-hidden="true">${tramos.map(t => `<i style="flex:${t.seg}"><b>${Math.round(t.seg / 60)}′</b><span>RPE ${esc(t.rpe)}</span></i>`).join('')}</div>` : ''}
+  </section>`;
+}
+
 /** RIR de una serie: un menú desplegable del teléfono, con cada opción dicha en simple. Encima se ve el número elegido
  *  o, en gris, la reserva que pide el plan (el menú queda transparente sobre la caja). */
 const OPCIONES_RIR = [[0, '0: al fallo, no salía otra'], [1, '1: salía 1 más'], [2, '2: salían 2 más'], [3, '3: salían 3 más'], [4, '4: salían 4 más'], [5, '5: salían 5 o más']];
@@ -221,10 +260,11 @@ function sesionHoy(dia) {
     ${prim.length ? `<div class="hoy-entrenas">${imagenesMusculos(prim.slice(0, 4))}<div><p class="sobretitulo">Hoy entrenas</p><p class="musculos-hoy">${esc(mayuscula(lista(prim.map(m => NOMBRE_MUSCULO[m] || m))))}</p>${sec.length ? `<p class="pequeno suave">Y un poco de ${esc(lista(sec.map(m => (NOMBRE_MUSCULO[m] || m).toLowerCase())))}</p>` : ''}</div></div>` : ''}
     <p class="suave pequeno">${esc(dia.racional || '')}</p>
     ${eligePeso ? '<p class="nota-sesion pequeno">Donde no hay peso, elige uno con el que te sobren las repeticiones de reserva (RIR) en la última serie. Lo anotas y la app ajusta desde ahí.</p>' : ''}
-    <details class="extra"><summary>Calentamiento</summary><ul class="pequeno">${(dia.calentamiento || []).map(c => `<li><strong>${esc(c.name)}</strong>. ${esc(c.how)}</li>`).join('')}</ul></details>
+    ${pasosHtml(dia.calentamiento, 'cal', f, 'Calentamiento', dia)}
   </section>
   <ol class="ejercicios-hoy">${dia.ejercicios.map((e, k) => ejercicioHoy(e, k, f, e.ejercicio_id ? anterior(todas, e.ejercicio_id, f) : null, notas[idDe(e, k)] || {}, dia)).join('')}</ol>
-  ${dia.cardio ? `<section class="tarjeta"><h3>Cardio</h3><p class="pequeno">${esc(dia.cardio)}</p></section>` : ''}
+  ${cardioHtml(dia.cardio)}
+  ${dia.estiramiento?.length ? `<section class="tarjeta">${pasosHtml(dia.estiramiento, 'est', f, 'Estiramiento de cierre (opcional)', dia)}</section>` : ''}
   <div class="fila-botones"><button type="button" class="boton primario grande" id="terminar">${E.sesiones.some(s => s.fecha === f && !s.origen) ? 'Guardar de nuevo' : 'Terminar sesión'}</button></div>`;
 }
 
@@ -278,7 +318,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
       <div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : 'Reps'}</span>${seg ? '' : '<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el RIR">RIR</button>'}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>
       ${filasHtml}
     </div>
-    <button type="button" class="boton agregar-serie" data-agregar="${id}">+ Agregar serie</button>
+    <div class="fila-agregar"><button type="button" class="boton agregar-serie" data-agregar="${id}">+ Serie</button>${seg ? '' : `<button type="button" class="boton agregar-serie" data-calentar="${id}">+ Calentamiento</button>`}</div>
     <details class="extra" data-panel="nota-${id}"${Object.keys(nota).some(k => !['nota', 'para_entrenador'].includes(k)) || abiertos.has(`nota-${id}`) ? ' open' : ''}><summary>Cómo te fue</summary>
       <div class="preguntas-ej">
         ${preguntas.map(p => `<div><span class="pequeno">${esc(p.texto)}</span>${p.tipo === 'escala'
@@ -436,11 +476,33 @@ function enlazar(ir, dia) {
   const agregarFila = (id, calentar) => {
     const { e, k } = ejercicioDe(id);
     const { lista, n } = materializar(f, e, k);
-    if (calentar) lista.unshift({ tipo: 'calentamiento' }); else lista.push({});
-    fijarFilas(f, idDe(e, k), n + 1);
+    let nuevas = [{}];
+    if (calentar) {
+      // Como la calculadora de Hevy: series livianas con su peso, según el de la primera serie de trabajo.
+      const ej = indice.porId.get(e.ejercicio_id);
+      const prev = e.ejercicio_id ? anterior(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f)?.series[0] : null;
+      const kgTrabajo = lista.find(x => deTrabajo(tipoDe(x)) && x.kg != null)?.kg ?? e.carga_kg ?? prev?.carga_kg ?? null;
+      nuevas = seriesDeCalentamiento(kgTrabajo, { incremento: (ej && incrementoPara(ej, lugar)) || 2.5, barra: ej?.equipamiento.includes('barra_rack') ? 20 : 0 });
+      const yaHay = lista.filter(x => tipoDe(x) === 'calentamiento').length;
+      lista.splice(yaHay, 0, ...nuevas);
+    } else lista.push({});
+    fijarFilas(f, idDe(e, k), n + nuevas.length);
     guardar(); repintar();
+    if (calentar) avisar(nuevas.length > 1 || nuevas[0].kg ? `${nuevas.length} ${nuevas.length === 1 ? 'serie' : 'series'} de calentamiento agregadas: ${nuevas.map(x => `${coma(enUnidad(x.kg))} × ${x.reps}`).join(', ')}.` : 'Serie de calentamiento agregada: escribe el peso.');
   };
   raiz.querySelectorAll('[data-agregar]').forEach(b => b.onclick = () => agregarFila(b.dataset.agregar, false));
+  raiz.querySelectorAll('[data-calentar]').forEach(b => b.onclick = () => agregarFila(b.dataset.calentar, true));
+
+  // Pasos del calentamiento y del estiramiento: marcar, abrir o cerrar y su cronómetro.
+  raiz.querySelectorAll('[data-paso]').forEach(b => b.onclick = () => {
+    const lista = (((E.pasos ||= {})[f] ||= {})[b.dataset.paso] ||= []);
+    lista[Number(b.dataset.i)] = !lista[Number(b.dataset.i)];
+    const total = (b.dataset.paso === 'cal' ? dia.calentamiento : dia.estiramiento)?.length || 0;
+    if (lista.filter(Boolean).length === total) pasosAbiertos[b.dataset.paso] = false; // completo: se pliega
+    guardar(); repintar();
+  });
+  raiz.querySelectorAll('details[data-pasos]').forEach(d => d.addEventListener('toggle', () => { pasosAbiertos[d.dataset.pasos] = d.open; }));
+  raiz.querySelectorAll('.reloj-paso').forEach(b => b.onclick = () => iniciarTramos(JSON.parse(b.dataset.tramos), b.dataset.final || '¡Listo!'));
 
   // Marcar una serie: si no escribió nada, toma lo de la serie anterior de hoy, lo de la vez anterior o lo del plan.
   raiz.querySelectorAll('[data-hecho]').forEach(b => b.onclick = () => {
@@ -513,7 +575,7 @@ function enlazar(ir, dia) {
       opciones: [
         ...(ej ? [{ valor: 'ficha', icono: icono('libro'), nombre: 'Cómo se hace y por qué' }] : []),
         ...(ej ? [{ valor: 'cambiar', icono: icono('cambiar'), nombre: 'Cambiar este ejercicio' }] : []),
-        { valor: 'calentar', icono: icono('fuego'), clase: 'tipo-calentamiento', nombre: 'Agregar serie de calentamiento' },
+        { valor: 'calentar', icono: icono('fuego'), clase: 'tipo-calentamiento', nombre: 'Agregar series de calentamiento' },
         { valor: 'descanso', icono: icono('reloj'), nombre: `Descanso: ${mmss(desc)}${g ? ' (al terminar la vuelta)' : ''}` },
         ...(ej ? [{ valor: 'superserie', icono: icono('cadena'), nombre: g ? `Superserie ${g.letra}` : 'Hacer superserie' }] : []),
         ...(ej && e.unidad !== 'seg' ? [{ valor: 'prioriza', icono: icono('objetivo'), nombre: 'Si no me salen las repeticiones' }] : []),

@@ -1,7 +1,7 @@
 // Cronómetro de descanso entre series: parte solo al marcar una serie, con el descanso que indica el plan, y avisa
 // al terminar (vibra en Android y suena un pitido corto). Se dibuja sobre el menú, fuera de la vista, así sigue
 // corriendo aunque la vista se vuelva a dibujar o se cambie de pantalla.
-let fin = 0, reloj = null, audio = null, etiqueta = '';
+let fin = 0, reloj = null, audio = null, etiqueta = '', siguientes = [], textoFinal = '¡A la siguiente serie!';
 const formato = seg => `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')}`;
 
 function caja() {
@@ -25,9 +25,17 @@ function caja() {
 
 function pintar() {
   const el = caja();
-  const resta = Math.max(0, Math.ceil((fin - Date.now()) / 1000));
+  let resta = Math.ceil((fin - Date.now()) / 1000);
+  // Cronómetro por tramos (calentamiento, estiramiento, cardio): al terminar uno, aviso corto y sigue el próximo.
+  if (resta <= 0 && reloj && siguientes.length) {
+    const s = siguientes.shift();
+    fin = Date.now() + s.seg * 1000; etiqueta = s.texto; resta = s.seg;
+    navigator.vibrate?.(200);
+    if (audio) pitido();
+  }
+  resta = Math.max(0, resta);
   el.querySelector('.tiempo').textContent = formato(resta);
-  el.querySelector('.etiqueta').textContent = resta ? etiqueta : '¡A la siguiente serie!';
+  el.querySelector('.etiqueta').textContent = resta ? etiqueta : textoFinal;
   if (!resta && reloj) terminar();
 }
 
@@ -60,9 +68,18 @@ function terminar() {
 
 /** Parte el descanso. Hay que llamarla desde un toque: en iPhone el sonido solo se habilita así. */
 export function iniciarDescanso(segundos, texto = 'Descanso') {
+  iniciarTramos([{ seg: segundos, texto }], '¡A la siguiente serie!');
+}
+
+/** Cronómetro por tramos [{seg, texto}] (calentamiento, estiramiento, cardio): avisa en cada cambio y al terminar. */
+export function iniciarTramos(tramos, final = '¡Listo!') {
+  if (!tramos?.length) return;
   try { audio ||= new (window.AudioContext || window.webkitAudioContext)(); audio.resume?.(); } catch { audio = null; }
-  fin = Date.now() + segundos * 1000;
-  etiqueta = texto;
+  const [primero, ...resto] = tramos;
+  fin = Date.now() + primero.seg * 1000;
+  etiqueta = primero.texto;
+  siguientes = resto;
+  textoFinal = final;
   caja().classList.add('visible');
   document.body.classList.add('con-descanso');
   correr();
@@ -72,6 +89,7 @@ export function iniciarDescanso(segundos, texto = 'Descanso') {
 export function detenerDescanso() {
   clearInterval(reloj);
   reloj = null;
+  siguientes = [];
   document.getElementById('descanso')?.classList.remove('visible', 'termino');
   document.body.classList.remove('con-descanso');
 }
