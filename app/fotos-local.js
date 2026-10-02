@@ -1,10 +1,11 @@
 // Fotos de progreso sin cuenta: quedan en este navegador (IndexedDB) y no salen del teléfono. También guarda,
 // mientras esperan subir a la cuenta, los archivos de las indicaciones médicas (app/cola.js).
+import { ambitoDatos, modoEjemplo } from './comun.js';
 const BASE = 'entreno-fotos', TABLA = 'fotos', ARCHIVOS = 'archivos';
 
 function abrir() {
   return new Promise((ok, mal) => {
-    const r = indexedDB.open(BASE, 2);
+    const r = indexedDB.open(modoEjemplo ? `${BASE}-ejemplo` : ambitoDatos === 'local' ? BASE : `${BASE}-${ambitoDatos}`, 2);
     r.onupgradeneeded = () => {
       for (const t of [TABLA, ARCHIVOS]) if (!r.result.objectStoreNames.contains(t)) r.result.createObjectStore(t, { keyPath: 'id' });
     };

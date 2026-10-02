@@ -42,6 +42,7 @@ export const volumenTexto = kg => `${Math.round(enUnidad(kg) || 0).toLocaleStrin
 // ── Estado guardado en este navegador ───────────────────────────────────────
 const CLAVE_PERSONAL = 'entreno-v2';
 let CLAVE = CLAVE_PERSONAL;
+export let ambitoDatos = 'local';
 export let modoEjemplo = false;
 export let errorGuardado = null;
 let lecturaFallida = false;
@@ -58,6 +59,10 @@ try {
 export function guardar() {
   try {
     if (lecturaFallida) throw new Error('Los datos anteriores no se pudieron leer');
+    if (ambitoDatos !== 'local' && !modoEjemplo && E.firmaPreferenciasCuenta) {
+      const p = { unidad: E.respuestas?.unidad || 'kg', asistente: E.asistente || 'entrenadora' };
+      if (JSON.stringify(p) !== E.firmaPreferenciasCuenta) E.preferenciasPendientes = p;
+    }
     const texto = JSON.stringify(E);
     localStorage.setItem(CLAVE, texto);
     if (localStorage.getItem(CLAVE) !== texto) throw new Error('La copia guardada no coincide');
@@ -76,12 +81,39 @@ export function guardar() {
   }
 }
 let personal = E;
+let claveAntesEjemplo = CLAVE_PERSONAL;
 export function entrarEjemplo() {
-  if (!modoEjemplo) { guardar(); personal = E; }
+  if (!modoEjemplo) { guardar(); personal = E; claveAntesEjemplo = CLAVE; }
   modoEjemplo = true; CLAVE = 'entreno-ejemplo-v1'; E = VACIO();
 }
 export function salirEjemplo() {
-  modoEjemplo = false; CLAVE = CLAVE_PERSONAL; E = personal; guardar();
+  modoEjemplo = false; CLAVE = claveAntesEjemplo; E = personal; guardar();
+}
+/** Una copia distinta por cuenta. Lo local solo se transfiere por elección explícita. */
+export function activarCuenta(id = null) {
+  if (modoEjemplo) salirEjemplo();
+  const nueva = id ? `entreno-cuenta-${id}` : CLAVE_PERSONAL;
+  if (CLAVE === nueva) return;
+  if (!guardar()) throw new Error('Respalda los cambios pendientes antes de cambiar de cuenta.');
+  let datos;
+  try { datos = JSON.parse(localStorage.getItem(nueva) || '{}'); }
+  catch { throw new Error('No pude leer la copia de esa cuenta. Tus datos actuales se conservan.'); }
+  E = { ...VACIO(), ...datos }; CLAVE = nueva; ambitoDatos = id || 'local'; personal = E;
+  lecturaFallida = false; guardar();
+}
+export function resumenLocal() {
+  const d = JSON.parse(localStorage.getItem(CLAVE_PERSONAL) || '{}');
+  return { perfil: Boolean(Object.keys(d.respuestas || {}).length), sesiones: (d.sesiones || []).filter(s => s.origen !== 'ejemplo').length };
+}
+export function traerPerfilLocal() {
+  if (CLAVE === CLAVE_PERSONAL || Object.keys(E.respuestas).some(k => k !== 'unidad') || E.sesiones.length) throw new Error('La cuenta debe estar vacía para copiar el perfil local.');
+  const d = JSON.parse(localStorage.getItem(CLAVE_PERSONAL) || '{}');
+  E = { ...VACIO(), ...structuredClone(d), pendientes: [], chat: [] };
+  E.sesiones = E.sesiones.filter(s => s.origen !== 'ejemplo').map(s => ({ ...s, enCuenta: false }));
+  E.bienestar = Object.fromEntries(Object.entries(E.bienestar).map(([f, b]) => [f, { ...b, enCuenta: false }]));
+  E.indicaciones = E.indicaciones.map(i => ({ ...i, enCuenta: false, archivo: null, archivoPendiente: false }));
+  // Las fotos y documentos no se transfieren automáticamente entre ámbitos.
+  if (!guardar()) throw new Error('No pude guardar la copia en este teléfono.');
 }
 // El historial ficticio antiguo se conserva aparte y se excluye del perfil personal.
 if (E.sesiones.some(s => s.origen === 'ejemplo')) {
@@ -125,10 +157,11 @@ export const ctxNucleo = () => ({
 export async function cambiarPlan(plan, mensaje, nube) {
   E.plan = plan; E.mensaje = mensaje || null; guardar();
   if (!nube?.conectado()) return null;
-  try { await nube.guardarPlan(plan); return null; }
+  try { const r = await nube.guardarPlan(plan); E.plan.id = r.id; delete E.planPendiente; guardar(); return null; }
   catch (e) {
     const aviso = `Se cambió en este teléfono, pero el servidor no lo aceptó: ${e.datos?.errores?.map(x => x.mensaje).join(' ') || e.message}`;
     E.mensaje = aviso; guardar();
+    E.planPendiente = structuredClone(plan); guardar();
     return aviso;
   }
 }

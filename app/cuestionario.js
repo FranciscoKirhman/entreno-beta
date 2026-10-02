@@ -1,3 +1,4 @@
+import { firmaPerfil } from '../nucleo/firma-perfil.js';
 // Cuestionario. Dos formas de responderlo:
 //  · Rápido (al empezar): una pregunta por pantalla, con tarjetas de colores y avance solo al tocar. Solo el
 //    objetivo, el nivel, ser mayor de edad y aceptar los términos son obligatorios; lo demás se puede saltar.
@@ -354,11 +355,11 @@ const seccionesVisibles = () => C.secciones.filter(s => cumple(s.mostrar_si));
 const preguntasVisibles = s => s.preguntas.filter(p => cumple(p.mostrar_si));
 const respondida = v => !(v == null || v === '' || (Array.isArray(v) && !v.length) || (typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length));
 /** Firma de las respuestas, para saber si cambiaron desde que se armó el plan. */
-export const firmaRespuestas = () => JSON.stringify(R());
+export const firmaRespuestas = (r = R()) => firmaPerfil(r);
 
 export function vistaPerfil(ir, armarPlan) {
   const secs = seccionesVisibles();
-  const cambio = E.plan && E.firmaPlan && E.firmaPlan !== firmaRespuestas();
+  const cambio = E.plan && E.firmaPlan && firmaRespuestas(E.firmaPlan) !== firmaRespuestas();
   const total = secs.reduce((a, s) => a + preguntasVisibles(s).length, 0);
   const hechas = secs.reduce((a, s) => a + preguntasVisibles(s).filter(p => respondida(R()[p.id])).length, 0);
   $('app').innerHTML = `<div id="vista-perfil">

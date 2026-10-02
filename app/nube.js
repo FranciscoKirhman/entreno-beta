@@ -2,6 +2,7 @@
 // navegador y nube.hay() devuelve false.
 import { CONFIG } from './config.js';
 import { aIso } from '../nucleo/hevy-csv.js';
+import { sesionDelServidor } from '../nucleo/sincronizacion.js';
 
 let supa = null, sesion = null, porEnlace = false;
 
@@ -29,7 +30,14 @@ export const entroPorEnlace = () => porEnlace;
 export const hay = () => Boolean(supa);
 export const conectado = () => Boolean(sesion);
 export const correo = () => sesion?.user?.email || null;
+export const usuarioId = () => sesion?.user?.id || null;
 const uid = () => sesion.user.id;
+export async function cargarPreferencias() {
+  return ok(await supa.from('perfiles').select('unidad, asistente, preferencias_actualizadas').eq('id', uid()).single());
+}
+export async function guardarPreferencias(p) {
+  ok(await supa.from('perfiles').update({ unidad: p.unidad, asistente: p.asistente, preferencias_actualizadas: new Date().toISOString() }).eq('id', uid()));
+}
 
 export async function pedirCodigo(email) {
   const { error } = await supa.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: location.origin + location.pathname } });
@@ -114,13 +122,27 @@ export async function guardarBienestar(fecha, b) {
  * Sube una sesión con el id que le dio el teléfono. Si ya estaba (un reintento, o "Guardar de nuevo"), se
  * reemplazan sus series y notas: subirla dos veces no la duplica. La llama la cola (app/cola.js).
  */
-export async function registrarSesion({ id, fecha, hora, titulo, duracion_min, series, notas }) {
-  ok(await supa.from('sesiones').upsert({ id, user_id: uid(), inicio: aIso(`${fecha}T${hora || '12:00'}`), titulo, duracion_min, origen: 'app' }, { onConflict: 'id' }));
-  ok(await supa.from('series').delete().eq('sesion_id', id));
-  if (series.length) ok(await supa.from('series').insert(series.map(x => ({ ...x, sesion_id: id, user_id: uid() }))));
-  ok(await supa.from('notas_ejercicio').delete().eq('sesion_id', id));
-  if (notas.length) ok(await supa.from('notas_ejercicio').insert(notas.map(n => ({ ...n, sesion_id: id, user_id: uid() }))));
+export async function registrarSesion({ id, fecha, hora, titulo, duracion_min, series = [], notas = [], origen, id_externo, comentario }) {
+  if (origen === 'ejemplo') throw new Error('El historial ficticio no se sube a una cuenta.');
+  const cuerpo = { sesion: { id, inicio: aIso(`${fecha}T${hora || '12:00'}`), titulo, duracion_min: duracion_min ?? null,
+    origen: origen === 'hevy' ? 'hevy_csv' : origen || 'app', id_externo: id_externo || null, comentario: comentario || null }, filas: series, notas };
+  const token = sesion.access_token;
+  const r = await fetch(`${CONFIG.supabaseUrl}/rest/v1/rpc/guardar_sesion_completa`, { method: 'POST', headers: { apikey: CONFIG.supabaseAnonKey, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(d.message || `No pude guardar la sesión (${r.status}).`), { status: r.status });
   return id;
+}
+export async function cargarSesiones() {
+  const filas = []; let desde = 0;
+  for (;;) {
+    const lote = ok(await supa.from('sesiones').select('*, series(*), notas_ejercicio(*)').order('inicio').order('id').range(desde, desde + 499));
+    filas.push(...lote); if (lote.length < 500) break; desde += 500;
+  }
+  return filas.map(sesionDelServidor);
+}
+export async function cargarBienestar() {
+  const filas = ok(await supa.from('bienestar_diario').select('*').order('fecha'));
+  return Object.fromEntries(filas.map(({ user_id, fecha, creado, actualizado, ...b }) => [fecha, { ...b, enCuenta: true }]));
 }
 
 // ── Indicaciones de tu médico o kinesiólogo (tabla y bucket privado "indicaciones") ─
@@ -128,13 +150,14 @@ const EXTENSION = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 
 
 /** Sube la indicación con el id del teléfono (reintentar no la duplica) y, si viene, su foto o PDF. */
 export async function guardarIndicacion(ind, archivo = null) {
+  const usuario = uid();
   let ruta = ind.archivo || null;
   if (archivo) {
-    ruta = `${uid()}/${ind.id}.${EXTENSION[archivo.type] || 'bin'}`;
+    ruta = `${usuario}/${ind.id}.${EXTENSION[archivo.type] || 'bin'}`;
     ok(await supa.storage.from('indicaciones').upload(ruta, archivo, { contentType: archivo.type, upsert: true }));
   }
   ok(await supa.from('indicaciones').upsert({
-    id: ind.id, user_id: uid(), profesional: ind.profesional || null, fecha: ind.fecha || null, hasta: ind.hasta || null,
+    id: ind.id, user_id: usuario, profesional: ind.profesional || null, fecha: ind.fecha || null, hasta: ind.hasta || null,
     restricciones: ind.restricciones || {}, ejercicios: ind.ejercicios || [], notas: ind.notas || null, archivo: ruta, activa: ind.activa !== false,
   }, { onConflict: 'id' }));
   return ruta;

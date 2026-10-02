@@ -205,7 +205,7 @@ function enlazar(ir, dia) {
     const r = evaluarDia(datos);
     E.bienestar[f] = { ...datos, puntaje: r.puntaje, recomendacion: r.recomendacion, motivos: r.motivos };
     guardar();
-    if (nube.conectado()) nube.guardarBienestar(f, { ...datos, puntaje: r.puntaje, recomendacion: r.recomendacion }).catch(() => {});
+    if (nube.conectado()) await subirACuenta('bienestar', f, { ...datos, puntaje: r.puntaje, recomendacion: r.recomendacion });
     if (dia && r.recomendacion !== 'normal') {
       E.mensaje = null;
       vistaHoy(ir);
@@ -491,12 +491,13 @@ function enlazar(ir, dia) {
     // Las sesiones importadas (Hevy) de ese día no se tocan.
     const id = E.sesiones.find(s => s.fecha === f && !s.origen)?.id || crypto.randomUUID();
     E.sesiones = E.sesiones.filter(s => !(s.fecha === f && !s.origen));
-    E.sesiones.push({ id, fecha: f, titulo: dia.foco, series, notas });
+    const hora = ahora().slice(11);
+    E.sesiones.push({ id, fecha: f, hora, titulo: dia.foco, series, notas });
     E.mensaje = `Sesión guardada: ${series.length} serie${series.length === 1 ? '' : 's'}.`;
     detenerDescanso();
     guardar();
     if (nube.conectado()) {
-      const subio = await subirACuenta('sesion', id, { fecha: f, titulo: dia.foco, series, notas });
+      const subio = await subirACuenta('sesion', id, { fecha: f, hora, titulo: dia.foco, series, notas });
       E.mensaje += subio ? ' También quedó en tu cuenta.' : ' Todavía no se pudo subir a tu cuenta: queda en este teléfono y se sube sola cuando vuelva la señal.';
       guardar();
     }

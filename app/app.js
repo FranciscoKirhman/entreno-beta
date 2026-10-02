@@ -2,7 +2,8 @@
 // que el servidor: nucleo/*.js.
 //
 //   node herramientas/servir.mjs  →  http://127.0.0.1:5173/app/
-import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo, entrarEjemplo, salirEjemplo, modoEjemplo, errorGuardado } from './comun.js';
+import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo, entrarEjemplo, salirEjemplo, modoEjemplo, errorGuardado, activarCuenta } from './comun.js';
+import { prepararSesion, unirSesiones } from '../nucleo/sincronizacion.js';
 import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
 import { derivar } from '../nucleo/derivar.js';
 import { generarPlan } from '../nucleo/motor-plan.js';
@@ -25,6 +26,7 @@ import { CONFIG } from './config.js';
 // ── Plan y cuenta ───────────────────────────────────────────────────────────
 /** Arma (o rehace) el plan con las respuestas y muestra la pantalla "Tu plan". */
 async function armarPlan({ mensaje = null } = {}) {
+  const estado = E, usuario = nube.usuarioId();
   const r = R();
   // Sin lugar elegido se supone un gimnasio completo, y la pantalla del plan lo dice.
   if (!r.lugares?.length) {
@@ -40,12 +42,17 @@ async function armarPlan({ mensaje = null } = {}) {
   if (nube.conectado()) {
     try {
       await nube.guardarCuestionario(r);
+      if (E !== estado || nube.usuarioId() !== usuario) return;
       const res = await nube.generarPlan();
-      E.plan = await nube.cargarPlan();
+      if (E !== estado || nube.usuarioId() !== usuario) return;
+      const plan = await nube.cargarPlan();
+      if (E !== estado || nube.usuarioId() !== usuario) return;
+      E.plan = plan;
       E.mensaje = [mensaje, ...(res.notas || [])].filter(Boolean).join(' ') || null;
       guardar();
       return ir('plan', { nuevo: true });
     } catch (e) {
+      if (E !== estado || nube.usuarioId() !== usuario) return;
       if (e.status === 409) { E.plan = { bloqueado: true, mensaje: e.datos?.mensaje }; guardar(); return ir('hoy'); }
       E.mensaje = `El servidor no respondió (${e.message}); armé el plan en este teléfono.`;
     }
@@ -56,24 +63,47 @@ async function armarPlan({ mensaje = null } = {}) {
 }
 
 /** Al entrar: si la cuenta ya tiene plan, se usa ese; si no, se sube lo de este teléfono. */
-async function sincronizarAlEntrar() {
-  const respuestas = await nube.cargarRespuestas();
-  const plan = await nube.cargarPlan();
-  if (respuestas && plan) { E.respuestas = respuestas; E.plan = plan; }
-  else if (Object.keys(R()).length) await armarPlan();
-  try { E.suplementos = await nube.subirLocal({ bienestar: E.bienestar, suplementos: E.suplementos, tomas: E.tomas, consentimientos: E.consentimientos }); }
+async function sincronizarAlEntrar({ forzar = false } = {}) {
+  activarCuenta(nube.usuarioId());
+  const estado = E, usuario = nube.usuarioId();
+  const consultar = async fn => {
+    const comprobar = () => { if (E !== estado || nube.usuarioId() !== usuario) throw new Error('La cuenta cambió durante la sincronización.'); };
+    comprobar(); const resultado = await fn(); comprobar(); return resultado;
+  };
+  if (E.preferenciasPendientes) { await consultar(() => nube.guardarPreferencias(E.preferenciasPendientes)); E.firmaPreferenciasCuenta = JSON.stringify(E.preferenciasPendientes); delete E.preferenciasPendientes; guardar(); }
+  if (E.planPendiente) { const r = await consultar(() => nube.guardarPlan(E.planPendiente)); E.plan = { ...E.planPendiente, id: r.id }; delete E.planPendiente; guardar(); }
+  const respuestas = await consultar(() => nube.cargarRespuestas());
+  const plan = await consultar(() => nube.cargarPlan());
+  if (respuestas && plan) {
+    const borrador = E.firmaPlan && firmaRespuestas(E.firmaPlan) !== firmaRespuestas();
+    if (!borrador) E.respuestas = respuestas;
+    E.plan = plan;
+  }
+  else if (R().objetivo_principal) await consultar(() => armarPlan());
+  let p = await consultar(() => nube.cargarPreferencias());
+  if (!p.preferencias_actualizadas) { p = { unidad: R().unidad || 'kg', asistente: E.asistente || 'entrenadora' }; await consultar(() => nube.guardarPreferencias(p)); }
+  R().unidad = p.unidad; E.asistente = p.asistente || 'entrenadora';
+  E.firmaPreferenciasCuenta = JSON.stringify({ unidad: R().unidad, asistente: E.asistente });
+  try { E.suplementos = await consultar(() => nube.subirLocal({ suplementos: E.suplementos, tomas: E.tomas, consentimientos: E.consentimientos })); }
   catch (e) { console.warn('No se pudo subir lo anotado en este teléfono', e); }
   // Sesiones e indicaciones anotadas sin cuenta: a la cola, que las sube con su id (sin duplicar).
-  for (const s of E.sesiones.filter(x => !x.enCuenta)) {
-    s.id ||= crypto.randomUUID();
+  for (const s of E.sesiones.filter(x => !x.enCuenta && x.origen !== 'ejemplo')) {
+    Object.assign(s, prepararSesion(s));
     const { id, enCuenta, ...datos } = s;
-    dejarPendiente('sesion', id, datos);
+    if (!(E.pendientes || []).some(x => x.tipo === 'sesion' && x.clave === id)) dejarPendiente('sesion', id, datos);
   }
-  for (const i of E.indicaciones.filter(x => !x.enCuenta)) { i.id ||= crypto.randomUUID(); dejarPendiente('indicacion', i.id, i); }
-  try { for (const i of await nube.cargarIndicaciones()) if (!E.indicaciones.some(x => x.id === i.id)) E.indicaciones.push(i); }
+  for (const i of E.indicaciones.filter(x => !x.enCuenta)) { i.id ||= crypto.randomUUID(); if (!(E.pendientes || []).some(x => x.tipo === 'indicacion' && x.clave === i.id)) dejarPendiente('indicacion', i.id, i); }
+  for (const [fecha, b] of Object.entries(E.bienestar)) if (!b.enCuenta) {
+    const datos = Object.fromEntries(['sueno_horas', 'sueno_calidad', 'cansancio', 'animo', 'estres', 'dolor', 'dolor_zona', 'enfermo', 'puntaje', 'recomendacion'].filter(k => b[k] !== undefined).map(k => [k, b[k]]));
+    if (!(E.pendientes || []).some(x => x.tipo === 'bienestar' && x.clave === fecha)) dejarPendiente('bienestar', fecha, datos);
+  }
+  try { for (const i of await consultar(() => nube.cargarIndicaciones())) if (!E.indicaciones.some(x => x.id === i.id)) E.indicaciones.push(i); }
   catch (e) { console.warn('No se pudieron traer las indicaciones de la cuenta', e); }
   guardar();
-  await subirPendientes({ forzar: true });
+  await consultar(() => subirPendientes({ forzar }));
+  E.sesiones = unirSesiones(E.sesiones, await consultar(() => nube.cargarSesiones()), E.pendientes || []);
+  E.bienestar = { ...await consultar(() => nube.cargarBienestar()), ...Object.fromEntries(Object.entries(E.bienestar).filter(([, b]) => !b.enCuenta)) };
+  guardar();
 }
 
 function vistaBloqueada() {
@@ -89,7 +119,7 @@ function vistaInicio() {
     ${dice('saludo', Object.keys(R()).length ? `¡Hola de nuevo! Soy ${nombreAsistente()}. Seguimos donde quedamos.` : `¡Hola! Soy ${nombreAsistente()}. Te ayudo a armar tu plan y te acompaño en cada entrenamiento.`)}
     <p class="pequeno">${CONFIG.modoPrueba ? 'Esta prueba funciona con reglas, sin IA ni nube. Tus respuestas y registros se conservan en este navegador. El ejemplo es ficticio y está separado de tu perfil.' : 'Puedes usar reglas en este teléfono. La IA requiere una cuenta y un servidor habilitado.'}</p>
     <p>Arma tu plan, lo agenda en tu semana, lo ajusta cuando faltas, cuando una máquina está ocupada o cuando dormiste mal, y te explica por qué de cada ejercicio, con evidencia.</p>
-    ${nube.hay() && !nube.conectado() ? `<section class="tarjeta"><h3>Entrar con tu correo</h3><p class="pequeno">Tu plan y tus registros quedan guardados y el coach puede usar IA.</p><button type="button" class="boton primario" id="a-cuenta">Entrar</button></section>` : ''}
+    ${nube.hay() && !nube.conectado() ? `<section class="tarjeta"><h3>Entrar con tu correo</h3><p class="pequeno">Puedes recuperar tus sesiones guardadas en otro dispositivo. El coach usa reglas mientras la IA no esté habilitada.</p><button type="button" class="boton primario" id="a-cuenta">Entrar</button></section>` : ''}
     ${nube.conectado() ? `<p class="pequeno suave">Entraste como ${esc(nube.correo())}.</p>` : ''}
     <div class="fila-botones">
       <button type="button" class="boton primario" id="empezar">${Object.keys(R()).length ? 'Seguir con el cuestionario' : 'Empezar el cuestionario'}</button>
@@ -131,7 +161,7 @@ $('nav').addEventListener('click', e => { const b = e.target.closest('[data-ir]'
 /** Encabezado: sin señal (lo anotado se guarda igual) o, con cuenta, el correo. En la versión de prueba, nada. */
 function pintarModo() {
   const m = $('modo');
-  const texto = modoEjemplo ? 'Ejemplo ficticio · Volver a mis datos' : errorGuardado ? 'Hay cambios sin guardar' : !navigator.onLine ? 'Sin señal · se guarda igual' : nube.conectado() ? (nube.correo() || 'Cuenta') : nube.hay() ? 'Sin cuenta' : '';
+  const texto = modoEjemplo ? 'Ejemplo ficticio · Volver a mis datos' : errorGuardado ? 'Hay cambios sin guardar' : !navigator.onLine ? 'Sin señal · se guarda igual' : nube.conectado() ? (R().demo_privada ? 'Demo privada · Perfil ficticio' : nube.correo() || 'Cuenta') : nube.hay() ? 'Sin cuenta' : '';
   m.textContent = texto;
   m.onclick = modoEjemplo ? () => { salirEjemplo(); ir(E.plan ? 'hoy' : 'inicio'); } : null;
   m.setAttribute('role', modoEjemplo ? 'button' : 'status');
@@ -163,6 +193,10 @@ if (CONFIG.sinSenal && 'serviceWorker' in navigator) navigator.serviceWorker.reg
 
 // El perfil personal persiste al abrir. El ejemplo solo empieza por elección explícita.
 await nube.iniciar();
-subirPendientes(); // lo que quedó sin subir la última vez
-if (nube.entroPorEnlace()) { await sincronizarAlEntrar(); E.mensaje = `Entraste como ${nube.correo()}.`; E.vista = E.plan ? 'hoy' : 'inicio'; }
+if (nube.conectado()) {
+  activarCuenta(nube.usuarioId());
+  try { await sincronizarAlEntrar(); }
+  catch { E.mensaje = 'No pude sincronizar ahora. Puedes seguir con la copia de esta cuenta en el teléfono y reintentar en Más.'; }
+  if (nube.entroPorEnlace()) { E.mensaje = `Entraste como ${nube.correo()}.`; E.vista = E.plan ? 'hoy' : 'inicio'; }
+}
 ir(['cuestionario', 'hoy', 'semana', 'coach', 'progreso', 'mas', 'checkin', 'plan', 'perfil', 'seccion'].includes(E.vista) ? E.vista : (E.plan ? 'hoy' : 'inicio'));

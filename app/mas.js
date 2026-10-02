@@ -1,6 +1,6 @@
 import { validarRespaldo } from '../nucleo/respaldo.js';
 // Vista Más: cuenta, ajustar con tu propia IA (copiar y pegar), importar un plan escrito y reiniciar.
-import { E, guardar, reiniciar, empezarDeNuevo, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje, unidadPeso, modoEjemplo } from './comun.js';
+import { E, guardar, reiniciar, empezarDeNuevo, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje, unidadPeso, modoEjemplo, activarCuenta, resumenLocal, traerPerfilLocal } from './comun.js';
 import { esExportacionHevy, importarParaTelefono } from '../nucleo/hevy-csv.js';
 import { soporte, configAvisos, cambiarAvisos, activarAvisos, notificar, enlaceCalendario } from './avisos.js';
 import { CONFIG } from './config.js';
@@ -43,7 +43,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
 
     <section class="tarjeta">
       <h3>Respaldo</h3>
-      <p class="pequeno">${nube.conectado() ? 'Tu cuenta ya guarda todo. Igual puedes' : 'Lo que anotas queda solo en este teléfono. Cada tanto,'} descarga un respaldo: sirve para no perder nada si se borran los datos del navegador o si cambias de teléfono.</p>
+      <p class="pequeno">Descarga un respaldo para conservar una copia de lo anotado en este teléfono. Las series todavía en curso y las fotos locales pueden no estar en la cuenta.</p>
       ${E.consentimientos.fotos_progreso ? '<label class="pequeno casilla"><input type="checkbox" id="respaldo-fotos" checked> Incluir mis fotos de progreso (el archivo pesa más)</label>' : ''}
       <div class="fila-botones"><button type="button" class="boton" id="descargar-respaldo">Descargar respaldo</button>
         <label class="boton">Restaurar un respaldo<input type="file" id="archivo-respaldo" accept="application/json,.json" hidden></label></div>
@@ -323,16 +323,32 @@ function restaurarValido(r) {
 
 function cuentaHtml() {
   if (!nube.hay()) return '<h3>Versión de prueba</h3><p class="pequeno">Todo lo que anotas queda guardado solo en este teléfono. Las cuentas, la sincronización y la IA del coach llegan con la beta.</p>';
-  if (nube.conectado()) return `<h3>Cuenta</h3><p>Entraste como <strong>${esc(nube.correo())}</strong>. Tu plan, tus registros y tus fotos quedan en tu cuenta.</p>
+  if (nube.conectado()) return `<h3>Cuenta</h3><p>Entraste como <strong>${esc(nube.correo())}</strong>. Tu plan y tus sesiones guardadas se sincronizan con esta cuenta.</p>
+    ${R().demo_privada ? '<p class="pequeno">Demo privada con historial importado. El cuestionario es ficticio y las pruebas de interfaz no son entrenamientos reales.</p>' : ''}
+    <p class="pequeno">El historial guardado se recupera en tus otros dispositivos. Las series todavía en curso permanecen en este teléfono hasta guardar la sesión. Las fotos y documentos locales se conservan por separado.</p>
+    <button type="button" class="boton" id="sincronizar">Sincronizar ahora</button><p id="estado-sincronizacion" role="status"></p>
+    ${!Object.keys(R()).some(k => k !== 'unidad') && !E.sesiones.length && resumenLocal().perfil ? `<p class="pequeno">Hay un perfil local con ${resumenLocal().sesiones} sesiones. No se ha enviado a esta cuenta.</p><button type="button" class="boton" id="copiar-local">Revisar traslado del perfil local</button>` : ''}
     <div class="fila-botones"><button type="button" class="boton" id="descargar">Descargar mis datos</button><button type="button" class="boton" id="salir">Salir</button></div>
     <div class="fila-botones"><button type="button" class="boton" id="borrar-cuenta">Borrar mi cuenta</button></div><div id="datos-descargados"></div>`;
-  return `<h3>Entrar</h3><p class="pequeno">Con una cuenta, tu plan y tus registros quedan guardados y el coach puede usar IA. Te mandamos un código y un enlace al correo; no hay contraseña.</p>
+  return `<h3>Entrar</h3><p class="pequeno">Con una cuenta, puedes sincronizar tus sesiones guardadas. El coach usa reglas mientras la IA no esté habilitada. Te mandamos un código y un enlace al correo; no hay contraseña.</p>
     <form id="form-correo" class="fila-chat"><input type="email" id="correo" required placeholder="tu@correo.cl" autocomplete="email" aria-label="Correo"><button type="submit" class="boton primario">Mandar código</button></form>
     <form id="form-codigo" class="fila-chat" hidden><input type="text" id="codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="Código de 6 dígitos" aria-label="Código"><button type="submit" class="boton primario">Entrar</button></form>
     <p class="pequeno" id="estado-cuenta"></p>`;
 }
 
 function enlazarCuenta(ir, sincronizarAlEntrar) {
+  $('sincronizar')?.addEventListener('click', async ev => {
+    const b = ev.currentTarget; b.disabled = true; $('estado-sincronizacion').textContent = 'Sincronizando…';
+    try { await sincronizarAlEntrar({ forzar: true }); $('estado-sincronizacion').textContent = E.pendientes?.length ? `Quedan ${E.pendientes.length} elementos pendientes. La copia del teléfono se conserva.` : `Sincronización completa. ${E.sesiones.length} sesiones disponibles en esta cuenta.`; }
+    catch (e) { $('estado-sincronizacion').textContent = `No pude sincronizar: ${e.message}. Tus datos del teléfono se conservan.`; }
+    finally { b.disabled = false; }
+  });
+  $('copiar-local')?.addEventListener('click', async ev => {
+    const b = ev.currentTarget;
+    if (!b.dataset.confirmar) { b.dataset.confirmar = '1'; b.textContent = `Confirmar traslado a ${nube.correo()}: perfil y ${resumenLocal().sesiones} sesiones, sin fotos ni documentos`; return; }
+    try { traerPerfilLocal(); await sincronizarAlEntrar(); E.mensaje = 'Perfil copiado. Se conserva la copia local; las fotos y documentos no se trasladaron.'; guardar(); ir(E.plan ? 'hoy' : 'mas'); }
+    catch (e) { E.mensaje = `No pude completar el traslado: ${e.message}. Reintenta la sincronización.`; guardar(); ir('mas'); }
+  });
   $('form-correo')?.addEventListener('submit', async ev => {
     ev.preventDefault();
     try { await nube.pedirCodigo($('correo').value.trim()); $('form-codigo').hidden = false; $('estado-cuenta').textContent = 'Te mandamos un correo. Escribe aquí el código, o toca el enlace del correo desde este mismo teléfono.'; $('codigo').focus(); }
@@ -340,10 +356,14 @@ function enlazarCuenta(ir, sincronizarAlEntrar) {
   });
   $('form-codigo')?.addEventListener('submit', async ev => {
     ev.preventDefault();
-    try { await nube.verificarCodigo($('correo').value.trim(), $('codigo').value); await sincronizarAlEntrar(); E.mensaje = `Entraste como ${nube.correo()}.`; guardar(); ir('hoy'); }
-    catch (e) { $('estado-cuenta').textContent = `El código no funcionó: ${e.message}`; }
+    try { await nube.verificarCodigo($('correo').value.trim(), $('codigo').value); }
+    catch (e) { $('estado-cuenta').textContent = `El código no funcionó: ${e.message}`; return; }
+    activarCuenta(nube.usuarioId());
+    try { await sincronizarAlEntrar(); E.mensaje = `Entraste como ${nube.correo()}.`; }
+    catch (e) { E.mensaje = `Entraste, pero no pude sincronizar: ${e.message}. Reintenta en Más.`; }
+    guardar(); ir(E.plan ? 'hoy' : 'mas');
   });
-  $('salir')?.addEventListener('click', async () => { await nube.salir(); E.mensaje = 'Saliste de tu cuenta. Lo de este teléfono sigue aquí.'; guardar(); ir('mas'); });
+  $('salir')?.addEventListener('click', async () => { await nube.salir(); activarCuenta(); E.mensaje = 'Saliste de tu cuenta. Volviste al perfil local. La copia de la cuenta se conserva por separado.'; guardar(); ir('mas'); });
   $('descargar')?.addEventListener('click', async () => {
     const d = await nube.descargarDatos();
     const url = URL.createObjectURL(new Blob([JSON.stringify(d, null, 1)], { type: 'application/json' }));
@@ -352,6 +372,6 @@ function enlazarCuenta(ir, sincronizarAlEntrar) {
   $('borrar-cuenta')?.addEventListener('click', async ev => {
     const b = ev.currentTarget;
     if (!b.dataset.confirmar) { b.dataset.confirmar = '1'; b.textContent = 'Toca de nuevo: se borra tu cuenta y todo lo guardado en ella'; return; }
-    await nube.borrarCuenta(); E.mensaje = 'Tu cuenta y sus datos fueron borrados.'; guardar(); ir('mas');
+    await nube.borrarCuenta(); activarCuenta(); E.mensaje = 'La cuenta del servidor fue borrada. El perfil local se conserva; las copias descargadas no se borran automáticamente.'; guardar(); ir('mas');
   });
 }
