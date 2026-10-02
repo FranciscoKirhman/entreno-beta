@@ -14,6 +14,7 @@ import { seriesAnotadas } from '../nucleo/semanal.js';
 import { semanaPorMusculo } from '../nucleo/volumen-semana.js';
 import { NOMBRE_MUSCULO, mayuscula, imagenMusculo } from './musculos.js';
 import * as nube from './nube.js';
+import { bienvenidaProgreso, historialVacio } from './estados-visuales.js';
 import { lineaSimple } from './grafico.js';
 import { sumarDias as sumar } from '../nucleo/agenda.js';
 
@@ -76,7 +77,7 @@ function suenoAnimoHtml() {
 
 function historialHtml() {
   const h = historial();
-  if (!h.length) return '<p class="pequeno suave">Todavía no hay sesiones. Marca tus series en Hoy, o importa tu historial de Hevy en Más.</p>';
+  if (!h.length) return historialVacio();
   const lunes = sumarDias(hoy(), -((diaSemana(hoy()) + 6) % 7));
   const semana = h.filter(s => s.fecha >= lunes);
   const resumen = semana.length ? `Esta semana: ${semana.length} ${semana.length === 1 ? 'sesión' : 'sesiones'} · ${series(semana.reduce((a, s) => a + s.series.filter(deTrabajo).length, 0))} de trabajo · volumen ${volumenTexto(semana.reduce((a, s) => a + volumen(s.series), 0))}.` : 'Esta semana todavía no entrenas.';
@@ -105,6 +106,7 @@ export async function vistaProgreso(ir) {
   const cola = estadoCola();
   $('app').innerHTML = `<div id="vista-progreso">
     <h1>Progreso</h1>
+    ${bienvenidaProgreso()}
     ${semanaHtml()}
     ${suenoAnimoHtml()}
     <section class="tarjeta">

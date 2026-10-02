@@ -1,0 +1,14 @@
+/* Poses del asistente elegido, con espacio propio y colores del tema. */
+.estado-ilustrado{display:flex;align-items:center;gap:12px;min-width:0}
+.estado-texto{flex:1;min-width:0}
+.estado-texto h3{font-size:21px;line-height:1.2;text-wrap:balance}
+.estado-texto p{margin-top:8px}
+.estado-personaje{flex:0 0 auto;width:132px;height:132px;object-fit:contain;background:radial-gradient(circle,var(--accent-soft),transparent 72%)}
+.descanso-ilustrado{background:linear-gradient(135deg,var(--surface),var(--accent-soft));padding-top:8px}
+.descanso-ilustrado .proxima-sesion{margin:8px 0 14px;line-height:1.5}
+.descanso-ilustrado .boton{width:100%}
+.progreso-ilustrado .estado-personaje{width:104px;height:104px}
+.progreso-ilustrado .estado-texto h3{font-size:19px}
+.historial-vacio{display:flex;flex-direction:column;align-items:center;text-align:center;padding:6px 8px 10px}
+.historial-vacio img{width:144px;height:144px;object-fit:contain;margin-bottom:6px}
+@media(max-width:340px){.estado-personaje{width:104px;height:104px}.estado-texto h3{font-size:19px}.progreso-ilustrado .estado-personaje{width:88px;height:88px}}
