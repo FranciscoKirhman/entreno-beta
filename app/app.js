@@ -2,7 +2,7 @@
 // que el servidor: nucleo/*.js.
 //
 //   node herramientas/servir.mjs  →  http://127.0.0.1:5173/app/
-import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo } from './comun.js';
+import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo, entrarEjemplo, salirEjemplo, modoEjemplo, errorGuardado } from './comun.js';
 import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
 import { derivar } from '../nucleo/derivar.js';
 import { generarPlan } from '../nucleo/motor-plan.js';
@@ -85,8 +85,9 @@ function vistaBloqueada() {
 
 function vistaInicio() {
   $('app').innerHTML = `<div id="vista-inicio">
-    <h1>Tu entrenador con IA</h1>
+    <h1>Tu compañero de entrenamiento</h1>
     ${dice('saludo', Object.keys(R()).length ? `¡Hola de nuevo! Soy ${nombreAsistente()}. Seguimos donde quedamos.` : `¡Hola! Soy ${nombreAsistente()}. Te ayudo a armar tu plan y te acompaño en cada entrenamiento.`)}
+    <p class="pequeno">${CONFIG.modoPrueba ? 'Esta prueba funciona con reglas, sin IA ni nube. Tus respuestas y registros se conservan en este navegador. El ejemplo es ficticio y está separado de tu perfil.' : 'Puedes usar reglas en este teléfono. La IA requiere una cuenta y un servidor habilitado.'}</p>
     <p>Arma tu plan, lo agenda en tu semana, lo ajusta cuando faltas, cuando una máquina está ocupada o cuando dormiste mal, y te explica por qué de cada ejercicio, con evidencia.</p>
     ${nube.hay() && !nube.conectado() ? `<section class="tarjeta"><h3>Entrar con tu correo</h3><p class="pequeno">Tu plan y tus registros quedan guardados y el coach puede usar IA.</p><button type="button" class="boton primario" id="a-cuenta">Entrar</button></section>` : ''}
     ${nube.conectado() ? `<p class="pequeno suave">Entraste como ${esc(nube.correo())}.</p>` : ''}
@@ -100,7 +101,7 @@ function vistaInicio() {
   $('a-respaldo').onclick = () => ir('mas');
   $('a-cuenta')?.addEventListener('click', () => ir('mas'));
   $('empezar').onclick = () => ir('cuestionario');
-  $('ejemplo').onclick = () => { E.respuestas = structuredClone(EJEMPLO); armarPlan(); };
+  $('ejemplo').onclick = () => { if (nube.conectado()) { E.mensaje = 'Sal de tu cuenta antes de abrir el ejemplo local.'; mostrarMensaje(); return; } entrarEjemplo(); E.respuestas = structuredClone(EJEMPLO); E.sesiones = historialDeEjemplo(hoy(), indice); armarPlan(); };
   mostrarMensaje();
 }
 
@@ -130,8 +131,12 @@ $('nav').addEventListener('click', e => { const b = e.target.closest('[data-ir]'
 /** Encabezado: sin señal (lo anotado se guarda igual) o, con cuenta, el correo. En la versión de prueba, nada. */
 function pintarModo() {
   const m = $('modo');
-  const texto = !navigator.onLine ? 'Sin señal · se guarda igual' : nube.conectado() ? (nube.correo() || 'Cuenta') : nube.hay() ? 'Sin cuenta' : '';
+  const texto = modoEjemplo ? 'Ejemplo ficticio · Volver a mis datos' : errorGuardado ? 'Hay cambios sin guardar' : !navigator.onLine ? 'Sin señal · se guarda igual' : nube.conectado() ? (nube.correo() || 'Cuenta') : nube.hay() ? 'Sin cuenta' : '';
   m.textContent = texto;
+  m.onclick = modoEjemplo ? () => { salirEjemplo(); ir(E.plan ? 'hoy' : 'inicio'); } : null;
+  m.setAttribute('role', modoEjemplo ? 'button' : 'status');
+  m.tabIndex = modoEjemplo ? 0 : -1;
+  m.onkeydown = e => { if (modoEjemplo && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); m.click(); } };
   m.hidden = !texto;
   m.classList.toggle('sin-senal', !navigator.onLine);
 }
@@ -156,14 +161,7 @@ const EJEMPLO = {
 // Versión de prueba en el celular: guarda la app para que abra sin señal en el gimnasio.
 if (CONFIG.sinSenal && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(e => console.warn('Sin modo sin señal', e));
 
-// Versión de prueba: cada vez que se abre la app, el cuestionario parte de cero para volver a probarlo (al
-// cambiar de pantalla o recargar, no). Lo anotado se queda y, si no hay historial, se carga uno inventado.
-if (CONFIG.modoPrueba) {
-  let nueva = true;
-  try { nueva = !sessionStorage.getItem('entreno-prueba'); sessionStorage.setItem('entreno-prueba', '1'); } catch { /* sin almacenamiento */ }
-  if (nueva) empezarDeNuevo();
-  if (!E.sesiones.length && !E.sinEjemplo) { E.sesiones = historialDeEjemplo(hoy(), indice); guardar(); }
-}
+// El perfil personal persiste al abrir. El ejemplo solo empieza por elección explícita.
 await nube.iniciar();
 subirPendientes(); // lo que quedó sin subir la última vez
 if (nube.entroPorEnlace()) { await sincronizarAlEntrar(); E.mensaje = `Entraste como ${nube.correo()}.`; E.vista = E.plan ? 'hoy' : 'inicio'; }

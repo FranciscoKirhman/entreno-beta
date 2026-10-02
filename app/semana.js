@@ -2,7 +2,7 @@
 import { E, guardar, R, esc, $, fechaCorta, presc, cambiarPlan, hoy, indice, mostrarMensaje, sesionVista, mostrarSemana } from './comun.js';
 import { moverSesion, intercambiar, marcarFaltada, reagendarConCalendario, sesionDe, nombreDia } from '../nucleo/agenda.js';
 import { leerIcs } from '../nucleo/ics.js';
-import { duracionEstimada } from '../nucleo/motor-plan.js';
+import { duracionSesion } from '../nucleo/motor-plan.js';
 import { avisoCheckin } from './checkin.js';
 import { tarjetaTemporada, tarjetaDescarga, enlazarTemporada } from './temporada.js';
 import { semanaDe } from '../nucleo/ciclos.js';
@@ -37,7 +37,7 @@ export function vistaSemana(ir) {
     <div class="semanas" role="group" aria-label="Semana"><span class="pequeno suave">Semana</span>${semanas.map(s => `<button type="button" data-semana="${s}" aria-pressed="${s === E.semana}"${s === p.semana_descarga ? ' aria-label="Semana ' + s + ', de descarga"' : ''}>${s}${s === p.semana_descarga ? ' · descarga' : ''}</button>`).join('')}</div>
     ${eligePeso ? '<p class="pequeno suave">Donde no hay peso indicado, elige uno con el que te sobren las repeticiones de reserva (RIR) en la última serie. Lo anotas en Hoy y la app lo ajusta desde ahí.</p>' : ''}
     ${dias.map(x => `<section class="tarjeta dia${x.fecha === f ? ' es-hoy' : ''}" id="dia-${x.fecha}">
-      <h3>${esc(fechaCorta(x.fecha))}${x.hora ? ` · ${esc(x.hora)}` : ''} · ${esc(x.foco)} ${x.fecha === f ? '<span class="chip hoy">Hoy</span>' : ''}${estado(x.fecha) === 'terminada' ? '<span class="chip firme">Hecha ✓</span>' : estado(x.fecha) === 'en_curso' ? '<span class="chip">En curso</span>' : `<span class="chip ${x.firme ? 'firme' : ''}">${x.firme ? 'Firme' : 'Opcional'}</span>`} <span class="chip num">~${duracionEstimada(x.ejercicios)} min</span></h3>
+      <h3>${esc(fechaCorta(x.fecha))}${x.hora ? ` · ${esc(x.hora)}` : ''} · ${esc(x.foco)} ${x.fecha === f ? '<span class="chip hoy">Hoy</span>' : ''}${estado(x.fecha) === 'terminada' ? '<span class="chip firme">Hecha ✓</span>' : estado(x.fecha) === 'en_curso' ? '<span class="chip">En curso</span>' : `<span class="chip ${x.firme ? 'firme' : ''}">${x.firme ? 'Firme' : 'Opcional'}</span>`} <span class="chip num">~${duracionSesion(x)} min</span></h3>
       <ul class="ejercicios">${x.ejercicios.map((e, k, todos) => { const g = grupos(todos)[k]; return `<li class="con-mini${g ? ` en-superserie ss-${g.letra}` : ''}">${indice.porId.has(e.ejercicio_id) ? `<button type="button" class="ej-semana" data-ficha="${e.ejercicio_id}">${miniatura(e.ejercicio_id, 'miniatura chica')}` : '<span class="ej-semana"><span class="miniatura chica vacia" aria-hidden="true"></span>'}<span class="nombre">${g ? `<span class="chip-ss">${etiquetaSuperserie(g)}</span>` : ''}${esc(e.nombre || indice.porId.get(e.ejercicio_id)?.nombre || '')}</span>${indice.porId.has(e.ejercicio_id) ? '</button>' : '</span>'}<span class="presc">${esc(presc(e))}</span>${e.nota && !/^Elige un peso/.test(e.nota) ? `<span class="detalle">${esc(e.nota)}</span>` : ''}</li>`; }).join('')}</ul>
       <details class="extra"><summary>Mover, intercambiar o marcar que faltaste</summary>
         <div class="panel">

@@ -33,3 +33,20 @@ export const borrarFotoLocal = id => tx('readwrite', s => s.delete(id));
 export const guardarArchivoLocal = (id, archivo) => tx('readwrite', s => s.put({ id, archivo }), ARCHIVOS);
 export const leerArchivoLocal = async id => (await tx('readonly', s => s.get(id), ARCHIVOS))?.archivo || null;
 export const borrarArchivoLocal = id => tx('readwrite', s => s.delete(id), ARCHIVOS);
+
+/** Fotos y estado: abortar IndexedDB conserva las fotos anteriores; el llamador recupera el estado. */
+export async function restaurarFotosAtomicas(fotos, confirmarEstado) {
+  const db = await abrir();
+  try {
+    await new Promise((ok, mal) => {
+      const t = db.transaction(TABLA, 'readwrite');
+      t.oncomplete = () => ok();
+      t.onabort = t.onerror = () => mal(t.error || new Error('La restauración se canceló'));
+      try {
+        const tabla = t.objectStore(TABLA);
+        for (const f of fotos) tabla.put(f);
+        confirmarEstado();
+      } catch (e) { t.abort(); mal(e); }
+    });
+  } finally { db.close(); }
+}

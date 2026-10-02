@@ -1,7 +1,7 @@
 // Revisa un plan antes de guardarlo, venga del motor de reglas, del coach Pro o de la IA de la persona.
 // Si hay errores, el plan no se guarda: se reintenta o se usa el plan de reglas.
 import { tieneEquipo, nivelAlcanza, articulacionesBloqueadas, cargaZonaBloqueada } from './catalogo.js';
-import { incrementoPara, duracionEstimada, volumenSemanal } from './motor-plan.js';
+import { incrementoPara, duracionSesion, volumenSemanal } from './motor-plan.js';
 import { grupos } from './superseries.js';
 
 const CONTADOS = ['femoral', 'gluteo', 'cuadriceps', 'aductor_abductor', 'espalda', 'pecho', 'hombro', 'biceps', 'triceps'];
@@ -70,8 +70,8 @@ export function validarPlan(plan, { derivados: d, respuestas: r, indice, hoy }) 
       const g = grupos(dia.ejercicios || []);
       if ((dia.ejercicios || []).some((e, i) => e.superserie && !g[i])) adv('superserie_suelta', `${dia.fecha}: una superserie quedó con un solo ejercicio o separada; se hace como serie normal.`, donde);
     }
-    const minutos = duracionEstimada(dia.ejercicios || []);
-    if (minutos > d.duracion_min * 1.15) err('duracion', `${dia.fecha}: la sesión dura unos ${minutos} minutos y tienes ${d.duracion_min}.`, donde);
+    const minutos = duracionSesion(dia);
+    if (minutos === null || minutos > d.duracion_min) err('duracion', `${dia.fecha}: la sesión dura unos ${minutos} minutos y tienes ${d.duracion_min}.`, donde);
   }
 
   // Volumen por músculo en una semana normal (la 1) y que la descarga baje.

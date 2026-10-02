@@ -7,7 +7,7 @@ import { evaluarDia, ajustarSesion, TEXTO_RECOMENDACION } from '../nucleo/bienes
 import { checklist } from '../nucleo/suplementos.js';
 import { enlaceVideo } from '../nucleo/explicar.js';
 import { sesionDe } from '../nucleo/agenda.js';
-import { duracionEstimada, incrementoPara } from '../nucleo/motor-plan.js';
+import { duracionSesion, incrementoPara } from '../nucleo/motor-plan.js';
 import { ESFUERZO, prioridadEsfuerzo, consejoSerie } from '../nucleo/series.js';
 import { TIPOS_SERIE, tipoDe, etiquetas, cuantasFilas, anterior, cifras, tipoParaGuardar } from '../nucleo/registro.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
@@ -120,7 +120,7 @@ function sesionHoy(dia) {
   const sec = [...new Set(ejs.flatMap(ej => ej.musculos_secundarios))].filter(m => !prim.includes(m));
   const eligePeso = dia.ejercicios.some(e => /^Elige un peso/.test(e.nota || ''));
   return `<section class="tarjeta sesion-cab">
-    <div class="fila-titulo"><div><h2>${esc(dia.foco)}</h2><p class="suave pequeno">${dia.hora ? `${esc(dia.hora)} · ` : ''}~${duracionEstimada(dia.ejercicios)} min · ${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? '' : 's'}</p></div>
+    <div class="fila-titulo"><div><h2>${esc(dia.foco)}</h2><p class="suave pequeno">${dia.hora ? `${esc(dia.hora)} · ` : ''}~${duracionSesion(dia)} min · ${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? '' : 's'}</p></div>
       <button type="button" class="boton chico" id="ajustar-hoy">${icono('ajustes')} Ajustar hoy</button></div>
     ${dia.ejercicios.length ? avanceHtml(avance(dia)) : '<p>Hoy, descanso activo: 20 a 30 minutos de caminata o bicicleta suave y movilidad.</p>'}
     ${prim.length ? `<div class="hoy-entrenas">${imagenesMusculos(prim.slice(0, 4))}<div><p class="sobretitulo">Hoy entrenas</p><p class="musculos-hoy">${esc(mayuscula(lista(prim.map(m => NOMBRE_MUSCULO[m] || m))))}</p>${sec.length ? `<p class="pequeno suave">Y un poco de ${esc(lista(sec.map(m => (NOMBRE_MUSCULO[m] || m).toLowerCase())))}</p>` : ''}</div></div>` : ''}
@@ -433,7 +433,7 @@ function enlazar(ir, dia) {
   // Ajustar hoy: lo mismo que contarle al entrenador, con la vista previa y la confirmación en hojas.
   $('ajustar-hoy').onclick = () => {
     const b = $('ajustar-hoy');
-    const min = duracionEstimada(dia.ejercicios);
+    const min = duracionSesion(dia);
     const listo = r => (r.ir === 'semana' ? ir('semana') : repintar());
     const o = { titulo: 'Ajustar hoy', volver: b, alCambiar: listo };
     abrirHoja({

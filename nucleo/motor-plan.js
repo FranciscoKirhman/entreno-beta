@@ -123,6 +123,18 @@ export function duracionEstimada(ejercicios) {
   return Math.round(seg / 60);
 }
 
+/** Incluye calentamiento, transiciones de pesas y cardio, usando el extremo mayor de un rango. */
+export function minutosCardio(texto) {
+  if (!texto) return 0;
+  if (/6 × 1 minuto fuerte y 1 minuto suave/.test(texto)) return 12;
+  const m = texto.match(/(\d+)(?: a (\d+))? minutos?/);
+  return m ? Number(m[2] || m[1]) : null;
+}
+export function duracionSesion(dia) {
+  const cardio = minutosCardio(dia.cardio);
+  return cardio === null ? null : duracionEstimada(dia.ejercicios || []) + cardio + (cardio ? 2 : 0);
+}
+
 /** Series por semana de cada músculo: 1 por serie si es principal y 0,5 si es secundario. */
 export function volumenSemanal(dias, porId, semana = 1) {
   const v = {};
@@ -420,6 +432,27 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
         ejercicios: x.ejercicios.map(e => (descarga ? comoDescarga(e) : { ...e, rir: Math.min(5, conservadora ? Math.max(e.rir, 3) : e.rir) })),
       });
     }
+  }
+  for (const dia of diasPlan) {
+    const objetivoCardio = minutosCardio(dia.cardio) || 0;
+    // Reservar una porción para cardio; recortar accesorios antes de exceder lo pedido.
+    const reserva = 0;
+    while (duracionEstimada(dia.ejercicios) + reserva > d.duracion_min && dia.ejercicios.length) {
+      const protegido = e => (r.favoritos || []).includes(e.ejercicio_id) || (indice.porId.get(e.ejercicio_id)?.musculos_primarios || []).some(m => (r.musculos_prioridad || []).includes(m));
+      const ultimo = [...dia.ejercicios].sort((a, b) => Number(protegido(a)) - Number(protegido(b)) || b.prioridad - a.prioridad || b.orden - a.orden)[0];
+      if (ultimo.series > 1) ultimo.series--;
+      else dia.ejercicios.splice(dia.ejercicios.indexOf(ultimo), 1);
+    }
+    const disponible = Math.max(0, d.duracion_min - duracionEstimada(dia.ejercicios) - 2);
+    if (objetivoCardio > disponible) {
+      dia.cardio = disponible >= 5 ? `${dia.cardio.split(/\d| en intervalos|:/)[0].trim()} ${disponible} minutos a ritmo cómodo. Reducido para respetar tu tiempo.` : null;
+      dia.nota_cardio = 'La dosis de cardio original no cabe en este tiempo. Puedes dedicarle una sesión aparte.';
+    }
+  }
+  for (const dia of diasPlan.filter(x => x.semana === 4)) {
+    const base = diasPlan.find(x => x.semana === 1 && x.plantilla === dia.plantilla);
+    dia.ejercicios = base.ejercicios.map(comoDescarga);
+    if (dia.ejercicios.every(e => e.series === 1) && dia.ejercicios.length > 1) dia.ejercicios.pop();
   }
   diasPlan.sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
 

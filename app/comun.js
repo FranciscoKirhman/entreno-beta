@@ -1,3 +1,4 @@
+import { validarRespaldo } from '../nucleo/respaldo.js';
 // Estado y utilidades que comparten las vistas de la app. Todo funciona sin cuenta (en este navegador);
 // con cuenta, nube.js sincroniza con Supabase.
 import { crearIndice } from '../nucleo/catalogo.js';
@@ -39,7 +40,11 @@ export function seriesTexto(series) {
 export const volumenTexto = kg => `${Math.round(enUnidad(kg) || 0).toLocaleString('es-CL')} ${unidadPeso()}`;
 
 // ── Estado guardado en este navegador ───────────────────────────────────────
-const CLAVE = 'entreno-v2';
+const CLAVE_PERSONAL = 'entreno-v2';
+let CLAVE = CLAVE_PERSONAL;
+export let modoEjemplo = false;
+export let errorGuardado = null;
+let lecturaFallida = false;
 const VACIO = () => ({
   vista: 'inicio', seccion: 0, respuestas: {}, plan: null, semana: 1,
   bienestar: {}, registro: {}, notas: {}, sesiones: [], chat: [], consentimientos: {},
@@ -49,22 +54,60 @@ export let E = VACIO();
 try {
   const viejo = JSON.parse(localStorage.getItem('entreno-demo-v1') || 'null');
   E = { ...E, ...(viejo ? { respuestas: viejo.respuestas, plan: viejo.plan } : {}), ...JSON.parse(localStorage.getItem(CLAVE) || '{}') };
-} catch { /* sin almacenamiento: se parte de cero */ }
-export const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(E)); } catch { /* modo privado */ } };
-export const reiniciar = () => { E = VACIO(); guardar(); };
+} catch { lecturaFallida = true; errorGuardado = 'No pude leer tus datos guardados. Descarga un respaldo de esta sesión antes de cerrar.'; }
+export function guardar() {
+  try {
+    if (lecturaFallida) throw new Error('Los datos anteriores no se pudieron leer');
+    const texto = JSON.stringify(E);
+    localStorage.setItem(CLAVE, texto);
+    if (localStorage.getItem(CLAVE) !== texto) throw new Error('La copia guardada no coincide');
+    errorGuardado = null;
+    document.getElementById('error-guardado')?.remove();
+    return true;
+  } catch {
+    errorGuardado = 'No se guardaron los últimos cambios en este teléfono. Descarga un respaldo antes de cerrar o recargar.';
+    let aviso = document.getElementById('error-guardado');
+    if (!aviso) { aviso = document.createElement('section'); aviso.id = 'error-guardado'; aviso.className = 'aviso alerta'; aviso.setAttribute('role', 'alert'); document.body.prepend(aviso); }
+    aviso.textContent = errorGuardado + ' ';
+    const boton = document.createElement('button'); boton.className = 'boton'; boton.textContent = 'Descargar respaldo';
+    boton.onclick = () => { const enlace = document.createElement('a'); const url = URL.createObjectURL(new Blob([JSON.stringify(respaldo())], { type: 'application/json' })); enlace.href = url; enlace.download = 'entreno-respaldo-emergencia.json'; enlace.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); };
+    aviso.append(boton);
+    return false;
+  }
+}
+let personal = E;
+export function entrarEjemplo() {
+  if (!modoEjemplo) { guardar(); personal = E; }
+  modoEjemplo = true; CLAVE = 'entreno-ejemplo-v1'; E = VACIO();
+}
+export function salirEjemplo() {
+  modoEjemplo = false; CLAVE = CLAVE_PERSONAL; E = personal; guardar();
+}
+// El historial ficticio antiguo se conserva aparte y se excluye del perfil personal.
+if (E.sesiones.some(s => s.origen === 'ejemplo')) {
+  try { localStorage.setItem('entreno-antes-separar-demo', JSON.stringify(E)); }
+  catch { errorGuardado = 'No pude guardar la copia previa de tus datos. Descarga un respaldo antes de continuar.'; }
+  if (!errorGuardado) { E.sesiones = E.sesiones.filter(s => s.origen !== 'ejemplo'); guardar(); }
+}
+
+export const reiniciar = () => { lecturaFallida = false; E = VACIO(); guardar(); };
 /** Versión de prueba: borra el cuestionario y el plan para volver a probarlos, y deja lo anotado (historial,
  *  series, notas, suplementos e indicaciones). */
 export function empezarDeNuevo() {
-  const { sesiones, registro, notas, filas, descansos, suplementos, tomas, indicaciones, avisos, sinEjemplo } = E;
-  E = { ...VACIO(), sesiones, registro, notas, filas, descansos, suplementos, tomas, indicaciones, ...(avisos ? { avisos } : {}), ...(sinEjemplo ? { sinEjemplo } : {}) };
+  E.vista = 'cuestionario'; E.paso = 0; E.seccion = 0;
+  E.mensaje = 'Puedes revisar tus respuestas. Tus registros y tu perfil se conservan.';
   guardar();
 }
 
 /** Respaldo de todo lo anotado en este teléfono. Desde la versión 2 incluye las fotos de progreso: [{id, fecha, angulo, datos}]. */
 export const respaldo = (fotos = []) => ({ app: 'entreno', version: 2, creado: new Date().toISOString(), estado: E, fotos });
 export function restaurar(r) {
-  if (r?.app !== 'entreno' || !r.estado || typeof r.estado !== 'object' || Array.isArray(r.estado)) throw new Error('Ese archivo no es un respaldo de Entreno.');
-  E = { ...VACIO(), ...r.estado, vista: 'hoy', mensaje: null }; guardar();
+  validarRespaldo(r, new Set(indice.porId.keys()));
+  const antes = E, bloqueoAnterior = lecturaFallida;
+  lecturaFallida = false;
+  E = { ...VACIO(), ...structuredClone(r.estado), vista: 'hoy', mensaje: null };
+  if (!modoEjemplo) E.sesiones = E.sesiones.filter(s => s.origen !== 'ejemplo');
+  if (!guardar()) { E = antes; lecturaFallida = bloqueoAnterior; throw new Error('No pude guardar el respaldo. Tus datos anteriores se conservan.'); }
 }
 /** Muestra esa semana del plan la próxima vez que se abra Semana (si no, se abre la semana en curso). */
 export const sesionVista = { semanaElegida: false };

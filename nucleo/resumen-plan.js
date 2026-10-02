@@ -2,7 +2,7 @@
 // generado, no de lo que se quiso hacer: si algo no se pudo (un favorito sin su máquina, una zona sin tiempo),
 // se dice y se explica por qué.
 import { tieneEquipo, nivelAlcanza, cargaZonaBloqueada, articulacionesBloqueadas } from './catalogo.js';
-import { volumenSemanal, duracionEstimada, NOMBRE_DIA, NOMBRE_ZONA } from './motor-plan.js';
+import { volumenSemanal, duracionSesion, NOMBRE_DIA, NOMBRE_ZONA } from './motor-plan.js';
 
 export const OBJETIVOS = {
   ganar_musculo: { nombre: 'Ganar músculo', como: 'Series cerca del fallo en rangos medios de repeticiones y suficiente volumen por músculo: es lo que más hace crecer.' },
@@ -31,7 +31,7 @@ export function resumenPlan({ plan, respuestas: r, derivados: d, indice, hoy }) 
   const diaSem = f => new Date(f + 'T12:00:00Z').getUTCDay();
   const dias = sem1.map(x => ({
     fecha: x.fecha, dia_semana: diaSem(x.fecha), nombre_dia: NOMBRE_DIA[diaSem(x.fecha)], plantilla: x.plantilla, foco: x.foco,
-    firme: x.firme, minutos: duracionEstimada(x.ejercicios), cardio: x.cardio || null,
+    firme: x.firme, minutos: duracionSesion(x), cardio: x.cardio || null,
     ejercicios: x.ejercicios.map(e => ({ id: e.ejercicio_id, nombre: e.nombre, series: e.series, reps_min: e.reps_min, reps_max: e.reps_max, unidad: e.unidad, rir: e.rir, prioridad: e.prioridad, ...(e.superserie ? { superserie: e.superserie } : {}) })),
   }));
   // Semana de lunes a domingo: el día de entrenamiento o null (descanso).
@@ -66,8 +66,8 @@ export function resumenPlan({ plan, respuestas: r, derivados: d, indice, hoy }) 
   const largo = Math.max(0, ...minutos), corto = Math.min(...minutos);
   cumple.push({
     tema: 'Tiempo',
-    estado: largo <= d.duracion_min * 1.15 ? 'si' : 'parcial',
-    texto: `Sesiones de ${rango(corto, largo)} minutos, con calentamiento; ${r.duracion_min ? `pediste ${d.duracion_min}` : `no elegiste: partimos con ${d.duracion_min}`}.${largo > d.duracion_min ? ' Si un día te falta tiempo, salta lo último: lo principal va primero.' : ''}${d.duracion_min <= 30 ? ' Con 30 minutos entra lo principal: si un día tienes más, suma series.' : ''}`,
+    estado: dias.every(x => x.minutos !== null) && largo <= d.duracion_min ? 'si' : 'parcial',
+    texto: `${dias.some(x => x.minutos === null) ? 'Hay una sesión con cardio sin duración conocida. ' : ''}Sesiones de ${rango(corto, largo)} minutos, incluyendo calentamiento, pesas, transiciones y cardio; ${r.duracion_min ? `pediste ${d.duracion_min}` : `no elegiste: partimos con ${d.duracion_min}`}.${largo > d.duracion_min ? ' Si un día te falta tiempo, salta lo último: lo principal va primero.' : ''}${d.duracion_min <= 30 ? ' Con 30 minutos entra lo principal: si un día tienes más, suma series.' : ''}`,
   });
 
   // Lugar y máquinas.

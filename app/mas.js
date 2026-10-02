@@ -1,5 +1,6 @@
+import { validarRespaldo } from '../nucleo/respaldo.js';
 // Vista Más: cuenta, ajustar con tu propia IA (copiar y pegar), importar un plan escrito y reiniciar.
-import { E, guardar, reiniciar, empezarDeNuevo, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje, unidadPeso } from './comun.js';
+import { E, guardar, reiniciar, empezarDeNuevo, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje, unidadPeso, modoEjemplo } from './comun.js';
 import { esExportacionHevy, importarParaTelefono } from '../nucleo/hevy-csv.js';
 import { soporte, configAvisos, cambiarAvisos, activarAvisos, notificar, enlaceCalendario } from './avisos.js';
 import { CONFIG } from './config.js';
@@ -7,7 +8,7 @@ import { aplicarCambios, promptParaIA, leerRespuestaIA } from '../nucleo/cambios
 import { validarPlan } from '../nucleo/validador.js';
 import { permitidos } from '../nucleo/mcp.js';
 import { leerPlanTexto, calendarizar } from '../nucleo/importar-plan.js';
-import { listarFotosLocales, guardarFotoLocal } from './fotos-local.js';
+import { listarFotosLocales, guardarFotoLocal, restaurarFotosAtomicas } from './fotos-local.js';
 import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
 import * as nube from './nube.js';
 
@@ -16,9 +17,9 @@ function pruebaHtml() {
   const hay = E.sesiones.some(x => x.origen === 'ejemplo');
   return `<section class="tarjeta destacada">
     <h3>Versión de prueba</h3>
-    <p class="pequeno suave">Cada vez que abres la app, el cuestionario parte de cero para que lo pruebes de nuevo. Lo que anotas se queda.${hay ? ' El historial de Progreso es de ejemplo: inventado, para probar.' : ''}</p>
+    <p class="pequeno suave">Tus respuestas y registros se conservan al abrir. Puedes revisar el cuestionario sin borrar tu historial.${hay ? ' El historial de Progreso es de ejemplo: inventado, para probar.' : ''}</p>
     <div class="fila-botones"><button type="button" class="boton primario" id="prueba-de-nuevo">Hacer el cuestionario de nuevo</button>
-      <button type="button" class="boton" id="prueba-ejemplo">${hay ? 'Quitar el historial de ejemplo' : 'Cargar historial de ejemplo'}</button></div>
+      <button type="button" class="boton" id="prueba-ejemplo" ${modoEjemplo ? '' : 'disabled'}>${hay ? 'Quitar el historial de ejemplo' : 'Cargar historial de ejemplo'}</button></div>
   </section>`;
 }
 
@@ -80,6 +81,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
   enlazarCuenta(ir, sincronizarAlEntrar);
   $('prueba-de-nuevo')?.addEventListener('click', () => { empezarDeNuevo(); ir('cuestionario'); });
   $('prueba-ejemplo')?.addEventListener('click', () => {
+    if (!modoEjemplo) return;
     const hay = E.sesiones.some(x => x.origen === 'ejemplo');
     E.sesiones = hay ? E.sesiones.filter(x => x.origen !== 'ejemplo') : [...E.sesiones, ...historialDeEjemplo(hoy(), indice)];
     E.sinEjemplo = hay;
@@ -151,18 +153,30 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     let r;
     try { r = JSON.parse(await f.text()); restaurarValido(r); }
     catch (e) { out.innerHTML = `<div class="aviso alerta">${esc(e.message.startsWith('Ese archivo') ? e.message : 'No pude leer ese archivo. Elige un respaldo descargado desde esta app.')}</div>`; return; }
-    const nFotos = Array.isArray(r.fotos) ? r.fotos.length : 0;
-    out.innerHTML = `<div class="aviso ojo">Respaldo del ${esc(fechaCorta(r.creado.slice(0, 10)))}${nFotos ? `, con ${nFotos} foto${nFotos === 1 ? '' : 's'}` : ''}. Reemplaza lo anotado en este teléfono${nFotos ? '; las fotos se suman a las que ya tengas' : ''}.</div>
-      <div class="fila-botones"><button type="button" class="boton primario" id="confirmar-respaldo">Restaurar</button></div>`;
+    if (nube.conectado() || modoEjemplo) { out.innerHTML = '<div class="aviso alerta">Para restaurar tus datos personales, vuelve a tu perfil local y sal de tu cuenta. El respaldo no se envía al servidor.</div>'; return; }
+    let anterior;
+    try { anterior = respaldo(await fotosParaRespaldo()); }
+    catch { out.innerHTML = '<div class="aviso alerta">No pude preparar la copia anterior con tus fotos. No cambié tus datos.</div>'; return; }
+    const urlAnterior = URL.createObjectURL(new Blob([JSON.stringify(anterior)], { type: 'application/json' }));
+    const nFotos = r.fotos?.length || 0;
+    out.innerHTML = `<div class="aviso ojo">Respaldo del ${esc(fechaCorta(r.creado.slice(0, 10)))}. Reemplaza tu perfil y registros, y suma ${nFotos} fotos. Primero guarda tu copia anterior.</div>
+      <a class="boton" id="copia-anterior" href="${urlAnterior}" download="entreno-antes-restaurar.json">Descargar copia anterior</a>
+      <button type="button" class="boton primario" id="confirmar-respaldo" disabled>Restaurar</button>`;
+    $('copia-anterior').onclick = () => { $('confirmar-respaldo').disabled = false; };
     $('confirmar-respaldo').onclick = async ev => {
       ev.currentTarget.disabled = true;
-      restaurar(r);
-      let fotos = 0, fallidas = 0;
-      for (const f of nFotos ? r.fotos : []) {
-        try { if (await restaurarFoto(f)) fotos++; } catch (e) { fallidas++; console.warn('Foto no restaurada', e); }
+      let estadoCambiado = false;
+      try {
+        const fotos = await Promise.all((r.fotos || []).map(async f => ({ id: f.id, fecha: f.fecha, angulo: f.angulo, blob: await (async () => { const blob = await (await fetch(f.datos)).blob(); const imagen = await createImageBitmap(blob); imagen.close(); return blob; })() })));
+        await restaurarFotosAtomicas(fotos, () => { restaurar(r); estadoCambiado = true; });
+        E.mensaje = `Respaldo restaurado, con ${fotos.length} fotos.`;
+        guardar(); ir(E.plan ? 'hoy' : 'inicio');
+        URL.revokeObjectURL(urlAnterior);
+      } catch (e) {
+        let recuperado = true;
+        if (estadoCambiado) { try { restaurar(anterior); } catch { recuperado = false; } }
+        out.insertAdjacentHTML('beforeend', `<div class="aviso alerta">No pude completar la restauración. ${recuperado ? 'Conservé tus datos anteriores.' : 'Usa la copia anterior descargada para recuperar tus datos.'} ${esc(e.message)}</div>`);
       }
-      E.mensaje = `Respaldo restaurado${fotos ? `, con ${fotos} foto${fotos === 1 ? '' : 's'}` : ''}.${fallidas ? ` ${fallidas} foto(s) no se pudieron guardar.` : ''}`;
-      guardar(); ir(E.plan ? 'hoy' : 'inicio');
     };
   };
   $('rehacer').onclick = () => armarPlan();
@@ -303,7 +317,7 @@ const instalada = () => matchMedia('(display-mode: standalone)').matches || navi
 
 /** Revisa que un archivo sea un respaldo antes de ofrecer restaurarlo (restaurar() vuelve a revisar). */
 function restaurarValido(r) {
-  if (r?.app !== 'entreno' || !r.estado || typeof r.estado !== 'object' || !r.creado) throw new Error('Ese archivo no es un respaldo de Entreno.');
+  validarRespaldo(r, new Set(indice.porId.keys()));
 }
 
 function cuentaHtml() {
