@@ -25,10 +25,12 @@ export const OBJETIVO_VISTA = {
 export const imagenObjetivo = (id, clase = 'ilustracion') => `<img class="${clase}" src="img/objetivos/${id}.webp" alt="" width="256" height="256" decoding="async">`;
 // Asistente: lo elige cada persona (app/img/asistentes, hechos con ChatGPT). Se guarda en el teléfono (E.asistente),
 // no en las respuestas: cambiarlo no cambia el plan. Si le falta una pose, se ve su dibujo de elegir.
+// Nombres cortos, para que quepan en una línea.
 export const ASISTENTES_VISTA = [
-  ['entrenadora', 'Entrenadora'], ['entrenador', 'Entrenador'], ['profe', 'Profe'], ['coach', 'Coach'],
-  ['pesa', 'Pesa rusa'], ['mancuerna', 'Mancuerna'], ['quiltro', 'Quiltro'], ['robot', 'Robot'],
+  ['entrenadora', 'Cami'], ['entrenador', 'Nico'], ['profe', 'Tere'], ['coach', 'Beto'],
+  ['pesa', 'Rusi'], ['mancuerna', 'Mancu'], ['quiltro', 'Canelo'], ['robot', 'Robi'],
 ];
+export const nombreAsistente = () => ASISTENTES_VISTA.find(([id]) => id === asistenteActual())[1];
 export const asistenteActual = () => (ASISTENTES_VISTA.some(([id]) => id === E.asistente) ? E.asistente : 'entrenadora');
 export function imagenAsistente(pose, clase = 'asistente-dice', id = asistenteActual()) {
   const elegir = `img/asistentes/${id}.webp`;
@@ -369,7 +371,7 @@ export function vistaPerfil(ir, armarPlan) {
   </div>`;
   document.querySelectorAll('[data-seccion]').forEach(b => b.onclick = () => { E.seccionPerfil = b.dataset.seccion; guardar(); ir('seccion'); });
   document.querySelectorAll('#vista-perfil [data-asistente]').forEach(b => b.onclick = () => {
-    E.asistente = b.dataset.asistente; E.mensaje = `Tu asistente ahora es ${ASISTENTES_VISTA.find(([id]) => id === E.asistente)[1].toLowerCase()}.`;
+    E.asistente = b.dataset.asistente; E.mensaje = `Ahora te acompaña ${nombreAsistente()}.`;
     guardar(); vistaPerfil(ir, armarPlan); mostrarMensaje();
   });
   $('aplicar')?.addEventListener('click', () => armarPlan());

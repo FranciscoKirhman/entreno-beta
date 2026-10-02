@@ -12,7 +12,7 @@ import { vistaProgreso } from './progreso.js';
 import { vistaMas } from './mas.js';
 import { vistaCheckin } from './checkin.js';
 import { historialReciente, fechasEntrenadas } from './temporada.js';
-import { vistaRapido, vistaPerfil, vistaSeccion, firmaRespuestas, dice } from './cuestionario.js';
+import { vistaRapido, vistaPerfil, vistaSeccion, firmaRespuestas, dice, nombreAsistente } from './cuestionario.js';
 import { vistaPlan } from './plan.js';
 import { progresoNivel } from '../nucleo/nivel.js';
 import { programarAvisos } from './avisos.js';
@@ -84,7 +84,7 @@ function vistaBloqueada() {
 function vistaInicio() {
   $('app').innerHTML = `<div id="vista-inicio">
     <h1>Tu entrenador con IA</h1>
-    ${dice('saludo', Object.keys(R()).length ? '¡Hola de nuevo! Seguimos donde quedamos.' : '¡Hola! Te ayudo a armar tu plan y te acompaño en cada entrenamiento.')}
+    ${dice('saludo', Object.keys(R()).length ? `¡Hola de nuevo! Soy ${nombreAsistente()}. Seguimos donde quedamos.` : `¡Hola! Soy ${nombreAsistente()}. Te ayudo a armar tu plan y te acompaño en cada entrenamiento.`)}
     <p>Arma tu plan, lo agenda en tu semana, lo ajusta cuando faltas, cuando una máquina está ocupada o cuando dormiste mal, y te explica por qué de cada ejercicio, con evidencia.</p>
     ${nube.hay() && !nube.conectado() ? `<section class="tarjeta"><h3>Entrar con tu correo</h3><p class="pequeno">Tu plan y tus registros quedan guardados y el coach puede usar IA.</p><button type="button" class="boton primario" id="a-cuenta">Entrar</button></section>` : ''}
     ${nube.conectado() ? `<p class="pequeno suave">Entraste como ${esc(nube.correo())}.</p>` : ''}
