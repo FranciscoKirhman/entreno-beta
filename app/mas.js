@@ -35,6 +35,7 @@ function pruebaHtml() {
 export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
   $('app').innerHTML = `<div id="vista-mas">
     <h1>Más</h1>
+    <section class="tarjeta"><h3>Banco de ejercicios</h3><p class="pequeno suave">Busca por nombre, músculo o equipo, revisa la técnica y agrega ejercicios a hoy.</p><button type="button" class="boton" id="abrir-banco">Explorar ejercicios</button></section>
     ${CONFIG.modoPrueba ? pruebaHtml() : ''}
     <section class="tarjeta" id="cuenta">${cuentaHtml()}</section>
     ${instalada() ? '' : `<section class="tarjeta"><h3>Instalarla en el teléfono</h3>
@@ -176,6 +177,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
   };
   $('rehacer').onclick = () => armarPlan();
   $('perfil').onclick = () => ir('perfil');
+  $('abrir-banco').onclick = () => ir('banco', { desde: 'mas' });
   $('ver-plan').onclick = () => ir(E.plan ? 'plan' : 'perfil');
   $('borrar-local').onclick = ev => {
     const b = ev.currentTarget;

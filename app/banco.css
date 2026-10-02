@@ -1,0 +1,12 @@
+.banco-busqueda input{margin:6px 0 12px}
+.banco-lista{list-style:none;margin:0;padding:0}
+.banco-fila{display:flex;align-items:center;gap:8px}
+.banco-ficha{display:flex;flex:1;align-items:center;gap:10px;min-width:0;min-height:64px;text-align:left;border:0;padding:0;background:none;cursor:pointer}
+.banco-ficha .miniatura{flex:0 0 52px;width:52px;height:52px}
+.banco-ficha>span{min-width:0;overflow-wrap:anywhere}
+.banco-ficha strong,.banco-ficha .pequeno{display:block}
+.banco-ficha strong{font-size:15px;line-height:1.25}
+.banco-agregar{padding:8px;font-size:13px;flex:0 0 auto}
+.banco-ejercicio>p{margin:8px 0 0}
+.banco-acceso{margin:12px 0}
+.banco-acceso .boton{width:100%}

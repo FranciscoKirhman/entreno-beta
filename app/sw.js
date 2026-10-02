@@ -1,11 +1,13 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
 // Red primero, con límite de tiempo, y la copia guardada como respaldo (igual que el tablero).
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-02 17:16 · 1f3dd87+";
+const VERSION = "2026-10-02 17:30 · 243d081+";
 const ARCHIVOS = [
  "./",
  "app.js",
  "avisos.js",
+ "banco.css",
+ "banco.js",
  "cambios-ui.js",
  "checkin.js",
  "coach-ui.js",
@@ -15,6 +17,7 @@ const ARCHIVOS = [
  "config.js",
  "cuestionario.js",
  "descanso.js",
+ "editar-sesion-ui.js",
  "estados-visuales.css",
  "estados-visuales.js",
  "estilos.css",
@@ -555,6 +558,7 @@ const ARCHIVOS = [
  "../nucleo/cuidado.js",
  "../nucleo/derivar.js",
  "../nucleo/dolor.js",
+ "../nucleo/editar-sesion.js",
  "../nucleo/estado-sesion.js",
  "../nucleo/explicar.js",
  "../nucleo/ficha.js",

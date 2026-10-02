@@ -30,6 +30,7 @@ import { aplicarOpcion } from '../nucleo/coach.js';
 import { nombreAsistente } from './cuestionario.js';
 import * as nube from './nube.js';
 import { descansoHtml } from './estados-visuales.js';
+import { proponerEdicion } from './editar-sesion-ui.js';
 
 
 const app = () => $('app');
@@ -55,6 +56,7 @@ export function vistaHoy(ir, extra) {
     ${bienestarHtml(f, b, dia)}
     ${sups.length ? `<section class="tarjeta"><h3>Suplementos</h3><ul class="lista-check">${sups.map((s, i) => `<li class="${s.estado}"><button type="button" class="check" data-toma="${s.suplemento_id}" ${s.estado === 'tomada' ? 'disabled aria-pressed="true"' : 'aria-pressed="false"'} aria-label="Marcar ${esc(s.nombre)} como tomado">${s.estado === 'tomada' ? '✓' : ''}</button><span>${esc(s.nombre)}${s.dosis ? ` · ${esc(s.dosis)}` : ''}</span><span class="suave pequeno">${s.hora || ''}${s.estado === 'atrasada' ? ' · atrasado' : ''}</span></li>`).join('')}</ul></section>` : ''}
     ${registradoHoyHtml(reg, dia, f, proxima)}
+    <div class="banco-acceso"><button type="button" class="boton" id="agregar-ejercicio-hoy">Agregar ejercicio</button></div>
     ${dia ? (hechaEnHevy ? `<details class="extra plan-hecho" id="plan-hecho"${planHechoAbierto ? ' open' : ''}><summary>La sesión del plan, por si quieres anotar algo aquí</summary>${sesionHoy(dia)}</details>` : sesionHoy(dia)) : descansoHtml(proxima)}
   </div>`;
   enlazar(ir, dia);
@@ -259,7 +261,7 @@ function sesionHoy(dia) {
   return `<section class="tarjeta sesion-cab">
     <div class="fila-titulo"><div><h2>${esc(dia.foco)}</h2><p class="suave pequeno">${dia.hora ? `${esc(dia.hora)} · ` : ''}~${duracionSesion(dia)} min · ${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? '' : 's'}</p></div>
       <button type="button" class="boton chico" id="ajustar-hoy">${icono('ajustes')} Ajustar hoy</button></div>
-    ${dia.ejercicios.length ? avanceHtml(avance(dia)) : '<p>Hoy, descanso activo: 20 a 30 minutos de caminata o bicicleta suave y movilidad.</p>'}
+    ${dia.ejercicios.length ? avanceHtml(avance(dia)) : '<p>Hoy no hay ejercicios en esta sesión. Puedes agregar uno desde el banco.</p>'}
     ${prim.length ? `<div class="hoy-entrenas">${imagenesMusculos(prim.slice(0, 4))}<div><p class="sobretitulo">Hoy entrenas</p><p class="musculos-hoy">${esc(mayuscula(lista(prim.map(m => NOMBRE_MUSCULO[m] || m))))}</p>${sec.length ? `<p class="pequeno suave">Y un poco de ${esc(lista(sec.map(m => (NOMBRE_MUSCULO[m] || m).toLowerCase())))}</p>` : ''}</div></div>` : ''}
     <p class="suave pequeno">${esc(dia.racional || '')}</p>
     ${eligePeso ? '<p class="nota-sesion pequeno">Donde no hay peso, elige uno con el que te sobren las repeticiones de reserva (RIR) en la última serie. Lo anotas y la app ajusta desde ahí.</p>' : ''}
@@ -373,6 +375,7 @@ function enlazar(ir, dia) {
   document.querySelectorAll('[data-ir-checkin]').forEach(b => b.onclick = () => ir('checkin', b.dataset.irCheckin));
   document.querySelectorAll('[data-ir-semana]').forEach(b => b.onclick = () => ir('semana'));
   $('entrenar-igual')?.addEventListener('click', () => ir('coach', 'Hoy no tenía sesión pero quiero entrenar, ¿qué otra opción tienes?'));
+  $('agregar-ejercicio-hoy')?.addEventListener('click', () => ir('banco', { desde: 'hoy' }));
   if (!dia) return;
 
   const raiz = $('vista-hoy');
@@ -594,6 +597,7 @@ function enlazar(ir, dia) {
         ...(ej ? [{ valor: 'superserie', icono: icono('cadena'), nombre: g ? `Superserie ${g.letra}` : 'Hacer superserie' }] : []),
         ...(ej && e.unidad !== 'seg' ? [{ valor: 'prioriza', icono: icono('objetivo'), nombre: 'Si no me salen las repeticiones' }] : []),
         ...(ej ? [{ valor: 'video', icono: icono('video'), nombre: 'Ver videos de técnica' }] : []),
+        { valor: 'quitar-hoy', icono: icono('cerrar'), nombre: 'Quitar de esta sesión', peligro: true },
         { valor: 'preguntar', icono: icono('chat'), nombre: `Preguntar a ${nombreAsistente()}` },
         ...(ej ? [{ valor: 'nunca', icono: icono('cerrar'), clase: 'quitar', nombre: 'No volver a hacer este ejercicio', peligro: true }] : []),
       ],
@@ -605,6 +609,7 @@ function enlazar(ir, dia) {
         else if (v === 'prioriza') abrirHoja({ titulo: 'Si no te salen las repeticiones', nota: prioridadEsfuerzo(e, ej, D(), lesiones).texto, volver: b, opciones: [{ valor: 'ok', icono: icono('visto'), clase: 'confirmar', nombre: 'Entendido' }], alElegir: () => {} });
         else if (v === 'video') window.open(enlaceVideo(ej), '_blank', 'noopener');
         else if (v === 'preguntar') ir('coach', { ejercicio: e.ejercicio_id, nombre: nombreDe(e) });
+        else if (v === 'quitar-hoy') proponerEdicion({ tipo: 'quitar', ejercicio: id }, { volver: b, alCambiar: repintar });
         else if (v === 'nunca') noVolver(e, b);
         else if (v === 'descanso') abrirHoja({
           titulo: g ? `Descanso de la superserie ${g.letra}` : 'Descanso entre series', volver: b,

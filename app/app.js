@@ -13,6 +13,7 @@ import { vistaSemana } from './semana.js';
 import { vistaCoach } from './coach-ui.js';
 import { vistaProgreso } from './progreso.js';
 import { vistaMas } from './mas.js';
+import { vistaBanco } from './banco.js';
 import { vistaCheckin } from './checkin.js';
 import { historialReciente, fechasEntrenadas } from './temporada.js';
 import { vistaRapido, vistaPerfil, vistaSeccion, firmaRespuestas, dice, nombreAsistente } from './cuestionario.js';
@@ -149,7 +150,7 @@ function vistaInicio() {
 
 // ── Navegación ──────────────────────────────────────────────────────────────
 const VISTAS_CON_PLAN = ['hoy', 'semana', 'coach', 'progreso', 'checkin', 'plan', 'resumen'];
-const PESTANA = { checkin: 'semana', plan: 'semana', perfil: 'mas', seccion: 'mas' };
+const PESTANA = { banco: 'mas', checkin: 'semana', plan: 'semana', perfil: 'mas', seccion: 'mas' };
 function ir(vista, extra) {
   if (VISTAS_CON_PLAN.includes(vista) && (!E.plan)) vista = 'inicio';
   if (VISTAS_CON_PLAN.includes(vista) && E.plan?.bloqueado) { vistaBloqueada(); return; }
@@ -161,7 +162,7 @@ function ir(vista, extra) {
   const vistas = {
     inicio: vistaInicio, cuestionario: () => vistaRapido(ir, armarPlan), perfil: () => vistaPerfil(ir, armarPlan), seccion: () => vistaSeccion(ir),
     plan: () => vistaPlan(ir, { armarPlan, nuevo: extra?.nuevo }), hoy: () => vistaHoy(ir, extra), ejercicio: () => vistaFicha(ir, extra || {}), semana: () => vistaSemana(ir),
-    coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), resumen: () => vistaResumen(ir, extra || {}), progreso: () => vistaProgreso(ir), mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar }),
+    banco: () => vistaBanco(ir, extra || {}), coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), resumen: () => vistaResumen(ir, extra || {}), progreso: () => vistaProgreso(ir), mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar }),
   };
   (vistas[vista] || vistaInicio)();
   mostrarMensaje(); // los avisos se muestran una vez, flotando sobre el menú
