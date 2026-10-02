@@ -1,6 +1,8 @@
 // Chat del coach. Primero intenta resolver el mensaje con reglas (gratis, al instante y sin señal); solo lo que
 // no entiende se manda a la IA (supabase/functions/coach). Las reglas cubren lo más común: faltar, mover un día,
 // "hoy no quiero piernas", máquina ocupada, poco tiempo, dormir mal, dolor, "¿por qué?" y "¿qué me toca?".
+// Nada cambia el plan sin preguntar: primero se muestra cómo queda la sesión de hoy o la semana, y se aplica solo
+// cuando la persona confirma (y elige si es solo hoy o desde hoy en adelante, cuando corresponde).
 import { normalizar } from './catalogo.js';
 import { marcarFaltada, moverSesion, intercambiar, opcionesParaHoy, sesionDe, sumarDias, diaSemana, nombreDia, familia } from './agenda.js';
 import { alternativas, recortarSesion } from './checkin.js';
@@ -9,6 +11,7 @@ import { explicarEjercicio } from './explicar.js';
 import { planDeCuidado } from './cuidado.js';
 import { reconocer } from './importar-plan.js';
 import { articulacionesBloqueadas } from './catalogo.js';
+import { duracionEstimada } from './motor-plan.js';
 
 const DIAS = { domingo: 0, lunes: 1, martes: 2, miercoles: 3, jueves: 4, viernes: 5, sabado: 6 };
 const ZONAS = { hombro: 'hombro', hombros: 'hombro', codo: 'codo', codos: 'codo', rodilla: 'rodilla', rodillas: 'rodilla', espalda: 'lumbar', lumbar: 'lumbar', cintura: 'lumbar', muneca: 'muneca', munecas: 'muneca', cuello: 'cuello', tobillo: 'tobillo', cadera: 'cadera' };
@@ -91,17 +94,8 @@ export function responder(texto, ctx) {
     case 'que_toca':
       if (dia) return { texto: `Hoy toca ${resumenDia(dia)}` };
       return { texto: `Hoy no tienes sesión.${(() => { const p = plan?.dias.find(d => d.fecha > hoy); return p ? ` La próxima es ${resumenDia(p)}` : ''; })()}` };
-    case 'falte': {
-      const res = marcarFaltada(plan, q.fecha, { hoy, noPuedo });
-      if (!res.ok) return { texto: res.error };
-      const movs = res.cambios.map(c => `${c.foco}: ${nombreDia(c.de)} → ${nombreDia(c.a)} ${Number(c.a.slice(8))}`);
-      return { texto: `Listo, reacomodé la semana.${movs.length ? ' ' + movs.join('; ') + '.' : ''}${res.avisos.length ? ' ' + res.avisos.join(' ') : ''}`, plan: res.plan };
-    }
-    case 'mover': {
-      const res = sesionDe(plan, q.a) ? intercambiar(plan, q.de, q.a) : moverSesion(plan, q.de, q.a, { noPuedo });
-      if (!res.ok) return { texto: res.error };
-      return { texto: `Hecho: ${res.cambios.map(c => c.tipo === 'intercambiar' ? `intercambié el ${nombreDia(c.fechas[0])} con el ${nombreDia(c.fechas[1])}` : `${c.foco} pasa al ${nombreDia(c.a)} ${Number(c.a.slice(8))}`).join('; ')}.${res.avisos.length ? ' Ojo: ' + res.avisos.join(' ') : ''}`, plan: res.plan };
-    }
+    case 'falte': return vistaPrevia({ tipo: 'falte', fecha: q.fecha }, ctx);
+    case 'mover': return vistaPrevia(sesionDe(plan, q.a) ? { tipo: 'intercambiar', fechas: [q.de, q.a] } : { tipo: 'mover', de: q.de, a: q.a }, ctx);
     case 'otra_opcion': {
       const o = opcionesParaHoy(plan, hoy, { evitar: q.evitar });
       return {
@@ -122,10 +116,7 @@ export function responder(texto, ctx) {
     }
     case 'poco_tiempo': {
       if (!dia) return { texto: 'Hoy no tienes sesión.' };
-      const corta = recortarSesion(dia.ejercicios, q.minutos);
-      const nuevo = structuredClone(plan);
-      sesionDe(nuevo, hoy).ejercicios = corta.map((e, i) => ({ ...e, orden: i }));
-      return { texto: `Con ${q.minutos} minutos: ${corta.map(e => `${e.nombre} ${e.series}×${e.reps_min}-${e.reps_max}`).join(', ')}. Lo demás se salta hoy.`, plan: nuevo };
+      return vistaPrevia({ tipo: 'recortar_hoy', fecha: hoy, minutos: q.minutos }, ctx);
     }
     case 'cansancio': {
       const ev = evaluarDia({ sueno_horas: q.sueno_horas ?? (q.mal ? 5 : null), cansancio: 4, sueno_calidad: q.mal ? 2 : 3 });
@@ -173,31 +164,100 @@ function opcionesAlternativa(ctx, fecha, id) {
   return { texto: `En vez de ${nombre} puedes hacer:`, opciones: alts.map(a => ({ etiqueta: a.nombre, accion: { tipo: 'reemplazar_hoy', fecha, de: id, a: a.id } })) };
 }
 
-/** Ejecuta una opción elegida en el chat. Devuelve {texto, plan?, consentimiento?}. */
-export function aplicarOpcion(accion, ctx) {
+// ── Cambios al plan: primero la vista previa, después la confirmación ──────────────
+const CAMBIAN_PLAN = new Set(['intercambiar', 'mover', 'falte', 'descanso_activo', 'ajustar_hoy', 'recortar_hoy', 'reemplazar_hoy', 'quitar_zona_hoy']);
+const fechaCorta = f => `${nombreDia(f)} ${Number(f.slice(8))}`;
+const prescCorta = e => `${e.nombre} ${e.series}×${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${e.unidad === 'seg' ? ' s' : ''}`;
+const finDeSemana = f => sumarDias(f, (7 - diaSemana(f)) % 7);
+const movidas = cambios => cambios.map(c => (c.tipo === 'intercambiar' ? `el ${nombreDia(c.fechas[0])} y el ${nombreDia(c.fechas[1])} se cambian` : `${c.foco} del ${nombreDia(c.de)} al ${fechaCorta(c.a)}`));
+
+/**
+ * Hace el cambio sobre una copia del plan (no guarda nada). Devuelve {plan, propone, hecho, ir} o {error}.
+ *   propone: cómo quedaría, para preguntar; hecho: lo que se dice al aplicarlo; ir: 'hoy' o 'semana'.
+ */
+export function calcularCambio(accion, ctx) {
   const { plan, indice } = ctx;
   const noPuedo = ctx.respuestas?.dias_no_puedo || [];
   const nuevo = structuredClone(plan);
+  const sesionHoy = (fecha, ejercicios, frase) => {
+    const antes = duracionEstimada(sesionDe(plan, fecha).ejercicios), despues = duracionEstimada(ejercicios);
+    return `${frase} ${ejercicios.map(prescCorta).join(', ')} (unos ${despues} minutos${despues !== antes ? `, en vez de ${antes}` : ''}).`;
+  };
   switch (accion.tipo) {
-    case 'intercambiar': { const r = intercambiar(plan, ...accion.fechas); return { texto: r.ok ? `Hecho: hoy ${sesionDe(r.plan, accion.fechas[0]).foco}.${r.avisos.length ? ' Ojo: ' + r.avisos.join(' ') : ''}` : r.error, plan: r.ok ? r.plan : undefined }; }
-    case 'mover': { const r = moverSesion(plan, accion.de, accion.a, { noPuedo }); return { texto: r.ok ? `Listo: ${sesionDe(r.plan, accion.a).foco} quedó para el ${nombreDia(accion.a)} ${Number(accion.a.slice(8))}.${r.avisos?.length ? ' Ojo: ' + r.avisos.join(' ') : ''}` : r.error, plan: r.ok ? r.plan : undefined }; }
-    case 'falte': { const r = marcarFaltada(plan, accion.fecha, { hoy: ctx.hoy, noPuedo }); return { texto: r.ok ? `Reacomodé la semana.${r.avisos.length ? ' ' + r.avisos.join(' ') : ''}` : r.error, plan: r.ok ? r.plan : undefined }; }
-    case 'descanso_activo': { const r = marcarFaltada(plan, accion.fecha, { hoy: ctx.hoy, noPuedo }); return { texto: 'Hoy descanso activo: 20 a 30 minutos de caminata o bicicleta suave y movilidad. La sesión pasó a otro día.', plan: r.ok ? r.plan : undefined }; }
-    case 'ajustar_hoy': { const d = sesionDe(nuevo, accion.fecha); d.ejercicios = ajustarSesion(d.ejercicios, accion.recomendacion); return { texto: TEXTO_RECOMENDACION[accion.recomendacion], plan: nuevo }; }
-    case 'reemplazar_hoy': {
-      const d = sesionDe(nuevo, accion.fecha), ej = indice.porId.get(accion.a);
-      d.ejercicios = d.ejercicios.map(e => (e.ejercicio_id === accion.de ? { ...e, ejercicio_id: ej.id, nombre: ej.nombre, carga_kg: null, nota: 'Cambiado hoy. Elige un peso con la misma reserva.' } : e));
-      return { texto: `Cambiado por ${ej.nombre}.`, plan: nuevo };
+    case 'intercambiar': {
+      const r = intercambiar(plan, ...accion.fechas);
+      if (!r.ok) return { error: r.error };
+      const [a, b] = accion.fechas;
+      return { plan: r.plan, ir: 'semana', propone: `Cambiaría el ${fechaCorta(a)} con el ${fechaCorta(b)}: el ${nombreDia(a)} harías ${sesionDe(r.plan, a).foco} y el ${nombreDia(b)}, ${sesionDe(r.plan, b).foco}.${r.avisos.length ? ' Ojo: ' + r.avisos.join(' ') : ''}`, hecho: `Listo: el ${nombreDia(a)} haces ${sesionDe(r.plan, a).foco}.` };
     }
-    case 'elegir_alternativa': return opcionesAlternativa(ctx, accion.fecha, accion.ejercicio);
-    case 'quitar_zona_hoy': {
+    case 'mover': {
+      const r = moverSesion(plan, accion.de, accion.a, { noPuedo });
+      if (!r.ok) return { error: r.error };
+      const foco = sesionDe(r.plan, accion.a).foco;
+      return { plan: r.plan, ir: 'semana', propone: `${foco} pasaría del ${fechaCorta(accion.de)} al ${fechaCorta(accion.a)}.${r.avisos?.length ? ' Ojo: ' + r.avisos.join(' ') : ''}`, hecho: `Listo: ${foco} quedó para el ${fechaCorta(accion.a)}.` };
+    }
+    case 'falte': case 'descanso_activo': {
+      const r = marcarFaltada(plan, accion.fecha, { hoy: ctx.hoy, noPuedo });
+      if (!r.ok) return { error: r.error };
+      const movs = movidas(r.cambios);
+      const semana = movs.length ? `la semana quedaría así: ${movs.join('; ')}.` : 'no queda un día libre esta semana para recuperarla.';
+      const inicio = accion.tipo === 'descanso_activo' ? `Hoy harías descanso activo (20 a 30 minutos de caminata o bicicleta suave y movilidad) y ${semana}` : `Si marco que faltaste el ${fechaCorta(accion.fecha)}, ${semana}`;
+      return { plan: r.plan, ir: 'semana', propone: `${inicio}${r.avisos.length ? ' ' + r.avisos.join(' ') : ''}`, hecho: accion.tipo === 'descanso_activo' ? 'Listo: hoy descanso activo, y reacomodé la semana.' : 'Listo, reacomodé la semana.' };
+    }
+    case 'ajustar_hoy': {
       const d = sesionDe(nuevo, accion.fecha);
-      const quedan = d.ejercicios.filter(e => !indice.porId.get(e.ejercicio_id)?.carga_articular.includes(accion.zona));
-      if (!quedan.length) return { texto: 'Todo lo de hoy carga esa zona. Mejor descansa o haz cardio suave, y mueve la sesión.' };
-      d.ejercicios = quedan.map((e, i) => ({ ...e, orden: i }));
-      return { texto: 'Saqué de hoy lo que carga esa zona.', plan: nuevo };
+      d.ejercicios = ajustarSesion(d.ejercicios, accion.recomendacion).map((e, i) => ({ ...e, orden: i }));
+      return { plan: nuevo, ir: 'hoy', propone: sesionHoy(accion.fecha, d.ejercicios, `${TEXTO_RECOMENDACION[accion.recomendacion]} Hoy quedaría:`), hecho: 'Listo, ajusté la sesión de hoy.' };
     }
+    case 'recortar_hoy': {
+      const d = sesionDe(nuevo, accion.fecha);
+      d.ejercicios = recortarSesion(d.ejercicios, accion.minutos).map((e, i) => ({ ...e, orden: i }));
+      return { plan: nuevo, ir: 'hoy', propone: `${sesionHoy(accion.fecha, d.ejercicios, `Con ${accion.minutos} minutos, hoy quedaría:`)} Lo demás se salta hoy.`, hecho: `Listo: la sesión de hoy quedó para ${accion.minutos} minutos.` };
+    }
+    case 'reemplazar_hoy': {
+      const ej = indice.porId.get(accion.a), de = indice.porId.get(accion.de)?.nombre || accion.de;
+      const adelante = accion.alcance === 'adelante';
+      const dias = nuevo.dias.filter(x => (adelante ? x.fecha >= accion.fecha : x.fecha === accion.fecha) && x.ejercicios.some(e => e.ejercicio_id === accion.de));
+      for (const x of dias) x.ejercicios = x.ejercicios.map(e => (e.ejercicio_id === accion.de ? { ...e, ejercicio_id: ej.id, nombre: ej.nombre, carga_kg: null, nota: 'Cambiado. Elige un peso con la misma reserva.' } : e));
+      return { plan: nuevo, ir: 'hoy', propone: `Cambiaría ${de} por ${ej.nombre}, con las mismas series y repeticiones.`, hecho: adelante ? `Listo: ${ej.nombre} en vez de ${de} desde hoy (${dias.length} ${dias.length === 1 ? 'sesión' : 'sesiones'}).` : `Listo: hoy ${ej.nombre} en vez de ${de}.` };
+    }
+    case 'quitar_zona_hoy': {
+      const toda = accion.alcance === 'semana';
+      const carga = e => indice.porId.get(e.ejercicio_id)?.carga_articular.includes(accion.zona);
+      const salen = sesionDe(plan, accion.fecha).ejercicios.filter(carga);
+      if (sesionDe(plan, accion.fecha).ejercicios.every(carga)) return { error: 'Todo lo de hoy carga esa zona. Mejor descansa o haz cardio suave, y mueve la sesión.' };
+      for (const x of nuevo.dias.filter(d => (toda ? d.fecha >= accion.fecha && d.fecha <= finDeSemana(accion.fecha) : d.fecha === accion.fecha))) {
+        const quedan = x.ejercicios.filter(e => !carga(e));
+        if (quedan.length) x.ejercicios = quedan.map((e, i) => ({ ...e, orden: i }));
+      }
+      return { plan: nuevo, ir: 'hoy', propone: `Saldría${salen.length === 1 ? '' : 'n'} de hoy ${salen.map(e => e.nombre).join(', ')}, porque carga${salen.length === 1 ? '' : 'n'} la zona del ${accion.zona}.`, hecho: toda ? 'Listo: saqué lo que carga esa zona hasta el domingo.' : 'Listo: saqué de hoy lo que carga esa zona.' };
+    }
+    default: return { error: 'No sé hacer ese cambio.' };
+  }
+}
+
+/** Cómo quedaría el cambio y los botones para confirmarlo (con el alcance, cuando se puede elegir). */
+export function vistaPrevia(accion, ctx) {
+  const r = calcularCambio(accion, ctx);
+  if (r.error) return { texto: r.error };
+  const confirmar = (etiqueta, extra = {}) => ({ etiqueta, accion: { tipo: 'confirmar', accion: { ...accion, ...extra } } });
+  const no = { etiqueta: 'No, dejarlo como está', accion: { tipo: 'nada' } };
+  if (accion.tipo === 'reemplazar_hoy') return { texto: `${r.propone} ¿Solo hoy o desde hoy en adelante?`, opciones: [confirmar('Solo hoy', { alcance: 'hoy' }), confirmar('Desde hoy en adelante', { alcance: 'adelante' }), no] };
+  if (accion.tipo === 'quitar_zona_hoy') return { texto: `${r.propone} ¿Solo hoy o toda la semana?`, opciones: [confirmar('Solo hoy', { alcance: 'hoy' }), confirmar('Toda la semana', { alcance: 'semana' }), no] };
+  return { texto: `${r.propone} ¿Lo cambio?`, opciones: [confirmar(r.ir === 'semana' ? 'Sí, cambiar la semana' : 'Sí, cambiar la sesión de hoy'), no] };
+}
+
+/** Una opción elegida en el chat. Lo que cambia el plan primero muestra la vista previa; 'confirmar' lo aplica. */
+export function aplicarOpcion(accion, ctx) {
+  if (accion.tipo === 'confirmar') {
+    const r = calcularCambio(accion.accion, ctx);
+    return r.error ? { texto: r.error } : { texto: r.hecho, plan: r.plan, ir: r.ir };
+  }
+  if (CAMBIAN_PLAN.has(accion.tipo)) return vistaPrevia(accion, ctx);
+  switch (accion.tipo) {
+    case 'elegir_alternativa': return opcionesAlternativa(ctx, accion.fecha, accion.ejercicio);
     case 'consentir_cuidado': return { texto: 'Gracias. Vuelve a contarme la molestia para darte los ejercicios.', consentimiento: 'cuidado_lesiones' };
+    case 'nada': return { texto: 'Bien, no cambié nada.' };
     default: return { texto: 'Perfecto.' };
   }
 }

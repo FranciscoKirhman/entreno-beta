@@ -1,5 +1,6 @@
 // Vista Coach: el chat. Las reglas (nucleo/coach.js) responden al instante y sin señal; con cuenta, lo que no
-// entienden lo responde la IA del servidor.
+// entienden lo responde la IA del servidor. Nada cambia el plan sin que la persona lo confirme con un botón: el
+// coach muestra cómo queda la sesión de hoy o la semana y pregunta; después ofrece ir a verlo.
 import { E, guardar, esc, $, ctxNucleo, cambiarPlan } from './comun.js';
 import { responder, aplicarOpcion } from '../nucleo/coach.js';
 import * as nube from './nube.js';
@@ -26,25 +27,38 @@ export function vistaCoach(ir, mensajeInicial) {
     const msg = E.chat[Number(b.dataset.msg)];
     const op = msg?.opciones?.[Number(b.dataset.opcion)];
     if (!op) return;
-    msg.opciones = null; // una opción por mensaje
+    if (op.accion.tipo === 'ir') return ir(op.accion.vista); // los botones para ir a ver el cambio quedan
+    msg.opciones = null; // una decisión por mensaje
     E.chat.push({ rol: 'persona', texto: op.etiqueta });
-    const r = aplicarOpcion(op.accion, ctxNucleo());
+    let r;
+    if (op.accion.tipo === 'confirmar_ia') {
+      // Un cambio que propuso la IA del servidor: se guarda ahora (guardar-plan lo vuelve a validar).
+      r = E.propuestaIA ? { texto: 'Listo, cambié tu plan.', plan: E.propuestaIA, ir: 'semana' } : { texto: 'Ese cambio ya no está disponible. Pídemelo de nuevo.' };
+      E.propuestaIA = null;
+    } else r = aplicarOpcion(op.accion, ctxNucleo());
+    if (op.accion.tipo === 'nada') E.propuestaIA = null;
     if (r.consentimiento) {
       E.consentimientos[r.consentimiento] = true;
       if (nube.conectado()) nube.consentir(r.consentimiento).catch(() => {});
     }
-    E.chat.push({ rol: 'coach', texto: r.texto, opciones: r.opciones || null });
     const aviso = r.plan ? await cambiarPlan(r.plan, null, nube) : null;
-    if (aviso) E.chat.push({ rol: 'coach', texto: aviso });
+    E.chat.push({ rol: 'coach', texto: aviso || r.texto, opciones: r.opciones || (r.plan && !aviso ? irA(r.ir) : null) });
     guardar();
     vistaCoach(ir);
   });
   if (mensajeInicial) enviar(mensajeInicial, ir);
 }
 
+/** Botones para ir a ver lo que cambió. */
+const irA = donde => [
+  ...(donde === 'hoy' ? [{ etiqueta: 'Ver Hoy', accion: { tipo: 'ir', vista: 'hoy' } }] : []),
+  { etiqueta: 'Ver la semana', accion: { tipo: 'ir', vista: 'semana' } },
+];
+const CONFIRMAR_IA = [{ etiqueta: 'Sí, cambiar', accion: { tipo: 'confirmar_ia' } }, { etiqueta: 'No, dejarlo como está', accion: { tipo: 'nada' } }];
+
 function burbuja(m, i) {
   return `<div class="burbuja ${m.rol}">${esc(m.texto)}${m.enlace ? ` <a class="enlace" href="${esc(m.enlace)}" target="_blank" rel="noopener">Ver videos</a>` : ''}
-    ${m.opciones?.length ? `<div class="opciones-chat">${m.opciones.map((o, k) => `<button type="button" class="boton" data-msg="${i}" data-opcion="${k}">${esc(o.etiqueta)}</button>${o.avisos?.length ? `<span class="pequeno suave">${esc(o.avisos.join(' '))}</span>` : ''}`).join('')}</div>` : ''}</div>`;
+    ${m.opciones?.length ? `<div class="opciones-chat">${m.opciones.map((o, k) => `<button type="button" class="boton${['confirmar', 'confirmar_ia'].includes(o.accion?.tipo) && k === 0 ? ' primario' : ''}" data-msg="${i}" data-opcion="${k}">${esc(o.etiqueta)}</button>${o.avisos?.length ? `<span class="pequeno suave">${esc(o.avisos.join(' '))}</span>` : ''}`).join('')}</div>` : ''}</div>`;
 }
 
 async function enviar(texto, ir) {
@@ -58,16 +72,17 @@ async function enviar(texto, ir) {
       const ia = await nube.chat(texto, historial.slice(0, -1));
       E.chat = E.chat.filter(m => !m.pendiente);
       const sinIa = ia.origen === 'reglas' && ia.requiere_ia ? ' (La IA del coach todavía no está activa o se acabó el cupo del mes; por ahora respondo con las reglas de la app.)' : '';
-      E.chat.push({ rol: 'coach', texto: (ia.texto || r.texto) + sinIa, opciones: ia.opciones || null });
-      if (ia.recargar_plan) { const p = await nube.cargarPlan(); if (p) E.plan = p; }
+      // Si la IA propone un cambio, queda pendiente hasta que la persona lo confirme.
+      if (ia.propuesta) E.propuestaIA = ia.propuesta;
+      E.chat.push({ rol: 'coach', texto: (ia.texto || r.texto) + sinIa, opciones: ia.propuesta ? CONFIRMAR_IA : ia.opciones || null });
+      if (ia.recargar_plan && !ia.propuesta) { const p = await nube.cargarPlan(); if (p) E.plan = p; }
     } catch (e) {
       E.chat = E.chat.filter(m => !m.pendiente);
       E.chat.push({ rol: 'coach', texto: `${r.texto} (No pude consultar a la IA: ${e.message})` });
     }
   } else {
+    // Las reglas nunca traen el plan cambiado: proponen y la persona confirma con un botón.
     E.chat.push({ rol: 'coach', texto: r.texto + (r.requiere_ia && !nube.conectado() ? (nube.hay() ? ' Con una cuenta, esto lo responde la IA.' : ' En esta versión de prueba el coach responde con las reglas de la app; la IA llega con las cuentas.') : ''), opciones: r.opciones || null, enlace: r.enlace || null });
-    const aviso = r.plan ? await cambiarPlan(r.plan, null, nube) : null;
-    if (aviso) E.chat.push({ rol: 'coach', texto: aviso });
   }
   guardar();
   vistaCoach(ir);

@@ -80,15 +80,17 @@ export const HERRAMIENTAS = [
     description: 'Prueba cambios al plan activo. Con aplicar=false solo los revisa; con aplicar=true los guarda si pasan todas las reglas de la app. Confírmalo con la persona antes de aplicar.',
     inputSchema: { ...ESQUEMA_CAMBIOS, properties: { ...ESQUEMA_CAMBIOS.properties, aplicar: { type: 'boolean', default: false } } },
     annotations: { destructiveHint: false, idempotentHint: false },
-    async run({ cambios, aplicar = false }, { datos, indice, hoy }) {
+    async run({ cambios, aplicar = false }, ctx) {
+      const { datos, indice, hoy } = ctx;
       const plan = await datos.planActivo();
       if (!plan) return { ...texto('No hay un plan activo. La persona tiene que completar el cuestionario en la app.'), isError: true };
       const { respuestas, derivados } = await datos.perfil();
       const r = aplicarCambios(plan, cambios, indice);
       const v = validarPlan(r.plan, { derivados, respuestas, indice, hoy });
-      const guardado = aplicar && v.ok && r.aplicados.length > 0;
-      if (guardado) await datos.guardarPlan({ ...r.plan, generado_por: 'ia_externa' });
-      return texto({ guardado, aplicados: r.aplicados, rechazados: r.rechazados, errores_de_validacion: v.errores, advertencias: v.advertencias });
+      const listo = aplicar && v.ok && r.aplicados.length > 0;
+      if (listo && ctx.soloProponer) ctx.propuesta = { ...r.plan, generado_por: 'ia_externa' };
+      else if (listo) await datos.guardarPlan({ ...r.plan, generado_por: 'ia_externa' });
+      return texto({ guardado: listo && !ctx.soloProponer, ...(listo && ctx.soloProponer ? { esperando_confirmacion: true } : {}), aplicados: r.aplicados, rechazados: r.rechazados, errores_de_validacion: v.errores, advertencias: v.advertencias });
     },
   },
   {
@@ -129,13 +131,20 @@ export const HERRAMIENTAS = [
   },
 ];
 
-/** Valida un plan cambiado y lo guarda si pasa; si no, devuelve los errores sin guardar nada. */
+/**
+ * Valida un plan cambiado y lo guarda si pasa; si no, devuelve los errores sin guardar nada. Con ctx.soloProponer
+ * (el chat del coach en la app) no guarda: deja el plan en ctx.propuesta y la persona lo confirma con un botón.
+ */
 async function validarYGuardar(nuevo, ctx, origen) {
   const { respuestas, derivados } = await ctx.datos.perfil();
   const v = validarPlan(nuevo, { derivados, respuestas, indice: ctx.indice, hoy: ctx.hoy });
-  if (v.ok) await ctx.datos.guardarPlan({ ...nuevo, generado_por: origen || nuevo.generado_por });
+  const plan = { ...nuevo, generado_por: origen || nuevo.generado_por };
+  if (v.ok && ctx.soloProponer) { ctx.propuesta = plan; return { ...v, propuesto: true }; }
+  if (v.ok) await ctx.datos.guardarPlan(plan);
   return v;
 }
+/** Lo que se le cuenta a la IA después de un cambio: guardado, o esperando que la persona lo confirme. */
+const estado = v => ({ guardado: v.ok && !v.propuesto, ...(v.propuesto ? { esperando_confirmacion: true } : {}) });
 
 const FECHA = { type: 'string', description: 'AAAA-MM-DD' };
 HERRAMIENTAS.push(
@@ -157,7 +166,7 @@ HERRAMIENTAS.push(
       const r = moverSesion(await ctx.datos.planActivo(), de, a, { noPuedo: respuestas.dias_no_puedo || [] });
       if (!r.ok) return { ...texto(r.error), isError: true };
       const v = await validarYGuardar(r.plan, ctx);
-      return texto({ guardado: v.ok, cambios: r.cambios, avisos: r.avisos, errores: v.errores });
+      return texto({ ...estado(v), cambios: r.cambios, avisos: r.avisos, errores: v.errores });
     },
   },
   {
@@ -169,7 +178,7 @@ HERRAMIENTAS.push(
       const r = intercambiar(await ctx.datos.planActivo(), fecha_a, fecha_b);
       if (!r.ok) return { ...texto(r.error), isError: true };
       const v = await validarYGuardar(r.plan, ctx);
-      return texto({ guardado: v.ok, cambios: r.cambios, avisos: r.avisos, errores: v.errores });
+      return texto({ ...estado(v), cambios: r.cambios, avisos: r.avisos, errores: v.errores });
     },
   },
   {
@@ -182,7 +191,7 @@ HERRAMIENTAS.push(
       const r = marcarFaltada(await ctx.datos.planActivo(), fecha, { hoy: ctx.hoy, noPuedo: respuestas.dias_no_puedo || [] });
       if (!r.ok) return { ...texto(r.error), isError: true };
       const v = await validarYGuardar(r.plan, ctx);
-      return texto({ guardado: v.ok, cambios: r.cambios, avisos: r.avisos, errores: v.errores });
+      return texto({ ...estado(v), cambios: r.cambios, avisos: r.avisos, errores: v.errores });
     },
   },
   {
@@ -230,7 +239,7 @@ HERRAMIENTAS.push(
       const plan = calendarizar(imp, { inicio: lunes, semanas, indice: ctx.indice });
       if (!aplicar || imp.revisar.length) return texto({ guardado: false, dias: imp.dias.map(d => ({ titulo: d.titulo, ejercicios: d.ejercicios.map(e => e.ejercicio_id || `¿${e.nombre}?`) })), por_revisar: imp.revisar });
       const v = await validarYGuardar(plan, ctx, 'importado');
-      return texto({ guardado: v.ok, errores: v.errores, advertencias: v.advertencias });
+      return texto({ ...estado(v), errores: v.errores, advertencias: v.advertencias });
     },
   },
   {
