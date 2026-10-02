@@ -19,6 +19,8 @@ import { avisoDescargaCorto } from './temporada.js';
 import { subirACuenta } from './cola.js';
 import { iniciarDescanso, detenerDescanso, iniciarTramos } from './descanso.js';
 import { tramosDePaso, tramosDeCardio, seriesDeCalentamiento } from '../nucleo/calentamiento.js';
+import { calentamientoDeSesion, minutosCalentamiento, partePaso, aproximacionesDelPlan } from '../nucleo/calentamiento-sesion.js';
+import { articulacionesBloqueadas } from '../nucleo/catalogo.js';
 import { actualizarPantalla } from './pantalla.js';
 import { abrirHoja } from './hoja.js';
 import { grupos, unir, separar, copiarSuperseries, despuesDeSerie, etiquetaSuperserie } from '../nucleo/superseries.js';
@@ -204,21 +206,27 @@ const pasosAbiertos = { cal: null, est: null }; // null: automático; true o fal
 const reloj = seg => `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')}`;
 function pasosHtml(pasos, tipo, f, titulo, dia) {
   if (!pasos?.length) return '';
-  const hechos = E.pasos?.[f]?.[tipo] || [];
-  const n = pasos.filter((_, i) => hechos[i]).length;
+  const anteriores = E.pasos?.[f]?.[tipo] || [];
+  const claves = E.pasosClaves?.[f]?.[tipo] || {};
+  const hechos = pasos.map((p, i) => p.clave ? claves[p.clave] ?? (p.indiceAnterior != null && Boolean(anteriores[p.indiceAnterior])) : Boolean(anteriores[i]));
+  const n = hechos.filter(Boolean).length;
   const completo = n === pasos.length;
   const a = avance(dia);
   const automatico = tipo === 'cal' ? !completo && !a.hechas : !completo && a.total > 0 && a.hechas === a.total;
   const abierto = pasosAbiertos[tipo] ?? automatico;
   return `<details class="extra pasos" data-pasos="${tipo}"${abierto ? ' open' : ''}><summary>${esc(titulo)} <span class="pequeno suave">${completo ? 'hecho ✓' : n ? `${n} de ${pasos.length}` : `${pasos.length} pasos`}</span></summary>
     <ol class="lista-pasos">${pasos.map((p, i) => {
+      const parte = partePaso(p.name);
       const tramos = tramosDePaso(p.name);
       const zona = ['codo', 'hombro', 'rodilla', 'cadera', 'tobillo', 'lumbar', 'muneca', 'cuello'].find(z => p.name.toLowerCase().includes(z));
-      const imagen = zona ? `img/articulaciones/${zona}.webp` : /cardio|bicicleta|caminata/i.test(p.name) ? 'img/equipos/bicicleta.webp' : srcMiniatura(dia.ejercicios[0]?.ejercicio_id);
+      const imagen = p.imagen || (zona ? `img/articulaciones/${zona}.webp` : /cardio|bicicleta|caminata/i.test(p.name) ? 'img/ejercicios/mini/caminata.webp' : null);
       const total = tramos.reduce((x, t) => x + t.seg, 0);
       return `<li class="paso${hechos[i] ? ' hecho' : ''}">
-        <button type="button" class="check" data-paso="${tipo}" data-i="${i}" aria-pressed="${Boolean(hechos[i])}" aria-label="${esc(p.name)}: hecho">${hechos[i] ? '✓' : ''}</button>
-        ${imagen && hayImagen(imagen) ? `<img class="paso-imagen" src="${imagen}" alt="" width="56" height="56">` : ''}<div class="paso-texto"><strong>${esc(p.name)}</strong>${p.how ? `<p class="pequeno suave">${esc(p.how)}</p>` : ''}</div>
+        <button type="button" class="check" data-paso="${tipo}" data-i="${i}"${p.clave ? ` data-clave="${esc(p.clave)}"` : ''} aria-pressed="${Boolean(hechos[i])}" aria-label="${esc(p.name)}: hecho">${hechos[i] ? '✓' : ''}</button>
+        ${imagen && hayImagen(imagen) ? `<img class="paso-imagen" src="${imagen}" alt="" width="56" height="56">` : ''}<div class="paso-texto">${p.fase ? `<span class="paso-fase">${esc(p.fase)}</span>` : ''}<strong>${esc(parte.nombre)}</strong>${parte.dosis ? `<span class="paso-dosis">${esc(parte.dosis)}</span>` : ''}${p.how ? `<p class="pequeno suave">${esc(p.how)}</p>` : ''}</div>
+        ${p.por_que ? `<p class="paso-motivo pequeno">${esc(p.por_que)}</p>` : ''}
+        ${p.series?.length ? `<div class="aproximaciones">${p.series.map(x => x.kg != null ? `<span>${esc(peso(x.kg))} × ${x.reps}</span>` : '<span>Carga liviana por elegir</span>').join('')}</div>` : ''}
+        ${p.agregar_id ? `<button type="button" class="boton chico" data-preparar="${esc(p.agregar_id)}">${filasDe(f, dia.ejercicios.find(e => e.ejercicio_id === p.agregar_id), dia.ejercicios.findIndex(e => e.ejercicio_id === p.agregar_id)).some(x => tipoDe(x) === 'calentamiento') ? 'Ver series de aproximación' : 'Agregar a la tabla'}</button>` : ''}
         ${tramos.length ? `<button type="button" class="boton chico reloj-paso" data-tramos="${esc(JSON.stringify(tramos))}" aria-label="Cronómetro de ${esc(reloj(total))}">▶ ${reloj(total)}</button>` : ''}
       </li>`;
     }).join('')}</ol>
@@ -269,10 +277,10 @@ function sesionHoy(dia) {
   const prim = [...new Set(ejs.flatMap(ej => ej.musculos_primarios))];
   const sec = [...new Set(ejs.flatMap(ej => ej.musculos_secundarios))].filter(m => !prim.includes(m));
   const eligePeso = dia.ejercicios.some(e => /^Elige un peso/.test(e.nota || ''));
-  const calentamiento = dia.calentamiento?.length ? dia.calentamiento : dia.ejercicios.length ? [
-    { name: '5 minutos de cardio suave', how: 'Bicicleta, trotadora o escaladora a ritmo cómodo.' },
-    { name: 'Series de aproximación del primer ejercicio', how: 'Una serie con la mitad del peso y otra con tres cuartos, pocas repeticiones. Usa + Calentamiento para verlas en la tabla.' }
-  ] : [];
+  const lugar = (R().lugares || []).find(x => x.nombre === dia.lugar) || (R().lugares || []).find(x => x.principal) || (R().lugares || [])[0];
+  const cargas = Object.fromEntries(dia.ejercicios.map((e, k) => [e.ejercicio_id, filasDe(f, e, k).find(x => deTrabajo(tipoDe(x)) && x.kg != null)?.kg ?? e.carga_kg ?? anterior(todas, e.ejercicio_id, f)?.series[0]?.carga_kg]));
+  const opcionesCarga = Object.fromEntries(ejs.map(ej => [ej.id, { incremento: incrementoPara(ej, lugar) || 2.5, barra: ej.equipamiento.includes('barra_rack') ? 20 : 0 }]));
+  const calentamiento = calentamientoDeSesion({ dia, porId: indice.porId, equipo: lugar?.equipamiento || [], bloqueadas: articulacionesBloqueadas(R().lesiones, f), cargas, opcionesCarga });
   return `<section class="sesion-cab compacta" aria-label="Sesión de hoy">
     <div class="sesion-controles">
       ${dia.ejercicios.length ? avanceHtml(avance(dia)) : '<p class="pequeno suave">Sin ejercicios en esta sesión.</p>'}
@@ -285,13 +293,13 @@ function sesionHoy(dia) {
     <button type="button" class="boton chico" id="banco-hoy-arriba">${icono('mas')} Ejercicios</button>
     <button type="button" class="boton chico" data-elegir-cardio>Cardio</button>
   </div>
-  ${calentamiento.length ? `<section class="tarjeta calentamiento-directo" id="calentamiento-hoy"${calentamientoVisible ? '' : ' hidden'}>${pasosHtml(calentamiento, 'cal', f, 'Calentamiento', dia)}</section>` : ''}
+  ${calentamiento.length ? `<section class="tarjeta calentamiento-directo" id="calentamiento-hoy"${calentamientoVisible ? '' : ' hidden'}><div class="calentamiento-intro"><p class="sobretitulo">Preparación para ${esc(dia.foco)}</p><h2>Calienta para esta sesión</h2><p class="suave pequeno">~${minutosCalentamiento(calentamiento)} min estimados · movilidad, activación y cargas progresivas. Termina preparado, con energía para las series de trabajo.</p></div>${pasosHtml(calentamiento, 'cal', f, 'Tus pasos', dia)}</section>` : ''}
   <ol class="ejercicios-hoy">${dia.ejercicios.map((e, k) => ejercicioHoy(e, k, f, e.ejercicio_id ? anterior(todas, e.ejercicio_id, f) : null, notas[idDe(e, k)] || {}, dia)).join('')}</ol>
   ${cardioHtml(dia.cardio)}
   <div class="fila-botones"><button type="button" class="boton primario grande" id="terminar">${E.sesiones.some(s => s.fecha === f && !s.origen) ? 'Guardar de nuevo' : 'Terminar sesión'}</button></div>
   <details class="tarjeta detalles-sesion" id="detalles-sesion">
     <summary>Detalles de la sesión</summary>
-    <p class="suave pequeno">${dia.hora ? `${esc(dia.hora)} · ` : ''}~${duracionSesion(dia)} min · ${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? '' : 's'}</p>
+    <p class="suave pequeno">${dia.hora ? `${esc(dia.hora)} · ` : ''}~${duracionSesion({ ...dia, calentamiento })} min · ${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? '' : 's'}</p>
     ${prim.length ? `<div class="hoy-entrenas">${imagenesMusculos(prim.slice(0, 4))}<div><p class="sobretitulo">Hoy entrenas</p><p class="musculos-hoy">${esc(mayuscula(lista(prim.map(m => NOMBRE_MUSCULO[m] || m))))}</p>${sec.length ? `<p class="pequeno suave">Y un poco de ${esc(lista(sec.map(m => (NOMBRE_MUSCULO[m] || m).toLowerCase())))}</p>` : ''}</div></div>` : ''}
     <p class="suave pequeno">${esc(dia.racional || '')}</p>
     ${eligePeso ? '<p class="nota-sesion pequeno">Donde no hay peso, elige uno con el que te sobren las repeticiones de reserva (RIR) en la última serie. Lo anotas y la app ajusta desde ahí.</p>' : ''}
@@ -543,7 +551,7 @@ function enlazar(ir, dia) {
       const ej = indice.porId.get(e.ejercicio_id);
       const prev = e.ejercicio_id ? anterior(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f)?.series[0] : null;
       const kgTrabajo = lista.find(x => deTrabajo(tipoDe(x)) && x.kg != null)?.kg ?? e.carga_kg ?? prev?.carga_kg ?? null;
-      nuevas = seriesDeCalentamiento(kgTrabajo, { incremento: (ej && incrementoPara(ej, lugar)) || 2.5, barra: ej?.equipamiento.includes('barra_rack') ? 20 : 0 });
+      nuevas = aproximacionesDelPlan(dia, e).length ? aproximacionesDelPlan(dia, e).map(x => ({ ...x })) : seriesDeCalentamiento(kgTrabajo, { incremento: (ej && incrementoPara(ej, lugar)) || 2.5, barra: ej?.equipamiento.includes('barra_rack') ? 20 : 0 });
       const yaHay = lista.filter(x => tipoDe(x) === 'calentamiento').length;
       lista.splice(yaHay, 0, ...nuevas);
     } else lista.push({});
@@ -553,13 +561,22 @@ function enlazar(ir, dia) {
   };
   raiz.querySelectorAll('[data-agregar]').forEach(b => b.onclick = () => agregarFila(b.dataset.agregar, false));
   raiz.querySelectorAll('[data-calentar]').forEach(b => b.onclick = () => agregarFila(b.dataset.calentar, true));
+  raiz.querySelectorAll('[data-preparar]').forEach(b => b.onclick = () => {
+    const id = b.dataset.preparar;
+    const { e, k } = ejercicioDe(id);
+    calentamientoVisible = false;
+    if (!filasDe(f, e, k).some(x => tipoDe(x) === 'calentamiento')) agregarFila(id, true);
+    else repintar();
+    raiz.querySelector(`[data-ej="${id}"][data-c="kg"]`)?.focus();
+  });
 
   // Pasos del calentamiento y del estiramiento: marcar, abrir o cerrar y su cronómetro.
   raiz.querySelectorAll('[data-paso]').forEach(b => b.onclick = () => {
-    const lista = (((E.pasos ||= {})[f] ||= {})[b.dataset.paso] ||= []);
-    lista[Number(b.dataset.i)] = !lista[Number(b.dataset.i)];
-    const total = raiz.querySelectorAll(`[data-paso="${b.dataset.paso}"]`).length;
-    if (lista.filter(Boolean).length === total) pasosAbiertos[b.dataset.paso] = false; // completo: se pliega
+    const valor = b.getAttribute('aria-pressed') !== 'true';
+    if (b.dataset.clave) (((E.pasosClaves ||= {})[f] ||= {})[b.dataset.paso] ||= {})[b.dataset.clave] = valor;
+    else (((E.pasos ||= {})[f] ||= {})[b.dataset.paso] ||= [])[Number(b.dataset.i)] = valor;
+    const completo = [...raiz.querySelectorAll(`[data-paso="${b.dataset.paso}"]`)].every(x => x === b ? valor : x.getAttribute('aria-pressed') === 'true');
+    if (completo) pasosAbiertos[b.dataset.paso] = false; // completo: se pliega
     guardar(); repintar();
   });
   raiz.querySelectorAll('details[data-pasos]').forEach(d => d.addEventListener('toggle', () => { pasosAbiertos[d.dataset.pasos] = d.open; }));

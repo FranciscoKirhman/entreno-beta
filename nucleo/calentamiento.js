@@ -5,8 +5,8 @@
  *  repeticiones ("2 × 15", "10 por lado"). Solo se mira el nombre del paso: la explicación puede nombrar otros tiempos. */
 export function tramosDePaso(nombre) {
   const t = String(nombre || '').toLowerCase();
-  const m = t.match(/(?:(\d+)\s*[x×]\s*)?(\d+(?:[.,]\d+)?)(?:\s*a\s*\d+(?:[.,]\d+)?)?\s*(minutos?|min|segundos?|seg|s)(?![a-zñáéíóú])/);
-  if (!m) return [];
+  const m = t.match(/(?:(\d+)\s*[x×]\s*)?(\d+(?:[.,]\d+)?)(?:\s*(?:a|-)\s*\d+(?:[.,]\d+)?)?\s*(minutos?|min|segundos?|seg|s)(?![a-zñáéíóú])/);
+  if (!m || /\bpausa\b/.test(t.slice(0, m.index))) return [];
   const valor = Number(m[2].replace(',', '.'));
   const seg = Math.round(/^m/.test(m[3]) ? valor * 60 : valor);
   if (!seg) return [];

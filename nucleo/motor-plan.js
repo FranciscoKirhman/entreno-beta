@@ -1,5 +1,6 @@
 // Motor de reglas: arma un plan de 4 semanas sin IA. Es el plan del plan Gratis y la base que el coach
 // Pro ajusta. Todo lo que hace está explicado en contenido/evidencia/.
+import { calentamientoDeSesion, minutosCalentamiento } from './calentamiento-sesion.js';
 import { grupos } from './superseries.js';
 import { nivelAlcanza, tieneEquipo, articulacionesBloqueadas, cargaZonaBloqueada } from './catalogo.js';
 
@@ -109,8 +110,8 @@ export function prescripcion(ej, prioridad, d) {
  * Minutos que toma un día: calentamiento + series × (tiempo bajo tensión + descanso) + cambio de ejercicio.
  * En una superserie se descansa una vez por vuelta (el descanso más largo de sus ejercicios), no después de cada uno.
  */
-export function duracionEstimada(ejercicios) {
-  let seg = 8 * 60;
+export function duracionEstimada(ejercicios, calentamientoMin = 8) {
+  let seg = calentamientoMin * 60;
   const g = grupos(ejercicios);
   ejercicios.forEach((e, i) => {
     const trabajo = e.unidad === 'seg' ? (e.reps_min + e.reps_max) / 2 : ((e.reps_min + e.reps_max) / 2) * 4;
@@ -132,7 +133,7 @@ export function minutosCardio(texto) {
 }
 export function duracionSesion(dia) {
   const cardio = minutosCardio(dia.cardio);
-  return cardio === null ? null : duracionEstimada(dia.ejercicios || []) + cardio + (cardio ? 2 : 0);
+  return cardio === null ? null : duracionEstimada(dia.ejercicios || [], dia.calentamiento?.length ? minutosCalentamiento(dia.calentamiento) : 8) + cardio + (cardio ? 2 : 0);
 }
 
 /** Series por semana de cada músculo: 1 por serie si es principal y 0,5 si es secundario. */
@@ -433,17 +434,24 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
       });
     }
   }
+  const preparar = dia => {
+    dia.calentamiento = calentamientoDeSesion({ dia, porId: indice.porId, equipo, bloqueadas,
+      opcionesCarga: Object.fromEntries(dia.ejercicios.map(e => { const ej = indice.porId.get(e.ejercicio_id); return [e.ejercicio_id, { incremento: ej ? incrementoPara(ej, lugar) : 2.5, barra: ej?.equipamiento.includes('barra_rack') ? 20 : 0 }]; })) });
+  };
   for (const dia of diasPlan) {
+    preparar(dia);
     const objetivoCardio = minutosCardio(dia.cardio) || 0;
     // Recortar accesorios para respetar el tiempo; después ajustar el cardio al espacio disponible.
-    const reserva = 0;
-    while (duracionEstimada(dia.ejercicios) + reserva > d.duracion_min && dia.ejercicios.length) {
+    const reserva = objetivoCardio > 0 && (r.favoritos || []).some(id => indice.porId.get(id)?.tipo === 'cardio') ? 7 : 0;
+    while (duracionSesion({ ...dia, cardio: null }) + reserva > d.duracion_min && dia.ejercicios.length) {
       const protegido = e => (r.favoritos || []).includes(e.ejercicio_id) || (indice.porId.get(e.ejercicio_id)?.musculos_primarios || []).some(m => (r.musculos_prioridad || []).includes(m));
-      const ultimo = [...dia.ejercicios].sort((a, b) => Number(protegido(a)) - Number(protegido(b)) || b.prioridad - a.prioridad || b.orden - a.orden)[0];
+      const candidatos = dia.ejercicios.filter(e => !favoritos.has(e.ejercicio_id) || e.series > 1);
+      const ultimo = [...(candidatos.length ? candidatos : dia.ejercicios)].sort((a, b) => Number(protegido(a)) - Number(protegido(b)) || b.prioridad - a.prioridad || b.orden - a.orden)[0];
       if (ultimo.series > 1) ultimo.series--;
       else dia.ejercicios.splice(dia.ejercicios.indexOf(ultimo), 1);
+      preparar(dia);
     }
-    const disponible = Math.max(0, d.duracion_min - duracionEstimada(dia.ejercicios) - 2);
+    const disponible = Math.max(0, d.duracion_min - duracionSesion({ ...dia, cardio: null }) - 2);
     if (objetivoCardio > disponible) {
       dia.cardio = disponible >= 5 ? `${dia.cardio.split(/\d| en intervalos|:/)[0].trim()} ${disponible} minutos a ritmo cómodo. Reducido para respetar tu tiempo.` : null;
       dia.nota_cardio = 'La dosis de cardio original no cabe en este tiempo. Puedes dedicarle una sesión aparte.';
@@ -453,6 +461,7 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     const base = diasPlan.find(x => x.semana === 1 && x.plantilla === dia.plantilla);
     dia.ejercicios = base.ejercicios.map(comoDescarga);
     if (dia.ejercicios.every(e => e.series === 1) && dia.ejercicios.length > 1) dia.ejercicios.pop();
+    preparar(dia);
   }
   diasPlan.sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
 

@@ -21,3 +21,14 @@
 .cardio-minutos{display:flex;align-items:center;gap:8px;margin:12px 0}
 .cardio-minutos input{width:64px;min-width:0}
 .cardio-imagen{display:block;object-fit:contain;margin:8px auto;max-width:100%}
+.calentamiento-intro h2{font-size:23px;line-height:1.2;margin:6px 0 10px}
+.calentamiento-intro{margin-bottom:16px}
+.calentamiento-directo .lista-pasos{padding:0;list-style:none}
+.calentamiento-directo .paso{padding:14px 0;border-bottom:1px solid var(--border)}
+.calentamiento-directo .paso:last-child{border:0}
+.paso-fase{display:block;color:var(--accent);font-size:11px;font-weight:600;margin-bottom:5px}
+.paso-dosis{display:block;font-weight:600;font-size:13px;margin:5px 0}
+.paso-motivo{flex:1 0 100%;margin:0;padding:8px 10px;border-radius:10px;background:var(--fill);line-height:1.5}
+.aproximaciones{display:flex;flex-wrap:wrap;gap:6px;flex:1 0 100%}
+.aproximaciones span{border-radius:8px;background:var(--fill);padding:8px;font-size:13px;font-weight:600}
+.calentamiento-directo .paso-texto p{line-height:1.55;margin:7px 0 0}

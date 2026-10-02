@@ -109,7 +109,9 @@ export function resumenPlan({ plan, respuestas: r, derivados: d, indice, hoy }) 
   const volumen = MUSCULOS.filter(m => vol[m] || prioridad.includes(m))
     .map(m => ({ musculo: m, nombre: NOMBRE_ZONA[m] || m, series: vol[m] || 0, prioridad: prioridad.includes(m) }))
     .sort((a, b) => b.prioridad - a.prioridad || b.series - a.series);
-  const resto = volumen.filter(v => !v.prioridad && v.musculo !== 'core' && v.series);
+  const deFavoritos = new Set((r.favoritos || []).flatMap(id => indice.porId.get(id)?.musculos_primarios || []));
+  const comparables = new Set(['femoral', 'gluteo', 'cuadriceps', 'pecho', 'espalda', 'hombro', 'biceps', 'triceps']);
+  const resto = volumen.filter(v => !v.prioridad && comparables.has(v.musculo) && !deFavoritos.has(v.musculo) && v.series);
   const promedio = resto.length ? resto.reduce((a, v) => a + v.series, 0) / resto.length : 0;
   for (const v of volumen.filter(x => x.prioridad)) {
     const bien = v.series + 0.5 >= promedio * 0.9;
