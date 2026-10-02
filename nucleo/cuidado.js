@@ -73,18 +73,20 @@ export const FASES = [
  * @param p.empeoro true si el dolor empeoró respecto de la semana anterior
  * @param p.indicacion indicación profesional vigente para esa zona, si existe
  */
-export function planDeCuidado({ zona, intensidad = 0, dias = 0, senales = [], consentimiento = false, empeoro = false, indicacion = null }) {
+export function planDeCuidado({ zona, intensidad = 0, dias = 0, senales = [], consentimiento = false, empeoro = false, indicacion = null, contextoCompleto = false }) {
   if (senales.length || intensidad >= 7) {
-    return { tipo: 'derivar', aviso: AVISO, mensaje: 'Con ese nivel de dolor o con esas señales, lo indicado es una evaluación profesional antes de seguir. Pausamos los ejercicios que cargan esa zona.' };
+    return { tipo: 'derivar', aviso: AVISO, mensaje: 'Con ese nivel de dolor o con esas señales, lo indicado es una evaluación profesional antes de seguir. Te recomiendo detener los ejercicios que cargan esa zona y consultar. Tu plan todavía no ha cambiado.' };
   }
   if (!consentimiento) return { tipo: 'requiere_consentimiento', texto: CONSENTIMIENTO, aviso: AVISO };
   if (indicacion) {
     return {
       tipo: 'indicacion', aviso: AVISO,
-      mensaje: `Sigues la indicación de ${indicacion.profesional || 'tu profesional'}${indicacion.fecha ? ` del ${indicacion.fecha}` : ''}. La app la respeta en tu plan.`,
+      mensaje: `Sigues la indicación de ${indicacion.profesional || 'tu profesional'}${indicacion.fecha ? ` del ${indicacion.fecha}` : ''}. Revisa que las restricciones estén incorporadas en tu plan antes de entrenar.`,
       ejercicios: indicacion.ejercicios || [], restricciones: indicacion.restricciones || {},
     };
   }
+  if (!contextoCompleto) return { tipo: 'requiere_contexto', aviso: AVISO, mensaje: 'Antes de sugerir ejercicios, cuéntame en un solo mensaje la zona, intensidad de 0 a 10, cuántos días llevas, si empeoró, si hay señales de alarma y si tienes indicaciones profesionales. Puedes escribir: Me duele el codo 3/10 hace 2 días, no empeoró, sin señales de alarma y sin indicaciones profesionales.' };
+  if (empeoro || dias >= 14) return { tipo: 'derivar', aviso: AVISO, mensaje: 'Como empeoró o lleva dos semanas, consulta a un profesional antes de seguir cargando la zona. Tu plan todavía no ha cambiado.' };
   const todos = EJERCICIOS[zona];
   if (!todos) return { tipo: 'sin_ejercicios', aviso: AVISO, mensaje: 'Para esa zona no tenemos ejercicios de cuidado: consulta a un profesional.' };
   let fase = dias < 14 ? 1 : dias < 28 ? 2 : 3;

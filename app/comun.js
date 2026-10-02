@@ -74,7 +74,7 @@ export const D = () => derivar(R(), C, hoy());
 
 /** Contexto que esperan las funciones del núcleo (coach, agenda, explicar). */
 export const ctxNucleo = () => ({
-  plan: E.plan, hoy: hoy(), respuestas: R(), derivados: D(), indice, evidencia: EVIDENCIA, consentimientos: E.consentimientos,
+  plan: E.plan, hoy: hoy(), respuestas: R(), derivados: D(), indice, evidencia: EVIDENCIA, consentimientos: E.consentimientos, indicaciones: E.indicaciones,
 });
 
 /** Cambia el plan local y, con cuenta, lo guarda en el servidor (que lo valida). */

@@ -1,7 +1,7 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
 // Red primero, con límite de tiempo, y la copia guardada como respaldo (igual que el tablero).
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-02 11:16 · 1baf40a";
+const VERSION = "2026-10-02 11:31 · c83d0d2";
 const ARCHIVOS = [
  "./",
  "app.js",
@@ -460,6 +460,8 @@ const ARCHIVOS = [
  "../nucleo/cola.js",
  "../nucleo/cuidado.js",
  "../nucleo/derivar.js",
+ "../nucleo/dolor.js",
+ "../nucleo/estado-sesion.js",
  "../nucleo/explicar.js",
  "../nucleo/ficha.js",
  "../nucleo/hevy-csv.js",
@@ -491,7 +493,7 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
-    .then(ks => Promise.all(ks.filter(k => k !== CACHE && k !== FUENTES).map(k => caches.delete(k))))
+    .then(ks => Promise.all(ks.filter(k => k.startsWith('entreno-b-') && k !== CACHE && k !== FUENTES).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 

@@ -8,6 +8,7 @@ import { marcarFaltada, moverSesion, intercambiar, opcionesParaHoy, sesionDe, su
 import { alternativas, recortarSesion } from './checkin.js';
 import { evaluarDia, ajustarSesion, TEXTO_RECOMENDACION } from './bienestar.js';
 import { explicarEjercicio } from './explicar.js';
+import { contextoDolor } from './dolor.js';
 import { planDeCuidado } from './cuidado.js';
 import { reconocer } from './importar-plan.js';
 import { articulacionesBloqueadas } from './catalogo.js';
@@ -49,7 +50,7 @@ export function entender(texto, { hoy, indice, plan }) {
     const sin = n.replace(/\b(la|el|maquina|esta|ocupada?|no hay|no esta|por que|porque|como se hace|tecnica|video|de|cambia|cambiar)\b/g, ' ');
     return reconocer(sin, indice).ejercicio?.id || null;
   };
-  if (/\b(dolor|duele|molestia|me lesione|lesion)\b/.test(n)) {
+  if (/\b(dolor|duele|molestia|me lesione|lesion|hormigueo|deformidad|fiebre)\b/.test(n)) {
     const zona = Object.entries(ZONAS).find(([k]) => new RegExp(`\\b${k}\\b`).test(n))?.[1] || null;
     // Leer la escala antes de normalizar: normalizar() borra la barra y los decimales.
     const escala = String(texto).toLowerCase().match(/(?:^|[^\d.,])(-?\d+(?:[.,]\d+)?)\s*(?:de|\/|sobre)\s*10\b/);
@@ -134,14 +135,20 @@ export function responder(texto, ctx) {
       };
     }
     case 'dolor': {
+      const contexto = contextoDolor(texto, ctx.indicaciones || [], hoy, q.zona);
+      if (contexto.senales.length || q.intensidad >= 7) {
+        const c = planDeCuidado({ zona: q.zona, intensidad: q.intensidad, ...contexto });
+        return { texto: `${c.mensaje} ${c.aviso}`, cuidado: c };
+      }
       if (!q.zona) return { texto: '¿Dónde te duele? Hombro, codo, rodilla, espalda baja, muñeca, tobillo, cadera o cuello.' };
       if (q.intensidad == null) return { texto: `¿Cuánto te duele el ${q.zona}, de 0 a 10? Escríbelo con la zona, por ejemplo: "Me duele el ${q.zona} 4/10". Antes de darte ejercicios necesito conocer la intensidad.` };
       const consentido = ctx.consentimientos?.cuidado_lesiones === true;
-      const c = planDeCuidado({ zona: q.zona, intensidad: q.intensidad, consentimiento: consentido });
+      const c = planDeCuidado({ zona: q.zona, intensidad: q.intensidad, consentimiento: consentido, ...contexto });
       const zonaHoy = dia ? dia.ejercicios.filter(e => indice.porId.get(e.ejercicio_id)?.carga_articular.includes(q.zona)) : [];
       const opciones = zonaHoy.length ? [{ etiqueta: `Sacar de hoy lo que carga ${q.zona}`, accion: { tipo: 'quitar_zona_hoy', fecha: hoy, zona: q.zona } }] : [];
       if (c.tipo === 'derivar') return { texto: `${c.mensaje} ${c.aviso}`, opciones, cuidado: c };
       if (c.tipo === 'requiere_consentimiento') return { texto: `Puedo darte ejercicios de cuidado para el ${q.zona}. Antes necesito que aceptes esto: "${c.texto}"`, opciones: [{ etiqueta: 'Acepto', accion: { tipo: 'consentir_cuidado', zona: q.zona } }, ...opciones], cuidado: c };
+      if (c.tipo === 'requiere_contexto' || c.tipo === 'indicacion') return { texto: `${c.mensaje} ${c.aviso}`, opciones, cuidado: c };
       return { texto: `Ejercicios de cuidado para el ${q.zona} (fase "${c.fase?.nombre}"): ${(c.ejercicios || []).map(e => `${e.nombre} ${e.dosis}`).join('; ')}. ${c.fase?.regla || ''} ${c.aviso}`, opciones, cuidado: c };
     }
     case 'por_que': case 'tecnica': {
