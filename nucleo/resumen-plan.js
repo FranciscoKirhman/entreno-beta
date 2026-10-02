@@ -67,7 +67,7 @@ export function resumenPlan({ plan, respuestas: r, derivados: d, indice, hoy }) 
   cumple.push({
     tema: 'Tiempo',
     estado: dias.every(x => x.minutos !== null) && largo <= d.duracion_min ? 'si' : 'parcial',
-    texto: `${dias.some(x => x.minutos === null) ? 'Hay una sesión con cardio sin duración conocida. ' : ''}Sesiones de ${rango(corto, largo)} minutos, incluyendo calentamiento, pesas, transiciones y cardio; ${r.duracion_min ? `pediste ${d.duracion_min}` : `no elegiste: partimos con ${d.duracion_min}`}.${largo > d.duracion_min ? ' Si un día te falta tiempo, salta lo último: lo principal va primero.' : ''}${d.duracion_min <= 30 ? ' Con 30 minutos entra lo principal: si un día tienes más, suma series.' : ''}`,
+    texto: `${dias.some(x => x.minutos === null) ? 'Hay una sesión con cardio sin duración conocida. ' : ''}Sesiones de ${rango(corto, largo)} minutos, incluyendo calentamiento, pesas, transiciones y cardio; ${r.duracion_min ? `pediste ${d.duracion_min}` : `no elegiste: partimos con ${d.duracion_min}`}.${largo > d.duracion_min ? ' Si un día te falta tiempo, salta lo último: lo principal va primero.' : ''}${sem1.some(x => x.nota_cardio) ? ' El cardio se redujo o quedó fuera en algunos días para respetar tu tiempo; puedes dedicarle otra sesión.' : ''}${d.duracion_min <= 30 ? ' Con 30 minutos entra lo principal: si un día tienes más, suma series.' : ''}`,
   });
 
   // Lugar y máquinas.

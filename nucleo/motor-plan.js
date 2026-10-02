@@ -435,7 +435,7 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
   }
   for (const dia of diasPlan) {
     const objetivoCardio = minutosCardio(dia.cardio) || 0;
-    // Reservar una porción para cardio; recortar accesorios antes de exceder lo pedido.
+    // Recortar accesorios para respetar el tiempo; después ajustar el cardio al espacio disponible.
     const reserva = 0;
     while (duracionEstimada(dia.ejercicios) + reserva > d.duracion_min && dia.ejercicios.length) {
       const protegido = e => (r.favoritos || []).includes(e.ejercicio_id) || (indice.porId.get(e.ejercicio_id)?.musculos_primarios || []).some(m => (r.musculos_prioridad || []).includes(m));

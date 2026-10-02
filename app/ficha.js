@@ -82,7 +82,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
     ${ex ? `<section class="tarjeta porque">
       <h2>Por qué está en tu plan</h2>
       <ul class="lista-porque">${ex.motivos.map(x => `<li><details><summary>${esc(x.pregunta)}</summary><p>${esc(x.respuesta)}</p>${x.fuente ? `<p class="pequeno suave">Fuente: ${esc(x.fuente.documento)}, ${esc(x.fuente.seccion)}${x.refs.length ? ` [${x.refs.join(', ')}]` : ''}</p>` : ''}</details></li>`).join('')}</ul>
-      ${ex.referencias.length ? `<details class="extra"><summary>Papers que lo respaldan (${ex.referencias.length})</summary><ol class="refs">${ex.referencias.map(r => `<li value="${r.n}">${esc(r.texto)} <span class="chip ${r.verificada ? 'verificada' : ''}">${r.verificada ? 'verificada' : 'por verificar'}</span></li>`).join('')}</ol></details>` : ''}
+      ${ex.referencias.length ? `<details class="extra"><summary>Papers que lo respaldan (${ex.referencias.length})</summary><ol class="refs">${ex.referencias.map(r => `<li value="${r.n}">${esc(r.texto)} <span class="chip ${r.verificada ? 'verificada' : ''}">${r.verificada ? 'bibliografía comprobada' : 'por verificar'}</span>${r.url ? `<p><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">Abrir fuente</a></p><p class="pequeno">${esc(r.poblacion)} ${esc(r.limites)}</p>` : ''}</li>`).join('')}</ol></details>` : ''}
     </section>` : ''}
 
     ${alts.length ? `<section class="tarjeta">

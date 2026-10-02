@@ -244,13 +244,15 @@ HERRAMIENTAS.push(
   },
   {
     name: 'plan_de_cuidado',
-    title: 'Ejercicios de cuidado para una molestia',
+    title: 'Orientación ante una molestia',
     description: 'Ejercicios de cuidado por fases para una zona con molestia. Siempre incluye el aviso de que no reemplaza una evaluación profesional; si hay señales de alarma o dolor de 7 o más, deriva. Requiere que la persona haya aceptado el consentimiento de cuidado en la app.',
     inputSchema: { type: 'object', properties: { zona: { type: 'string', enum: ['hombro', 'codo', 'muneca', 'lumbar', 'cadera', 'rodilla', 'tobillo', 'cuello'] }, intensidad: { type: 'integer', minimum: 0, maximum: 10 }, dias: { type: 'integer' }, senales: { type: 'array', items: { type: 'string' } } }, required: ['zona'] },
     annotations: { readOnlyHint: true },
     async run(args, ctx) {
       const consentimientos = (await ctx.datos.consentimientos?.()) || {};
-      return texto(planDeCuidado({ ...args, consentimiento: consentimientos.cuidado_lesiones === true }));
+      const indicaciones = (await ctx.datos.indicaciones?.()) || [];
+      const indicacion = indicaciones.find(i => i.activa !== false && (!i.fecha || i.fecha <= ctx.hoy) && (!i.hasta || i.hasta >= ctx.hoy) && (i.zona === args.zona || i.restricciones?.zonas?.includes(args.zona)));
+      return texto(planDeCuidado({ ...args, indicacion, consentimiento: consentimientos.cuidado_lesiones === true }));
     },
   },
 );

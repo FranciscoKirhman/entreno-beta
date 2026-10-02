@@ -50,7 +50,7 @@ export function entender(texto, { hoy, indice, plan }) {
     const sin = n.replace(/\b(la|el|maquina|esta|ocupada?|no hay|no esta|por que|porque|como se hace|tecnica|video|de|cambia|cambiar)\b/g, ' ');
     return reconocer(sin, indice).ejercicio?.id || null;
   };
-  if (/\b(dolor|duele|molestia|me lesione|lesion|hormigueo|deformidad|fiebre)\b/.test(n)) {
+  if (/\b(dolor|duele|molestia|me lesione|lesion|hormigueo|adormecimiento|hinchazon|chasquido|deformidad|fiebre|falta de aire)\b/.test(n)) {
     const zona = Object.entries(ZONAS).find(([k]) => new RegExp(`\\b${k}\\b`).test(n))?.[1] || null;
     // Leer la escala antes de normalizar: normalizar() borra la barra y los decimales.
     const escala = String(texto).toLowerCase().match(/(?:^|[^\d.,])(-?\d+(?:[.,]\d+)?)\s*(?:de|\/|sobre)\s*10\b/);

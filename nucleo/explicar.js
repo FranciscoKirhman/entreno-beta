@@ -65,10 +65,10 @@ export function explicarEjercicio(p) {
   if (e.unidad === 'seg') agregar(`¿Por qué ${e.reps_min} a ${e.reps_max} segundos?`, 'Es un ejercicio de estabilidad: lo que cuenta es sostener la posición con buena técnica, no cuántas veces se repite.', null);
   else agregar(`¿Por qué ${e.reps_min} a ${e.reps_max} repeticiones?`, e.reps_max <= 6
     ? 'Rangos bajos con carga alta, porque tu objetivo incluye fuerza máxima.'
-    : 'En este rango se gana músculo igual que con cargas más pesadas, con menos desgaste para las articulaciones.', seccion(evidencia, P, 'Pesado o liviano'));
+    : 'Cargas diferentes pueden favorecer una hipertrofia similar en adultos sanos cuando el esfuerzo es suficiente. Los estudios no demuestran menor daño articular para este rango.', seccion(evidencia, P, 'Pesado o liviano'));
 
   // Reserva
-  agregar(`¿Por qué dejar ${e.rir} repeticiones de reserva?`, 'Llegar cerca del fallo da el mismo estímulo que llegar al fallo, con menos cansancio para las series y sesiones siguientes.', seccion(evidencia, P, 'Cerca del fallo'));
+  agregar(`¿Por qué dejar ${e.rir} repeticiones de reserva?`, 'No se ha demostrado que llegar al fallo momentáneo siempre produzca más hipertrofia. Dejamos reserva para regular el esfuerzo; no significa que todos los valores de reserva den el mismo resultado.', seccion(evidencia, P, 'Cerca del fallo'));
 
   // Qué priorizar si no calzan repeticiones y reserva
   const zonas0 = (r.lesiones || []).filter(l => l.activa !== false).map(l => l.region);

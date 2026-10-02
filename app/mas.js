@@ -151,6 +151,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     const f = ev.target.files[0]; if (!f) return;
     const out = $('estado-respaldo');
     let r;
+    if (f.size > 100000000) { out.innerHTML = '<div class="aviso alerta">Ese respaldo supera los 100 MB. No cambié tus datos. Usa un respaldo sin fotos y conserva las imágenes por separado.</div>'; return; }
     try { r = JSON.parse(await f.text()); restaurarValido(r); }
     catch (e) { out.innerHTML = `<div class="aviso alerta">${esc(e.message.startsWith('Ese archivo') ? e.message : 'No pude leer ese archivo. Elige un respaldo descargado desde esta app.')}</div>`; return; }
     if (nube.conectado() || modoEjemplo) { out.innerHTML = '<div class="aviso alerta">Para restaurar tus datos personales, vuelve a tu perfil local y sal de tu cuenta. El respaldo no se envía al servidor.</div>'; return; }

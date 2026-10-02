@@ -6,7 +6,7 @@
 // - Si hay una señal de alarma o el dolor es de 7 o más, no entrega ejercicios: deriva.
 // - Si existe una indicación profesional, manda la indicación por sobre estas sugerencias.
 
-export const AVISO = 'Estos ejercicios son orientación general: no son un diagnóstico ni un tratamiento, y no reemplazan una evaluación médica o kinesiológica. Te recomendamos consultar. Si un profesional te dio indicaciones, sigue esas y súbelas a la app para que tu plan las respete.';
+export const AVISO = 'Las dosis y fases de cuidado siguen pendientes de revisión profesional. Estos ejercicios son orientación general: no son un diagnóstico ni un tratamiento, y no reemplazan una evaluación médica o kinesiológica. Te recomendamos consultar. Si un profesional te dio indicaciones, sigue esas y súbelas a la app para que tu plan las respete.';
 
 export const CONSENTIMIENTO = 'Entiendo que los ejercicios de cuidado son orientación general y no un diagnóstico ni un tratamiento, que debo consultar a un médico o kinesiólogo, y que si un profesional me da indicaciones, esas mandan por sobre las sugerencias de la app.';
 
@@ -73,10 +73,11 @@ export const FASES = [
  * @param p.empeoro true si el dolor empeoró respecto de la semana anterior
  * @param p.indicacion indicación profesional vigente para esa zona, si existe
  */
-export function planDeCuidado({ zona, intensidad = 0, dias = 0, senales = [], consentimiento = false, empeoro = false, indicacion = null, contextoCompleto = false }) {
+export function planDeCuidado({ zona, intensidad = null, dias = 0, senales = [], consentimiento = false, empeoro = false, indicacion = null, contextoCompleto = false }) {
   if (senales.length || intensidad >= 7) {
-    return { tipo: 'derivar', aviso: AVISO, mensaje: 'Con ese nivel de dolor o con esas señales, lo indicado es una evaluación profesional antes de seguir. Te recomiendo detener los ejercicios que cargan esa zona y consultar. Tu plan todavía no ha cambiado.' };
+    return { tipo: 'derivar', aviso: AVISO, mensaje: `${senales.some(s => ['dolor de pecho', 'falta de aire'].includes(s)) ? 'Detén el entrenamiento y busca atención urgente. ' : ''}Con ese nivel de dolor o con esas señales, lo indicado es una evaluación profesional antes de seguir. Te recomiendo detener los ejercicios que cargan esa zona y consultar. Tu plan todavía no ha cambiado.` };
   }
+  if (!Number.isFinite(intensidad) || intensidad < 0 || intensidad > 10) return { tipo: 'requiere_contexto', aviso: AVISO, mensaje: 'Necesito una intensidad válida de 0 a 10 antes de orientar ejercicios.' };
   if (!consentimiento) return { tipo: 'requiere_consentimiento', texto: CONSENTIMIENTO, aviso: AVISO };
   if (indicacion) {
     return {

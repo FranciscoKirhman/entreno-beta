@@ -68,8 +68,8 @@ export function guardar() {
     errorGuardado = 'No se guardaron los últimos cambios en este teléfono. Descarga un respaldo antes de cerrar o recargar.';
     let aviso = document.getElementById('error-guardado');
     if (!aviso) { aviso = document.createElement('section'); aviso.id = 'error-guardado'; aviso.className = 'aviso alerta'; aviso.setAttribute('role', 'alert'); document.body.prepend(aviso); }
-    aviso.textContent = errorGuardado + ' ';
-    const boton = document.createElement('button'); boton.className = 'boton'; boton.textContent = 'Descargar respaldo';
+    aviso.textContent = errorGuardado + ' Este respaldo de emergencia no incluye las fotos. ';
+    const boton = document.createElement('button'); boton.className = 'boton'; boton.textContent = 'Respaldar perfil y registros';
     boton.onclick = () => { const enlace = document.createElement('a'); const url = URL.createObjectURL(new Blob([JSON.stringify(respaldo())], { type: 'application/json' })); enlace.href = url; enlace.download = 'entreno-respaldo-emergencia.json'; enlace.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); };
     aviso.append(boton);
     return false;
