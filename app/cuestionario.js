@@ -4,7 +4,7 @@
 //    Lo básico que más cambia el plan va acá: días, tiempo, máquinas del lugar, zonas a priorizar, favoritos y salud.
 //  · Perfil (Más → Completar mi perfil): cada sección completa del cuestionario, para agregar lo adicional cuando
 //    se quiera. Nada es obligatorio; al cambiar algo, se ofrece aplicarlo al plan.
-import { C, E, guardar, R, esc, $, hoy, indice, numero, coma, chk } from './comun.js';
+import { C, E, guardar, R, esc, $, hoy, indice, numero, coma, chk, mostrarMensaje } from './comun.js';
 import { derivar, nivelDeclarado } from '../nucleo/derivar.js';
 import { tieneEquipo, nivelAlcanza } from '../nucleo/catalogo.js';
 
@@ -23,6 +23,22 @@ export const OBJETIVO_VISTA = {
 };
 /** Dibujo del objetivo (app/img/objetivos, hecho con ChatGPT desde docs/09-banco-de-imagenes.md). Es decorativo: el texto va al lado. */
 export const imagenObjetivo = (id, clase = 'ilustracion') => `<img class="${clase}" src="img/objetivos/${id}.webp" alt="" width="256" height="256" decoding="async">`;
+// Asistente: lo elige cada persona (app/img/asistentes, hechos con ChatGPT). Se guarda en el teléfono (E.asistente),
+// no en las respuestas: cambiarlo no cambia el plan. Si le falta una pose, se ve su dibujo de elegir.
+export const ASISTENTES_VISTA = [
+  ['entrenadora', 'Entrenadora'], ['entrenador', 'Entrenador'], ['profe', 'Profe'], ['coach', 'Coach'],
+  ['pesa', 'Pesa rusa'], ['mancuerna', 'Mancuerna'], ['quiltro', 'Quiltro'], ['robot', 'Robot'],
+];
+export const asistenteActual = () => (ASISTENTES_VISTA.some(([id]) => id === E.asistente) ? E.asistente : 'entrenadora');
+export function imagenAsistente(pose, clase = 'asistente-dice', id = asistenteActual()) {
+  const elegir = `img/asistentes/${id}.webp`;
+  return `<img class="${clase}" src="${pose ? `img/asistentes/${id}/${pose}.webp` : elegir}" alt="" width="320" height="320" decoding="async"${pose ? ` onerror="this.onerror=null;this.src='${elegir}'"` : ''}>`;
+}
+/** El asistente dice algo: su dibujo y un globo con el texto. */
+export const dice = (pose, texto) => `<div class="dice">${imagenAsistente(pose)}<p class="globo">${esc(texto)}</p></div>`;
+/** Botones para elegir asistente (cuestionario y perfil). */
+export const elegirAsistente = () => `<div class="grid-asistentes" role="group" aria-label="Asistentes">${ASISTENTES_VISTA.map(([id, nombre]) => `<button type="button" class="tarjeta-asistente" data-asistente="${id}" aria-pressed="${E.asistente === id}">${imagenAsistente(null, 'asistente-elegir', id)}<span>${esc(nombre)}</span></button>`).join('')}</div>`;
+
 export const NIVEL_VISTA = {
   principiante: { icono: '🌱', nombre: 'Principiante' },
   intermedio: { icono: '🌿', nombre: 'Intermedio' },
@@ -32,7 +48,7 @@ const NIVEL_DE_TIEMPO = { nunca: 'principiante', menos_6m: 'principiante', '6_24
 const PAUSAS = [[2, '1 a 3 meses'], [4, '3 a 6 meses'], [9, '6 meses a 1 año'], [18, 'Más de un año']];
 const DIAS = [[1, 'L', 'lunes'], [2, 'M', 'martes'], [3, 'M', 'miércoles'], [4, 'J', 'jueves'], [5, 'V', 'viernes'], [6, 'S', 'sábado'], [0, 'D', 'domingo']];
 
-const PASOS = ['objetivo', 'nivel', 'semana', 'lugar', 'musculos', 'favoritos', 'sobre_ti', 'salud', 'final'];
+const PASOS = ['asistente', 'objetivo', 'nivel', 'semana', 'lugar', 'musculos', 'favoritos', 'sobre_ti', 'salud', 'final'];
 /** Lo obligatorio de cada paso (los que no están, se pueden saltar). */
 const LISTO = {
   objetivo: r => !!r.objetivo_principal,
@@ -42,6 +58,14 @@ const LISTO = {
 };
 const pasoActual = () => Math.max(0, Math.min(PASOS.length - 1, E.paso || 0));
 const lugarPrincipal = () => (R().lugares || [])[0] || null;
+
+function pasoAsistente() {
+  return {
+    titulo: '¿Quién te acompaña?', pose: 'saludo',
+    sub: '¡Hola! Elige a tu asistente: te va a explicar el plan y te acompaña en cada paso. Lo puedes cambiar cuando quieras.',
+    html: elegirAsistente(),
+  };
+}
 
 function pasoObjetivo(r) {
   const ops = pregunta('objetivo_principal').opciones;
@@ -76,7 +100,7 @@ function pasoNivel(r) {
       return `<button type="button" class="fila-opcion" data-set="tiempo_entrenando" data-v="${o}" aria-pressed="${v === o}"><span>${esc(t)}</span><span class="nivel-chip ${n || 'mixto'}">${n ? `${NIVEL_VISTA[n].icono} ${NIVEL_VISTA[n].nombre}` : '🌿 o 🌳'}</span></button>`;
     }).join('')}</div>
     ${conConstancia ? `<div class="seguir"><p class="enunciado">${esc(pregunta('constancia').texto)}</p>${chips('constancia', pregunta('constancia').opciones, r.constancia)}</div>` : ''}
-    ${niv ? `<div class="resultado-nivel nivel-${niv}"><span class="emoji" aria-hidden="true">${NIVEL_VISTA[niv].icono}</span><div><strong>Partes como ${NIVEL_VISTA[niv].nombre.toLowerCase()}</strong><p class="pequeno">Tu nivel sube solo a medida que entrenas con la app.</p></div></div>` : '<p class="pequeno suave">🌱 → 🌿 → 🌳 Tu nivel sube solo a medida que entrenas con la app.</p>'}`,
+    ${niv ? `<div class="resultado-nivel nivel-${niv}"><img class="nivel-dibujo" src="img/niveles/${niv}.webp" alt="" width="256" height="256" decoding="async"><div><strong>Partes como ${NIVEL_VISTA[niv].nombre.toLowerCase()}</strong><p class="pequeno">Tu nivel sube solo a medida que entrenas con la app.</p></div></div>` : '<p class="pequeno suave">🌱 → 🌿 → 🌳 Tu nivel sube solo a medida que entrenas con la app.</p>'}`,
   };
 }
 
@@ -99,9 +123,9 @@ function pasoLugar(r) {
   const p = pregunta('lugares');
   return {
     titulo: '¿Dónde entrenas?', sub: 'El plan usa solo las máquinas que marques.',
-    html: `<div class="grid-opciones">${PRESETS().map(x => `<button type="button" class="tarjeta-opcion lugar" data-preset="${x.id}" aria-pressed="${l?.preset === x.id}"><span class="emoji" aria-hidden="true">${x.icono}</span><strong>${esc(x.nombre)}</strong><span class="pequeno">${esc(x.ayuda)}</span></button>`).join('')}</div>
+    html: `<div class="grid-opciones">${PRESETS().map(x => `<button type="button" class="tarjeta-opcion lugar" data-preset="${x.id}" aria-pressed="${l?.preset === x.id}"><img class="ilustracion" src="img/lugares/${x.id}.webp" alt="" width="256" height="256" decoding="async"><strong>${esc(x.nombre)}</strong><span class="pequeno">${esc(x.ayuda)}</span></button>`).join('')}</div>
     ${l ? `<div class="seguir"><p class="enunciado">Máquinas y equipos de ${esc(l.nombre)}</p><p class="pequeno suave">Marca lo que hay y quita lo que no. Es vital: el plan no te va a pedir una máquina que no tienes.</p>
-      <div class="chips-botones">${p.equipamiento.map(([eq, n]) => `<button type="button" class="chip-opcion" data-eq="${eq}" aria-pressed="${l.equipamiento.includes(eq)}">${esc(n)}</button>`).join('')}</div>
+      <div class="chips-botones">${p.equipamiento.map(([eq, n]) => `<button type="button" class="chip-opcion con-icono" data-eq="${eq}" aria-pressed="${l.equipamiento.includes(eq)}"><img src="img/equipos/${eq}.webp" alt="" width="256" height="256" decoding="async">${esc(n)}</button>`).join('')}</div>
       <p class="pequeno suave">${l.equipamiento.length ? `${l.equipamiento.length} marcadas.` : 'Sin máquinas: el plan va con tu peso corporal.'}</p></div>` : ''}`,
   };
 }
@@ -187,7 +211,7 @@ function pasoFinal(r) {
   };
 }
 
-const PINTAR = { objetivo: pasoObjetivo, nivel: pasoNivel, semana: pasoSemana, lugar: pasoLugar, musculos: pasoMusculos, favoritos: pasoFavoritos, sobre_ti: pasoSobreTi, salud: pasoSalud, final: pasoFinal };
+const PINTAR = { asistente: pasoAsistente, objetivo: pasoObjetivo, nivel: pasoNivel, semana: pasoSemana, lugar: pasoLugar, musculos: pasoMusculos, favoritos: pasoFavoritos, sobre_ti: pasoSobreTi, salud: pasoSalud, final: pasoFinal };
 
 function chips(id, opciones, v, num = false) {
   return `<div class="chips-botones">${opciones.map(([o, t]) => `<button type="button" class="chip-opcion" data-set="${id}" data-v="${esc(o)}"${num ? ' data-num' : ''} aria-pressed="${String(v) === String(o)}">${esc(t)}</button>`).join('')}</div>`;
@@ -198,7 +222,7 @@ export function vistaRapido(ir, armarPlan) {
   const i = pasoActual();
   const id = PASOS[i];
   const r = R();
-  const { titulo, sub, html } = PINTAR[id](r);
+  const { titulo, sub, html, pose } = PINTAR[id](r);
   const obligatorio = !!LISTO[id];
   const listo = !obligatorio || LISTO[id](r);
   const ultimo = i === PASOS.length - 1;
@@ -210,7 +234,7 @@ export function vistaRapido(ir, armarPlan) {
     </div>
     <p class="suave pequeno paso-n">Paso ${i + 1} de ${PASOS.length}${obligatorio ? ' · obligatorio' : ''}</p>
     <h1>${esc(titulo)}</h1>
-    <p class="sub-rapido">${esc(sub)}</p>
+    ${dice(pose || POSE_PASO[id], sub)}
     ${html}
     <div class="pie-rapido"><button type="button" class="boton primario grande" data-siguiente${listo ? '' : ' disabled'}>${ultimo ? 'Armar mi plan ✨' : 'Siguiente'}</button></div>
   </div>`;
@@ -218,6 +242,7 @@ export function vistaRapido(ir, armarPlan) {
 }
 
 const SIGUE_OBJETIVO = ['recomposicion', 'deporte', 'volver'];
+const POSE_PASO = { objetivo: 'pregunta', nivel: 'pensando', semana: 'calendario', lugar: 'explica', musculos: 'explica', favoritos: 'animo', sobre_ti: 'saludo', salud: 'cuidado', final: 'celebra' };
 
 function enlazarRapido(ir, armarPlan) {
   const raiz = $('rapido');
@@ -239,6 +264,7 @@ function enlazarRapido(ir, armarPlan) {
     const d = b.dataset;
     if (d.atras !== undefined) { E.paso = Math.max(0, pasoActual() - 1); guardar(); vistaRapido(ir, armarPlan); window.scrollTo(0, 0); return; }
     if (d.saltar !== undefined || d.siguiente !== undefined) return avanzar();
+    if (d.asistente) { E.asistente = d.asistente; guardar(); repintar(); setTimeout(avanzar, 260); return; }
     if (d.set) {
       const v = d.bool !== undefined ? d.v === 'true' : d.num !== undefined ? Number(d.v) : d.v;
       r[d.set] = r[d.set] === v && d.set !== 'objetivo_principal' && d.set !== 'tiempo_entrenando' ? undefined : v;
@@ -333,6 +359,7 @@ export function vistaPerfil(ir, armarPlan) {
     <p class="suave">Mientras más sepa de ti, mejor se ajusta el plan. Nada de esto es obligatorio: completa lo que quieras, cuando quieras.</p>
     <div class="avance-perfil"><div class="medidor"><i style="width:${Math.round((hechas / (total || 1)) * 100)}%"></i></div><span class="pequeno num">${hechas} de ${total}</span></div>
     ${cambio ? '<section class="tarjeta destacada"><h3>Cambiaste respuestas</h3><p class="pequeno">Tu plan todavía usa las de antes. Al aplicarlas se rehace desde el próximo lunes, con los pesos que ya anotaste.</p><div class="fila-botones"><button type="button" class="boton primario" id="aplicar">Aplicar a mi plan</button></div></section>' : ''}
+    <section class="tarjeta"><h3>Tu asistente</h3><p class="pequeno suave">Quién te acompaña en la app. Cambiarlo no cambia tu plan.</p>${elegirAsistente()}</section>
     <ul class="secciones-perfil">${secs.map(s => {
       const ps = preguntasVisibles(s);
       const n = ps.filter(p => respondida(R()[p.id])).length;
@@ -341,6 +368,10 @@ export function vistaPerfil(ir, armarPlan) {
     ${E.plan ? '' : '<div class="fila-botones"><button type="button" class="boton primario" id="aplicar">Armar mi plan</button></div>'}
   </div>`;
   document.querySelectorAll('[data-seccion]').forEach(b => b.onclick = () => { E.seccionPerfil = b.dataset.seccion; guardar(); ir('seccion'); });
+  document.querySelectorAll('#vista-perfil [data-asistente]').forEach(b => b.onclick = () => {
+    E.asistente = b.dataset.asistente; E.mensaje = `Tu asistente ahora es ${ASISTENTES_VISTA.find(([id]) => id === E.asistente)[1].toLowerCase()}.`;
+    guardar(); vistaPerfil(ir, armarPlan); mostrarMensaje();
+  });
   $('aplicar')?.addEventListener('click', () => armarPlan());
 }
 

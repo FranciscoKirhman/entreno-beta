@@ -5,7 +5,7 @@
 import { E, guardar, R, D, esc, $, hoy, indice, C, mostrarMensaje } from './comun.js';
 import { resumenPlan } from '../nucleo/resumen-plan.js';
 import { progresoNivel } from '../nucleo/nivel.js';
-import { OBJETIVO_VISTA, NIVEL_VISTA, imagenObjetivo } from './cuestionario.js';
+import { OBJETIVO_VISTA, NIVEL_VISTA, imagenObjetivo, dice } from './cuestionario.js';
 import { fechasEntrenadas } from './temporada.js';
 import { abrirHoja } from './hoja.js';
 import { grupos, etiquetaSuperserie } from '../nucleo/superseries.js';
@@ -46,6 +46,8 @@ export function vistaPlan(ir, { armarPlan, nuevo = false } = {}) {
       <button type="button" class="enlace" id="cambiar-objetivo">Cambiar objetivo</button>
     </section>
 
+    ${dice(nuevo ? 'celebra' : 'explica', nuevo ? '¡Listo! Lo armé con lo que me contaste. Abajo ves, punto por punto, cómo quedó lo que pediste.' : 'Este es tu plan. Abajo ves, punto por punto, cómo quedó lo que pediste.')}
+
     <h2>Tu semana</h2>
     <div class="tira-semana" role="list">${s.semana.map((x, i) => x
       ? `<div class="dia-tira entrena" role="listitem" aria-label="${esc(x.nombre_dia)}: ${esc(x.foco)}, ${x.minutos} minutos"><b>${LETRA[i]}</b><span>${esc(corto(x))}</span><small class="num">${x.minutos}′</small></div>`
@@ -80,7 +82,7 @@ export function vistaPlan(ir, { armarPlan, nuevo = false } = {}) {
 
     <h2>Tu nivel</h2>
     <section class="tarjeta nivel-tarjeta nivel-${nv.nivel}">
-      <div class="fila-nivel">${['principiante', 'intermedio', 'avanzado'].map(k => `<span class="paso-nivel${k === nv.nivel ? ' actual' : ''}${['principiante', 'intermedio', 'avanzado'].indexOf(k) < ['principiante', 'intermedio', 'avanzado'].indexOf(nv.nivel) ? ' pasado' : ''}">${NIVEL_VISTA[k].icono}<small>${NIVEL_VISTA[k].nombre}</small></span>`).join('<i aria-hidden="true"></i>')}</div>
+      <div class="fila-nivel">${['principiante', 'intermedio', 'avanzado'].map(k => `<span class="paso-nivel${k === nv.nivel ? ' actual' : ''}${['principiante', 'intermedio', 'avanzado'].indexOf(k) < ['principiante', 'intermedio', 'avanzado'].indexOf(nv.nivel) ? ' pasado' : ''}"><img src="img/niveles/${k}.webp" alt="" width="256" height="256" decoding="async"><small>${NIVEL_VISTA[k].nombre}</small></span>`).join('<i aria-hidden="true"></i>')}</div>
       <p class="pequeno">${nv.sube ? `Con lo que has entrenado ya corresponde ${NIVEL_VISTA[nv.alcanzado].nombre.toLowerCase()}: se aplica al armar tu próximo bloque.` : esc(nv.falta || 'Estás en el nivel más alto. El plan sigue ajustando cargas y volumen con lo que anotas.')}</p>
     </section>
 

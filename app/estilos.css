@@ -313,6 +313,7 @@ body.con-descanso main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 170
   --c-salud:#2F8A57; --c-deporte:#16808A; --c-volver:#A86F14; --c-ink:#FFFFFF;
   --c-principiante:#2F8A57; --c-intermedio:#3B5BA9; --c-avanzado:#7A4FB5;
   --foco-dibujo:transparent; /* en oscuro, una luz suave detrás de los dibujos para que la ropa oscura no se pierda */
+  --fondo-icono:#E4E7E9; /* detrás de los íconos de máquinas, que son negros */
 }
 @media (prefers-color-scheme: dark){
   :root{
@@ -320,6 +321,7 @@ body.con-descanso main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 170
     --c-salud:#5FBE84; --c-deporte:#4EC1CA; --c-volver:#E0B24E; --c-ink:#14171A;
     --c-principiante:#5FBE84; --c-intermedio:#7F9EE8; --c-avanzado:#B596E6;
     --foco-dibujo:rgba(231,229,222,.16);
+    --fondo-icono:#D3D7DA;
   }
 }
 .obj-ganar_musculo{--c:var(--c-ganar_musculo)} .obj-ganar_fuerza{--c:var(--c-ganar_fuerza)} .obj-bajar_grasa{--c:var(--c-bajar_grasa)}
@@ -469,3 +471,20 @@ input[type=search]{width:100%;min-height:44px;padding:9px 11px;border:1px solid 
 .ejercicios li.en-superserie,.ejercicios-plan li.en-superserie{box-shadow:inset 3px 0 0 var(--ss);padding-left:9px}
 .opcion-hoja .letra{width:auto;min-width:24px}
 .nota-hoja{text-align:center;margin:-6px 4px 12px}
+
+/* Asistente: cada persona elige el suyo; habla con un globo */
+.dice{display:grid;grid-template-columns:76px minmax(0,1fr);gap:10px;align-items:end;margin:6px 0 16px}
+.asistente-dice{width:76px;height:76px;object-fit:contain;object-position:bottom;border-radius:50%;background:radial-gradient(circle,var(--foco-dibujo) 0 45%,transparent 70%)}
+.globo{position:relative;margin:0 0 14px;padding:10px 12px;border-radius:16px 16px 16px 4px;background:var(--surface);border:1px solid var(--border);color:var(--ink);font-size:14.5px;line-height:1.45}
+.grid-asistentes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px}
+.tarjeta-asistente{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;padding:8px 2px 10px;border-radius:14px;border:2px solid var(--border);background:var(--surface);cursor:pointer;font-size:11.5px;font-weight:600;line-height:1.2;text-align:center;letter-spacing:-.01em}
+.tarjeta-asistente[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.asistente-elegir{width:100%;max-width:84px;aspect-ratio:1;height:auto;object-fit:contain;border-radius:50%;background:radial-gradient(circle,var(--foco-dibujo) 0 45%,transparent 70%)}
+
+/* Dibujos de niveles y máquinas */
+.resultado-nivel .nivel-dibujo{width:60px;height:60px;flex:0 0 60px;object-fit:contain}
+.paso-nivel img{width:52px;height:52px;object-fit:contain}
+.chip-opcion.con-icono{display:inline-flex;align-items:center;gap:6px;padding-left:6px}
+.chip-opcion.con-icono img{width:30px;height:30px;flex:0 0 30px;object-fit:contain;border-radius:8px;background:var(--fondo-icono)}
+.chip-opcion.con-icono[aria-pressed="true"]::before{content:none}
+.chip-opcion.con-icono[aria-pressed="true"] img{background:#FFFFFF}
