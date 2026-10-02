@@ -85,6 +85,7 @@ export function vistaResumen(ir, { id } = {}) {
     <span class="sobretitulo">${esc(fechaCorta(sesion.fecha))}${sesion.hora ? ` · ${esc(sesion.hora)}` : ''}${sesion.origen === 'hevy' ? ' · Hevy' : ''}</span>
     <h1>${esc(foco)}</h1>
     ${dice('celebra', n ? `¡${n} ${n === 1 ? 'récord' : 'récords'} hoy! Mira abajo cuáles.` : r.mal.length ? '¡Sesión terminada! Abajo ves qué salió bien y qué cuidar la próxima.' : '¡Sesión terminada! Hiciste lo que pedía el plan.')}
+    ${dia && !r.mal.length && IMAGENES.has('img/resumen/completa.webp') ? '<img class="medalla-completa" src="img/resumen/completa.webp" alt="Sesión completa" width="64" height="64" decoding="async">' : ''}
     <div class="cifras-resumen">
       ${cifra(r.minutos == null ? 'sin dato' : r.minutos < 1 ? 'menos de 1' : `${r.minutos}`, 'minutos')}
       ${cifra(esc(volumenTexto(r.volumen)), 'levantados en total')}

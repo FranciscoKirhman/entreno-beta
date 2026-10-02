@@ -611,6 +611,7 @@ details.pasos > summary{font-weight:600}
 .lista-resumen.record li{padding-left:0}
 .lista-resumen.record li::before{display:none}
 .lista-resumen .insignia{width:40px;height:40px;vertical-align:middle;margin-right:4px}
+.medalla-completa{display:block;width:64px;height:64px;margin:8px auto 0}
 .chip-record{display:inline-block;font:700 11px/1.6 var(--f-texto);letter-spacing:.02em;padding:0 7px;border-radius:999px;background:var(--good-soft);color:var(--good);vertical-align:1px}
 .agregar-serie{width:100%;min-height:38px;margin-top:8px;font-size:15px;color:var(--ink)}
 .fila-agregar .agregar-serie{flex:1 1 0;margin-top:0}
