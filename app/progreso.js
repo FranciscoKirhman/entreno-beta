@@ -14,6 +14,7 @@ import { seriesAnotadas } from '../nucleo/semanal.js';
 import { semanaPorMusculo } from '../nucleo/volumen-semana.js';
 import { NOMBRE_MUSCULO, mayuscula, imagenMusculo } from './musculos.js';
 import * as nube from './nube.js';
+import { esAsistido } from '../nucleo/catalogo.js';
 import { bienvenidaProgreso, historialVacio } from './estados-visuales.js';
 import { lineaSimple } from './grafico.js';
 import { sumarDias as sumar } from '../nucleo/agenda.js';
@@ -25,7 +26,7 @@ let verTodo = false;
 /** Sesiones para el historial: las guardadas (de la app o importadas de Hevy) y los días con series marcadas sin terminar. */
 function historial() {
   const out = E.sesiones.map(s => ({ id: s.id, fecha: s.fecha, titulo: s.titulo, origen: s.origen,
-    series: (s.series || []).map(x => ({ nombre: x.ejercicio_nombre || nombreEj(x.ejercicio_id), carga_kg: x.carga_kg, reps: x.reps ?? x.duracion_seg, tipo: x.tipo })) }));
+    series: (s.series || []).map(x => ({ nombre: x.ejercicio_nombre || nombreEj(x.ejercicio_id), carga_kg: x.carga_kg, reps: x.reps ?? x.duracion_seg, tipo: x.tipo, asistido: esAsistido(indice.porId.get(x.ejercicio_id)) })) }));
   for (const [fecha, porEj] of Object.entries(E.registro)) {
     if (E.sesiones.some(s => s.fecha === fecha && !s.origen)) continue;
     const series = Object.entries(porEj || {}).flatMap(([id, l]) => (l || []).filter(x => x?.hecho)
@@ -36,7 +37,8 @@ function historial() {
 }
 const series = n => `${n} serie${n === 1 ? '' : 's'}`;
 const deTrabajo = x => !['calentamiento', 'drop', 'descarga'].includes(x.tipo);
-const volumen = series => series.filter(x => x.tipo !== 'calentamiento').reduce((a, x) => a + (Number(x.carga_kg) || 0) * (Number(x.reps) || 0), 0);
+// La ayuda de la máquina (asistidos) no es peso levantado: no suma al volumen.
+const volumen = series => series.filter(x => x.tipo !== 'calentamiento' && !x.asistido).reduce((a, x) => a + (Number(x.carga_kg) || 0) * (Number(x.reps) || 0), 0);
 
 /** Esta semana por músculo: series hechas de las que tocan, con la imagen de cada músculo cuando llega. */
 function semanaHtml() {

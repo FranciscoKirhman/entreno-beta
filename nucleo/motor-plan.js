@@ -2,7 +2,7 @@
 // Pro ajusta. Todo lo que hace está explicado en contenido/evidencia/.
 import { calentamientoDeSesion, minutosCalentamiento } from './calentamiento-sesion.js';
 import { grupos } from './superseries.js';
-import { nivelAlcanza, tieneEquipo, articulacionesBloqueadas, cargaZonaBloqueada } from './catalogo.js';
+import { nivelAlcanza, tieneEquipo, articulacionesBloqueadas, cargaZonaBloqueada, esAsistido } from './catalogo.js';
 
 // ── Plantillas de día ───────────────────────────────────────────────────────
 // Cada hueco es [patrón, prioridad]. Prioridad 1 va primero y es lo último que se salta si falta tiempo.
@@ -69,6 +69,14 @@ export function incrementoPara(ej, lugar) {
 }
 
 const redondearA = (x, paso) => Math.round(x / paso) * paso;
+
+/** Ayuda de partida en un ejercicio asistido: la menor de la última sesión en que se hizo, o null si nunca se hizo. */
+export function ayudaInicial(registros) {
+  const conAyuda = registros.filter(s => Number(s.carga_kg) > 0);
+  if (!conAyuda.length) return null;
+  const ultima = conAyuda.reduce((m, s) => ((s.fecha || '') > m ? s.fecha || '' : m), '');
+  return Math.min(...conAyuda.filter(s => (s.fecha || '') === ultima).map(s => Number(s.carga_kg)));
+}
 
 const n = v => (v === null || v === undefined || v === '' ? null : Number(v));
 
@@ -226,13 +234,17 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     const pr = prescripcion(ej, prioridad, d);
     const inc = incrementoPara(ej, lugar);
     const maxMancuerna = ej.equipamiento.includes('mancuernas') ? Number(lugar.mancuerna_max_kg) || null : null;
-    const carga = pr.unidad === 'reps'
-      ? cargaInicial([...historialDe(ej.id), ...cargasRef.filter(c => c.ejercicio_id === ej.id)], pr.reps_min + 1, pr.rir, inc, maxMancuerna)
-      : null;
+    // En los asistidos el peso es la ayuda: se parte con la de la última vez (el máximo estimado no aplica).
+    const asistido = esAsistido(ej);
+    const carga = pr.unidad !== 'reps' ? null
+      : asistido ? ayudaInicial(historialDe(ej.id))
+        : cargaInicial([...historialDe(ej.id), ...cargasRef.filter(c => c.ejercicio_id === ej.id)], pr.reps_min + 1, pr.rir, inc, maxMancuerna);
     return {
       ejercicio_id: ej.id, nombre: ej.nombre, orden, prioridad, ...pr, carga_kg: carga,
       nota: carga == null && pr.unidad === 'reps' && inc
-        ? `Elige un peso con el que te sobren ${pr.rir} repeticiones en la última serie. Anótalo y la app lo ajusta desde ahí.`
+        ? asistido
+          ? `Elige la ayuda de la máquina con la que te sobren ${pr.rir} repeticiones en la última serie. Anótala y la app la ajusta desde ahí.`
+          : `Elige un peso con el que te sobren ${pr.rir} repeticiones en la última serie. Anótalo y la app lo ajusta desde ahí.`
         : null,
     };
   };

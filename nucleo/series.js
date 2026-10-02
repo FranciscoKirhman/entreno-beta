@@ -42,17 +42,20 @@ export function prioridadEsfuerzo(e, ej, d = {}, zonasConMolestia = []) {
  * @param s  serie hecha { kg, reps, rir?, rpe?, fallo? }
  * @param incremento kg que se pueden sumar o restar (null en peso corporal)
  */
-export function consejoSerie(e, s, incremento = null) {
+export function consejoSerie(e, s, incremento = null, { asistido = false } = {}) {
   const reps = Number(s.reps);
   if (!reps || e.unidad === 'seg') return null;
   const r = reservaDe(s);
   const ajuste = incremento ? ` (${String(incremento).replace('.', ',')} kg)` : '';
-  if (s.fallo && e.rir >= 1) return { tipo: 'bajar', texto: `Llegaste al fallo y el plan pedía dejar ${e.rir}. En la siguiente serie baja la carga un escalón${ajuste} o haz 1 a 2 repeticiones menos.` };
-  if (reps < e.reps_min && r != null && r < e.rir) return { tipo: 'bajar', texto: `No llegaste a ${e.reps_min} y quedaste más cerca del fallo de lo pedido: baja la carga un escalón${ajuste} para la siguiente.` };
+  // En los asistidos el peso es ayuda: costar más es subir la ayuda, y progresar es bajarla.
+  const masDificil = asistido ? `baja la ayuda un escalón${ajuste}` : `sube un escalón${ajuste}`;
+  const masFacil = asistido ? `sube la ayuda un escalón${ajuste}` : `baja la carga un escalón${ajuste}`;
+  if (s.fallo && e.rir >= 1) return { tipo: 'bajar', texto: `Llegaste al fallo y el plan pedía dejar ${e.rir}. En la siguiente serie ${masFacil} o haz 1 a 2 repeticiones menos.` };
+  if (reps < e.reps_min && r != null && r < e.rir) return { tipo: 'bajar', texto: `No llegaste a ${e.reps_min} y quedaste más cerca del fallo de lo pedido: ${masFacil} para la siguiente.` };
   if (reps < e.reps_min && (r == null || r >= e.rir)) return { tipo: 'mantener', texto: `Paraste antes del rango con reserva de sobra. Si te sentías bien, en la siguiente intenta llegar a ${e.reps_min}.` };
-  if (reps > e.reps_max && (r == null || r >= e.rir)) return { tipo: 'subir', texto: `Te pasaste del rango con reserva: en la siguiente serie sube un escalón${ajuste}.` };
-  if (r != null && r > e.rir + 1.5) return { tipo: 'subir', texto: `Te sobraban más repeticiones de las pedidas: sube un escalón${ajuste} o haz más repeticiones.` };
-  if (r != null && r < e.rir - 1.5) return { tipo: 'bajar', texto: `Quedaste mucho más cerca del fallo que lo pedido (${e.rir} en reserva): baja la carga un escalón${ajuste} para la siguiente.` };
-  if (r != null && r < e.rir - 0.5) return { tipo: 'mantener', texto: `Quedaste más cerca del fallo que lo pedido (${e.rir} en reserva). Mantén la carga y no fuerces más.` };
+  if (reps > e.reps_max && (r == null || r >= e.rir)) return { tipo: 'subir', texto: `Te pasaste del rango con reserva: en la siguiente serie ${masDificil}.` };
+  if (r != null && r > e.rir + 1.5) return { tipo: 'subir', texto: `Te sobraban más repeticiones de las pedidas: ${masDificil} o haz más repeticiones.` };
+  if (r != null && r < e.rir - 1.5) return { tipo: 'bajar', texto: `Quedaste mucho más cerca del fallo que lo pedido (${e.rir} en reserva): ${masFacil} para la siguiente.` };
+  if (r != null && r < e.rir - 0.5) return { tipo: 'mantener', texto: `Quedaste más cerca del fallo que lo pedido (${e.rir} en reserva). Mantén ${asistido ? 'la ayuda' : 'la carga'} y no fuerces más.` };
   return { tipo: 'bien', texto: 'Justo lo pedido. Sigue igual.' };
 }

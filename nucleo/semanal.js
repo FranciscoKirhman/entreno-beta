@@ -202,7 +202,7 @@ export function aplicarCheckin(p, aceptar) {
       for (const e of d.ejercicios) {
         const r = e.ejercicio_id && aceptar.includes(`${d.plantilla}|${e.ejercicio_id}`) && ref?.ejercicios.find(y => y.ejercicio_id === e.ejercicio_id);
         if (!r) continue;
-        if (e.carga_kg == null && r.carga_kg != null && /^Elige un peso/.test(e.nota || '')) e.nota = null;
+        if (e.carga_kg == null && r.carga_kg != null && /^Elige (un peso|la ayuda)/.test(e.nota || '')) e.nota = null;
         Object.assign(e, { carga_kg: r.carga_kg, reps_min: r.reps_min, reps_max: r.reps_max });
         if (r.rango_extendido !== undefined) e.rango_extendido = r.rango_extendido;
       }

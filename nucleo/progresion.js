@@ -1,6 +1,7 @@
 // Ajuste semanal de cargas: las reglas de contenido/checkin.json → semanal.reglas_de_ajuste, como código.
 // Son las mismas que se venían aplicando a mano en el tablero.
 import { e1rm, incrementoPara } from './motor-plan.js';
+import { esAsistido } from './catalogo.js';
 import { calidadPermiteSubir } from './notas.js';
 
 /** Kilos con coma decimal, como se escriben en Chile. */
@@ -15,8 +16,10 @@ const reserva = s => (s.rir != null ? s.rir : s.rpe != null ? 10 - s.rpe : null)
  * @param p.subioRecien la carga se subió la semana pasada
  * @param p.incremento kg que se pueden sumar (null en peso corporal)
  * @param p.calidad    respuestas del desplegable del ejercicio (forma, rango, molestia, dolor), si las hay
+ * @param p.asistido   el peso es la ayuda de la máquina: progresar es bajarla (y el máximo estimado no aplica)
  */
-export function ajustarEjercicio({ objetivo: o, hechas, semanas = [], subioRecien = false, incremento, calidad = null }) {
+export function ajustarEjercicio({ objetivo: o, hechas, semanas = [], subioRecien = false, incremento, calidad = null, asistido = false }) {
+  if (asistido) return ajustarAsistido({ objetivo: o, hechas, subioRecien, incremento, calidad });
   // Si el plan no indicaba carga ("elige un peso"), la referencia es la más pesada que anotó.
   const carga = o.carga_kg ?? (Math.max(0, ...hechas.map(s => Number(s.carga_kg) || 0)) || null);
   const mantener = (regla, motivo) => ({ accion: 'mantener', carga_kg: carga, reps_min: o.reps_min, reps_max: o.reps_max, regla, motivo });
@@ -67,6 +70,40 @@ export function ajustarEjercicio({ objetivo: o, hechas, semanas = [], subioRecie
   return mantener('repetir', 'Algunas series quedaron bajo el rango: repite la carga.');
 }
 
+/**
+ * Lo mismo para un ejercicio asistido: el peso es la ayuda de la máquina, así que progresar es bajarla y costar más es
+ * subirla. Sin máximo estimado (con ayuda no se puede calcular) ni la regla del 5% (la ayuda no es la carga real).
+ */
+function ajustarAsistido({ objetivo: o, hechas, subioRecien, incremento, calidad }) {
+  const anotadas = hechas.map(s => Number(s.carga_kg)).filter(x => x > 0);
+  // Si el plan no indicaba ayuda, la referencia es la menor con la que entrenó.
+  const ayuda = o.carga_kg ?? (anotadas.length ? Math.min(...anotadas) : null);
+  const mantener = (regla, motivo) => ({ accion: 'mantener', carga_kg: ayuda, reps_min: o.reps_min, reps_max: o.reps_max, regla, motivo });
+  if (!hechas.length) return mantener('sin_registro', 'No hay series registradas esta semana.');
+  if (!ayuda) return mantener('sin_carga', 'No anotaste la ayuda de la máquina: anótala en la próxima sesión para poder ajustarla.');
+  const completas = hechas.length >= o.series;
+  const todasAlTope = completas && hechas.slice(0, o.series).every(s => s.reps >= o.reps_max);
+  const conReserva = hechas.every(s => reserva(s) == null || reserva(s) >= o.rir - 0.5);
+  const sobrabanMuchas = hechas.every(s => reserva(s) != null && reserva(s) >= 4);
+  const bajoElRango = hechas.some(s => s.reps < o.reps_min);
+  if (subioRecien && bajoElRango && incremento) {
+    return { accion: 'bajar_carga', carga_kg: ayuda + incremento, reps_min: o.reps_min, reps_max: o.reps_max, regla: 'anclaje',
+      motivo: `Con ${kg(ayuda)} de ayuda no salió el rango completo. Vuelves a ${kg(ayuda + incremento)} de ayuda una semana antes de intentarlo de nuevo.` };
+  }
+  const cal = calidadPermiteSubir(calidad || {});
+  if (!cal.ok && ((todasAlTope && conReserva) || sobrabanMuchas)) return mantener('calidad', cal.motivo);
+  if ((todasAlTope && conReserva) || sobrabanMuchas) {
+    if (!incremento || ayuda - incremento <= 0) {
+      return { accion: 'subir_reps', carga_kg: ayuda, reps_min: o.reps_min + 2, reps_max: o.reps_max + 2, regla: 'doble_progresion',
+        motivo: 'Ya estás con la ayuda mínima: sube las repeticiones, o prueba la versión sin ayuda.' };
+    }
+    return { accion: 'subir_carga', carga_kg: ayuda - incremento, reps_min: o.reps_min, reps_max: o.reps_max, regla: 'doble_progresion',
+      motivo: sobrabanMuchas && !todasAlTope ? 'Te sobraban 4 o más repeticiones: baja la ayuda.' : `Todas las series en ${o.reps_max} repeticiones con reserva: baja la ayuda ${kg(incremento)}.` };
+  }
+  if (!bajoElRango) return { ...mantener('repeticiones_primero', 'Dentro del rango: misma ayuda y una repetición más por serie.'), accion: 'subir_reps_dentro' };
+  return mantener('repetir', 'Algunas series quedaron bajo el rango: repite la misma ayuda.');
+}
+
 /** Semana de descarga adelantada: dos semanas de energía baja, o rendimiento cayendo en 2+ ejercicios principales. */
 export function descargaAnticipada({ energias = [], caidas = 0, suenoMalo = [], estres = [] }) {
   const dos = (xs, f) => xs.length >= 2 && xs.slice(-2).every(f);
@@ -106,7 +143,7 @@ export function ajustarSemana({ plan, semana, registros, historialSemanas = {}, 
       const r = ajustarEjercicio({
         objetivo, hechas, semanas: historialSemanas[e.ejercicio_id] || [], subioRecien: subidas.has(e.ejercicio_id),
         incremento: ej ? incrementoPara(ej, lugar) : null,
-        calidad: calidades[e.ejercicio_id] || null,
+        calidad: calidades[e.ejercicio_id] || null, asistido: esAsistido(ej),
       });
       const aplica = !descarga && (!aceptar || aceptar.has(clave));
       if (!vistos.has(clave)) {
@@ -122,7 +159,7 @@ export function ajustarSemana({ plan, semana, registros, historialSemanas = {}, 
       }
       if (!aplica) continue;
       // La nota "elige un peso" sobra cuando la carga ya quedó fijada.
-      if (e.carga_kg == null && r.carga_kg != null && /^Elige un peso/.test(e.nota || '')) e.nota = null;
+      if (e.carga_kg == null && r.carga_kg != null && /^Elige (un peso|la ayuda)/.test(e.nota || '')) e.nota = null;
       Object.assign(e, { carga_kg: r.carga_kg, reps_min: r.reps_min, reps_max: r.reps_max });
       if (r.rango_extendido !== undefined) e.rango_extendido = r.rango_extendido;
     }

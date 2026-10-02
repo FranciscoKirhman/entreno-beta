@@ -5,7 +5,8 @@
 import { E, guardar, R, D, C, K, indice, hoy, ahora, esc, $, fechaCorta, ctxNucleo, escala, opcionesRadio, chk, cambiarPlan, numero, coma, mostrarMensaje, avisar, unidadPeso, enUnidad, aKilos, peso, volumenTexto, seriesTexto } from './comun.js';
 import { estadoDelPlan } from '../nucleo/registrado.js';
 import { recordsDeSerie } from '../nucleo/records.js';
-import { textoRecord, esAsistido } from './resumen.js';
+import { textoRecord } from './resumen.js';
+import { esAsistido, conLastre } from '../nucleo/catalogo.js';
 import { evaluarDia, ajustarSesion, TEXTO_RECOMENDACION } from '../nucleo/bienestar.js';
 import { checklist } from '../nucleo/suplementos.js';
 import { enlaceVideo } from '../nucleo/explicar.js';
@@ -266,7 +267,8 @@ function cajaRir(id, i, rir, delPlan, etiqueta) {
 
 /** Series hechas y totales de la sesión, y sus cifras. */
 function avance(dia) {
-  const filas = dia.ejercicios.flatMap((e, k) => filasDe(dia.fecha, e, k));
+  // La ayuda de la máquina (asistidos) no es peso levantado: cuenta la serie, pero no suma al volumen.
+  const filas = dia.ejercicios.flatMap((e, k) => filasDe(dia.fecha, e, k).map(x => (esAsistido(indice.porId.get(e.ejercicio_id)) ? { ...x, kg: null } : x)));
   return { hechas: filas.filter(x => x.hecho).length, total: filas.length, cifras: cifras(filas) };
 }
 const avanceHtml = ({ hechas, total, cifras: c }) => `<div class="avance" id="avance" aria-live="polite">
@@ -320,6 +322,9 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
   const etiq = etiquetas(filas);
   const u = unidadPeso();
   const seg = e.unidad === 'seg';
+  // Qué es el peso anotado: la ayuda de la máquina (asistidos) o lo que se agrega al cuerpo (lastre).
+  const ejCat = indice.porId.get(e.ejercicio_id);
+  const queEs = esAsistido(ejCat) ? 'ayuda' : conLastre(ejCat) ? 'lastre' : '';
   let iTrabajo = 0; // posición entre las series de trabajo, para mostrar lo de la vez anterior
   let kgHoy = null; // el último peso escrito hoy en una serie de trabajo: pasa a ser el gris de las siguientes
   const filasHtml = filas.map((r, i) => {
@@ -335,7 +340,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     return `<div class="serie tipo-${t}${r.hecho ? ' hecha' : ''}${seg ? ' seg' : ''}">
       <button type="button" class="tipo-serie" data-tipo-serie="${id}" data-i="${i}" aria-label="Serie ${etiq[i]}, ${TIPOS_SERIE[t].nombre.toLowerCase()}. Cambiar el tipo">${etiq[i]}</button>
       <span class="antes num">${esc(antes)}</span>
-      ${seg ? '' : `<input type="text" inputmode="decimal" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="kg" value="${esc(coma(enUnidad(r.kg)))}" placeholder="${esc(coma(enUnidad(kgGris)))}" aria-label="${u === 'lb' ? 'Libras' : 'Kilos'}, serie ${etiq[i]}">`}
+      ${seg ? '' : `<input type="text" inputmode="decimal" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="kg" value="${esc(coma(enUnidad(r.kg)))}" placeholder="${esc(coma(enUnidad(kgGris)))}" aria-label="${u === 'lb' ? 'Libras' : 'Kilos'}${queEs ? ` de ${queEs}` : ''}, serie ${etiq[i]}">`}
       <input type="text" inputmode="numeric" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="reps" value="${esc(r.reps ?? '')}" placeholder="${esc(repsGris ?? '')}" aria-label="${seg ? 'Segundos' : 'Repeticiones'}, serie ${etiq[i]}">
       ${seg ? '' : trabajo ? cajaRir(id, i, rir, e.rir, etiq[i]) : '<span aria-hidden="true"></span>'}
       <button type="button" class="check" data-hecho="${id}" data-i="${i}" aria-pressed="${Boolean(r.hecho)}" aria-label="Serie ${etiq[i]} hecha">${r.hecho ? '✓' : ''}</button>
@@ -351,13 +356,13 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     <div class="ej-cab">
       ${ej ? `<button type="button" class="ej-abrir" data-ficha="${e.ejercicio_id}" aria-label="${esc(nombre)}: cómo se hace y por qué">${miniatura(e.ejercicio_id)}</button>` : `<span class="miniatura vacia"></span>`}
       <div class="ej-textos"><span class="nombre">${g ? `<span class="chip-ss">${etiquetaSuperserie(g)}</span>` : ''}${esc(nombre)}</span>
-        <span class="ej-sub num">${esc(`${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${seg ? ' s' : ''} · RIR ${e.rir}${e.carga_kg ? ` · ${peso(e.carga_kg)}` : ''} · ${descTexto}`)}</span>
+        <span class="ej-sub num">${esc(`${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${seg ? ' s' : ''} · RIR ${e.rir}${e.carga_kg ? ` · ${peso(e.carga_kg)}${queEs ? ` de ${queEs}` : ''}` : ''} · ${descTexto}`)}</span>
         ${ej ? '' : '<span class="chip">Indicado por tu profesional</span>'}</div>
       ${ej ? `<button type="button" class="boton-icono" data-ficha="${e.ejercicio_id}" aria-label="Cómo se hace y por qué">${icono('info')}</button>` : ''}
       <button type="button" class="boton-icono" data-mas="${id}" aria-label="Más opciones de ${esc(nombre)}">${icono('puntos')}</button>
     </div>
     <div class="tabla-series${seg ? ' seg' : ''}">
-      <div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : 'Reps'}</span>${seg ? '' : '<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el RIR">RIR</button>'}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>
+      <div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${queEs || u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : 'Reps'}</span>${seg ? '' : '<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el RIR">RIR</button>'}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>
       ${filasHtml}
     </div>
     <div class="fila-agregar"><button type="button" class="boton agregar-serie" data-agregar="${id}">+ Serie</button>${seg ? '' : `<button type="button" class="boton agregar-serie" data-calentar="${id}">+ Calentamiento</button>`}</div>
@@ -443,7 +448,7 @@ function enlazar(ir, dia) {
   /** Consejo para la serie siguiente (nucleo/series.js), según reps, esfuerzo y fallo. Solo en las de trabajo. */
   const consejo = (e, r) => {
     const ej = indice.porId.get(e.ejercicio_id);
-    return deTrabajo(tipoDe(r)) ? consejoSerie(e, { ...r, fallo: tipoDe(r) === 'fallo' }, ej ? incrementoPara(ej, lugar) : null) : null;
+    return deTrabajo(tipoDe(r)) ? consejoSerie(e, { ...r, fallo: tipoDe(r) === 'fallo' }, ej ? incrementoPara(ej, lugar) : null, { asistido: esAsistido(ej) }) : null;
   };
 
   // Escribir kilos (o libras) y repeticiones: se guarda en kilos, sin volver a dibujar.
@@ -608,7 +613,8 @@ function enlazar(ir, dia) {
     if (r.hecho && deTrabajo(t) && e.ejercicio_id) {
       const seg = e.unidad === 'seg';
       const comoSerie = x => ({ carga_kg: seg ? null : x.kg ?? null, reps: seg ? null : x.reps ?? null, duracion_seg: seg ? x.reps ?? null : null, rir: x.rir ?? (x.rpe != null ? 10 - x.rpe : null) });
-      const previas = [...seriesAnotadas(E.sesiones, E.registro).filter(x => x.ejercicio_id === e.ejercicio_id && x.fecha < f),
+      // Lo anterior incluye otra sesión de hoy ya guardada (por ejemplo, una de Hevy en la mañana).
+      const previas = [...seriesAnotadas(E.sesiones, {}).filter(x => x.ejercicio_id === e.ejercicio_id && x.fecha <= f),
         ...lista.slice(0, i).filter(x => x?.hecho && deTrabajo(tipoDe(x))).map(comoSerie)];
       recs = recordsDeSerie(previas, comoSerie(r), { asistido: esAsistido(indice.porId.get(e.ejercicio_id)) });
     }

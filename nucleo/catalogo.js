@@ -39,6 +39,10 @@ export function buscar(indice, nombre) {
 }
 
 const NIVELES = ['principiante', 'intermedio', 'avanzado'];
+/** En los asistidos el peso anotado es la ayuda de la máquina: progresar es bajarla y no cuenta como carga levantada. */
+export const esAsistido = ej => ej?.asistido === true;
+/** Con lastre, el peso anotado es lo que se agrega al cuerpo (la dirección es la de siempre). */
+export const conLastre = ej => ej?.lastre === true;
 export const nivelAlcanza = (nivel, minimo) => NIVELES.indexOf(nivel) >= NIVELES.indexOf(minimo);
 
 /** El ejercicio se puede hacer con este equipamiento (lista de ids de cuestionario.json). */

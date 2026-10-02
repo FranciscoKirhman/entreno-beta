@@ -4,7 +4,7 @@
 import { E, R, D, C, TECNICA, EVIDENCIA, indice, hoy, esc, $, fechaCorta, coma, enUnidad, unidadPeso, peso } from './comun.js';
 import { explicarEjercicio, enlaceVideo } from '../nucleo/explicar.js';
 import { alternativas } from '../nucleo/checkin.js';
-import { articulacionesBloqueadas } from '../nucleo/catalogo.js';
+import { articulacionesBloqueadas, esAsistido } from '../nucleo/catalogo.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { tecnicaDe, marcas } from '../nucleo/ficha.js';
 import { NOMBRE_MUSCULO, lista, mayuscula, imagenesMusculos } from './musculos.js';
@@ -32,7 +32,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
   if (!ej) return ir(desde);
   const f = hoy();
   const t = tecnicaDe(ej, TECNICA);
-  const m = marcas(seriesAnotadas(E.sesiones, E.registro), id);
+  const m = marcas(seriesAnotadas(E.sesiones, E.registro), id, { asistido: esAsistido(ej) });
   const p = enElPlan(id);
   const ex = p ? explicarEjercicio({ e: p.e, dia: p.dia, plan: E.plan, respuestas: R(), derivados: D(), indice, evidencia: EVIDENCIA }) : null;
   const lugar = (R().lugares || []).find(l => l.principal) || (R().lugares || [])[0] || { equipamiento: [] };
@@ -71,9 +71,10 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
     <section class="tarjeta">
       <h2>Tus marcas</h2>
       ${m ? `<div class="marcas">
+        ${m.menorAyuda ? `<div><span class="num grande">${esc(kg(m.menorAyuda.carga_kg))} <small>× ${m.menorAyuda.reps}</small></span><span class="pequeno suave">Tu menor ayuda (el número es la ayuda de la máquina: bajarla es progresar)</span></div>` : ''}
         ${m.pesada ? `<div><span class="num grande">${esc(kg(m.pesada.carga_kg))} <small>× ${m.pesada.reps}</small></span><span class="pequeno suave">Tu serie más pesada</span></div>` : ''}
         ${m.mejor ? `<div><span class="num grande">${esc(kg(m.mejor.estimado))}</span><span class="pequeno suave">Lo que levantarías 1 vez (estimado)</span></div>` : ''}
-        ${!m.pesada && m.reps ? `<div><span class="num grande">${m.reps.reps}${seg ? ' s' : ''}</span><span class="pequeno suave">Tu mejor serie</span></div>` : ''}
+        ${!m.pesada && !m.menorAyuda && m.reps ? `<div><span class="num grande">${m.reps.reps}${seg ? ' s' : ''}</span><span class="pequeno suave">Tu mejor serie</span></div>` : ''}
       </div>
       <p class="pequeno suave">Anotado ${m.veces === 1 ? '1 vez' : `${m.veces} veces`}. La última, el ${esc(fechaCorta(m.ultima.fecha))}: <span class="num">${esc(m.ultima.series.map(s => (s.carga_kg ? `${coma(enUnidad(s.carga_kg))} × ${s.reps ?? ''}` : `${s.reps ?? ''}${seg ? ' s' : ''}`)).join(', '))}</span></p>`
         : '<p class="suave pequeno">Todavía no lo anotas. Cuando lo hagas, aquí vas a ver tu serie más pesada, tu máximo estimado y cómo te fue la última vez.</p>'}

@@ -1,7 +1,8 @@
 // Récords, como en Hevy: al marcar una serie se compara con todo lo anterior de ese ejercicio. Tipos: más peso, mejor
 // máximo estimado (1RM), mejor volumen de una serie (peso × repeticiones), más repeticiones con ese peso o más, más
 // repeticiones sin peso y más tiempo. La primera vez que se hace un ejercicio no hay récord: no hay con qué comparar.
-// En los ejercicios asistidos el peso es ayuda, no carga: ahí no se cuentan récords de peso.
+// En los ejercicios asistidos el peso es la ayuda de la máquina: ahí el récord es usar menos ayuda que nunca, o hacer
+// más repeticiones con la misma ayuda o menos.
 import { e1rm } from './motor-plan.js';
 
 const n = v => (v == null || v === '' ? null : Number(v));
@@ -11,7 +12,7 @@ const redondo = x => Math.round(x * 10) / 10;
 /**
  * Récords que logra una serie contra las anteriores del mismo ejercicio.
  * @param previas series anteriores del ejercicio [{carga_kg, reps, duracion_seg, rir, rpe}] (de trabajo)
- * @returns [{tipo: 'peso' | 'e1rm' | 'volumen' | 'reps_con_peso' | 'reps' | 'duracion', valor, antes}]
+ * @returns [{tipo: 'peso' | 'e1rm' | 'volumen' | 'reps_con_peso' | 'reps' | 'duracion' | 'menos_ayuda' | 'reps_con_ayuda', valor, antes}]
  */
 export function recordsDeSerie(previas, s, { asistido = false } = {}) {
   if (!previas.length) return [];
@@ -31,6 +32,16 @@ export function recordsDeSerie(previas, s, { asistido = false } = {}) {
     if (pesadas.length && e > antesE + 0.05) out.push({ tipo: 'e1rm', valor: redondo(e), antes: redondo(antesE) });
     const antesV = maximo(pesadas, p => n(p.carga_kg) * n(p.reps));
     if (pesadas.length && kg * reps > antesV) out.push({ tipo: 'volumen', valor: redondo(kg * reps), antes: redondo(antesV) });
+  }
+  if (asistido && conPeso(s)) {
+    const conAyuda = previas.filter(conPeso);
+    const menorAntes = conAyuda.length ? Math.min(...conAyuda.map(p => n(p.carga_kg))) : null; // la menor ayuda usada antes
+    if (menorAntes != null && reps >= 5 && kg < menorAntes) out.push({ tipo: 'menos_ayuda', valor: kg, reps, antes: menorAntes });
+    else {
+      const conIgualOMenos = conAyuda.filter(p => n(p.carga_kg) <= kg);
+      const antesReps = maximo(conIgualOMenos, p => n(p.reps));
+      if (conIgualOMenos.length && reps > antesReps) out.push({ tipo: 'reps_con_ayuda', valor: reps, kg, antes: antesReps });
+    }
   }
   if (reps > 0 && !(kg > 0)) {
     const sinPeso = previas.filter(p => n(p.reps) > 0 && !(n(p.carga_kg) > 0));
@@ -58,8 +69,9 @@ export function recordsDeSesion(historial, series, { asistidos = new Set() } = {
   // Por ejercicio y tipo, el mejor de la sesión (si dos series superan el récord, cuenta la mejor).
   const mejor = new Map();
   for (const r of out) {
-    const k = `${r.ejercicio_id}|${r.tipo}${r.tipo === 'reps_con_peso' ? `|${r.kg}` : ''}`;
-    if (!mejor.has(k) || r.valor > mejor.get(k).valor) mejor.set(k, r);
+    const k = `${r.ejercicio_id}|${r.tipo}${['reps_con_peso', 'reps_con_ayuda'].includes(r.tipo) ? `|${r.kg}` : ''}`;
+    const supera = (x, y) => (x.tipo === 'menos_ayuda' ? x.valor < y.valor : x.valor > y.valor); // en la ayuda, menos es mejor
+    if (!mejor.has(k) || supera(r, mejor.get(k))) mejor.set(k, r);
   }
   return [...mejor.values()];
 }

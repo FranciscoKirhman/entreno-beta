@@ -3,6 +3,7 @@
 import { E, guardar, R, K, esc, $, hoy, indice, fechaCorta, cambiarPlan, peso, seriesTexto, mostrarSemana } from './comun.js';
 import { semanaParaCheckin, proponerCheckin, aplicarCheckin } from '../nucleo/semanal.js';
 import * as nube from './nube.js';
+import { esAsistido } from '../nucleo/catalogo.js';
 
 const kg = peso;
 const claveDe = semana => `${E.plan.inicio}|${semana}`;
@@ -38,6 +39,12 @@ const entradaPara = semana => ({ plan: E.plan, semana, sesiones: E.sesiones, reg
 
 function propuestaTexto(it) {
   const rango = `${it.reps_min} a ${it.reps_max} reps`;
+  // En los asistidos el peso es la ayuda: subir de nivel es bajar la ayuda.
+  if (esAsistido(indice.porId.get(it.ejercicio_id))) {
+    if (it.accion === 'subir_carga') return `Baja la ayuda a ${kg(it.carga_kg)}`;
+    if (it.accion === 'bajar_carga') return `Sube la ayuda a ${kg(it.carga_kg)}`;
+    if (it.accion === 'mantener' && it.carga_kg) return `Misma ayuda: ${kg(it.carga_kg)}`;
+  }
   switch (it.accion) {
     case 'subir_carga': return `Sube a ${kg(it.carga_kg)}${it.reps_max !== it.antes.reps_max ? ` · ${rango}` : ''}`;
     case 'bajar_carga': return `Baja a ${kg(it.carga_kg)}`;
