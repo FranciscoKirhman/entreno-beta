@@ -237,20 +237,3 @@ export async function borrarFoto(f) {
 // ── Cuenta ──────────────────────────────────────────────────────────────────
 export const descargarDatos = () => funcion('cuenta', { metodo: 'GET' });
 export async function borrarCuenta() { await funcion('cuenta', { metodo: 'DELETE' }); await supa.auth.signOut(); sesion = null; }
-
-// Conexión directa: el proveedor de identidad conserva claves y tokens OAuth.
-export const detallesAutorizacion = id => supa.auth.oauth.getAuthorizationDetails(id).then(ok);
-export const aprobarAutorizacion = id => supa.auth.oauth.approveAuthorization(id, { skipBrowserRedirect: true }).then(ok);
-export const negarAutorizacion = id => supa.auth.oauth.denyAuthorization(id, { skipBrowserRedirect: true }).then(ok);
-export async function autorizarConexionIA(clientId) {
-  ok(await supa.from('conexiones_ia').upsert({ user_id: uid(), client_id: clientId, activa: true, actualizado: new Date().toISOString() }));
-}
-export const conexionesIA = () => supa.auth.oauth.listGrants().then(ok);
-export async function revocarConexionIA(clientId) {
-  // Primero se bloquean las herramientas; incluso un token todavía vigente deja de funcionar.
-  ok(await supa.from('conexiones_ia').update({ activa: false }).eq('user_id', uid()).eq('client_id', clientId));
-  ok(await supa.auth.oauth.revokeGrant({ clientId }));
-}
-export const propuestasIA = () => funcion('propuestas-ia', { metodo: 'GET' });
-export const confirmarPropuestaIA = id => funcion('propuestas-ia', { cuerpo: { id } });
-export const descartarPropuestaIA = id => funcion('propuestas-ia', { metodo: 'DELETE', cuerpo: { id } });
