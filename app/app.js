@@ -80,6 +80,16 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
     if (!borrador) E.respuestas = respuestas;
     E.plan = plan;
   }
+  else if (R().objetivo_principal && E.plan?.dias?.length && !E.plan.bloqueado && !E.plan.id) {
+    // Perfil local copiado a una cuenta vacía: se sube su plan tal cual (el servidor lo valida), sin armar otro.
+    await consultar(() => nube.guardarCuestionario(R()));
+    try { const r = await consultar(() => nube.guardarPlan(E.plan)); E.plan.id = r.id; }
+    catch (e) {
+      if (/cuenta cambió/.test(e.message)) throw e;
+      E.planPendiente = structuredClone(E.plan);
+      E.mensaje = `Tu plan quedó en este teléfono, pero el servidor no lo aceptó: ${e.datos?.errores?.map(x => x.mensaje).join(' ') || e.message}`;
+    }
+  }
   else if (R().objetivo_principal) await consultar(() => armarPlan());
   let p = await consultar(() => nube.cargarPreferencias());
   if (!p.preferencias_actualizadas) { p = { unidad: R().unidad || 'kg', asistente: E.asistente || 'entrenadora' }; await consultar(() => nube.guardarPreferencias(p)); }

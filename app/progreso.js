@@ -54,7 +54,7 @@ function historialHtml() {
   if (!h.length) return '<p class="pequeno suave">Todavía no hay sesiones. Marca tus series en Hoy, o importa tu historial de Hevy en Más.</p>';
   const lunes = sumarDias(hoy(), -((diaSemana(hoy()) + 6) % 7));
   const semana = h.filter(s => s.fecha >= lunes);
-  const resumen = semana.length ? `Esta semana: ${semana.length} sesión${semana.length === 1 ? '' : 'es'} · ${series(semana.reduce((a, s) => a + s.series.filter(deTrabajo).length, 0))} de trabajo · volumen ${volumenTexto(semana.reduce((a, s) => a + volumen(s.series), 0))}.` : 'Esta semana todavía no entrenas.';
+  const resumen = semana.length ? `Esta semana: ${semana.length} ${semana.length === 1 ? 'sesión' : 'sesiones'} · ${series(semana.reduce((a, s) => a + s.series.filter(deTrabajo).length, 0))} de trabajo · volumen ${volumenTexto(semana.reduce((a, s) => a + volumen(s.series), 0))}.` : 'Esta semana todavía no entrenas.';
   const item = s => {
     const porEj = [];
     for (const x of s.series) {
@@ -84,7 +84,7 @@ export async function vistaProgreso(ir) {
     <section class="tarjeta">
       <h3>Historial</h3>
       ${historialHtml()}
-      ${nube.conectado() && cola.total ? `<div class="aviso ojo" id="cola">${cola.total} cosa${cola.total === 1 ? '' : 's'} esperando subir a tu cuenta (${[cola.sesiones && `${cola.sesiones} sesión${cola.sesiones === 1 ? '' : 'es'}`, cola.indicaciones && `${cola.indicaciones} indicación${cola.indicaciones === 1 ? '' : 'es'}`, cola.bienestar && `${cola.bienestar} registro${cola.bienestar === 1 ? '' : 's'} de bienestar`].filter(Boolean).join(', ')}). Quedan guardadas en este teléfono y se suben solas cuando hay señal.${cola.detenidos ? ` Después de varios intentos se pausó${cola.error ? ` (${esc(cola.error)})` : ''}.` : ''}
+      ${nube.conectado() && cola.total ? `<div class="aviso ojo" id="cola">${cola.total} cosa${cola.total === 1 ? '' : 's'} esperando subir a tu cuenta (${[cola.sesiones && `${cola.sesiones} ${cola.sesiones === 1 ? 'sesión' : 'sesiones'}`, cola.indicaciones && `${cola.indicaciones} indicación${cola.indicaciones === 1 ? '' : 'es'}`, cola.bienestar && `${cola.bienestar} registro${cola.bienestar === 1 ? '' : 's'} de bienestar`].filter(Boolean).join(', ')}). Quedan guardadas en este teléfono y se suben solas cuando hay señal.${cola.detenidos ? ` Después de varios intentos se pausó${cola.error ? ` (${esc(cola.error)})` : ''}.` : ''}
         <div class="fila-botones"><button type="button" class="boton" id="reintentar">Reintentar ahora</button></div></div>` : ''}
     </section>
 

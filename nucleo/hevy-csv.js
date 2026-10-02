@@ -164,7 +164,7 @@ export function aFilas(w, indice, origen = 'hevy_csv') {
         orden: orden++,
         ejercicio_id: del?.id ?? null,
         ejercicio_nombre: e.title,
-        tipo: TIPO_SERIE[s.set_type] || 'efectiva',
+        tipo: TIPO_SERIE[s.set_type ?? s.type] || 'efectiva', // el CSV dice set_type; la API de Hevy, type
         carga_kg: s.weight_kg,
         reps: s.reps,
         rpe: s.rpe,

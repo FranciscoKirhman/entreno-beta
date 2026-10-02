@@ -293,7 +293,7 @@ function conexionesHtml() {
       <li>
         <div class="cab-conexion">${icono('hevy')}<strong>Hevy</strong><label class="accion-conexion">Importar<input type="file" id="archivo-hevy" accept=".csv,text/csv" hidden></label></div>
         <p class="pequeno suave">Trae tu historial de Hevy: la app lo usa para "la vez anterior" y para partir el plan con tus pesos reales. En Hevy: Perfil → Ajustes → Exportar e importar datos → Exportar entrenamientos; guarda el archivo y elígelo aquí.</p>
-        ${importadas.length ? `<p class="pequeno">Importadas: ${importadas.length} sesión${importadas.length === 1 ? '' : 'es'} (la última, ${esc(fechaCorta(ultima))}). <button type="button" class="enlace" id="quitar-hevy">Quitar lo importado</button></p>` : ''}
+        ${importadas.length ? `<p class="pequeno">Importadas: ${importadas.length} ${importadas.length === 1 ? 'sesión' : 'sesiones'} (la última, ${esc(fechaCorta(ultima))}). <button type="button" class="enlace" id="quitar-hevy">Quitar lo importado</button></p>` : ''}
         <div id="estado-hevy"></div>
       </li>
       <li>
@@ -323,7 +323,7 @@ function enlazarConexiones(repintar) {
     catch (e) { out.innerHTML = `<div class="aviso alerta">No pude leer el archivo: ${esc(e.message)}</div>`; return; }
     E.sesiones.push(...r.nuevas);
     E.sesiones.sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
-    E.mensaje = r.nuevas.length ? `Importé ${r.nuevas.length} sesión${r.nuevas.length === 1 ? '' : 'es'} de Hevy${r.total > r.nuevas.length ? ` (las otras ${r.total - r.nuevas.length} ya estaban)` : ''}.` : 'Esas sesiones ya estaban importadas.';
+    E.mensaje = r.nuevas.length ? `Importé ${r.nuevas.length} ${r.nuevas.length === 1 ? 'sesión' : 'sesiones'} de Hevy${r.total > r.nuevas.length ? ` (las otras ${r.total - r.nuevas.length} ya estaban)` : ''}.` : 'Esas sesiones ya estaban importadas.';
     if (r.sinCatalogo.length) E.mensaje += ` ${r.sinCatalogo.length} ejercicio${r.sinCatalogo.length === 1 ? '' : 's'} no calza${r.sinCatalogo.length === 1 ? '' : 'n'} con el catálogo y no cuenta${r.sinCatalogo.length === 1 ? '' : 'n'} para "la vez anterior": ${r.sinCatalogo.slice(0, 4).join(', ')}${r.sinCatalogo.length > 4 ? '…' : ''}.`;
     guardar(); repintar();
   };
