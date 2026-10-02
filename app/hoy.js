@@ -34,6 +34,8 @@ import * as nube from './nube.js';
 import { descansoHtml } from './estados-visuales.js';
 import { proponerEdicion } from './editar-sesion-ui.js';
 import { serieCompleta } from '../nucleo/serie-completa.js';
+import { ilustracionesCalentamiento } from '../nucleo/imagenes-calentamiento.js';
+import { IMAGENES } from './comun.js';
 import { elegirCardio } from './cardio-ui.js';
 import { CARDIOS, registroCardio } from '../nucleo/cardio.js';
 import { hayImagen, srcMiniatura } from './imagenes.js';
@@ -220,10 +222,13 @@ function pasosHtml(pasos, tipo, f, titulo, dia) {
       const tramos = tramosDePaso(p.name);
       const zona = ['codo', 'hombro', 'rodilla', 'cadera', 'tobillo', 'lumbar', 'muneca', 'cuello'].find(z => p.name.toLowerCase().includes(z));
       const imagen = p.imagen || (zona ? `img/articulaciones/${zona}.webp` : /cardio|bicicleta|caminata/i.test(p.name) ? 'img/ejercicios/mini/caminata.webp' : null);
+      const ilustraciones = tipo === 'cal' ? ilustracionesCalentamiento(p, IMAGENES) : [];
       const total = tramos.reduce((x, t) => x + t.seg, 0);
       return `<li class="paso${hechos[i] ? ' hecho' : ''}">
         <button type="button" class="check" data-paso="${tipo}" data-i="${i}"${p.clave ? ` data-clave="${esc(p.clave)}"` : ''} aria-pressed="${Boolean(hechos[i])}" aria-label="${esc(p.name)}: hecho">${hechos[i] ? '✓' : ''}</button>
-        ${imagen && hayImagen(imagen) ? `<img class="paso-imagen" src="${imagen}" alt="" width="56" height="56">` : ''}<div class="paso-texto">${p.fase ? `<span class="paso-fase">${esc(p.fase)}</span>` : ''}<strong>${esc(parte.nombre)}</strong>${parte.dosis ? `<span class="paso-dosis">${esc(parte.dosis)}</span>` : ''}${p.how ? `<p class="pequeno suave">${esc(p.how)}</p>` : ''}</div>
+        ${tipo !== 'cal' && imagen && hayImagen(imagen) ? `<img class="paso-imagen" src="${imagen}" alt="" width="56" height="56">` : ''}<div class="paso-texto">${p.fase ? `<span class="paso-fase">${esc(p.fase)}</span>` : ''}<strong>${esc(parte.nombre)}</strong>${parte.dosis ? `<span class="paso-dosis">${esc(parte.dosis)}</span>` : ''}</div>
+        ${ilustraciones.map(x => `<figure class="paso-ilustracion${x.tipo === 'referencia' ? ' referencia' : ''}"><img src="${esc(x.src)}" alt="${esc(x.alt)}" width="768" height="512" loading="lazy" decoding="async">${x.tipo === 'referencia' ? '<figcaption>Equipo o zona de referencia</figcaption>' : ''}</figure>`).join('')}
+        ${p.how ? `<p class="paso-instruccion pequeno suave">${esc(p.how)}</p>` : ''}
         ${p.por_que ? `<p class="paso-motivo pequeno">${esc(p.por_que)}</p>` : ''}
         ${p.series?.length ? `<div class="aproximaciones">${p.series.map(x => x.kg != null ? `<span>${esc(peso(x.kg))} × ${x.reps}</span>` : '<span>Carga liviana por elegir</span>').join('')}</div>` : ''}
         ${p.agregar_id ? `<button type="button" class="boton chico" data-preparar="${esc(p.agregar_id)}">${filasDe(f, dia.ejercicios.find(e => e.ejercicio_id === p.agregar_id), dia.ejercicios.findIndex(e => e.ejercicio_id === p.agregar_id)).some(x => tipoDe(x) === 'calentamiento') ? 'Ver series de aproximación' : 'Agregar a la tabla'}</button>` : ''}

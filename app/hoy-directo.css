@@ -32,3 +32,9 @@
 .aproximaciones{display:flex;flex-wrap:wrap;gap:6px;flex:1 0 100%}
 .aproximaciones span{border-radius:8px;background:var(--fill);padding:8px;font-size:13px;font-weight:600}
 .calentamiento-directo .paso-texto p{line-height:1.55;margin:7px 0 0}
+/* El dibujo del movimiento tiene espacio propio para ver ambas posiciones en el teléfono. */
+.paso-ilustracion{flex:1 0 100%;width:100%;min-width:0;margin:6px 0;border-radius:14px;overflow:hidden;background:#fff}
+.paso-ilustracion img{display:block;width:100%;height:auto;aspect-ratio:3/2;object-fit:contain;padding:6px;box-sizing:border-box}
+.paso-ilustracion.referencia img{height:130px;aspect-ratio:auto}
+.paso-ilustracion figcaption{color:#555;font-size:12px;text-align:center;padding:0 8px 10px}
+.paso-instruccion{flex:1 0 100%;line-height:1.55;margin:4px 0}

@@ -1,7 +1,7 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
 // Red primero, con límite de tiempo, y la copia guardada como respaldo (igual que el tablero).
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-02 19:12 · d298441+";
+const VERSION = "2026-10-02 19:41 · 337a36c+";
 const ARCHIVOS = [
  "./",
  "app.js",
@@ -162,6 +162,23 @@ const ARCHIVOS = [
  "img/avatares/av14.webp",
  "img/avatares/av15.webp",
  "img/avatares/av16.webp",
+ "img/calentamiento/bisagra_pared.webp",
+ "img/calentamiento/cadera_90_90.webp",
+ "img/calentamiento/circulos_cadera.webp",
+ "img/calentamiento/circulos_hombro.webp",
+ "img/calentamiento/colgar_barra.webp",
+ "img/calentamiento/deslizamiento_pared.webp",
+ "img/calentamiento/dorsal_banda.webp",
+ "img/calentamiento/empuje_omoplatos_pared.webp",
+ "img/calentamiento/extension_rodilla_banda.webp",
+ "img/calentamiento/face_pull_banda.webp",
+ "img/calentamiento/flexion_codo_liviana.webp",
+ "img/calentamiento/movilidad_cuello.webp",
+ "img/calentamiento/movilidad_muneca.webp",
+ "img/calentamiento/paso_banda.webp",
+ "img/calentamiento/rotacion_externa_banda.webp",
+ "img/calentamiento/rotacion_toracica.webp",
+ "img/calentamiento/tobillo_pared.webp",
  "img/disponibles.json",
  "img/ejercicios/abdominal_completo.webp",
  "img/ejercicios/abductor_de_pie.webp",
@@ -570,6 +587,7 @@ const ARCHIVOS = [
  "../nucleo/hevy-csv.js",
  "../nucleo/historial-ejemplo.js",
  "../nucleo/ics.js",
+ "../nucleo/imagenes-calentamiento.js",
  "../nucleo/importar-plan.js",
  "../nucleo/motor-plan.js",
  "../nucleo/nivel.js",
