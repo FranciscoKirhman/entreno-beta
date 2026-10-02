@@ -14,6 +14,8 @@ import { seriesAnotadas } from '../nucleo/semanal.js';
 import { semanaPorMusculo } from '../nucleo/volumen-semana.js';
 import { NOMBRE_MUSCULO, mayuscula, imagenMusculo } from './musculos.js';
 import * as nube from './nube.js';
+import { lineaSimple } from './grafico.js';
+import { sumarDias as sumar } from '../nucleo/agenda.js';
 
 const DIAS = [[1, 'L'], [2, 'M'], [3, 'M'], [4, 'J'], [5, 'V'], [6, 'S'], [0, 'D']];
 const nombreEj = id => indice.porId.get(id)?.nombre || id;
@@ -49,6 +51,29 @@ function semanaHtml() {
   </section>`;
 }
 
+/** Sueño y ánimo de las últimas 4 semanas (lo respondido en "¿Cómo estás hoy?"): dos gráficos, uno por medida. */
+const ANIMO = ['', 'Muy bajo', 'Bajo', 'Normal', 'Bien', 'Muy bien'];
+function suenoAnimoHtml() {
+  const hasta = hoy(), desde = sumar(hasta, -27);
+  const dias = Object.entries(E.bienestar || {}).filter(([f, b]) => f >= desde && f <= hasta && b && (b.sueno_horas != null || b.animo != null))
+    .sort(([a], [b]) => (a < b ? -1 : 1));
+  const horas = h => (h >= 9 ? '9 o más horas' : h <= 5 ? '5 o menos horas' : `${h} horas`);
+  const sueno = dias.filter(([, b]) => b.sueno_horas != null).map(([fecha, b]) => ({ fecha, valor: b.sueno_horas, texto: horas(b.sueno_horas) }));
+  const animo = dias.filter(([, b]) => b.animo != null).map(([fecha, b]) => ({ fecha, valor: b.animo, texto: ANIMO[b.animo].toLowerCase() }));
+  const cabeza = '<h3>Sueño y ánimo</h3><p class="pequeno suave">Lo que respondes en "¿Cómo estás hoy?", las últimas 4 semanas. Toca un punto para ver el día.</p>';
+  if (sueno.length + animo.length < 2) return `<section class="tarjeta">${cabeza}<p class="pequeno">Todavía hay pocos días. Responde "¿Cómo estás hoy?" en Hoy (toma 10 segundos) y aquí vas a ver cómo duermes y cómo andas de ánimo.</p></section>`;
+  const semana = xs => xs.filter(p => p.fecha >= sumar(hasta, -6));
+  const prom = xs => (xs.length ? xs.reduce((a, p) => a + p.valor, 0) / xs.length : null);
+  const pS = prom(semana(sueno)), pA = prom(semana(animo));
+  return `<section class="tarjeta">${cabeza}
+    <div class="cifra-grafico"><span>Sueño</span><strong class="num">${pS == null ? 'sin datos esta semana' : `${pS.toFixed(1).replace('.', ',')} h promedio esta semana`}</strong></div>
+    ${lineaSimple({ puntos: sueno, desde, hasta, min: 4, max: 10, marcas: [{ valor: 6, texto: '6 h' }, { valor: 8, texto: '8 h' }], titulo: `Horas de sueño, ${sueno.length} días respondidos`, izquierda: 50 })}
+    <div class="cifra-grafico"><span>Ánimo</span><strong>${pA == null ? 'sin datos esta semana' : `${ANIMO[Math.round(pA)].toLowerCase()} en promedio esta semana`}</strong></div>
+    ${lineaSimple({ puntos: animo, desde, hasta, min: 1, max: 5, marcas: [{ valor: 1, texto: 'Muy bajo' }, { valor: 3, texto: 'Normal' }, { valor: 5, texto: 'Muy bien' }], titulo: `Ánimo, ${animo.length} días respondidos`, izquierda: 50 })}
+    <details class="extra"><summary>Ver como tabla</summary><ul class="pequeno lista-simple">${[...dias].reverse().map(([f, b]) => `<li><span>${esc(fechaCorta(f))}</span><span>${[b.sueno_horas != null && horas(b.sueno_horas), b.animo != null && `ánimo ${ANIMO[b.animo].toLowerCase()}`].filter(Boolean).join(' · ')}</span></li>`).join('')}</ul></details>
+  </section>`;
+}
+
 function historialHtml() {
   const h = historial();
   if (!h.length) return '<p class="pequeno suave">Todavía no hay sesiones. Marca tus series en Hoy, o importa tu historial de Hevy en Más.</p>';
@@ -81,6 +106,7 @@ export async function vistaProgreso(ir) {
   $('app').innerHTML = `<div id="vista-progreso">
     <h1>Progreso</h1>
     ${semanaHtml()}
+    ${suenoAnimoHtml()}
     <section class="tarjeta">
       <h3>Historial</h3>
       ${historialHtml()}
