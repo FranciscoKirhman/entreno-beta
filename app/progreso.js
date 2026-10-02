@@ -23,7 +23,7 @@ let verTodo = false;
 
 /** Sesiones para el historial: las guardadas (de la app o importadas de Hevy) y los días con series marcadas sin terminar. */
 function historial() {
-  const out = E.sesiones.map(s => ({ fecha: s.fecha, titulo: s.titulo, origen: s.origen,
+  const out = E.sesiones.map(s => ({ id: s.id, fecha: s.fecha, titulo: s.titulo, origen: s.origen,
     series: (s.series || []).map(x => ({ nombre: x.ejercicio_nombre || nombreEj(x.ejercicio_id), carga_kg: x.carga_kg, reps: x.reps ?? x.duracion_seg, tipo: x.tipo })) }));
   for (const [fecha, porEj] of Object.entries(E.registro)) {
     if (E.sesiones.some(s => s.fecha === fecha && !s.origen)) continue;
@@ -88,7 +88,7 @@ function historialHtml() {
       if (x.tipo === 'calentamiento') g.calentamiento++; else g.trabajo.push(x);
     }
     return `<li><details><summary><span class="fecha-h">${esc(fechaCorta(s.fecha))}</span><span class="titulo-h">${esc(s.titulo || 'Sesión')}${s.origen === 'hevy' ? ' <span class="chip">Hevy</span>' : s.origen === 'ejemplo' ? ' <span class="chip">Ejemplo</span>' : ''}${s.sinTerminar && s.fecha === hoy() ? ' <span class="chip">en curso</span>' : ''}</span><span class="cifra-h num">${series(s.series.filter(deTrabajo).length)}</span></summary>
-      <ul class="pequeno detalle-h">${porEj.map(g => `<li><strong>${esc(g.nombre)}</strong>: ${esc(seriesTexto(g.trabajo) || 'sin series de trabajo')}${g.calentamiento ? ` <span class="suave">(+${g.calentamiento} de calentamiento)</span>` : ''}</li>`).join('')}</ul></details></li>`;
+      <ul class="pequeno detalle-h">${porEj.map(g => `<li><strong>${esc(g.nombre)}</strong>: ${esc(seriesTexto(g.trabajo) || 'sin series de trabajo')}${g.calentamiento ? ` <span class="suave">(+${g.calentamiento} de calentamiento)</span>` : ''}</li>`).join('')}</ul>${s.id && !s.sinTerminar ? `<button type="button" class="enlace pequeno" data-resumen="${esc(s.id)}">Ver resumen: récords y cómo te fue</button>` : ''}</details></li>`;
   };
   return `<p class="pequeno">${esc(resumen)}</p>
     <ul class="historial">${(verTodo ? h : h.slice(0, 6)).map(item).join('')}</ul>
@@ -163,6 +163,7 @@ export async function vistaProgreso(ir) {
   </div>`;
 
   document.querySelector('[data-ir-mas]')?.addEventListener('click', () => ir('mas'));
+  document.querySelectorAll('[data-resumen]').forEach(b => b.onclick = () => ir('resumen', { id: b.dataset.resumen, desde: 'progreso' }));
   $('ver-todo')?.addEventListener('click', () => { verTodo = !verTodo; const y = scrollY; vistaProgreso(ir); scrollTo(0, y); });
   $('consentir-fotos')?.addEventListener('change', ev => {
     if (!ev.target.checked) return;

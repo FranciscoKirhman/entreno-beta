@@ -97,7 +97,7 @@ export function seriesAnotadas(sesiones = [], registro = {}, desde = '') {
   const conSesion = new Set(sesiones.map(s => s.fecha));
   for (const ses of sesiones) {
     if (ses.fecha < desde) continue;
-    for (const s of ses.series || []) if (s.ejercicio_id && esDeTrabajoGuardada(s)) out.push({ fecha: ses.fecha, ejercicio_id: s.ejercicio_id, carga_kg: s.carga_kg ?? null, reps: s.reps ?? null, rir: s.tipo === 'fallo' ? 0 : s.rir ?? null, rpe: s.rpe ?? null });
+    for (const s of ses.series || []) if (s.ejercicio_id && esDeTrabajoGuardada(s)) out.push({ fecha: ses.fecha, ejercicio_id: s.ejercicio_id, carga_kg: s.carga_kg ?? null, reps: s.reps ?? null, duracion_seg: s.duracion_seg ?? null, rir: s.tipo === 'fallo' ? 0 : s.rir ?? null, rpe: s.rpe ?? null });
   }
   for (const [fecha, porEj] of Object.entries(registro)) {
     if (fecha < desde || conSesion.has(fecha)) continue;

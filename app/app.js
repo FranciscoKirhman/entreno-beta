@@ -17,6 +17,7 @@ import { vistaCheckin } from './checkin.js';
 import { historialReciente, fechasEntrenadas } from './temporada.js';
 import { vistaRapido, vistaPerfil, vistaSeccion, firmaRespuestas, dice, nombreAsistente } from './cuestionario.js';
 import { vistaPlan } from './plan.js';
+import { vistaResumen } from './resumen.js';
 import { progresoNivel } from '../nucleo/nivel.js';
 import { programarAvisos } from './avisos.js';
 import { actualizarPantalla } from './pantalla.js';
@@ -128,7 +129,7 @@ function vistaInicio() {
   $('app').innerHTML = `<div id="vista-inicio">
     <h1>Tu compañero de entrenamiento</h1>
     ${dice('saludo', Object.keys(R()).length ? `¡Hola de nuevo! Soy ${nombreAsistente()}. Seguimos donde quedamos.` : `¡Hola! Soy ${nombreAsistente()}. Te ayudo a armar tu plan y te acompaño en cada entrenamiento.`)}
-    <p class="pequeno">${CONFIG.modoPrueba ? 'Esta prueba funciona con reglas, sin IA ni nube. Tus respuestas y registros se conservan en este navegador. El ejemplo es ficticio y está separado de tu perfil.' : 'Puedes usar reglas en este teléfono. La IA requiere una cuenta y un servidor habilitado.'}</p>
+    <p class="pequeno">${nube.hay() ? 'Puedes entrenar con reglas en este teléfono y sincronizar con tu cuenta. En Más puedes conectar ChatGPT para consultar tu plan y recibir propuestas. El ejemplo es ficticio y está separado de tu perfil.' : 'Puedes entrenar con reglas en este teléfono. Tus respuestas y registros se conservan en este navegador. El ejemplo es ficticio y está separado de tu perfil.'}</p>
     <p>Arma tu plan, lo agenda en tu semana, lo ajusta cuando faltas, cuando una máquina está ocupada o cuando dormiste mal, y te explica por qué de cada ejercicio, con evidencia.</p>
     ${nube.hay() && !nube.conectado() ? `<section class="tarjeta"><h3>Entrar con tu correo</h3><p class="pequeno">Puedes recuperar tus sesiones guardadas en otro dispositivo. El coach usa reglas mientras la IA no esté habilitada.</p><button type="button" class="boton primario" id="a-cuenta">Entrar</button></section>` : ''}
     ${nube.conectado() ? `<p class="pequeno suave">Entraste como ${esc(nube.correo())}.</p>` : ''}
@@ -147,20 +148,20 @@ function vistaInicio() {
 }
 
 // ── Navegación ──────────────────────────────────────────────────────────────
-const VISTAS_CON_PLAN = ['hoy', 'semana', 'coach', 'progreso', 'checkin', 'plan'];
+const VISTAS_CON_PLAN = ['hoy', 'semana', 'coach', 'progreso', 'checkin', 'plan', 'resumen'];
 const PESTANA = { checkin: 'semana', plan: 'semana', perfil: 'mas', seccion: 'mas' };
 function ir(vista, extra) {
   if (VISTAS_CON_PLAN.includes(vista) && (!E.plan)) vista = 'inicio';
   if (VISTAS_CON_PLAN.includes(vista) && E.plan?.bloqueado) { vistaBloqueada(); return; }
   E.vista = vista; guardar();
   $('nav').hidden = !E.plan || E.plan.bloqueado;
-  const pestana = vista === 'ejercicio' ? PESTANA[extra?.desde] || extra?.desde || 'hoy' : PESTANA[vista] || vista;
+  const pestana = ['ejercicio', 'resumen'].includes(vista) ? PESTANA[extra?.desde] || extra?.desde || 'hoy' : PESTANA[vista] || vista;
   document.querySelectorAll('#nav [data-ir]').forEach(b => b.setAttribute('aria-current', String(b.dataset.ir === pestana)));
   pintarModo();
   const vistas = {
     inicio: vistaInicio, cuestionario: () => vistaRapido(ir, armarPlan), perfil: () => vistaPerfil(ir, armarPlan), seccion: () => vistaSeccion(ir),
     plan: () => vistaPlan(ir, { armarPlan, nuevo: extra?.nuevo }), hoy: () => vistaHoy(ir, extra), ejercicio: () => vistaFicha(ir, extra || {}), semana: () => vistaSemana(ir),
-    coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), progreso: () => vistaProgreso(ir), mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar }),
+    coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), resumen: () => vistaResumen(ir, extra || {}), progreso: () => vistaProgreso(ir), mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar }),
   };
   (vistas[vista] || vistaInicio)();
   mostrarMensaje(); // los avisos se muestran una vez, flotando sobre el menú

@@ -39,8 +39,8 @@ export async function guardarPreferencias(p) {
   ok(await supa.from('perfiles').update({ unidad: p.unidad, asistente: p.asistente, preferencias_actualizadas: new Date().toISOString() }).eq('id', uid()));
 }
 
-export async function pedirCodigo(email) {
-  const { error } = await supa.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: location.origin + location.pathname } });
+export async function pedirCodigo(email, destino = location.origin + location.pathname) {
+  const { error } = await supa.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: destino } });
   if (error) throw error;
 }
 export async function verificarCodigo(email, token) {
@@ -237,3 +237,20 @@ export async function borrarFoto(f) {
 // ── Cuenta ──────────────────────────────────────────────────────────────────
 export const descargarDatos = () => funcion('cuenta', { metodo: 'GET' });
 export async function borrarCuenta() { await funcion('cuenta', { metodo: 'DELETE' }); await supa.auth.signOut(); sesion = null; }
+
+// Conexión directa: el proveedor de identidad conserva claves y tokens OAuth.
+export const detallesAutorizacion = id => supa.auth.oauth.getAuthorizationDetails(id).then(ok);
+export const aprobarAutorizacion = id => supa.auth.oauth.approveAuthorization(id, { skipBrowserRedirect: true }).then(ok);
+export const negarAutorizacion = id => supa.auth.oauth.denyAuthorization(id, { skipBrowserRedirect: true }).then(ok);
+export async function autorizarConexionIA(clientId) {
+  ok(await supa.from('conexiones_ia').upsert({ user_id: uid(), client_id: clientId, activa: true, actualizado: new Date().toISOString() }));
+}
+export const conexionesIA = () => supa.auth.oauth.listGrants().then(ok);
+export async function revocarConexionIA(clientId) {
+  // Primero se bloquean las herramientas; incluso un token todavía vigente deja de funcionar.
+  ok(await supa.from('conexiones_ia').update({ activa: false }).eq('user_id', uid()).eq('client_id', clientId));
+  ok(await supa.auth.oauth.revokeGrant({ clientId }));
+}
+export const propuestasIA = () => funcion('propuestas-ia', { metodo: 'GET' });
+export const confirmarPropuestaIA = id => funcion('propuestas-ia', { cuerpo: { id } });
+export const descartarPropuestaIA = id => funcion('propuestas-ia', { metodo: 'DELETE', cuerpo: { id } });

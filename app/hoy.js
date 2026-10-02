@@ -4,6 +4,8 @@
 // (calentamiento, normal, al fallo, drop set), lo de la vez anterior, cronómetro de descanso y superseries.
 import { E, guardar, R, D, C, K, indice, hoy, ahora, esc, $, fechaCorta, ctxNucleo, escala, opcionesRadio, chk, cambiarPlan, numero, coma, mostrarMensaje, avisar, unidadPeso, enUnidad, aKilos, peso, volumenTexto, seriesTexto } from './comun.js';
 import { estadoDelPlan } from '../nucleo/registrado.js';
+import { recordsDeSerie } from '../nucleo/records.js';
+import { textoRecord, esAsistido } from './resumen.js';
 import { evaluarDia, ajustarSesion, TEXTO_RECOMENDACION } from '../nucleo/bienestar.js';
 import { checklist } from '../nucleo/suplementos.js';
 import { enlaceVideo } from '../nucleo/explicar.js';
@@ -295,7 +297,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
       <input type="text" inputmode="numeric" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="reps" value="${esc(r.reps ?? '')}" placeholder="${esc(repsGris ?? '')}" aria-label="${seg ? 'Segundos' : 'Repeticiones'}, serie ${etiq[i]}">
       ${seg ? '' : trabajo ? cajaRir(id, i, rir, e.rir, etiq[i]) : '<span aria-hidden="true"></span>'}
       <button type="button" class="check" data-hecho="${id}" data-i="${i}" aria-pressed="${Boolean(r.hecho)}" aria-label="Serie ${etiq[i]} hecha">${r.hecho ? '✓' : ''}</button>
-      ${r.consejo && trabajo ? `<p class="consejo ${r.consejo.tipo}">${esc(r.consejo.texto)}</p>` : ''}</div>`;
+      ${(r.consejo || r.record?.length) && trabajo ? `<p class="consejo ${r.consejo?.tipo || 'bien'}">${r.record?.length ? '<span class="chip-record">Récord</span> ' : ''}${esc(r.consejo?.texto || '')}</p>` : ''}</div>`;
   }).join('');
   const preguntas = K.por_ejercicio.preguntas.filter(p => !p.mostrar_si || Object.entries(p.mostrar_si).every(([q, vals]) => vals.includes(nota[q])));
   // En una superserie, el descanso va al terminar la vuelta (se elige en el último ejercicio).
@@ -521,6 +523,16 @@ function enlazar(ir, dia) {
     if (!r.hecho) r.t ||= Date.now();
     r.hecho = !r.hecho;
     r.consejo = r.hecho ? consejo(e, r) : null;
+    // Récord, como en Hevy: contra todo lo anterior de ese ejercicio y las series previas de hoy.
+    let recs = [];
+    if (r.hecho && deTrabajo(t) && e.ejercicio_id) {
+      const seg = e.unidad === 'seg';
+      const comoSerie = x => ({ carga_kg: seg ? null : x.kg ?? null, reps: seg ? null : x.reps ?? null, duracion_seg: seg ? x.reps ?? null : null, rir: x.rir ?? (x.rpe != null ? 10 - x.rpe : null) });
+      const previas = [...seriesAnotadas(E.sesiones, E.registro).filter(x => x.ejercicio_id === e.ejercicio_id && x.fecha < f),
+        ...lista.slice(0, i).filter(x => x?.hecho && deTrabajo(tipoDe(x))).map(comoSerie)];
+      recs = recordsDeSerie(previas, comoSerie(r), { asistido: esAsistido(indice.porId.get(e.ejercicio_id)) });
+    }
+    r.record = recs.length ? recs.map(x => x.tipo) : undefined;
     lista[i] = r;
     guardar();
     // Descanso hasta la serie siguiente (sin descanso antes de un drop set); con la última de la sesión, guardarla.
@@ -545,6 +557,7 @@ function enlazar(ir, dia) {
       } else if (seg) iniciarDescanso(seg, quedan ? `Descanso · falta${quedan === 1 ? '' : 'n'} ${quedan} serie${quedan === 1 ? '' : 's'}` : 'Descanso · sigue otro ejercicio');
     } else detenerDescanso();
     repintar();
+    if (recs.length) avisar(`Récord en ${nombreDe(e)}: ${recs.map(x => textoRecord(x, { corto: true })).join(', ')}.`, 'bien');
   });
 
   raiz.addEventListener('change', ev => {
@@ -689,16 +702,18 @@ function enlazar(ir, dia) {
     const id = E.sesiones.find(s => s.fecha === f && !s.origen)?.id || crypto.randomUUID();
     E.sesiones = E.sesiones.filter(s => !(s.fecha === f && !s.origen));
     const hora = ahora().slice(11);
-    E.sesiones.push({ id, fecha: f, hora, titulo: dia.foco, series, notas });
+    const minutos = avance(dia).cifras.minutos ?? null;
+    E.sesiones.push({ id, fecha: f, hora, titulo: dia.foco, duracion_min: minutos, series, notas });
     E.mensaje = `Sesión guardada: ${series.length} serie${series.length === 1 ? '' : 's'}.`;
     detenerDescanso();
     guardar();
     if (nube.conectado()) {
-      const subio = await subirACuenta('sesion', id, { fecha: f, hora, titulo: dia.foco, series, notas });
+      const subio = await subirACuenta('sesion', id, { fecha: f, hora, titulo: dia.foco, duracion_min: minutos, series, notas });
       E.mensaje += subio ? ' También quedó en tu cuenta.' : ' Todavía no se pudo subir a tu cuenta: queda en este teléfono y se sube sola cuando vuelva la señal.';
       guardar();
     }
-    repintar();
+    // Como Hevy: al guardar se abre el resumen (récords, cuánto levantaste, qué salió bien y qué salió mal).
+    ir('resumen', { id });
   };
 }
 

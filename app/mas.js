@@ -1,12 +1,11 @@
 import { validarRespaldo } from '../nucleo/respaldo.js';
-// Vista Más: cuenta, ajustar con tu propia IA (copiar y pegar), importar un plan escrito y reiniciar.
+// Vista Más: cuenta, conexión directa con tu IA, importar un plan escrito y reiniciar.
 import { E, guardar, reiniciar, empezarDeNuevo, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje, unidadPeso, modoEjemplo, activarCuenta, resumenLocal, traerPerfilLocal } from './comun.js';
 import { esExportacionHevy, importarParaTelefono } from '../nucleo/hevy-csv.js';
 import { soporte, configAvisos, cambiarAvisos, activarAvisos, notificar, enlaceCalendario } from './avisos.js';
 import { CONFIG } from './config.js';
-import { aplicarCambios, promptParaIA, leerRespuestaIA } from '../nucleo/cambios.js';
+import { conexionIAHtml, enlazarConexionIA } from './conexion-ia.js';
 import { validarPlan } from '../nucleo/validador.js';
-import { permitidos } from '../nucleo/mcp.js';
 import { leerPlanTexto, calendarizar } from '../nucleo/importar-plan.js';
 import { listarFotosLocales, guardarFotoLocal, restaurarFotosAtomicas } from './fotos-local.js';
 import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
@@ -67,16 +66,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
       <div id="estado-respaldo"></div>
     </section>
 
-    <section class="tarjeta" id="tu-ia">
-      <h3>Ajustar con tu IA</h3>
-      <p class="pequeno">Usa ChatGPT, Claude o Gemini. Copia el texto, pégalo en tu IA y trae de vuelta su respuesta. La app revisa todo con las mismas reglas antes de cambiar tu plan.</p>
-      <textarea id="pedido" placeholder="Ej: quiero más glúteo, el martes solo tengo 40 minutos">${esc(E.pedido)}</textarea>
-      <div class="fila-botones"><button type="button" class="boton" id="copiar">Copiar texto para mi IA</button></div>
-      <div id="prompt-caja"></div>
-      <textarea id="respuesta" placeholder="Pega aquí la respuesta completa de tu IA"></textarea>
-      <div class="fila-botones"><button type="button" class="boton" id="revisar">Revisar cambios</button></div>
-      <div id="resultado-ia"></div>
-    </section>
+    <section class="tarjeta" id="tu-ia">${conexionIAHtml()}</section>
 
     <section class="tarjeta">
       <h3>Importar un plan que ya tengo</h3>
@@ -115,26 +105,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     document.querySelectorAll('[data-elegir-tema]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
   });
   $('pantalla-encendida').onchange = ev => { E.pantallaEncendida = ev.target.checked; guardar(); actualizarPantalla(); };
-  $('pedido').oninput = e => { E.pedido = e.target.value; guardar(); };
-  $('copiar').onclick = async () => {
-    const d = D();
-    const texto = promptParaIA({ derivados: d, plan: E.plan, permitidos: permitidos({ indice, respuestas: R(), derivados: d, hoy: hoy() }), pedido: E.pedido || '' });
-    $('prompt-caja').innerHTML = `<pre class="prompt" id="prompt-texto">${esc(texto)}</pre><p class="pequeno" id="copiado"></p>`;
-    try { await navigator.clipboard.writeText(texto); $('copiado').textContent = 'Copiado. Pégalo en tu IA.'; }
-    catch { const sel = getSelection(), rango = document.createRange(); rango.selectNodeContents($('prompt-texto')); sel.removeAllRanges(); sel.addRange(rango); $('copiado').textContent = 'Texto seleccionado: cópialo con Copiar.'; }
-  };
-  $('revisar').onclick = () => {
-    const out = $('resultado-ia');
-    const leido = leerRespuestaIA($('respuesta').value);
-    if (!leido.ok) { out.innerHTML = `<div class="aviso alerta">${esc(leido.error)}</div>`; return; }
-    const c = aplicarCambios(E.plan, leido.cambios, indice);
-    const v = validarPlan(c.plan, { derivados: D(), respuestas: R(), indice, hoy: hoy() });
-    out.innerHTML = `${c.aplicados.length ? `<div class="aviso bien"><strong>${v.ok ? 'Se pueden aplicar' : 'Lo que propone'}:</strong><ul>${c.aplicados.map(x => `<li>${esc(x.motivo || x.tipo)}</li>`).join('')}</ul></div>` : ''}
-      ${c.rechazados.length ? `<div class="aviso ojo"><strong>Descartados:</strong><ul>${c.rechazados.map(x => `<li>${esc(x.motivo)}</li>`).join('')}</ul></div>` : ''}
-      ${v.errores.length ? `<div class="aviso alerta"><strong>No pasa las reglas de la app:</strong><ul>${v.errores.map(x => `<li>${esc(x.mensaje)}</li>`).join('')}</ul></div>` : ''}
-      ${v.ok && c.aplicados.length ? '<button type="button" class="boton primario" id="aplicar-ia">Aplicar a mi plan</button>' : ''}`;
-    $('aplicar-ia')?.addEventListener('click', async () => { await cambiarPlan({ ...c.plan, generado_por: 'ia_externa' }, `${c.aplicados.length} cambio(s) de tu IA aplicados.`, nube); ir('semana'); });
-  };
+  enlazarConexionIA(async () => { await sincronizarAlEntrar({ forzar: true }); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); });
   $('importar').onclick = () => {
     const imp = leerPlanTexto($('plan-texto').value, indice);
     const out = $('resultado-importar');
@@ -298,7 +269,7 @@ function conexionesHtml() {
       </li>
       <li>
         <div class="cab-conexion">${icono('ia')}<strong>ChatGPT y Claude</strong><a class="accion-conexion" href="#tu-ia">Usar ahora</a></div>
-        <p class="pequeno suave">Tu IA arma o ajusta el plan y la app lo revisa con sus reglas antes de guardarlo. Hoy funciona copiando y pegando; la conexión directa llega con el servidor.</p>
+        <p class="pequeno suave">Tu IA arma o ajusta el plan y la app lo revisa con sus reglas antes de guardarlo. La conexión directa requiere una cuenta y un servidor configurado.</p>
       </li>
       <li>
         <div class="cab-conexion">${icono('strava')}<strong>Strava</strong><span class="chip">Con el servidor</span></div>
@@ -355,11 +326,17 @@ function cuentaHtml() {
     <div class="fila-botones"><button type="button" class="boton" id="borrar-cuenta">Borrar mi cuenta</button></div><div id="datos-descargados"></div>`;
   return `<h3>Entrar</h3><p class="pequeno">Con una cuenta, puedes sincronizar tus sesiones guardadas. El coach usa reglas mientras la IA no esté habilitada. Te mandamos un código y un enlace al correo; no hay contraseña.</p>
     <form id="form-correo" class="fila-chat"><input type="email" id="correo" required placeholder="tu@correo.cl" autocomplete="email" aria-label="Correo"><button type="submit" class="boton primario">Mandar código</button></form>
-    <form id="form-codigo" class="fila-chat" hidden><input type="text" id="codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="Código de 6 dígitos" aria-label="Código"><button type="submit" class="boton primario">Entrar</button></form>
+    <button type="button" class="enlace" id="ya-tengo-codigo">Ya tengo un código</button>
+    <form id="form-codigo" class="fila-chat" hidden><input type="text" id="codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Código del correo" aria-label="Código"><button type="submit" class="boton primario">Entrar</button></form>
     <p class="pequeno" id="estado-cuenta"></p>`;
 }
 
 function enlazarCuenta(ir, sincronizarAlEntrar) {
+  $('ya-tengo-codigo')?.addEventListener('click', () => {
+    if (!$('correo').reportValidity()) return;
+    $('form-codigo').hidden = false;
+    $('codigo').focus();
+  });
   $('sincronizar')?.addEventListener('click', async ev => {
     const b = ev.currentTarget; b.disabled = true; $('estado-sincronizacion').textContent = 'Sincronizando…';
     try { await sincronizarAlEntrar({ forzar: true }); $('estado-sincronizacion').textContent = E.pendientes?.length ? `Quedan ${E.pendientes.length} elementos pendientes. La copia del teléfono se conserva.` : `Sincronización completa. ${E.sesiones.length} sesiones disponibles en esta cuenta.`; }
