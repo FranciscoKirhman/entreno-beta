@@ -216,7 +216,6 @@ a.boton{text-decoration:none;color:inherit}
 .avance .cifras{margin:2px 0 0}
 .avance .medidor{flex:1;height:6px;border-radius:6px;background:var(--surface-2);overflow:hidden}
 .avance .medidor i{display:block;height:100%;background:var(--good);transition:width .25s}
-.serie:not(.hecha):not(.con-esfuerzo) .esfuerzo{display:none}
 
 /* Cronómetro de descanso, sobre el menú */
 #descanso{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 76px);z-index:7;max-width:536px;margin:0 auto;
@@ -521,8 +520,9 @@ input[type=search]{margin:6px 0 8px}
 .miniatura.maquina{object-fit:contain;padding:4px;background:var(--fondo-icono)}
 .ej.tarjeta > .pequeno.suave{margin:8px 0 0}
 .tabla-series{margin-top:10px;display:flex;flex-direction:column;gap:4px}
-.cab-series,.serie{display:grid;grid-template-columns:34px minmax(0,1fr) 62px 70px 38px;gap:6px;align-items:center}
-.tabla-series.seg .cab-series,.serie.seg{grid-template-columns:34px minmax(0,1fr) 72px 38px}
+/* Serie, Anterior, kg, Reps, RIR y ✓, como Hevy con su columna de RPE. Cabe a 375 px de ancho. */
+.cab-series,.serie{display:grid;grid-template-columns:30px minmax(0,1fr) 56px 46px 40px 36px;gap:5px;align-items:center}
+.tabla-series.seg .cab-series,.serie.seg{grid-template-columns:30px minmax(0,1fr) 72px 36px}
 .cab-series{font-size:11.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--ink-muted);text-align:center;padding:0 0 2px}
 .cab-series span:nth-child(2){text-align:center}
 .cab-series .icono-chico{width:15px;height:15px;stroke-width:2.4;vertical-align:-2px}
@@ -533,20 +533,44 @@ input[type=search]{margin:6px 0 8px}
 .serie input::placeholder{font-weight:500;color:var(--ink-muted);opacity:.75}
 .serie.tipo-calentamiento input{box-shadow:inset 0 0 0 1px var(--border)}
 .serie .antes{font-size:14px;color:var(--ink-muted);text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tipo-serie{width:34px;height:34px;border:0;border-radius:8px;background:var(--fill);font:600 15px/1 var(--f-texto);font-variant-numeric:tabular-nums;color:var(--ink-muted);cursor:pointer}
+.tipo-serie{width:30px;height:34px;border:0;border-radius:8px;background:var(--fill);font:600 15px/1 var(--f-texto);font-variant-numeric:tabular-nums;color:var(--ink-muted);cursor:pointer}
 .serie.hecha .tipo-serie{background:transparent}
 .check{width:36px;height:34px;border-radius:8px;border:0;background:var(--fill);color:#FFFFFF;font-weight:700;font-size:17px;cursor:pointer;justify-self:end}
 .check[aria-pressed="false"]::before{content:"✓";color:var(--border)}
 .check[aria-pressed="true"]{background:var(--good)}
 .lista-check .check{width:44px;height:40px}
-.serie .esfuerzo{grid-column:2 / -1;justify-self:end;padding:0 4px 2px 0}
-.chip-esfuerzo{min-height:24px;padding:2px 8px;border:0;border-radius:6px;background:none;color:var(--ink-muted);font-size:12px;font-weight:600;letter-spacing:.02em;font-variant-numeric:tabular-nums;cursor:pointer;opacity:.8}
-.chip-esfuerzo.con-valor{color:var(--good);opacity:1}
-.serie .esfuerzo{margin-top:-2px}
 .opcion-hoja .letra.rpe{min-width:40px;text-align:center;font-size:18px;font-variant-numeric:tabular-nums}
 .hoja h3 .ayuda-titulo{width:24px;height:24px;margin-left:6px;vertical-align:2px;font-size:14px;border-radius:50%;border:0;background:var(--surface-2);color:var(--ink-muted);font-weight:600;cursor:pointer}
 .hoja h3 .ayuda-titulo[aria-expanded="true"]{background:var(--accent-soft);color:var(--accent)}
 .serie .consejo{margin:0 6px 2px 0}
+.cab-rir{border:0;background:none;padding:0;font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+.caja-rir{position:relative;display:block;height:36px;border-radius:8px;background:var(--fill)}
+.serie.hecha .caja-rir{background:transparent}
+.rir-valor{display:flex;align-items:center;justify-content:center;height:100%;font-weight:600;font-variant-numeric:tabular-nums}
+.rir-valor.gris{font-weight:500;color:var(--ink-muted);opacity:.75}
+/* El menú del teléfono queda encima, transparente: tocar la caja lo abre. 16 px para que el iPhone no haga zoom. */
+.caja-rir select{position:absolute;inset:0;width:100%;height:100%;opacity:0;font-size:16px;cursor:pointer;-webkit-appearance:none;appearance:none}
+.caja-rir:focus-within{outline:2px solid var(--accent);outline-offset:1px}
+.tipo-superserie .letra,.letra.tipo-superserie{color:var(--accent)}
+/* Nota para el entrenador bajo el nombre del ejercicio, como el "Add notes here" de Hevy: crece con el texto. */
+textarea.nota-ej{display:block;width:100%;min-height:0;height:auto;margin:6px 0 0;padding:6px 0;border:0;border-radius:0;background:transparent;resize:none;overflow:hidden;line-height:1.35;color:var(--ink)}
+textarea.nota-ej::placeholder{color:var(--ink-muted);opacity:.8}
+textarea.nota-ej:focus{outline:none;box-shadow:inset 0 -1.5px 0 var(--accent)}
+/* "¿Cómo estás hoy?": plegado desde el inicio, botones con palabras que guardan al tocarlos. */
+details.bienestar-caja{padding:0}
+.bienestar-caja > summary{display:flex;align-items:baseline;gap:8px;padding:14px 16px;cursor:pointer;list-style:none;min-width:0}
+.bienestar-caja > summary::-webkit-details-marker{display:none}
+.bienestar-caja > summary::after{content:"›";margin-left:auto;padding-left:6px;color:var(--ink-muted);font-size:20px;line-height:1;transform:rotate(90deg);transition:transform .2s}
+.bienestar-caja[open] > summary::after{transform:rotate(-90deg)}
+.bienestar-titulo{font-weight:600;white-space:nowrap}
+.bienestar-sub{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bienestar-rapido{padding:0 16px 14px}
+.pregunta-b{margin-top:10px}
+.escala-b{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-top:4px}
+.escala-b.tres{grid-template-columns:1fr 1.3fr 1.7fr}
+.escala-b button{min-height:42px;padding:4px 2px;border:0;border-radius:10px;background:var(--fill);font:500 13px/1.15 var(--f-texto);color:var(--ink);cursor:pointer}
+.escala-b button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+@media (prefers-reduced-motion:reduce){.bienestar-caja > summary::after{transition:none}}
 .agregar-serie{width:100%;min-height:38px;margin-top:8px;font-size:15px;color:var(--ink)}
 .ej.tarjeta details.extra summary{margin-top:10px}
 

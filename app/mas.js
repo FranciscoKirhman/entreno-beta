@@ -4,9 +4,8 @@ import { E, guardar, reiniciar, empezarDeNuevo, R, D, esc, $, indice, hoy, cambi
 import { esExportacionHevy, importarParaTelefono } from '../nucleo/hevy-csv.js';
 import { soporte, configAvisos, cambiarAvisos, activarAvisos, notificar, enlaceCalendario } from './avisos.js';
 import { CONFIG } from './config.js';
-import { aplicarCambios, promptParaIA, leerRespuestaIA } from '../nucleo/cambios.js';
+import { conexionIAHtml, enlazarConexionIA } from './conexion-ia.js';
 import { validarPlan } from '../nucleo/validador.js';
-import { permitidos } from '../nucleo/mcp.js';
 import { leerPlanTexto, calendarizar } from '../nucleo/importar-plan.js';
 import { listarFotosLocales, guardarFotoLocal, restaurarFotosAtomicas } from './fotos-local.js';
 import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
@@ -67,16 +66,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
       <div id="estado-respaldo"></div>
     </section>
 
-    <section class="tarjeta" id="tu-ia">
-      <h3>Ajustar con tu IA</h3>
-      <p class="pequeno">Usa ChatGPT, Claude o Gemini. Copia el texto, pégalo en tu IA y trae de vuelta su respuesta. La app revisa todo con las mismas reglas antes de cambiar tu plan.</p>
-      <textarea id="pedido" placeholder="Ej: quiero más glúteo, el martes solo tengo 40 minutos">${esc(E.pedido)}</textarea>
-      <div class="fila-botones"><button type="button" class="boton" id="copiar">Copiar texto para mi IA</button></div>
-      <div id="prompt-caja"></div>
-      <textarea id="respuesta" placeholder="Pega aquí la respuesta completa de tu IA"></textarea>
-      <div class="fila-botones"><button type="button" class="boton" id="revisar">Revisar cambios</button></div>
-      <div id="resultado-ia"></div>
-    </section>
+    <section class="tarjeta" id="tu-ia">${conexionIAHtml()}</section>
 
     <section class="tarjeta">
       <h3>Importar un plan que ya tengo</h3>
@@ -115,26 +105,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     document.querySelectorAll('[data-elegir-tema]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
   });
   $('pantalla-encendida').onchange = ev => { E.pantallaEncendida = ev.target.checked; guardar(); actualizarPantalla(); };
-  $('pedido').oninput = e => { E.pedido = e.target.value; guardar(); };
-  $('copiar').onclick = async () => {
-    const d = D();
-    const texto = promptParaIA({ derivados: d, plan: E.plan, permitidos: permitidos({ indice, respuestas: R(), derivados: d, hoy: hoy() }), pedido: E.pedido || '' });
-    $('prompt-caja').innerHTML = `<pre class="prompt" id="prompt-texto">${esc(texto)}</pre><p class="pequeno" id="copiado"></p>`;
-    try { await navigator.clipboard.writeText(texto); $('copiado').textContent = 'Copiado. Pégalo en tu IA.'; }
-    catch { const sel = getSelection(), rango = document.createRange(); rango.selectNodeContents($('prompt-texto')); sel.removeAllRanges(); sel.addRange(rango); $('copiado').textContent = 'Texto seleccionado: cópialo con Copiar.'; }
-  };
-  $('revisar').onclick = () => {
-    const out = $('resultado-ia');
-    const leido = leerRespuestaIA($('respuesta').value);
-    if (!leido.ok) { out.innerHTML = `<div class="aviso alerta">${esc(leido.error)}</div>`; return; }
-    const c = aplicarCambios(E.plan, leido.cambios, indice);
-    const v = validarPlan(c.plan, { derivados: D(), respuestas: R(), indice, hoy: hoy() });
-    out.innerHTML = `${c.aplicados.length ? `<div class="aviso bien"><strong>${v.ok ? 'Se pueden aplicar' : 'Lo que propone'}:</strong><ul>${c.aplicados.map(x => `<li>${esc(x.motivo || x.tipo)}</li>`).join('')}</ul></div>` : ''}
-      ${c.rechazados.length ? `<div class="aviso ojo"><strong>Descartados:</strong><ul>${c.rechazados.map(x => `<li>${esc(x.motivo)}</li>`).join('')}</ul></div>` : ''}
-      ${v.errores.length ? `<div class="aviso alerta"><strong>No pasa las reglas de la app:</strong><ul>${v.errores.map(x => `<li>${esc(x.mensaje)}</li>`).join('')}</ul></div>` : ''}
-      ${v.ok && c.aplicados.length ? '<button type="button" class="boton primario" id="aplicar-ia">Aplicar a mi plan</button>' : ''}`;
-    $('aplicar-ia')?.addEventListener('click', async () => { await cambiarPlan({ ...c.plan, generado_por: 'ia_externa' }, `${c.aplicados.length} cambio(s) de tu IA aplicados.`, nube); ir('semana'); });
-  };
+  enlazarConexionIA(async () => { await sincronizarAlEntrar({ forzar: true }); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); });
   $('importar').onclick = () => {
     const imp = leerPlanTexto($('plan-texto').value, indice);
     const out = $('resultado-importar');
