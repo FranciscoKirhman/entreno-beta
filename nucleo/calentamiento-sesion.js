@@ -28,7 +28,7 @@ export function calentamientoDeSesion({ dia, porId, equipo = [], bloqueadas = ne
     const n = p.name.toLowerCase();
     const zona = ['hombro', 'codo', 'cadera', 'rodilla', 'tobillo', 'muneca', 'lumbar', 'cuello'].find(z => n.includes(z));
     const id = /puente/.test(n) ? 'puente_gluteo' : /dead bug/.test(n) ? 'dead_bug' : /bird dog/.test(n) ? 'bird_dog' : null;
-    const imagen = id ? `img/ejercicios/mini/${id}.webp` : /banda/.test(n) ? 'img/equipos/bandas.webp' : /colgar|barra/.test(n) ? 'img/equipos/barra_dominadas.webp' : zona ? `img/articulaciones/${zona}.webp` : /torácica/.test(n) ? 'img/articulaciones/lumbar.webp' : /bici|cardio|camin/.test(n) ? 'img/ejercicios/mini/caminata.webp' : null;
+    const imagen = id ? `img/ejercicios/mini/${id}.webp` : /banda/.test(n) ? 'img/equipos/bandas.webp' : /colgar|barra/.test(n) ? 'img/equipos/barra_dominadas.webp' : zona ? `img/articulaciones/${zona}.webp` : /torácica/.test(n) ? 'img/musculos/espalda.webp' : /bici|cardio|camin/.test(n) ? 'img/ejercicios/mini/caminata.webp' : null;
     const primero = dia.ejercicios?.[0];
     const indicadas = primero ? aproximacionesDelPlan(dia, primero) : [];
     const aproximacion = /series de aproximaci/i.test(n) && indicadas.length;
@@ -49,7 +49,7 @@ export function calentamientoDeSesion({ dia, porId, equipo = [], bloqueadas = ne
   }
   if ([...patrones].some(p => TORSO.has(p))) {
     agregar('hombros', 'Círculos de hombro, 10 adelante y 10 atrás', 'De pie, brazos sueltos. Dibuja círculos grandes y lentos sin encoger los hombros hacia las orejas.', 'Prepara el movimiento de hombros para los ejercicios de torso.', '2 · Movilidad', ['hombro'], 'img/articulaciones/hombro.webp', 45);
-    agregar('toracica', 'Movilidad torácica sentado, 8 por lado', 'Sentado, manos en la nuca. Gira el pecho sin mover la cadera. Se mueve la espalda alta, sin forzar la zona baja.', 'Ensaya el control del tronco que usarás en presses y remos.', '2 · Movilidad', ['lumbar', 'cuello', 'hombro'], 'img/articulaciones/lumbar.webp', 60);
+    agregar('toracica', 'Movilidad torácica sentado, 8 por lado', 'Sentado, manos en la nuca. Gira el pecho sin mover la cadera. Se mueve la espalda alta, sin forzar la zona baja.', 'Ensaya el control del tronco que usarás en presses y remos.', '2 · Movilidad', ['lumbar', 'cuello', 'hombro'], 'img/musculos/espalda.webp', 60);
     if ([...patrones].some(p => p.startsWith('empuje'))) {
       agregar('pared', 'Deslizamiento en pared, 10 repeticiones', 'Apoya espalda y brazos en la pared, con codos a 90°. Sube los brazos hasta donde puedas mantener el contacto, sin arquear la espalda.', 'Prepara el recorrido de los brazos antes del press.', '3 · Activación', ['hombro', 'lumbar'], 'img/articulaciones/hombro.webp', 45);
       agregar('serrato', 'Empuje de omóplatos en pared, 15 s', 'Manos en la pared. Empuja separando los omóplatos, como si alejaras el pecho de la pared. Mantén los brazos extendidos y respira.', 'Practica el control de los omóplatos antes de empujar.', '3 · Activación', ['hombro', 'codo', 'muneca'], 'img/articulaciones/hombro.webp', 30);
