@@ -6,7 +6,7 @@ import { E, guardar, R, D, C, K, indice, hoy, ahora, esc, $, fechaCorta, ctxNucl
 import { estadoDelPlan } from '../nucleo/registrado.js';
 import { recordsDeSerie } from '../nucleo/records.js';
 import { textoRecord } from './resumen.js';
-import { esAsistido, conLastre } from '../nucleo/catalogo.js';
+import { esAsistido, conLastre, sinCargaExterna } from '../nucleo/catalogo.js';
 import { evaluarDia, ajustarSesion, TEXTO_RECOMENDACION } from '../nucleo/bienestar.js';
 import { checklist } from '../nucleo/suplementos.js';
 import { enlaceVideo } from '../nucleo/explicar.js';
@@ -482,8 +482,10 @@ function enlazar(ir, dia) {
     if (ev.type === 'focusout' && t.dataset.c === 'rir') return;
     if (!t.dataset.ej || !['kg', 'reps', 'rir'].includes(t.dataset.c)) return;
     const { e, k } = ejercicioDe(t.dataset.ej), { lista } = materializar(f, e, k);
-    const r = lista[Number(t.dataset.i)];
-    if (!r.hecho && serieCompleta(r, e)) marcarSerie(t.dataset.ej, Number(t.dataset.i));
+    const i = Number(t.dataset.i), r = lista[i];
+    // Peso corporal sin peso en gris (ni del plan, ni de hoy, ni de la vez anterior): se marca sin escribir kilos.
+    const sinCarga = sinCargaExterna(indice.porId.get(e.ejercicio_id)) && sugerencia(e, lista, i).kg == null;
+    if (!r.hecho && serieCompleta(r, e, { sinCarga })) marcarSerie(t.dataset.ej, i);
     else if (t.dataset.c === 'rir') repintar();
   };
   raiz.addEventListener('change', completarAlSalir);
@@ -593,16 +595,22 @@ function enlazar(ir, dia) {
   raiz.querySelectorAll('.reloj-paso').forEach(b => b.onclick = () => iniciarTramos(JSON.parse(b.dataset.tramos), b.dataset.final || '¡Listo!'));
 
   // Marcar una serie: si no escribió nada, toma lo de la serie anterior de hoy, lo de la vez anterior o lo del plan.
+  // Lo que se guarda al marcar sin escribir (lo que está en gris): el peso escrito antes hoy, el del plan o el de la
+  // vez anterior en esa misma serie.
+  function sugerencia(e, lista, i) {
+    const posicion = lista.slice(0, i).filter(x => deTrabajo(tipoDe(x))).length;
+    const prev = e.ejercicio_id ? anterior(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f)?.series[posicion] : null;
+    const hoyAntes = [...lista.slice(0, i)].reverse().find(x => deTrabajo(tipoDe(x)) && x.kg != null);
+    return { kg: hoyAntes?.kg ?? e.carga_kg ?? prev?.carga_kg ?? null, prev };
+  }
   function marcarSerie(id, i) {
     const { e, k } = ejercicioDe(id);
     const { lista, n } = materializar(f, e, k);
     const r = { ...lista[i] };
     const t = tipoDe(r);
     if (!r.hecho && deTrabajo(t)) {
-      const posicion = lista.slice(0, i).filter(x => deTrabajo(tipoDe(x))).length;
-      const prev = e.ejercicio_id ? anterior(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f)?.series[posicion] : null;
-      const hoyAntes = [...lista.slice(0, i)].reverse().find(x => deTrabajo(tipoDe(x)) && x.kg != null);
-      if (r.kg == null && e.unidad !== 'seg') r.kg = hoyAntes?.kg ?? e.carga_kg ?? prev?.carga_kg ?? null;
+      const { kg, prev } = sugerencia(e, lista, i);
+      if (r.kg == null && e.unidad !== 'seg') r.kg = kg;
       if (r.reps == null) r.reps = (e.unidad === 'seg' ? e.reps_min : e.reps_max) ?? prev?.reps ?? null;
     }
     if (!r.hecho) r.t ||= Date.now();

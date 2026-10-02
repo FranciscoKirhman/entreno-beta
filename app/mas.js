@@ -1,10 +1,11 @@
 import { validarRespaldo } from '../nucleo/respaldo.js';
-// Vista Más: cuenta, conexión directa con tu IA, importar un plan escrito y reiniciar.
+// Vista Más: cuenta, ajustar con tu IA (copiar y pegar o conexión directa), importar un plan escrito y reiniciar.
 import { E, guardar, reiniciar, empezarDeNuevo, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje, unidadPeso, modoEjemplo, activarCuenta, resumenLocal, traerPerfilLocal } from './comun.js';
 import { esExportacionHevy, importarParaTelefono } from '../nucleo/hevy-csv.js';
 import { soporte, configAvisos, cambiarAvisos, activarAvisos, notificar, enlaceCalendario } from './avisos.js';
 import { CONFIG } from './config.js';
 import { conexionIAHtml, enlazarConexionIA } from './conexion-ia.js';
+import { iaCopiarHtml, enlazarIACopiar } from './ia-copiar.js';
 import { validarPlan } from '../nucleo/validador.js';
 import { leerPlanTexto, calendarizar } from '../nucleo/importar-plan.js';
 import { listarFotosLocales, guardarFotoLocal, restaurarFotosAtomicas } from './fotos-local.js';
@@ -67,7 +68,9 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
       <div id="estado-respaldo"></div>
     </section>
 
-    <section class="tarjeta" id="tu-ia">${conexionIAHtml()}</section>
+    <section class="tarjeta" id="tu-ia">${iaCopiarHtml()}</section>
+
+    <section class="tarjeta" id="conectar-ia">${conexionIAHtml()}</section>
 
     <section class="tarjeta">
       <h3>Importar un plan que ya tengo</h3>
@@ -106,6 +109,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     document.querySelectorAll('[data-elegir-tema]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
   });
   $('pantalla-encendida').onchange = ev => { E.pantallaEncendida = ev.target.checked; guardar(); actualizarPantalla(); };
+  enlazarIACopiar(ir);
   enlazarConexionIA(async () => { await sincronizarAlEntrar({ forzar: true }); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); });
   $('importar').onclick = () => {
     const imp = leerPlanTexto($('plan-texto').value, indice);
@@ -271,7 +275,7 @@ function conexionesHtml() {
       </li>
       <li>
         <div class="cab-conexion">${icono('ia')}<strong>ChatGPT y Claude</strong><a class="accion-conexion" href="#tu-ia">Usar ahora</a></div>
-        <p class="pequeno suave">Tu IA arma o ajusta el plan y la app lo revisa con sus reglas antes de guardarlo. La conexión directa requiere una cuenta y un servidor configurado.</p>
+        <p class="pequeno suave">Tu IA arma o ajusta el plan y la app lo revisa con sus reglas antes de guardarlo. Copiando y pegando funciona sin cuenta; la conexión directa con ChatGPT requiere una cuenta.</p>
       </li>
       <li>
         <div class="cab-conexion">${icono('strava')}<strong>Strava</strong><span class="chip">Con el servidor</span></div>

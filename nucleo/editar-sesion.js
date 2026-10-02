@@ -1,7 +1,7 @@
 // Edición manual de hoy: prepara una copia, conserva las otras fechas y valida antes de guardar.
 import { normalizar, tieneEquipo, nivelAlcanza, articulacionesBloqueadas, cargaZonaBloqueada } from './catalogo.js';
 import { prescripcion, comoDescarga, duracionSesion } from './motor-plan.js';
-import { validarPlan } from './validador.js';
+import { validarCambio } from './validador.js';
 import { grupos } from './superseries.js';
 import { seriesRetiradas } from './series-retiradas.js';
 
@@ -36,14 +36,18 @@ export function editarSesion(accion, ctx) {
   if (!plan?.dias?.length || plan.bloqueado) return { error: 'Primero arma tu plan.' };
   const nuevo = structuredClone(plan);
   let dia = nuevo.dias.find(x => x.fecha === hoy);
-  let ejercicio;
+  let ejercicio, fueraDelPlan = false;
   if (accion.tipo === 'agregar') {
     const ej = indice.porId.get(accion.ejercicio);
     const motivo = motivoNoAgregar(ej, ctx);
     if (motivo) return { error: motivo };
     if (!dia) {
-      const semana = Math.max(1, Math.floor((Date.parse(hoy) - Date.parse(plan.inicio)) / 604800000) + 1);
-      dia = { fecha: hoy, semana, foco: 'Sesión libre', lugar: ctx.respuestas.lugares?.find(l => l.principal)?.nombre || ctx.respuestas.lugares?.[0]?.nombre,
+      // En la semana de margen después del plan, el día nuevo queda en la última semana: un respaldo no acepta
+      // semanas fuera del plan. No es descarga aunque la última lo sea, porque el bloque ya terminó.
+      const semanaReal = Math.max(1, Math.floor((Date.parse(hoy) - Date.parse(plan.inicio)) / 604800000) + 1);
+      if (semanaReal > plan.semanas + 1) return { error: 'Tu plan terminó hace más de una semana. Arma uno nuevo en Tu plan para agregar ejercicios.' };
+      fueraDelPlan = semanaReal > plan.semanas;
+      dia = { fecha: hoy, semana: Math.min(plan.semanas, semanaReal), foco: 'Sesión libre', lugar: ctx.respuestas.lugares?.find(l => l.principal)?.nombre || ctx.respuestas.lugares?.[0]?.nombre,
         ejercicios: [], calentamiento: [], estiramiento: [], cardio: null, racional: 'Sesión armada por ti para hoy.' };
       nuevo.dias.push(dia); nuevo.dias.sort((a, b) => a.fecha.localeCompare(b.fecha));
     }
@@ -52,7 +56,7 @@ export function editarSesion(accion, ctx) {
     if (ej.tipo === 'movilidad') Object.assign(p, { series: 1, reps_min: 30, reps_max: 45, unidad: 'seg', descanso_seg: 0 });
     ejercicio = { ejercicio_id: ej.id, nombre: ej.nombre, ...p, prioridad: 2, orden: dia.ejercicios.length, carga_kg: null,
       nota: p.unidad === 'seg' ? 'Agregado por ti. Registra los segundos de cada serie.' : 'Agregado por ti. Elige un peso con la reserva indicada.' };
-    if (dia.semana === plan.semana_descarga) ejercicio = comoDescarga(ejercicio);
+    if (!fueraDelPlan && dia.semana === plan.semana_descarga) ejercicio = comoDescarga(ejercicio);
     dia.ejercicios.push(ejercicio);
   } else if (accion.tipo === 'quitar') {
     const k = dia?.ejercicios.findIndex((e, i) => (e.ejercicio_id || `i${i}`) === accion.ejercicio) ?? -1;
@@ -63,7 +67,8 @@ export function editarSesion(accion, ctx) {
     const g = grupos(dia.ejercicios);
     dia.ejercicios.forEach((e, i) => { e.orden = i; if (!g[i]) delete e.superserie; });
   } else return { error: 'No reconozco ese cambio.' };
-  const v = validarPlan(nuevo, ctx);
+  // Un error que el plan ya traía no bloquea agregar ni quitar (nucleo/validador.js: validarCambio).
+  const v = validarCambio(plan, nuevo, ctx);
   if (!v.ok) return { error: v.errores.map(e => e.mensaje).join(' ') };
   return { plan: nuevo, ejercicio, minutos: duracionSesion(dia), cantidad: dia.ejercicios.length, advertencias: v.advertencias,
     ...(accion.tipo === 'quitar' ? { conservar: seriesRetiradas(ejercicio, ctx) } : {}) };

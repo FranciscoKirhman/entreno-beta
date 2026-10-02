@@ -1,7 +1,7 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
 // Red primero, con límite de tiempo, y la copia guardada como respaldo (igual que el tablero).
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-02 20:50 · a6872ad";
+const VERSION = "2026-10-02 20:57 · c51fb71";
 const ARCHIVOS = [
  "./",
  "app.js",
@@ -28,6 +28,7 @@ const ARCHIVOS = [
  "hoja.js",
  "hoy-directo.css",
  "hoy.js",
+ "ia-copiar.js",
  "iconos/icono-180.png",
  "iconos/icono-192.png",
  "iconos/icono-512.png",
@@ -570,6 +571,7 @@ const ARCHIVOS = [
  "../nucleo/bienestar.js",
  "../nucleo/calentamiento-sesion.js",
  "../nucleo/calentamiento.js",
+ "../nucleo/cambios.js",
  "../nucleo/cardio.js",
  "../nucleo/catalogo.js",
  "../nucleo/checkin.js",
@@ -589,6 +591,7 @@ const ARCHIVOS = [
  "../nucleo/ics.js",
  "../nucleo/imagenes-calentamiento.js",
  "../nucleo/importar-plan.js",
+ "../nucleo/mcp.js",
  "../nucleo/motor-plan.js",
  "../nucleo/nivel.js",
  "../nucleo/notas.js",

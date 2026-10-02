@@ -71,7 +71,7 @@ export function validarPlan(plan, { derivados: d, respuestas: r, indice, hoy }) 
       if ((dia.ejercicios || []).some((e, i) => e.superserie && !g[i])) adv('superserie_suelta', `${dia.fecha}: una superserie quedó con un solo ejercicio o separada; se hace como serie normal.`, donde);
     }
     const minutos = duracionSesion(dia);
-    if (minutos === null || minutos > d.duracion_min) err('duracion', `${dia.fecha}: la sesión dura unos ${minutos} minutos y tienes ${d.duracion_min}.`, donde);
+    if (minutos === null || minutos > d.duracion_min) err('duracion', `${dia.fecha}: la sesión dura unos ${minutos} minutos y tienes ${d.duracion_min}.`, { ...donde, valor: minutos });
   }
 
   // Volumen por músculo en una semana normal (la 1) y que la descarga baje.
@@ -79,7 +79,7 @@ export function validarPlan(plan, { derivados: d, respuestas: r, indice, hoy }) 
   const [lo, hi] = d.series_rango;
   for (const m of CONTADOS) {
     const s = v[m] || 0;
-    if (s > hi + 4) err('volumen_alto', `${m}: ${s} series a la semana; tu tope es ${hi}.`);
+    if (s > hi + 4) err('volumen_alto', `${m}: ${s} series a la semana; tu tope es ${hi}.`, { musculo: m, valor: s });
     else if (s > 0 && s < lo / 2) adv('volumen_bajo', `${m}: solo ${s} series a la semana.`);
   }
   if (plan.semana_descarga) {
@@ -87,4 +87,19 @@ export function validarPlan(plan, { derivados: d, respuestas: r, indice, hoy }) 
     if (total(plan.semana_descarga) >= total(1)) err('descarga', 'La semana de descarga no tiene menos series que una semana normal.');
   }
   return { ok: errores.length === 0, errores, advertencias };
+}
+
+const claveError = e => [e.codigo, e.fecha || '', e.ejercicio || '', e.musculo || ''].join('|');
+/**
+ * Revisa un cambio a un plan que ya existía: solo bloquean los errores que trae el cambio. Si el plan ya tenía uno
+ * (por ejemplo, un ejercicio importado con menos reserva que tu mínimo), queda como advertencia. Un error de duración
+ * o de volumen que ya estaba cuenta como nuevo si el cambio lo empeora.
+ * @returns {{ok: boolean, errores: object[], advertencias: object[]}}
+ */
+export function validarCambio(antes, despues, ctx) {
+  const previos = new Map(validarPlan(antes, ctx).errores.map(e => [claveError(e), e.valor ?? 0]));
+  const v = validarPlan(despues, ctx);
+  const esNuevo = e => !previos.has(claveError(e)) || (e.valor ?? 0) > previos.get(claveError(e));
+  const errores = v.errores.filter(esNuevo);
+  return { ok: errores.length === 0, errores, advertencias: [...v.advertencias, ...v.errores.filter(e => !esNuevo(e))] };
 }
