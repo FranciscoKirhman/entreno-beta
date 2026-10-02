@@ -6,6 +6,7 @@ import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje } from './comun.j
 import { derivar } from '../nucleo/derivar.js';
 import { generarPlan } from '../nucleo/motor-plan.js';
 import { vistaHoy } from './hoy.js';
+import { vistaFicha } from './ficha.js';
 import { vistaSemana } from './semana.js';
 import { vistaCoach } from './coach-ui.js';
 import { vistaProgreso } from './progreso.js';
@@ -110,11 +111,12 @@ function ir(vista, extra) {
   if (VISTAS_CON_PLAN.includes(vista) && E.plan?.bloqueado) { vistaBloqueada(); return; }
   E.vista = vista; guardar();
   $('nav').hidden = !E.plan || E.plan.bloqueado;
-  document.querySelectorAll('#nav [data-ir]').forEach(b => b.setAttribute('aria-current', String(b.dataset.ir === (PESTANA[vista] || vista))));
+  const pestana = vista === 'ejercicio' ? PESTANA[extra?.desde] || extra?.desde || 'hoy' : PESTANA[vista] || vista;
+  document.querySelectorAll('#nav [data-ir]').forEach(b => b.setAttribute('aria-current', String(b.dataset.ir === pestana)));
   pintarModo();
   const vistas = {
     inicio: vistaInicio, cuestionario: () => vistaRapido(ir, armarPlan), perfil: () => vistaPerfil(ir, armarPlan), seccion: () => vistaSeccion(ir),
-    plan: () => vistaPlan(ir, { armarPlan, nuevo: extra?.nuevo }), hoy: () => vistaHoy(ir), semana: () => vistaSemana(ir),
+    plan: () => vistaPlan(ir, { armarPlan, nuevo: extra?.nuevo }), hoy: () => vistaHoy(ir, extra), ejercicio: () => vistaFicha(ir, extra || {}), semana: () => vistaSemana(ir),
     coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), progreso: () => vistaProgreso(ir), mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar }),
   };
   (vistas[vista] || vistaInicio)();

@@ -87,7 +87,7 @@ export function explicarEjercicio(p) {
   // Molestias
   const zonas = (r.lesiones || []).filter(l => l.activa !== false).map(l => l.region);
   const tocan = ej.carga_articular.filter(a => zonas.includes(a));
-  if (tocan.length) agregar('¿Y mi molestia?', `Este ejercicio usa ${tocan.join(' y ')}, donde marcaste una molestia leve. Si duele más de 3 sobre 10 o empeora al día siguiente, usa "Tengo un problema" para cambiarlo.`, seccion(evidencia, '06-dolor-y-lesiones.md', 'Por qué dejamos seguir'));
+  if (tocan.length) agregar('¿Y mi molestia?', `Este ejercicio usa ${tocan.join(' y ')}, donde marcaste una molestia leve. Si duele más de 3 sobre 10 o empeora al día siguiente, toca "Ajustar hoy" y luego "Me duele algo" para cambiarlo.`, seccion(evidencia, '06-dolor-y-lesiones.md', 'Por qué dejamos seguir'));
 
   const citadas = [...new Set(motivos.flatMap(m => m.refs))].sort((a, b) => a - b);
   return {

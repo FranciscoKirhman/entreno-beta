@@ -4,27 +4,29 @@
 //    Lo básico que más cambia el plan va acá: días, tiempo, máquinas del lugar, zonas a priorizar, favoritos y salud.
 //  · Perfil (Más → Completar mi perfil): cada sección completa del cuestionario, para agregar lo adicional cuando
 //    se quiera. Nada es obligatorio; al cambiar algo, se ofrece aplicarlo al plan.
-import { C, E, guardar, R, esc, $, hoy, indice, numero, coma, chk, mostrarMensaje } from './comun.js';
+import { C, E, guardar, R, esc, $, hoy, indice, numero, coma, chk, mostrarMensaje, IMAGENES } from './comun.js';
 import { derivar, nivelDeclarado } from '../nucleo/derivar.js';
 import { tieneEquipo, nivelAlcanza } from '../nucleo/catalogo.js';
+import { icono } from './iconos.js';
 
 const pregunta = id => C.secciones.flatMap(s => s.preguntas).find(p => p.id === id);
 const PRESETS = () => pregunta('lugares').presets;
 
 // ── Rápido ──────────────────────────────────────────────────────────────────
 export const OBJETIVO_VISTA = {
-  ganar_musculo: { icono: '💪', corto: 'Ganar músculo', sub: 'Más masa muscular' },
-  ganar_fuerza: { icono: '🏋️', corto: 'Ser más fuerte', sub: 'Levantar más peso' },
-  bajar_grasa: { icono: '🔥', corto: 'Bajar grasa', sub: 'Sin perder músculo' },
-  recomposicion: { icono: '⚖️', corto: 'Las dos', sub: 'Bajar grasa y ganar músculo' },
-  salud: { icono: '❤️', corto: 'Salud', sub: 'Sentirme mejor' },
-  deporte: { icono: '⚽', corto: 'Mi deporte', sub: 'Rendir mejor' },
-  volver: { icono: '🔄', corto: 'Volver', sub: 'Después de una pausa' },
+  ganar_musculo: { corto: 'Ganar músculo', sub: 'Más masa muscular' },
+  ganar_fuerza: { corto: 'Ser más fuerte', sub: 'Levantar más peso' },
+  bajar_grasa: { corto: 'Bajar grasa', sub: 'Sin perder músculo' },
+  recomposicion: { corto: 'Las dos', sub: 'Bajar grasa y ganar músculo' },
+  salud: { corto: 'Salud', sub: 'Sentirme mejor' },
+  deporte: { corto: 'Mi deporte', sub: 'Rendir mejor' },
+  volver: { corto: 'Volver', sub: 'Después de una pausa' },
 };
 /** Dibujo del objetivo (app/img/objetivos, hecho con ChatGPT desde docs/09-banco-de-imagenes.md). Es decorativo: el texto va al lado. */
 export const imagenObjetivo = (id, clase = 'ilustracion') => `<img class="${clase}" src="img/objetivos/${id}.webp" alt="" width="256" height="256" decoding="async">`;
 // Asistente: lo elige cada persona (app/img/asistentes, hechos con ChatGPT). Se guarda en el teléfono (E.asistente),
-// no en las respuestas: cambiarlo no cambia el plan. Si le falta una pose, se ve su dibujo de elegir.
+// no en las respuestas: cambiarlo no cambia el plan. Si le falta una pose (no está en app/img/disponibles.json), se
+// ve su dibujo de elegir.
 // Nombres cortos, para que quepan en una línea.
 export const ASISTENTES_VISTA = [
   ['entrenadora', 'Cami'], ['entrenador', 'Nico'], ['profe', 'Tere'], ['coach', 'Beto'],
@@ -33,8 +35,8 @@ export const ASISTENTES_VISTA = [
 export const nombreAsistente = () => ASISTENTES_VISTA.find(([id]) => id === asistenteActual())[1];
 export const asistenteActual = () => (ASISTENTES_VISTA.some(([id]) => id === E.asistente) ? E.asistente : 'entrenadora');
 export function imagenAsistente(pose, clase = 'asistente-dice', id = asistenteActual()) {
-  const elegir = `img/asistentes/${id}.webp`;
-  return `<img class="${clase}" src="${pose ? `img/asistentes/${id}/${pose}.webp` : elegir}" alt="" width="320" height="320" decoding="async"${pose ? ` onerror="this.onerror=null;this.src='${elegir}'"` : ''}>`;
+  const conPose = pose && `img/asistentes/${id}/${pose}.webp`;
+  return `<img class="${clase}" src="${conPose && IMAGENES.has(conPose) ? conPose : `img/asistentes/${id}.webp`}" alt="" width="320" height="320" decoding="async">`;
 }
 /** El asistente dice algo: su dibujo y un globo con el texto. */
 export const dice = (pose, texto) => `<div class="dice">${imagenAsistente(pose)}<p class="globo">${esc(texto)}</p></div>`;
@@ -42,9 +44,9 @@ export const dice = (pose, texto) => `<div class="dice">${imagenAsistente(pose)}
 export const elegirAsistente = () => `<div class="grid-asistentes" role="group" aria-label="Asistentes">${ASISTENTES_VISTA.map(([id, nombre]) => `<button type="button" class="tarjeta-asistente" data-asistente="${id}" aria-pressed="${E.asistente === id}">${imagenAsistente(null, 'asistente-elegir', id)}<span>${esc(nombre)}</span></button>`).join('')}</div>`;
 
 export const NIVEL_VISTA = {
-  principiante: { icono: '🌱', nombre: 'Principiante' },
-  intermedio: { icono: '🌿', nombre: 'Intermedio' },
-  avanzado: { icono: '🌳', nombre: 'Avanzado' },
+  principiante: { nombre: 'Principiante' },
+  intermedio: { nombre: 'Intermedio' },
+  avanzado: { nombre: 'Avanzado' },
 };
 const NIVEL_DE_TIEMPO = { nunca: 'principiante', menos_6m: 'principiante', '6_24m': 'intermedio', '2_5a': null, mas_5a: null };
 const PAUSAS = [[2, '1 a 3 meses'], [4, '3 a 6 meses'], [9, '6 meses a 1 año'], [18, 'Más de un año']];
@@ -99,10 +101,10 @@ function pasoNivel(r) {
     titulo: 'Tu nivel', sub: '¿Cuánto tiempo llevas entrenando con pesas? Es lo que más cambia el plan.',
     html: `<div class="lista-opciones">${p.opciones.map(([o, t]) => {
       const n = NIVEL_DE_TIEMPO[o];
-      return `<button type="button" class="fila-opcion" data-set="tiempo_entrenando" data-v="${o}" aria-pressed="${v === o}"><span>${esc(t)}</span><span class="nivel-chip ${n || 'mixto'}">${n ? `${NIVEL_VISTA[n].icono} ${NIVEL_VISTA[n].nombre}` : '🌿 o 🌳'}</span></button>`;
+      return `<button type="button" class="fila-opcion" data-set="tiempo_entrenando" data-v="${o}" aria-pressed="${v === o}"><span>${esc(t)}</span><span class="nivel-chip ${n || 'mixto'}">${n ? NIVEL_VISTA[n].nombre : 'Intermedio o avanzado'}</span></button>`;
     }).join('')}</div>
     ${conConstancia ? `<div class="seguir"><p class="enunciado">${esc(pregunta('constancia').texto)}</p>${chips('constancia', pregunta('constancia').opciones, r.constancia)}</div>` : ''}
-    ${niv ? `<div class="resultado-nivel nivel-${niv}"><img class="nivel-dibujo" src="img/niveles/${niv}.webp" alt="" width="256" height="256" decoding="async"><div><strong>Partes como ${NIVEL_VISTA[niv].nombre.toLowerCase()}</strong><p class="pequeno">Tu nivel sube solo a medida que entrenas con la app.</p></div></div>` : '<p class="pequeno suave">🌱 → 🌿 → 🌳 Tu nivel sube solo a medida que entrenas con la app.</p>'}`,
+    ${niv ? `<div class="resultado-nivel nivel-${niv}"><img class="nivel-dibujo" src="img/niveles/${niv}.webp" alt="" width="256" height="256" decoding="async"><div><strong>Partes como ${NIVEL_VISTA[niv].nombre.toLowerCase()}</strong><p class="pequeno">Tu nivel sube solo a medida que entrenas con la app.</p></div></div>` : '<p class="pequeno suave">Tu nivel sube solo a medida que entrenas con la app.</p>'}`,
   };
 }
 
@@ -114,7 +116,7 @@ function pasoSemana(r) {
     html: `<p class="enunciado">¿Cuántos días quieres entrenar?</p>
     <div class="numeros">${[2, 3, 4, 5, 6].map(n => `<button type="button" class="numero-opcion" data-set="dias_meta" data-v="${n}" data-num aria-pressed="${Number(r.dias_meta) === n}">${n}</button>`).join('')}</div>
     <p class="enunciado">¿Cuánto dura cada sesión?</p>
-    <div class="chips-botones">${dur.map(([o, t]) => `<button type="button" class="chip-opcion" data-set="duracion_min" data-v="${o}" aria-pressed="${String(r.duracion_min) === o}">⏱️ ${esc(t)}</button>`).join('')}</div>
+    <div class="chips-botones">${dur.map(([o, t]) => `<button type="button" class="chip-opcion" data-set="duracion_min" data-v="${o}" aria-pressed="${String(r.duracion_min) === o}">${esc(t)}</button>`).join('')}</div>
     <p class="enunciado">¿Qué días casi nunca puedes? <span class="suave pequeno">(opcional)</span></p>
     <div class="dias-semana">${DIAS.map(([n, l, nombre]) => `<button type="button" class="dia-opcion" data-dia="${n}" aria-pressed="${no.includes(n)}" aria-label="${nombre}">${l}</button>`).join('')}</div>`,
   };
@@ -158,7 +160,7 @@ function pasoFavoritos(r) {
   const sug = sugerencias(r).filter(e => !v.includes(e.id));
   return {
     titulo: 'Tus favoritos', sub: 'Los ejercicios que te gustan van a estar siempre en tu plan, si tu lugar tiene con qué hacerlos.',
-    html: `${v.length ? `<div class="chips-botones elegidos">${v.map(id => `<button type="button" class="chip-opcion" data-fav="${id}" aria-pressed="true" aria-label="Quitar ${esc(indice.porId.get(id)?.nombre)}">⭐ ${esc(indice.porId.get(id)?.nombre)} <span aria-hidden="true">✕</span></button>`).join('')}</div>` : ''}
+    html: `${v.length ? `<div class="chips-botones elegidos">${v.map(id => `<button type="button" class="chip-opcion" data-fav="${id}" aria-pressed="true" aria-label="Quitar ${esc(indice.porId.get(id)?.nombre)}">${icono('estrella', 'icono-estrella')} ${esc(indice.porId.get(id)?.nombre)} <span aria-hidden="true">✕</span></button>`).join('')}</div>` : ''}
     <input type="search" data-buscar-fav placeholder="Busca: sentadilla, banca, hip thrust…" autocomplete="off" aria-label="Buscar un ejercicio">
     <div class="chips-botones" id="res-fav"></div>
     <p class="enunciado">Sugerencias para tu lugar</p>
@@ -238,7 +240,7 @@ export function vistaRapido(ir, armarPlan) {
     <h1>${esc(titulo)}</h1>
     ${dice(pose || POSE_PASO[id], sub)}
     ${html}
-    <div class="pie-rapido"><button type="button" class="boton primario grande" data-siguiente${listo ? '' : ' disabled'}>${ultimo ? 'Armar mi plan ✨' : 'Siguiente'}</button></div>
+    <div class="pie-rapido"><button type="button" class="boton primario grande" data-siguiente${listo ? '' : ' disabled'}>${ultimo ? 'Armar mi plan' : 'Siguiente'}</button></div>
   </div>`;
   enlazarRapido(ir, armarPlan);
 }
@@ -331,10 +333,13 @@ function enlazarRapido(ir, armarPlan) {
 }
 
 // ── Perfil: las secciones completas, para agregar lo adicional ─────────────
+// Ícono y color de cada sección del perfil, como en Ajustes de iOS.
 export const SECCION_ICONO = {
-  sobre_ti: '🙂', objetivo: '🎯', experiencia: '📈', tiempo: '📅', lugar: '🏋️', salud: '🩺', ciclo: '🌙',
-  recuperacion: '😴', cardio: '🏃', preferencias: '⭐', seguimiento: '📝', consentimientos: '✅',
+  sobre_ti: ['persona', '#8E8E93'], objetivo: ['objetivo', '#FF9500'], experiencia: ['grafico', '#34C759'], tiempo: ['calendario', '#FF3B30'],
+  lugar: ['casa', '#007AFF'], salud: ['corazon', '#FF2D55'], ciclo: ['gota', '#AF52DE'], recuperacion: ['luna', '#5856D6'],
+  cardio: ['pulso', '#30B0C7'], preferencias: ['estrella', '#FFB800'], seguimiento: ['lapiz', '#A2845E'], consentimientos: ['visto', '#34C759'],
 };
+const iconoSeccion = id => { const [n, c] = SECCION_ICONO[id] || ['persona', '#8E8E93']; return `<span class="emoji" style="--c:${c}" aria-hidden="true">${icono(n)}</span>`; };
 
 function cumple(cond) {
   if (!cond) return true;
@@ -365,7 +370,7 @@ export function vistaPerfil(ir, armarPlan) {
     <ul class="secciones-perfil">${secs.map(s => {
       const ps = preguntasVisibles(s);
       const n = ps.filter(p => respondida(R()[p.id])).length;
-      return `<li><button type="button" data-seccion="${s.id}"><span class="emoji" aria-hidden="true">${SECCION_ICONO[s.id] || '•'}</span><span class="texto"><strong>${esc(s.titulo)}</strong><span class="pequeno suave">${n === ps.length ? 'Completa ✓' : `${n} de ${ps.length}`}</span></span><span class="flecha" aria-hidden="true">›</span></button></li>`;
+      return `<li><button type="button" data-seccion="${s.id}">${iconoSeccion(s.id)}<span class="texto"><strong>${esc(s.titulo)}</strong><span class="pequeno suave">${n === ps.length ? 'Completa ✓' : `${n} de ${ps.length}`}</span></span><span class="flecha" aria-hidden="true">›</span></button></li>`;
     }).join('')}</ul>
     ${E.plan ? '' : '<div class="fila-botones"><button type="button" class="boton primario" id="aplicar">Armar mi plan</button></div>'}
   </div>`;
@@ -537,7 +542,7 @@ export function vistaSeccion(ir) {
   const repintar = () => { const y = window.scrollY; vistaSeccion(ir); window.scrollTo(0, y); };
   $('app').innerHTML = `<div id="vista-seccion">
     <button type="button" class="enlace" id="a-perfil">‹ Tu perfil</button>
-    <h1><span aria-hidden="true">${SECCION_ICONO[s.id] || ''}</span> ${esc(s.titulo)}</h1>
+    <h1>${esc(s.titulo)}</h1>
     ${s.intro ? `<div class="aviso ${s.sensible ? 'ojo' : ''}">${esc(s.intro)}</div>` : ''}
     <form id="seccion" novalidate>
       ${ps.map(p => `<div class="pregunta" id="q-${p.id}">

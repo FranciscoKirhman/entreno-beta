@@ -4,16 +4,18 @@ import { crearIndice } from '../nucleo/catalogo.js';
 import { derivar } from '../nucleo/derivar.js';
 
 const cargar = u => fetch(u).then(r => { if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.json(); });
-export const [C, catalogo, K, EVIDENCIA, PLANES] = await Promise.all(
-  ['cuestionario', 'ejercicios', 'checkin', 'evidencia', 'planes'].map(n => cargar(`../contenido/${n}.json`)));
+export const [C, catalogo, K, EVIDENCIA, PLANES, TECNICA] = await Promise.all(
+  ['cuestionario', 'ejercicios', 'checkin', 'evidencia', 'planes', 'tecnica'].map(n => cargar(`../contenido/${n}.json`)));
 export const indice = crearIndice(catalogo);
+/** Imágenes que hay en app/img (las genera herramientas/imagenes.mjs): así no se piden las que todavía no existen. */
+export const IMAGENES = new Set(await fetch('img/disponibles.json').then(r => (r.ok ? r.json() : [])).catch(() => []));
 
 export const hoy = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Santiago' });
 export const ahora = () => new Date().toLocaleString('sv-SE', { timeZone: 'America/Santiago' }).replace(' ', 'T').slice(0, 16);
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const $ = id => document.getElementById(id);
 export const fechaCorta = iso => new Date(iso + 'T12:00:00Z').toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
-export const presc = e => `${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? `–${e.reps_max}` : ''}${e.unidad === 'seg' ? ' s' : ''} · RIR ${e.rir}${e.carga_kg ? ` · ${peso(e.carga_kg)}` : ''}`;
+export const presc = e => `${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${e.unidad === 'seg' ? ' s' : ''} · RIR ${e.rir}${e.carga_kg ? ` · ${peso(e.carga_kg)}` : ''}`;
 
 // ── Unidad de peso: se guarda siempre en kilos; se muestra y se escribe en la unidad de la persona ─
 const LB = 0.45359237;

@@ -1,5 +1,6 @@
-// Vista Progreso: fotos de progreso privadas, suplementos, indicaciones de tu médico o kinesiólogo, y lo que
-// anotaste para el entrenador.
+// Vista Progreso: la semana en el mapa del cuerpo (series hechas contra las del plan, por músculo), el historial,
+// fotos de progreso privadas, suplementos, indicaciones de tu médico o kinesiólogo, y lo que anotaste para el
+// entrenador.
 import { E, guardar, C, esc, $, fechaCorta, hoy, indice, cambiarPlan, opcionesRadio, chk, mostrarMensaje, seriesTexto, volumenTexto } from './comun.js';
 import { tipoParaGuardar } from '../nucleo/registro.js';
 import { sesionDe, sumarDias, diaSemana } from '../nucleo/agenda.js';
@@ -9,6 +10,9 @@ import { resumenParaEntrenador } from '../nucleo/notas.js';
 import { reconocer } from '../nucleo/importar-plan.js';
 import { guardarFotoLocal, listarFotosLocales, borrarFotoLocal, guardarArchivoLocal } from './fotos-local.js';
 import { subirACuenta, subirPendientes, estadoCola } from './cola.js';
+import { seriesAnotadas } from '../nucleo/semanal.js';
+import { semanaPorMusculo } from '../nucleo/volumen-semana.js';
+import { mapaCuerpo, NOMBRE_MUSCULO } from './mapa-cuerpo.js';
 import * as nube from './nube.js';
 
 const DIAS = [[1, 'L'], [2, 'M'], [3, 'M'], [4, 'J'], [5, 'V'], [6, 'S'], [0, 'D']];
@@ -30,6 +34,20 @@ function historial() {
 const deTrabajo = x => !['calentamiento', 'drop', 'descarga'].includes(x.tipo);
 const volumen = series => series.filter(x => x.tipo !== 'calentamiento').reduce((a, x) => a + (Number(x.carga_kg) || 0) * (Number(x.reps) || 0), 0);
 
+/** Esta semana en el mapa del cuerpo: más color, más series hechas de las que tocan. */
+function semanaHtml() {
+  const r = semanaPorMusculo({ series: seriesAnotadas(E.sesiones, E.registro), plan: E.plan, indice, hoy: hoy() });
+  if (!r.filas.length) return '';
+  const n = x => String(Math.round(x)); // las series que ayudan cuentan media: se muestra redondeado
+  const nombre = m => { const t = NOMBRE_MUSCULO[m] || m; return t[0].toUpperCase() + t.slice(1); };
+  return `<section class="tarjeta semana-cuerpo">
+    <h3>Esta semana</h3>
+    <div class="mapa-semana">${mapaCuerpo({ intensidad: r.intensidad, titulo: 'Series de esta semana por músculo' })}</div>
+    <p class="pequeno suave leyenda-mapa"><span class="escala-mapa" aria-hidden="true"><i class="i1"></i><i class="i2"></i><i class="i3"></i><i class="i4"></i></span>Más color, más series hechas de las que tocan.</p>
+    <ul class="barras-semana">${r.filas.filter(f => f.planeadas >= 1 || f.hechas >= 1).map(f => `<li><span class="nombre-musculo">${esc(nombre(f.musculo))}</span><span class="pista" aria-hidden="true"><i style="width:${Math.round(f.avance * 100)}%"></i></span><span class="num pequeno">${n(f.hechas)}${f.planeadas ? ` de ${n(f.planeadas)}` : ''}</span></li>`).join('')}</ul>
+  </section>`;
+}
+
 function historialHtml() {
   const h = historial();
   if (!h.length) return '<p class="pequeno suave">Todavía no hay sesiones. Marca tus series en Hoy, o importa tu historial de Hevy en Más.</p>';
@@ -44,7 +62,7 @@ function historialHtml() {
       if (x.tipo === 'calentamiento') g.calentamiento++; else g.trabajo.push(x);
     }
     return `<li><details><summary><span class="fecha-h">${esc(fechaCorta(s.fecha))}</span><span class="titulo-h">${esc(s.titulo || 'Sesión')}${s.origen === 'hevy' ? ' <span class="chip">Hevy</span>' : ''}${s.sinTerminar && s.fecha === hoy() ? ' <span class="chip">en curso</span>' : ''}</span><span class="cifra-h num">${s.series.filter(deTrabajo).length} series</span></summary>
-      <ul class="pequeno detalle-h">${porEj.map(g => `<li><strong>${esc(g.nombre)}</strong>: ${esc(seriesTexto(g.trabajo) || '—')}${g.calentamiento ? ` <span class="suave">(+${g.calentamiento} de calentamiento)</span>` : ''}</li>`).join('')}</ul></details></li>`;
+      <ul class="pequeno detalle-h">${porEj.map(g => `<li><strong>${esc(g.nombre)}</strong>: ${esc(seriesTexto(g.trabajo) || 'sin series de trabajo')}${g.calentamiento ? ` <span class="suave">(+${g.calentamiento} de calentamiento)</span>` : ''}</li>`).join('')}</ul></details></li>`;
   };
   return `<p class="pequeno">${esc(resumen)}</p>
     <ul class="historial">${(verTodo ? h : h.slice(0, 6)).map(item).join('')}</ul>
@@ -61,6 +79,7 @@ export async function vistaProgreso(ir) {
   const cola = estadoCola();
   $('app').innerHTML = `<div id="vista-progreso">
     <h1>Progreso</h1>
+    ${semanaHtml()}
     <section class="tarjeta">
       <h3>Historial</h3>
       ${historialHtml()}
@@ -97,7 +116,7 @@ export async function vistaProgreso(ir) {
     <section class="tarjeta">
       <h3>Indicación de tu médico o kinesiólogo</h3>
       <p class="pequeno suave">Si un profesional te dio restricciones o ejercicios, anótalos: el plan los respeta y van primero.</p>
-      ${E.indicaciones.map(i => `<div class="aviso ojo">${esc(i.profesional || 'Profesional')}${i.fecha ? `, ${esc(fechaCorta(i.fecha))}` : ''}: evitar ${esc((i.restricciones?.zonas || []).join(', ') || '—')}; ${esc((i.ejercicios || []).map(e => `${e.nombre} ${e.series}×${e.reps || e.segundos + ' s'} ${e.por_semana}/sem`).join('; ') || 'sin ejercicios')}${nube.conectado() ? `<span class="pequeno"> · ${i.enCuenta ? 'en tu cuenta' : 'esperando subir'}${i.archivo ? ` · <button type="button" class="enlace" data-ver-archivo="${esc(i.archivo)}">Ver el documento</button>` : ''}</span>` : ''}</div>`).join('')}
+      ${E.indicaciones.map(i => `<div class="aviso ojo">${esc(i.profesional || 'Profesional')}${i.fecha ? `, ${esc(fechaCorta(i.fecha))}` : ''}: evitar ${esc((i.restricciones?.zonas || []).join(', ') || 'nada en especial')}; ${esc((i.ejercicios || []).map(e => `${e.nombre} ${e.series}×${e.reps || e.segundos + ' s'} ${e.por_semana}/sem`).join('; ') || 'sin ejercicios')}${nube.conectado() ? `<span class="pequeno"> · ${i.enCuenta ? 'en tu cuenta' : 'esperando subir'}${i.archivo ? ` · <button type="button" class="enlace" data-ver-archivo="${esc(i.archivo)}">Ver el documento</button>` : ''}</span>` : ''}</div>`).join('')}
       <details class="extra"><summary>Agregar una indicación</summary>
       <form id="form-ind" class="panel">
         <div class="dos-col"><label class="pequeno">Profesional <input type="text" id="ind-prof" placeholder="Kinesióloga, traumatólogo…"></label><label class="pequeno">Hasta <input type="date" id="ind-hasta"></label></div>
@@ -112,7 +131,7 @@ export async function vistaProgreso(ir) {
 
     <section class="tarjeta">
       <h3>Lo que anotaste para el entrenador</h3>
-      ${resumen.length ? `<ul class="lista-simple">${resumen.map(x => `<li><span><strong>${esc(x.ejercicio)}</strong> (${esc(fechaCorta(x.fecha))})${x.marcas.length ? `: ${esc(x.marcas.join(', '))}` : ''}${x.nota ? ` — "${esc(x.nota)}"` : ''}</span>${x.para_entrenador ? '<span class="chip firme">Para el entrenador</span>' : ''}</li>`).join('')}</ul>` : '<p class="pequeno suave">En cada ejercicio de Hoy hay un desplegable para contar cómo te fue.</p>'}
+      ${resumen.length ? `<ul class="lista-simple">${resumen.map(x => `<li><span><strong>${esc(x.ejercicio)}</strong> (${esc(fechaCorta(x.fecha))})${x.marcas.length ? `: ${esc(x.marcas.join(', '))}` : ''}${x.nota ? `. Nota: "${esc(x.nota)}"` : ''}</span>${x.para_entrenador ? '<span class="chip firme">Para el entrenador</span>' : ''}</li>`).join('')}</ul>` : '<p class="pequeno suave">En cada ejercicio de Hoy hay un desplegable para contar cómo te fue.</p>'}
     </section>
   </div>`;
 

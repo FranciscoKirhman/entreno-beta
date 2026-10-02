@@ -7,6 +7,7 @@ import { avisoCheckin } from './checkin.js';
 import { tarjetaTemporada, tarjetaDescarga, enlazarTemporada } from './temporada.js';
 import { semanaDe } from '../nucleo/ciclos.js';
 import { grupos, etiquetaSuperserie } from '../nucleo/superseries.js';
+import { miniatura } from './imagenes.js';
 import * as nube from './nube.js';
 
 const DIAS_CORTOS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
@@ -36,7 +37,7 @@ export function vistaSemana(ir) {
     ${eligePeso ? '<p class="pequeno suave">Donde no hay peso indicado, elige uno con el que te sobren las repeticiones de reserva (RIR) en la última serie. Lo anotas en Hoy y la app lo ajusta desde ahí.</p>' : ''}
     ${dias.map(x => `<section class="tarjeta dia${x.fecha === f ? ' es-hoy' : ''}" id="dia-${x.fecha}">
       <h3>${esc(fechaCorta(x.fecha))}${x.hora ? ` · ${esc(x.hora)}` : ''} · ${esc(x.foco)} ${x.fecha === f ? '<span class="chip hoy">Hoy</span>' : ''}${entrenado(x.fecha) ? '<span class="chip firme">Hecha ✓</span>' : `<span class="chip ${x.firme ? 'firme' : ''}">${x.firme ? 'Firme' : 'Opcional'}</span>`} <span class="chip num">~${duracionEstimada(x.ejercicios)} min</span></h3>
-      <ul class="ejercicios">${x.ejercicios.map((e, k, todos) => { const g = grupos(todos)[k]; return `<li${g ? ` class="en-superserie ss-${g.letra}"` : ''}><span class="nombre">${g ? `<span class="chip-ss">${etiquetaSuperserie(g)}</span>` : ''}${esc(e.nombre || indice.porId.get(e.ejercicio_id)?.nombre || '')}</span><span class="presc">${esc(presc(e))}</span>${e.nota && !/^Elige un peso/.test(e.nota) ? `<span class="detalle">${esc(e.nota)}</span>` : ''}</li>`; }).join('')}</ul>
+      <ul class="ejercicios">${x.ejercicios.map((e, k, todos) => { const g = grupos(todos)[k]; return `<li class="con-mini${g ? ` en-superserie ss-${g.letra}` : ''}">${indice.porId.has(e.ejercicio_id) ? `<button type="button" class="ej-semana" data-ficha="${e.ejercicio_id}">${miniatura(e.ejercicio_id, 'miniatura chica')}` : '<span class="ej-semana"><span class="miniatura chica vacia" aria-hidden="true"></span>'}<span class="nombre">${g ? `<span class="chip-ss">${etiquetaSuperserie(g)}</span>` : ''}${esc(e.nombre || indice.porId.get(e.ejercicio_id)?.nombre || '')}</span>${indice.porId.has(e.ejercicio_id) ? '</button>' : '</span>'}<span class="presc">${esc(presc(e))}</span>${e.nota && !/^Elige un peso/.test(e.nota) ? `<span class="detalle">${esc(e.nota)}</span>` : ''}</li>`; }).join('')}</ul>
       <details class="extra"><summary>Mover, intercambiar o marcar que faltaste</summary>
         <div class="panel">
           <label class="pequeno">Mover a <input type="date" data-mover="${x.fecha}" value="${x.fecha}"></label>
@@ -57,6 +58,7 @@ export function vistaSemana(ir) {
   enlazarTemporada(() => vistaSemana(ir));
   $('ver-plan').onclick = () => ir('plan');
   raiz.querySelectorAll('[data-ir-checkin]').forEach(b => b.onclick = () => ir('checkin', b.dataset.irCheckin));
+  raiz.querySelectorAll('[data-ficha]').forEach(b => b.onclick = () => ir('ejercicio', { id: b.dataset.ficha, desde: 'semana' }));
   raiz.querySelectorAll('[data-semana]').forEach(b => b.onclick = () => { mostrarSemana(Number(b.dataset.semana)); guardar(); vistaSemana(ir); });
   raiz.querySelectorAll('[data-aplicar-mover]').forEach(b => b.onclick = async () => {
     const de = b.dataset.aplicarMover, a = raiz.querySelector(`[data-mover="${de}"]`).value;

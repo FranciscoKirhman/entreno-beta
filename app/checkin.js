@@ -37,7 +37,7 @@ export function avisoCheckin(siempre = false) {
 const entradaPara = semana => ({ plan: E.plan, semana, sesiones: E.sesiones, registro: E.registro, notas: E.notas, indice, lugar: (R().lugares || [])[0], checkin: K });
 
 function propuestaTexto(it) {
-  const rango = `${it.reps_min}–${it.reps_max} reps`;
+  const rango = `${it.reps_min} a ${it.reps_max} reps`;
   switch (it.accion) {
     case 'subir_carga': return `Sube a ${kg(it.carga_kg)}${it.reps_max !== it.antes.reps_max ? ` · ${rango}` : ''}`;
     case 'bajar_carga': return `Baja a ${kg(it.carga_kg)}`;

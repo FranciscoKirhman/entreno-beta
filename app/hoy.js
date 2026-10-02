@@ -1,10 +1,11 @@
-// Vista Hoy: check-in de bienestar, suplementos y la sesión del día con su registro: series con tipo (calentamiento,
-// normal, al fallo, drop set, como en Hevy), lo de la vez anterior, cronómetro de descanso, superseries, el
-// "¿Por qué?" de cada ejercicio y el desplegable de cómo te fue con nota para el entrenador.
-import { E, guardar, R, D, C, K, EVIDENCIA, indice, hoy, ahora, esc, $, fechaCorta, presc, escala, opcionesRadio, chk, cambiarPlan, numero, coma, mostrarMensaje, avisar, unidadPeso, enUnidad, aKilos, seriesTexto, volumenTexto } from './comun.js';
+// Vista Hoy, como en Hevy: check-in de bienestar, suplementos y la sesión del día con lo que entrenas en el mapa del
+// cuerpo, "Ajustar hoy" (poco tiempo, cansancio, no puedo, otra opción, dolor: siempre pregunta antes de cambiar) y
+// cada ejercicio con su miniatura, su ficha (cómo se hace y por qué), el menú ⋯ y la tabla de series: tipo
+// (calentamiento, normal, al fallo, drop set), lo de la vez anterior, cronómetro de descanso y superseries.
+import { E, guardar, R, D, C, K, indice, hoy, ahora, esc, $, fechaCorta, escala, opcionesRadio, chk, cambiarPlan, numero, coma, mostrarMensaje, avisar, unidadPeso, enUnidad, aKilos, peso, volumenTexto } from './comun.js';
 import { evaluarDia, ajustarSesion, TEXTO_RECOMENDACION } from '../nucleo/bienestar.js';
 import { checklist } from '../nucleo/suplementos.js';
-import { explicarEjercicio } from '../nucleo/explicar.js';
+import { enlaceVideo } from '../nucleo/explicar.js';
 import { sesionDe } from '../nucleo/agenda.js';
 import { duracionEstimada, incrementoPara } from '../nucleo/motor-plan.js';
 import { ESFUERZO, prioridadEsfuerzo, consejoSerie } from '../nucleo/series.js';
@@ -16,11 +17,17 @@ import { subirACuenta } from './cola.js';
 import { iniciarDescanso, detenerDescanso } from './descanso.js';
 import { abrirHoja } from './hoja.js';
 import { grupos, unir, separar, copiarSuperseries, despuesDeSerie, etiquetaSuperserie } from '../nucleo/superseries.js';
+import { icono } from './iconos.js';
+import { miniatura } from './imagenes.js';
+import { mapaCuerpo, NOMBRE_MUSCULO, lista } from './mapa-cuerpo.js';
+import { preguntar, proponer } from './cambios-ui.js';
+import { nombreAsistente } from './cuestionario.js';
 import * as nube from './nube.js';
+
 
 const app = () => $('app');
 
-export function vistaHoy(ir) {
+export function vistaHoy(ir, extra) {
   const f = hoy();
   const plan = E.plan;
   if (!plan || plan.bloqueado) return ir('inicio');
@@ -29,7 +36,8 @@ export function vistaHoy(ir) {
   const sups = checklist(E.suplementos, E.tomas, f, ahora());
   const proxima = plan.dias.find(d => d.fecha > f);
   app().innerHTML = `<div id="vista-hoy">
-    <h1>Hoy <span class="suave pequeno">${esc(fechaCorta(f))}</span></h1>
+    <span class="sobretitulo">${esc(new Date(f + 'T12:00:00Z').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }))}</span>
+    <h1>Hoy</h1>
     ${D().mensaje_alerta ? `<div class="aviso ojo">${esc(D().mensaje_alerta)}</div>` : ''}
     ${avisoCheckin()}
     ${avisoDescargaCorto()}
@@ -41,6 +49,8 @@ export function vistaHoy(ir) {
   </div>`;
   enlazar(ir, dia);
   mostrarMensaje();
+  // Al volver de la ficha de un ejercicio, la pantalla queda en ese ejercicio.
+  if (extra?.ej) requestAnimationFrame(() => document.getElementById(`ej-${extra.ej}`)?.scrollIntoView({ block: 'center' }));
 }
 
 function formularioBienestar() {
@@ -86,7 +96,7 @@ const nombreDe = e => e.nombre || indice.porId.get(e.ejercicio_id)?.nombre || ''
 const mmss = seg => (seg ? `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')}` : 'sin descanso');
 const DESCANSOS = [0, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300];
 
-// Paneles abiertos ("¿Por qué?", "Qué priorizar", "Cómo te fue"): siguen abiertos aunque la vista se vuelva a dibujar.
+// Paneles abiertos ("Cómo te fue"): siguen abiertos aunque la vista se vuelva a dibujar.
 const abiertos = new Set();
 
 /** Series hechas y totales de la sesión, y sus cifras. */
@@ -103,19 +113,22 @@ function sesionHoy(dia) {
   const f = dia.fecha;
   const notas = E.notas[f] || {};
   const todas = seriesAnotadas(E.sesiones, E.registro);
-  return `<section class="tarjeta dia">
-    <h3>${esc(dia.foco)} ${dia.hora ? `<span class="chip">${esc(dia.hora)}</span>` : ''} <span class="chip num">~${duracionEstimada(dia.ejercicios)} min</span></h3>
-    ${dia.ejercicios.length ? avanceHtml(avance(dia)) : ''}
+  const ejs = dia.ejercicios.map(e => indice.porId.get(e.ejercicio_id)).filter(Boolean);
+  const prim = [...new Set(ejs.flatMap(ej => ej.musculos_primarios))];
+  const sec = [...new Set(ejs.flatMap(ej => ej.musculos_secundarios))].filter(m => !prim.includes(m));
+  const eligePeso = dia.ejercicios.some(e => /^Elige un peso/.test(e.nota || ''));
+  return `<section class="tarjeta sesion-cab">
+    <div class="fila-titulo"><div><h2>${esc(dia.foco)}</h2><p class="suave pequeno">${dia.hora ? `${esc(dia.hora)} · ` : ''}~${duracionEstimada(dia.ejercicios)} min · ${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? '' : 's'}</p></div>
+      <button type="button" class="boton chico" id="ajustar-hoy">${icono('ajustes')} Ajustar hoy</button></div>
+    ${dia.ejercicios.length ? avanceHtml(avance(dia)) : '<p>Hoy, descanso activo: 20 a 30 minutos de caminata o bicicleta suave y movilidad.</p>'}
+    ${prim.length ? `<div class="hoy-entrenas">${mapaCuerpo({ primarios: prim, secundarios: sec, titulo: 'Lo que entrenas hoy' })}<div><p class="sobretitulo">Hoy entrenas</p><p class="musculos-hoy">${esc(lista(prim.map(m => NOMBRE_MUSCULO[m] || m)))}</p>${sec.length ? `<p class="pequeno suave">Y un poco de ${esc(lista(sec.map(m => (NOMBRE_MUSCULO[m] || m).toLowerCase())))}</p>` : ''}</div></div>` : ''}
     <p class="suave pequeno">${esc(dia.racional || '')}</p>
-    ${dia.ejercicios.length ? '' : '<p>Hoy, descanso activo: 20 a 30 minutos de caminata o bicicleta suave y movilidad.</p>'}
-    <ol class="ejercicios-hoy">${dia.ejercicios.map((e, k) => ejercicioHoy(e, k, f, e.ejercicio_id ? anterior(todas, e.ejercicio_id, f) : null, notas[idDe(e, k)] || {}, dia)).join('')}</ol>
-    ${dia.cardio ? `<p class="pequeno"><strong>Cardio:</strong> ${esc(dia.cardio)}</p>` : ''}
+    ${eligePeso ? '<p class="nota-sesion pequeno">Donde no hay peso, elige uno con el que te sobren las repeticiones de reserva (RIR) en la última serie. Lo anotas y la app ajusta desde ahí.</p>' : ''}
     <details class="extra"><summary>Calentamiento</summary><ul class="pequeno">${(dia.calentamiento || []).map(c => `<li><strong>${esc(c.name)}</strong>. ${esc(c.how)}</li>`).join('')}</ul></details>
-    <div class="fila-botones">
-      <button type="button" class="boton" id="problema">Tengo un problema con la sesión</button>
-      <button type="button" class="boton primario" id="terminar">${E.sesiones.some(s => s.fecha === f && !s.origen) ? 'Guardar de nuevo' : 'Terminar sesión'}</button>
-    </div>
-  </section>`;
+  </section>
+  <ol class="ejercicios-hoy">${dia.ejercicios.map((e, k) => ejercicioHoy(e, k, f, e.ejercicio_id ? anterior(todas, e.ejercicio_id, f) : null, notas[idDe(e, k)] || {}, dia)).join('')}</ol>
+  ${dia.cardio ? `<section class="tarjeta"><h3>Cardio</h3><p class="pequeno">${esc(dia.cardio)}</p></section>` : ''}
+  <div class="fila-botones"><button type="button" class="boton primario grande" id="terminar">${E.sesiones.some(s => s.fecha === f && !s.origen) ? 'Guardar de nuevo' : 'Terminar sesión'}</button></div>`;
 }
 
 function ejercicioHoy(e, k, f, previas, nota, dia) {
@@ -125,43 +138,49 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
   const filas = filasDe(f, e, k);
   const etiq = etiquetas(filas);
   const u = unidadPeso();
+  const seg = e.unidad === 'seg';
   let iTrabajo = 0; // posición entre las series de trabajo, para mostrar lo de la vez anterior
   const filasHtml = filas.map((r, i) => {
     const t = tipoDe(r);
     const prev = deTrabajo(t) ? previas?.series[iTrabajo++] : null;
     const kg = r.kg ?? (deTrabajo(t) ? e.carga_kg : null);
-    const repsPh = prev?.reps ?? (e.unidad === 'seg' ? 'seg' : deTrabajo(t) ? `${e.reps_min}-${e.reps_max}` : 'reps');
-    return `<div class="serie tipo-${t}${r.hecho ? ' hecha' : ''}${r.rpe != null ? ' con-esfuerzo' : ''}${e.unidad === 'seg' ? ' seg' : ''}">
+    const antes = prev ? (seg ? `${prev.reps ?? ''} s` : `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.reps ?? ''}`) : '';
+    const repsPh = seg ? `${e.reps_min}` : deTrabajo(t) ? (e.reps_min === e.reps_max ? `${e.reps_min}` : `${e.reps_min} a ${e.reps_max}`) : '';
+    return `<div class="serie tipo-${t}${r.hecho ? ' hecha' : ''}${r.rpe != null ? ' con-esfuerzo' : ''}${seg ? ' seg' : ''}">
       <button type="button" class="tipo-serie" data-tipo-serie="${id}" data-i="${i}" aria-label="Serie ${etiq[i]}, ${TIPOS_SERIE[t].nombre.toLowerCase()}. Cambiar el tipo">${etiq[i]}</button>
-      ${e.unidad === 'seg' ? '' : `<input type="text" inputmode="decimal" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="kg" value="${esc(coma(enUnidad(kg)))}" placeholder="${esc(prev?.carga_kg != null ? coma(enUnidad(prev.carga_kg)) : u)}" aria-label="${u === 'lb' ? 'Libras' : 'Kilos'}, serie ${etiq[i]}">`}
-      <input type="text" inputmode="numeric" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="reps" value="${esc(r.reps ?? '')}" placeholder="${esc(repsPh)}" aria-label="${e.unidad === 'seg' ? 'Segundos' : 'Repeticiones'}, serie ${etiq[i]}">
+      <span class="antes num">${esc(antes)}</span>
+      ${seg ? '' : `<input type="text" inputmode="decimal" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="kg" value="${esc(coma(enUnidad(kg)))}" placeholder="${esc(prev?.carga_kg != null ? coma(enUnidad(prev.carga_kg)) : '')}" aria-label="${u === 'lb' ? 'Libras' : 'Kilos'}, serie ${etiq[i]}">`}
+      <input type="text" inputmode="numeric" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="reps" value="${esc(r.reps ?? '')}" placeholder="${esc(prev?.reps ?? repsPh)}" aria-label="${seg ? 'Segundos' : 'Repeticiones'}, serie ${etiq[i]}">
       <button type="button" class="check" data-hecho="${id}" data-i="${i}" aria-pressed="${Boolean(r.hecho)}" aria-label="Serie ${etiq[i]} hecha">${r.hecho ? '✓' : ''}</button>
-      ${e.unidad === 'seg' || !deTrabajo(t) ? '' : `<div class="esfuerzo"><select data-ej="${id}" data-i="${i}" data-c="rpe" aria-label="Esfuerzo, serie ${etiq[i]}"><option value="">Esfuerzo (RPE · RIR)</option>${ESFUERZO.map(o => `<option value="${o.rpe}"${Number(r.rpe) === o.rpe ? ' selected' : ''}>${o.etiqueta}</option>`).join('')}</select></div>`}
+      ${seg || !deTrabajo(t) ? '' : `<div class="esfuerzo"><button type="button" class="chip-esfuerzo${r.rpe != null ? ' con-valor' : ''}" data-esfuerzo="${id}" data-i="${i}" aria-label="Esfuerzo de la serie ${etiq[i]}">${esc(ESFUERZO.find(o => o.rpe === Number(r.rpe))?.etiqueta || '¿Cuánto te costó?')}</button></div>`}
       ${r.consejo && deTrabajo(t) ? `<p class="consejo ${r.consejo.tipo}">${esc(r.consejo.texto)}</p>` : ''}</div>`;
   }).join('');
   const preguntas = K.por_ejercicio.preguntas.filter(p => !p.mostrar_si || Object.entries(p.mostrar_si).every(([q, vals]) => vals.includes(nota[q])));
-  // En una superserie, el descanso se elige en el último ejercicio y vale para la vuelta.
+  // En una superserie, el descanso va al terminar la vuelta (se elige en el último ejercicio).
   const desc = g ? descansoVuelta(dia.ejercicios, g) : descansoDe(e, k);
-  const conDescanso = !g || g.pos === g.total;
-  return `<li class="ej${g ? ` en-superserie ss-${g.letra}${g.pos === 1 ? ' ss-inicio' : ''}` : ''}" id="ej-${id}">
+  const descTexto = g && g.pos < g.total ? 'sin descanso, sigue la superserie' : `descanso ${mmss(desc)}`;
+  const nombre = e.nombre || ej?.nombre || id;
+  return `<li class="ej tarjeta${g ? ` en-superserie ss-${g.letra}${g.pos === 1 ? ' ss-inicio' : ''}` : ''}" id="ej-${id}">
     ${g?.pos === 1 ? `<p class="titulo-ss">Superserie ${g.letra} · sin descanso entre estos ${g.total}, descansas al terminar la vuelta</p>` : ''}
-    <div class="ej-cab"><span class="nombre">${g ? `<span class="chip-ss">${etiquetaSuperserie(g)}</span>` : ''}${esc(e.nombre || ej?.nombre || id)}</span><span class="presc">${esc(presc(e))}</span></div>
-    ${previas ? `<p class="anterior pequeno suave">La vez anterior (${esc(fechaCorta(previas.fecha))}): ${esc(seriesTexto(previas.series))}</p>` : ''}
-    ${e.nota && !(previas && /^Elige un peso/.test(e.nota)) ? `<p class="pequeno suave">${esc(e.nota)}</p>` : ''}
-    <div class="series">${filasHtml}</div>
-    <div class="agregar-series"><button type="button" class="enlace" data-agregar="${id}">+ Serie</button><button type="button" class="enlace" data-calentar="${id}">+ Calentamiento</button>
-      ${conDescanso ? `<label class="descanso-ej pequeno">${g ? 'Descanso de la vuelta' : 'Descanso'} <select data-descanso="${id}" aria-label="${g ? `Descanso al terminar cada vuelta de la superserie ${g.letra}` : `Descanso entre series de ${esc(e.nombre || ej?.nombre || 'este ejercicio')}`}">${[...new Set([...DESCANSOS, desc])].sort((a, b) => a - b).map(sg => `<option value="${sg}"${sg === desc ? ' selected' : ''}>${mmss(sg)}</option>`).join('')}</select></label>` : '<span class="descanso-ej pequeno">Sin descanso: sigue la superserie</span>'}</div>
-    <div class="acciones-ej">
-      ${e.ejercicio_id && dia.ejercicios.length > 1 ? `<button type="button" class="enlace" data-superserie="${id}">${g ? `Superserie ${g.letra}` : 'Superserie'}</button>` : ''}
-      ${ej ? `<button type="button" class="enlace" data-porque="${id}" aria-expanded="${abiertos.has(`porque-${id}`)}">¿Por qué?</button>${e.unidad !== 'seg' ? `<button type="button" class="enlace" data-prioriza="${id}" aria-expanded="${abiertos.has(`prioriza-${id}`)}">Qué priorizar</button>` : ''}<a class="enlace" href="https://www.youtube.com/results?search_query=${encodeURIComponent(`${ej.nombre} técnica correcta`)}" target="_blank" rel="noopener">Video</a>` : '<span class="chip">Indicado por tu profesional</span>'}
+    <div class="ej-cab">
+      ${ej ? `<button type="button" class="ej-abrir" data-ficha="${e.ejercicio_id}" aria-label="${esc(nombre)}: cómo se hace y por qué">${miniatura(e.ejercicio_id)}</button>` : `<span class="miniatura vacia"></span>`}
+      <div class="ej-textos"><span class="nombre">${g ? `<span class="chip-ss">${etiquetaSuperserie(g)}</span>` : ''}${esc(nombre)}</span>
+        <span class="ej-sub num">${esc(`${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${seg ? ' s' : ''} · RIR ${e.rir}${e.carga_kg ? ` · ${peso(e.carga_kg)}` : ''} · ${descTexto}`)}</span>
+        ${ej ? '' : '<span class="chip">Indicado por tu profesional</span>'}</div>
+      ${ej ? `<button type="button" class="boton-icono" data-ficha="${e.ejercicio_id}" aria-label="Cómo se hace y por qué">${icono('info')}</button>` : ''}
+      <button type="button" class="boton-icono" data-mas="${id}" aria-label="Más opciones de ${esc(nombre)}">${icono('puntos')}</button>
     </div>
-    ${ej && e.unidad !== 'seg' ? `<p class="prioriza pequeno" id="prioriza-${id}"${abiertos.has(`prioriza-${id}`) ? '' : ' hidden'}>${esc(prioridadEsfuerzo(e, ej, D(), (R().lesiones || []).filter(l => l.activa !== false).map(l => l.region)).texto)}</p>` : ''}
-    <div id="porque-${id}"></div>
+    ${e.nota && !/^Elige un peso/.test(e.nota) ? `<p class="pequeno suave">${esc(e.nota)}</p>` : ''}
+    <div class="tabla-series${seg ? ' seg' : ''}">
+      <div class="cab-series" aria-hidden="true"><span>Serie</span><span>Anterior</span>${seg ? '' : `<span>${u}</span>`}<span>${seg ? 'Seg' : 'Reps'}</span><span>${icono('visto', 'icono icono-chico')}</span></div>
+      ${filasHtml}
+    </div>
+    <button type="button" class="boton agregar-serie" data-agregar="${id}">+ Agregar serie</button>
     <details class="extra" data-panel="nota-${id}"${Object.keys(nota).length || abiertos.has(`nota-${id}`) ? ' open' : ''}><summary>Cómo te fue · nota para el entrenador</summary>
       <div class="preguntas-ej">
         ${preguntas.map(p => `<div><span class="pequeno">${esc(p.texto)}</span>${p.tipo === 'escala'
           ? escala(`n-${id}-${p.id}`, p.min, p.max, nota[p.id], p.extremos, `data-nota="${id}" data-p="${p.id}" data-num`)
-          : opcionesRadio(`n-${id}-${p.id}`, p.zonas ? [] : p.opciones, nota[p.id], `data-nota="${id}" data-p="${p.id}"`)}${p.zonas ? `<select data-nota="${id}" data-p="${p.id}"><option value="">—</option>${C.zonas[p.zonas].map(([z, t]) => `<option value="${z}"${nota[p.id] === z ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>` : ''}</div>`).join('')}
+          : opcionesRadio(`n-${id}-${p.id}`, p.zonas ? [] : p.opciones, nota[p.id], `data-nota="${id}" data-p="${p.id}"`)}${p.zonas ? `<select data-nota="${id}" data-p="${p.id}"><option value="">Elige</option>${C.zonas[p.zonas].map(([z, t]) => `<option value="${z}"${nota[p.id] === z ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>` : ''}</div>`).join('')}
         <label class="pequeno">${esc(K.por_ejercicio.nota_entrenador.texto)}<textarea data-nota="${id}" data-p="nota" placeholder="${esc(K.por_ejercicio.nota_entrenador.ayuda)}">${esc(nota.nota || '')}</textarea></label>
         <label class="pequeno"><input type="checkbox" data-nota="${id}" data-p="para_entrenador"${chk(nota.para_entrenador)}> Que la vea mi entrenador</label>
       </div>
@@ -210,7 +229,6 @@ function enlazar(ir, dia) {
   document.querySelectorAll('[data-ir-checkin]').forEach(b => b.onclick = () => ir('checkin', b.dataset.irCheckin));
   document.querySelectorAll('[data-ir-semana]').forEach(b => b.onclick = () => ir('semana'));
   $('entrenar-igual')?.addEventListener('click', () => ir('coach', 'Hoy no tenía sesión pero quiero entrenar, ¿qué otra opción tienes?'));
-  $('problema')?.addEventListener('click', () => ir('coach'));
   if (!dia) return;
 
   const raiz = $('vista-hoy');
@@ -263,8 +281,8 @@ function enlazar(ir, dia) {
   });
 
   // Superserie: unir este ejercicio con otro del día (o sacarlo). Se repite en este mismo día de las semanas siguientes.
-  raiz.querySelectorAll('[data-superserie]').forEach(b => b.onclick = () => {
-    const { e, k } = ejercicioDe(b.dataset.superserie);
+  const superserie = (id, b) => {
+    const { e, k } = ejercicioDe(id);
     const g = grupos(dia.ejercicios);
     const otros = dia.ejercicios.map((x, j) => ({ x, j })).filter(({ x, j }) => j !== k && x.ejercicio_id && !(g[k] && g[j]?.letra === g[k].letra));
     abrirHoja({
@@ -286,16 +304,17 @@ function enlazar(ir, dia) {
         repintar();
       },
     });
-  });
+  };
 
   // Agregar una serie al final, o un calentamiento al principio.
-  raiz.querySelectorAll('[data-agregar], [data-calentar]').forEach(b => b.onclick = () => {
-    const { e, k } = ejercicioDe(b.dataset.agregar || b.dataset.calentar);
+  const agregarFila = (id, calentar) => {
+    const { e, k } = ejercicioDe(id);
     const { lista, n } = materializar(f, e, k);
-    if (b.dataset.calentar) lista.unshift({ tipo: 'calentamiento' }); else lista.push({});
+    if (calentar) lista.unshift({ tipo: 'calentamiento' }); else lista.push({});
     fijarFilas(f, idDe(e, k), n + 1);
     guardar(); repintar();
-  });
+  };
+  raiz.querySelectorAll('[data-agregar]').forEach(b => b.onclick = () => agregarFila(b.dataset.agregar, false));
 
   // Marcar una serie: si no escribió nada, toma lo de la serie anterior de hoy, lo de la vez anterior o lo del plan.
   raiz.querySelectorAll('[data-hecho]').forEach(b => b.onclick = () => {
@@ -340,22 +359,26 @@ function enlazar(ir, dia) {
     repintar();
   });
 
-  raiz.addEventListener('change', ev => {
-    const t = ev.target;
-    // Esfuerzo: RPE 10 es una serie al fallo; bajar de 10 la deja normal.
-    if (t.dataset.ej && t.dataset.c === 'rpe') {
-      const { e, k } = ejercicioDe(t.dataset.ej);
+  // Esfuerzo de una serie (RPE y reserva), en una hoja. RPE 10 es una serie al fallo; bajar de 10 la deja normal.
+  raiz.querySelectorAll('[data-esfuerzo]').forEach(b => b.onclick = () => abrirHoja({
+    titulo: '¿Cuánto te costó?', volver: b,
+    nota: 'RIR es cuántas repeticiones más te salían con buena técnica. RPE es lo mismo contado desde 10.',
+    opciones: [...ESFUERZO.map(o => ({ valor: String(o.rpe), letra: String(o.rir).replace('.', ','), clase: o.rpe === 10 ? 'tipo-fallo' : '', nombre: o.etiqueta })), { valor: '', letra: '', nombre: 'Sin anotar' }],
+    alElegir: v => {
+      const { e, k } = ejercicioDe(b.dataset.esfuerzo);
       const { lista } = materializar(f, e, k);
-      const r = { ...lista[t.dataset.i], rpe: t.value === '' ? null : Number(t.value) };
+      const r = { ...lista[b.dataset.i], rpe: v === '' ? null : Number(v) };
       delete r.fallo;
       if (r.rpe === 10) r.tipo = 'fallo';
       else if (tipoDe(r) === 'fallo') r.tipo = 'normal';
       if (r.hecho) r.consejo = consejo(e, r);
-      lista[t.dataset.i] = r;
+      lista[b.dataset.i] = r;
       guardar(); repintar();
-      return;
-    }
-    if (t.dataset.descanso) { (E.descansos ||= {})[t.dataset.descanso] = Number(t.value); guardar(); return; }
+    },
+  }));
+
+  raiz.addEventListener('change', ev => {
+    const t = ev.target;
     if (!t.dataset.nota || t.tagName === 'TEXTAREA') return;
     const v = t.type === 'checkbox' ? t.checked : t.dataset.num !== undefined ? Number(t.value) : t.value;
     guardarNota(t.dataset.nota, t.dataset.p, v);
@@ -364,32 +387,84 @@ function enlazar(ir, dia) {
   function guardarNota(id, p, v) { ((E.notas[f] ||= {})[id] ||= {})[p] = v; guardar(); }
   raiz.querySelectorAll('details[data-panel]').forEach(d => d.addEventListener('toggle', () => { d.open ? abiertos.add(d.dataset.panel) : abiertos.delete(d.dataset.panel); }));
 
-  // Qué priorizar si no salen las repeticiones o la reserva.
-  raiz.querySelectorAll('[data-prioriza]').forEach(b => b.onclick = () => {
-    const p = $(`prioriza-${b.dataset.prioriza}`);
-    p.hidden = !p.hidden;
-    p.hidden ? abiertos.delete(`prioriza-${b.dataset.prioriza}`) : abiertos.add(`prioriza-${b.dataset.prioriza}`);
-    b.setAttribute('aria-expanded', String(!p.hidden));
+  // Ficha del ejercicio: cómo se hace, qué trabaja, tus marcas, por qué está en tu plan y alternativas.
+  raiz.querySelectorAll('[data-ficha]').forEach(b => b.onclick = () => ir('ejercicio', { id: b.dataset.ficha, desde: 'hoy' }));
+
+  // Menú ⋯ de cada ejercicio.
+  raiz.querySelectorAll('[data-mas]').forEach(b => b.onclick = () => {
+    const id = b.dataset.mas;
+    const { e, k } = ejercicioDe(id);
+    const ej = indice.porId.get(e.ejercicio_id);
+    const g = grupos(dia.ejercicios)[k];
+    // En una superserie, el descanso es el de la vuelta y se elige en el último ejercicio.
+    const idDescanso = g ? idDe(dia.ejercicios[g.miembros.at(-1)], g.miembros.at(-1)) : id;
+    const desc = g ? descansoVuelta(dia.ejercicios, g) : descansoDe(e, k);
+    const lesiones = (R().lesiones || []).filter(l => l.activa !== false).map(l => l.region);
+    abrirHoja({
+      titulo: nombreDe(e), volver: b,
+      opciones: [
+        ...(ej ? [{ valor: 'ficha', icono: icono('libro'), nombre: 'Cómo se hace y por qué' }] : []),
+        ...(ej ? [{ valor: 'cambiar', icono: icono('cambiar'), nombre: 'Cambiar este ejercicio' }] : []),
+        { valor: 'calentar', icono: icono('fuego'), clase: 'tipo-calentamiento', nombre: 'Agregar serie de calentamiento' },
+        { valor: 'descanso', icono: icono('reloj'), nombre: `Descanso: ${mmss(desc)}${g ? ' (al terminar la vuelta)' : ''}` },
+        ...(ej ? [{ valor: 'superserie', icono: icono('cadena'), nombre: g ? `Superserie ${g.letra}` : 'Hacer superserie' }] : []),
+        ...(ej && e.unidad !== 'seg' ? [{ valor: 'prioriza', icono: icono('objetivo'), nombre: 'Si no me salen las repeticiones' }] : []),
+        ...(ej ? [{ valor: 'video', icono: icono('video'), nombre: 'Ver videos de técnica' }] : []),
+      ],
+      alElegir: v => {
+        if (v === 'ficha') ir('ejercicio', { id: e.ejercicio_id, desde: 'hoy' });
+        else if (v === 'cambiar') proponer({ tipo: 'elegir_alternativa', fecha: f, ejercicio: e.ejercicio_id }, { titulo: `Cambiar ${nombreDe(e)}`, volver: b, alCambiar: repintar });
+        else if (v === 'calentar') agregarFila(id, true);
+        else if (v === 'superserie') superserie(id, b);
+        else if (v === 'prioriza') abrirHoja({ titulo: 'Si no te salen las repeticiones', nota: prioridadEsfuerzo(e, ej, D(), lesiones).texto, volver: b, opciones: [{ valor: 'ok', icono: icono('visto'), clase: 'confirmar', nombre: 'Entendido' }], alElegir: () => {} });
+        else if (v === 'video') window.open(enlaceVideo(ej), '_blank', 'noopener');
+        else if (v === 'descanso') abrirHoja({
+          titulo: g ? `Descanso de la superserie ${g.letra}` : 'Descanso entre series', volver: b,
+          nota: g ? 'Se descansa al terminar la vuelta, no entre los ejercicios de la superserie.' : 'El cronómetro parte solo al marcar una serie.',
+          opciones: DESCANSOS.map(x => ({ valor: String(x), icono: x === desc ? icono('visto') : '', clase: 'confirmar', nombre: x ? mmss(x) : 'Sin descanso' })),
+          alElegir: x => { (E.descansos ||= {})[idDescanso] = Number(x); guardar(); repintar(); },
+        });
+      },
+    });
   });
 
-  // ¿Por qué?
-  const pintarPorque = id => {
-    const e = dia.ejercicios.find(x => x.ejercicio_id === id);
-    const ex = explicarEjercicio({ e, dia, plan: E.plan, respuestas: R(), indice, evidencia: EVIDENCIA });
-    $(`porque-${id}`).innerHTML = `<div class="panel porque">
-      ${ex.motivos.map(m => `<div><strong>${esc(m.pregunta)}</strong><p>${esc(m.respuesta)}</p>${m.fuente ? `<p class="pequeno suave">Fuente: ${esc(m.fuente.documento)} → ${esc(m.fuente.seccion)}${m.refs.length ? ` [${m.refs.join(', ')}]` : ''}</p>` : ''}</div>`).join('')}
-      ${ex.referencias.length ? `<details class="extra"><summary>Papers que lo respaldan (${ex.referencias.length})</summary><ol class="refs">${ex.referencias.map(r => `<li value="${r.n}">${esc(r.texto)} <span class="chip ${r.verificada ? 'verificada' : ''}">${r.verificada ? 'verificada' : 'por verificar'}</span></li>`).join('')}</ol></details>` : ''}
-      <a class="enlace" href="${esc(ex.video)}" target="_blank" rel="noopener">Ver videos de técnica</a>
-    </div>`;
+  // Ajustar hoy: lo mismo que contarle al entrenador, con la vista previa y la confirmación en hojas.
+  $('ajustar-hoy').onclick = () => {
+    const b = $('ajustar-hoy');
+    const min = duracionEstimada(dia.ejercicios);
+    const listo = r => (r.ir === 'semana' ? ir('semana') : repintar());
+    const o = { titulo: 'Ajustar hoy', volver: b, alCambiar: listo };
+    abrirHoja({
+      titulo: 'Ajustar hoy', volver: b,
+      nota: 'Te muestro cómo quedaría y te pregunto antes de cambiar algo.',
+      opciones: [
+        { valor: 'tiempo', icono: icono('reloj'), nombre: 'Tengo poco tiempo' },
+        { valor: 'cansado', icono: icono('luna'), nombre: 'Dormí mal o estoy cansado' },
+        { valor: 'maquina', icono: icono('cambiar'), nombre: 'Una máquina está ocupada' },
+        { valor: 'otra', icono: icono('calendario'), nombre: 'Prefiero entrenar otra cosa' },
+        { valor: 'falte', icono: icono('flecha'), nombre: 'Hoy no puedo, moverla' },
+        { valor: 'dolor', icono: icono('curita'), clase: 'tipo-fallo', nombre: 'Me duele algo' },
+        { valor: 'chat', icono: icono('chat'), nombre: `Hablar con ${nombreAsistente()}` },
+      ],
+      alElegir: v => {
+        if (v === 'tiempo') abrirHoja({
+          titulo: '¿Cuánto tiempo tienes?', volver: b, nota: `La sesión completa toma unos ${min} minutos.`,
+          opciones: [20, 30, 40, 45, 60].filter(x => x < min).map(x => ({ valor: String(x), icono: icono('reloj'), nombre: `${x} minutos` })),
+          alElegir: x => preguntar(`solo tengo ${x} minutos`, o),
+        });
+        else if (v === 'cansado') preguntar('dormí mal y estoy cansado', o);
+        else if (v === 'maquina') preguntar('la máquina está ocupada', { ...o, titulo: '¿Qué máquina está ocupada?' });
+        else if (v === 'otra') preguntar('hoy no quiero hacer esto, ¿qué otra opción tienes?', { ...o, titulo: 'Otra opción para hoy' });
+        else if (v === 'falte') proponer({ tipo: 'falte', fecha: f }, o);
+        else if (v === 'chat') ir('coach');
+        else if (v === 'dolor') abrirHoja({
+          titulo: '¿Dónde te duele?', volver: b, nota: `Te llevo con ${nombreAsistente()} para ver qué hacer hoy.`,
+          opciones: C.zonas.articulaciones.map(([z, t]) => ({ valor: z, icono: icono('curita'), clase: 'tipo-fallo', nombre: t })),
+          alElegir: z => ir('coach', `me duele ${z === 'lumbar' ? 'la zona lumbar' : `${['muneca', 'cadera', 'rodilla'].includes(z) ? 'la' : 'el'} ${C.zonas.articulaciones.find(x => x[0] === z)[1].toLowerCase()}`}`),
+        });
+      },
+    });
   };
-  raiz.querySelectorAll('[data-porque]').forEach(b => {
-    if (abiertos.has(`porque-${b.dataset.porque}`)) pintarPorque(b.dataset.porque);
-    b.onclick = () => {
-      const id = b.dataset.porque, abierto = abiertos.has(`porque-${id}`);
-      if (abierto) { abiertos.delete(`porque-${id}`); $(`porque-${id}`).innerHTML = ''; } else { abiertos.add(`porque-${id}`); pintarPorque(id); }
-      b.setAttribute('aria-expanded', String(!abierto));
-    };
-  });
 
   // Terminar sesión: queda en el historial local y, con cuenta, en el servidor.
   $('terminar').onclick = async () => {

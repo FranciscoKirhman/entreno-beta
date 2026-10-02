@@ -1,11 +1,12 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
 // Red primero, con límite de tiempo, y la copia guardada como respaldo (igual que el tablero).
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-02 01:07 · bb99b8c";
+const VERSION = "2026-10-02 01:33 · 5b13e0d";
 const ARCHIVOS = [
  "./",
  "app.js",
  "avisos.js",
+ "cambios-ui.js",
  "checkin.js",
  "coach-ui.js",
  "cola.js",
@@ -14,6 +15,7 @@ const ARCHIVOS = [
  "cuestionario.js",
  "descanso.js",
  "estilos.css",
+ "ficha.js",
  "fotos-local.js",
  "hoja.js",
  "hoy.js",
@@ -21,6 +23,8 @@ const ARCHIVOS = [
  "iconos/icono-192.png",
  "iconos/icono-512.png",
  "iconos/icono.svg",
+ "iconos.js",
+ "imagenes.js",
  "img/asistentes/coach/animo.webp",
  "img/asistentes/coach/calendario.webp",
  "img/asistentes/coach/celebra.webp",
@@ -113,6 +117,7 @@ const ARCHIVOS = [
  "img/asistentes/robot/saludo.webp",
  "img/asistentes/robot/sin_senal.webp",
  "img/asistentes/robot.webp",
+ "img/disponibles.json",
  "img/equipos/abductora.webp",
  "img/equipos/banco.webp",
  "img/equipos/bandas.webp",
@@ -150,6 +155,7 @@ const ARCHIVOS = [
  "img/objetivos/volver.webp",
  "index.html",
  "manifest.webmanifest",
+ "mapa-cuerpo.js",
  "mas.js",
  "nube.js",
  "plan.js",
@@ -161,6 +167,7 @@ const ARCHIVOS = [
  "../contenido/ejercicios.json",
  "../contenido/evidencia.json",
  "../contenido/planes.json",
+ "../contenido/tecnica.json",
  "../nucleo/agenda.js",
  "../nucleo/bienestar.js",
  "../nucleo/cambios.js",
@@ -172,6 +179,7 @@ const ARCHIVOS = [
  "../nucleo/cuidado.js",
  "../nucleo/derivar.js",
  "../nucleo/explicar.js",
+ "../nucleo/ficha.js",
  "../nucleo/hevy-csv.js",
  "../nucleo/ics.js",
  "../nucleo/importar-plan.js",
@@ -187,7 +195,8 @@ const ARCHIVOS = [
  "../nucleo/series.js",
  "../nucleo/superseries.js",
  "../nucleo/suplementos.js",
- "../nucleo/validador.js"
+ "../nucleo/validador.js",
+ "../nucleo/volumen-semana.js"
 ];
 const CACHE = `entreno-b-${VERSION}`;
 const FUENTES = 'entreno-b-fuentes';

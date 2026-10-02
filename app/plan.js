@@ -8,6 +8,8 @@ import { progresoNivel } from '../nucleo/nivel.js';
 import { OBJETIVO_VISTA, NIVEL_VISTA, imagenObjetivo, dice } from './cuestionario.js';
 import { fechasEntrenadas } from './temporada.js';
 import { abrirHoja } from './hoja.js';
+import { icono } from './iconos.js';
+import { miniatura } from './imagenes.js';
 import { grupos, etiquetaSuperserie } from '../nucleo/superseries.js';
 
 const LETRA = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
@@ -38,7 +40,7 @@ export function vistaPlan(ir, { armarPlan, nuevo = false } = {}) {
       <p class="antetitulo">${nuevo ? 'Tu plan está listo' : 'Tu plan'}</p>
       <h1>${esc(s.objetivo.nombre)}</h1>
       <div class="chips-heroe">
-        <span class="nivel-chip ${s.nivel}">${n.icono} ${n.nombre}</span>
+        <span class="nivel-chip ${s.nivel}">${n.nombre}</span>
         <span class="chip-heroe">${s.dias.length} días</span>
         <span class="chip-heroe">~${s.minutos.largo} min</span>
         <span class="chip-heroe">${s.bloque.semanas} semanas</span>
@@ -58,11 +60,11 @@ export function vistaPlan(ir, { armarPlan, nuevo = false } = {}) {
 
     <h2>Cada día</h2>
     ${s.dias.map(x => `<details class="tarjeta dia-plan"><summary><span class="dia-nombre">${esc(mayus(x.nombre_dia))}</span><span class="dia-foco">${esc(x.foco)}</span><span class="chip num">~${x.minutos} min</span></summary>
-      <ul class="ejercicios-plan">${x.ejercicios.map((e, k, todos) => { const g = grupos(todos)[k]; return `<li${g ? ` class="en-superserie ss-${g.letra}"` : ''}><span class="nombre">${g ? `<span class="chip-ss">${etiquetaSuperserie(g)}</span>` : ''}${favoritos.has(e.id) ? '<span title="Favorito" aria-label="Favorito">⭐</span> ' : ''}${esc(e.nombre)}${trabajaPrioridad(e.id) ? ' <span class="punto-prioridad" title="Trabaja una zona prioritaria" aria-label="Zona prioritaria"></span>' : ''}</span><span class="num">${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${e.unidad === 'seg' ? ' s' : ''}</span></li>`; }).join('')}</ul>
-      ${x.cardio ? `<p class="pequeno suave">🏃 ${esc(x.cardio)}</p>` : ''}
+      <ul class="ejercicios-plan">${x.ejercicios.map((e, k, todos) => { const g = grupos(todos)[k]; return `<li class="con-mini${g ? ` en-superserie ss-${g.letra}` : ''}"><span class="ej-semana">${miniatura(e.id, 'miniatura chica')}<span class="nombre">${g ? `<span class="chip-ss">${etiquetaSuperserie(g)}</span>` : ''}${favoritos.has(e.id) ? `<span title="Favorito" aria-label="Favorito">${icono('estrella', 'icono-estrella')}</span> ` : ''}${esc(e.nombre)}${trabajaPrioridad(e.id) ? ' <span class="punto-prioridad" title="Trabaja una zona prioritaria" aria-label="Zona prioritaria"></span>' : ''}</span></span><span class="num">${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${e.unidad === 'seg' ? ' s' : ''}</span></li>`; }).join('')}</ul>
+      ${x.cardio ? `<p class="pequeno suave">Cardio: ${esc(x.cardio)}</p>` : ''}
       ${x.firme ? '' : '<p class="pequeno suave">Día opcional: si no alcanzas, no se pierde nada importante.</p>'}
     </details>`).join('')}
-    <p class="pequeno suave leyenda">⭐ favorito · <span class="punto-prioridad"></span> zona prioritaria · series × repeticiones</p>
+    <p class="pequeno suave leyenda">${icono('estrella', 'icono-estrella')} favorito · <span class="punto-prioridad"></span> zona prioritaria · series × repeticiones</p>
 
     <h2>Series por músculo</h2>
     <p class="pequeno suave">A la semana. La franja es lo recomendado para tu nivel (${lo} a ${hi}); las zonas prioritarias pueden pasarse un poco.</p>
@@ -87,7 +89,7 @@ export function vistaPlan(ir, { armarPlan, nuevo = false } = {}) {
     </section>
 
     <div class="pie-plan">
-      <button type="button" class="boton primario grande" id="empezar-plan">${nuevo ? 'Empezar 💪' : 'Ir a Hoy'}</button>
+      <button type="button" class="boton primario grande" id="empezar-plan">${nuevo ? 'Empezar' : 'Ir a Hoy'}</button>
       <button type="button" class="boton" id="a-perfil">Completar mi perfil</button>
     </div>
   </div>`;
@@ -98,7 +100,7 @@ export function vistaPlan(ir, { armarPlan, nuevo = false } = {}) {
     titulo: '¿Qué quieres lograr?',
     volver: ev.currentTarget,
     opciones: C.secciones.flatMap(x => x.preguntas).find(q => q.id === 'objetivo_principal').opciones.map(([v, t]) => ({
-      valor: v, letra: OBJETIVO_VISTA[v].icono, nombre: t + (v === s.objetivo.id ? ' (actual)' : ''),
+      valor: v, imagen: `img/objetivos/${v}.webp`, nombre: t + (v === s.objetivo.id ? ' (actual)' : ''),
     })),
     alElegir: async v => {
       if (v === R().objetivo_principal) return;
