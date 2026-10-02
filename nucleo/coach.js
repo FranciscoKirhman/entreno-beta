@@ -51,8 +51,10 @@ export function entender(texto, { hoy, indice, plan }) {
   };
   if (/\b(dolor|duele|molestia|me lesione|lesion)\b/.test(n)) {
     const zona = Object.entries(ZONAS).find(([k]) => new RegExp(`\\b${k}\\b`).test(n))?.[1] || null;
-    const intensidad = Number((n.match(/\b(\d{1,2})\s*(?:de|\/|sobre)\s*10\b/) || [])[1] ?? NaN);
-    return { intencion: 'dolor', zona, intensidad: Number.isFinite(intensidad) ? intensidad : null };
+    // Leer la escala antes de normalizar: normalizar() borra la barra y los decimales.
+    const escala = String(texto).toLowerCase().match(/(?:^|[^\d.,])(-?\d+(?:[.,]\d+)?)\s*(?:de|\/|sobre)\s*10\b/);
+    const intensidad = escala ? Number(escala[1].replace(',', '.')) : NaN;
+    return { intencion: 'dolor', zona, intensidad: Number.isFinite(intensidad) && intensidad >= 0 && intensidad <= 10 ? intensidad : null };
   }
   if (/\b(falte|no fui|no pude ir|me salte|me perdi|no alcance a ir)\b/.test(n)) {
     return { intencion: 'falte', fecha: fechaMencionada(n, hoy, { pasado: true }) || hoy };
@@ -133,8 +135,9 @@ export function responder(texto, ctx) {
     }
     case 'dolor': {
       if (!q.zona) return { texto: '¿Dónde te duele? Hombro, codo, rodilla, espalda baja, muñeca, tobillo, cadera o cuello.' };
+      if (q.intensidad == null) return { texto: `¿Cuánto te duele el ${q.zona}, de 0 a 10? Escríbelo con la zona, por ejemplo: "Me duele el ${q.zona} 4/10". Antes de darte ejercicios necesito conocer la intensidad.` };
       const consentido = ctx.consentimientos?.cuidado_lesiones === true;
-      const c = planDeCuidado({ zona: q.zona, intensidad: q.intensidad ?? 3, consentimiento: consentido });
+      const c = planDeCuidado({ zona: q.zona, intensidad: q.intensidad, consentimiento: consentido });
       const zonaHoy = dia ? dia.ejercicios.filter(e => indice.porId.get(e.ejercicio_id)?.carga_articular.includes(q.zona)) : [];
       const opciones = zonaHoy.length ? [{ etiqueta: `Sacar de hoy lo que carga ${q.zona}`, accion: { tipo: 'quitar_zona_hoy', fecha: hoy, zona: q.zona } }] : [];
       if (c.tipo === 'derivar') return { texto: `${c.mensaje} ${c.aviso}`, opciones, cuidado: c };
