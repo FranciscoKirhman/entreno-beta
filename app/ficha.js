@@ -46,7 +46,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
 
   $('app').innerHTML = `<div id="vista-ficha">
     <button type="button" class="volver" id="volver">${icono('flecha', 'icono flecha-atras')} ${esc(VOLVER[desde] || 'Atrás')}</button>
-    ${dibujo ? `<img class="ficha-dibujo" src="${dibujo}" alt="Cómo se hace: ${esc(ej.nombre)}" width="1024" height="512">` : ''}
+    ${dibujo ? `<img class="ficha-dibujo" src="${dibujo}" alt="Cómo se hace: ${esc(ej.nombre)}" width="960" height="640">` : ''}
     <h1>${esc(ej.nombre)}</h1>
     <p class="ficha-sub suave">${esc([...ej.equipamiento.map(q => EQUIPO[q]).filter(Boolean).slice(0, 2), NIVEL[ej.nivel_minimo]].filter(Boolean).join(' · '))}</p>
 
