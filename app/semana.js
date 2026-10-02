@@ -13,7 +13,28 @@ import * as nube from './nube.js';
 const DIAS_CORTOS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 
 import { estadoSesion, resumenSemana } from '../nucleo/estado-sesion.js';
+import { estadoDelPlan } from '../nucleo/registrado.js';
 const estado = f => estadoSesion(f, E.sesiones, E.registro);
+const diaCorto = iso => `${DIAS_CORTOS[new Date(iso + 'T12:00:00Z').getUTCDay()]} ${Number(iso.slice(8))}`;
+
+/** Cómo quedó un día del plan según lo registrado en la app o en Hevy (nucleo/registrado.js). */
+function chipEstado(x, reg) {
+  const e = reg.porDia.get(x.fecha);
+  if (estado(x.fecha) === 'en_curso' && e?.t !== 'hecha') return '<span class="chip">En curso</span>';
+  switch (e?.t) {
+    case 'hecha': return `<span class="chip firme">Hecha ✓${e.sesion?.origen === 'hevy' ? ' en Hevy' : ''}</span>`;
+    case 'recuperada': return `<span class="chip firme">Hecha el ${diaCorto(e.el)}</span>`;
+    case 'adelantada': return `<span class="chip firme">Hecha antes, el ${diaCorto(e.el)}</span>`;
+    case 'hecha_sin_registro': return '<span class="chip firme">Hecha, sin anotar</span>';
+    case 'saltada': return '<span class="chip">Saltada</span>';
+    case 'pendiente': return '<span class="chip pendiente">Pendiente</span>';
+    case 'no_hecha': return '<span class="chip">No se hizo</span>';
+    case 'omitida': return '<span class="chip">Opcional, no se hizo</span>';
+    case 'reemplazada': return `<span class="chip">Se repite el ${diaCorto(e.por)}</span>`;
+    case 'sin_datos': return '<span class="chip">Sin registro todavía</span>';
+    default: return `<span class="chip ${x.firme ? 'firme' : ''}">${x.firme ? 'Firme' : 'Opcional'}</span>`;
+  }
+}
 
 export function vistaSemana(ir) {
   const p = E.plan;
@@ -24,6 +45,7 @@ export function vistaSemana(ir) {
   if (!semanas.includes(E.semana)) E.semana = semanas[0];
   const dias = p.dias.filter(x => x.semana === E.semana);
   const resumen = resumenSemana(p.dias, E.semana);
+  const reg = estadoDelPlan(p, E.sesiones, { hoy: f, marcas: E.marcasPlan || {} });
   const diasSemana = resumen.dias;
   // La nota "elige un peso" se repite en cada ejercicio: en el plan se dice una vez, arriba.
   const eligePeso = dias.some(x => x.ejercicios.some(e => /^Elige un peso/.test(e.nota || '')));
@@ -37,7 +59,7 @@ export function vistaSemana(ir) {
     <div class="semanas" role="group" aria-label="Semana"><span class="pequeno suave">Semana</span>${semanas.map(s => `<button type="button" data-semana="${s}" aria-pressed="${s === E.semana}"${s === p.semana_descarga ? ' aria-label="Semana ' + s + ', de descarga"' : ''}>${s}${s === p.semana_descarga ? ' · descarga' : ''}</button>`).join('')}</div>
     ${eligePeso ? '<p class="pequeno suave">Donde no hay peso indicado, elige uno con el que te sobren las repeticiones de reserva (RIR) en la última serie. Lo anotas en Hoy y la app lo ajusta desde ahí.</p>' : ''}
     ${dias.map(x => `<section class="tarjeta dia${x.fecha === f ? ' es-hoy' : ''}" id="dia-${x.fecha}">
-      <h3>${esc(fechaCorta(x.fecha))}${x.hora ? ` · ${esc(x.hora)}` : ''} · ${esc(x.foco)} ${x.fecha === f ? '<span class="chip hoy">Hoy</span>' : ''}${estado(x.fecha) === 'terminada' ? '<span class="chip firme">Hecha ✓</span>' : estado(x.fecha) === 'en_curso' ? '<span class="chip">En curso</span>' : `<span class="chip ${x.firme ? 'firme' : ''}">${x.firme ? 'Firme' : 'Opcional'}</span>`} <span class="chip num">~${duracionSesion(x)} min</span></h3>
+      <h3>${esc(fechaCorta(x.fecha))}${x.hora ? ` · ${esc(x.hora)}` : ''} · ${esc(x.foco)} ${x.fecha === f ? '<span class="chip hoy">Hoy</span>' : ''}${chipEstado(x, reg)} <span class="chip num">~${duracionSesion(x)} min</span></h3>
       <ul class="ejercicios">${x.ejercicios.map((e, k, todos) => { const g = grupos(todos)[k]; return `<li class="con-mini${g ? ` en-superserie ss-${g.letra}` : ''}">${indice.porId.has(e.ejercicio_id) ? `<button type="button" class="ej-semana" data-ficha="${e.ejercicio_id}">${miniatura(e.ejercicio_id, 'miniatura chica')}` : '<span class="ej-semana"><span class="miniatura chica vacia" aria-hidden="true"></span>'}<span class="nombre">${g ? `<span class="chip-ss">${etiquetaSuperserie(g)}</span>` : ''}${esc(e.nombre || indice.porId.get(e.ejercicio_id)?.nombre || '')}</span>${indice.porId.has(e.ejercicio_id) ? '</button>' : '</span>'}<span class="presc">${esc(presc(e))}</span>${e.nota && !/^Elige un peso/.test(e.nota) ? `<span class="detalle">${esc(e.nota)}</span>` : ''}</li>`; }).join('')}</ul>
       <details class="extra"><summary>Mover, intercambiar o marcar que faltaste</summary>
         <div class="panel">

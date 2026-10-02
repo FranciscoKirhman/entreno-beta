@@ -3,6 +3,7 @@ import { validarRespaldo } from '../nucleo/respaldo.js';
 // con cuenta, nube.js sincroniza con Supabase.
 import { crearIndice } from '../nucleo/catalogo.js';
 import { derivar } from '../nucleo/derivar.js';
+import { estadoDelPlan } from '../nucleo/registrado.js';
 
 const cargar = u => fetch(u).then(r => { if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.json(); });
 export const [C, catalogo, K, EVIDENCIA, PLANES, TECNICA] = await Promise.all(
@@ -50,6 +51,7 @@ const VACIO = () => ({
   vista: 'inicio', seccion: 0, respuestas: {}, plan: null, semana: 1,
   bienestar: {}, registro: {}, notas: {}, sesiones: [], chat: [], consentimientos: {},
   suplementos: [], tomas: [], indicaciones: [], checkins: {}, macro: null, descargaNo: {}, filas: {}, descansos: {}, pedido: '', mensaje: null,
+  marcasPlan: {},
 });
 export let E = VACIO();
 try {
@@ -148,8 +150,15 @@ export const R = () => E.respuestas;
 export const D = () => derivar(R(), C, hoy());
 
 /** Contexto que esperan las funciones del núcleo (coach, agenda, explicar). */
+/** Fechas del plan ya hechas (en la app o en Hevy): al reacomodar la semana, esas no se mueven. */
+function hechasDelPlan() {
+  if (!E.plan?.dias?.length) return [];
+  const r = estadoDelPlan(E.plan, E.sesiones, { hoy: hoy(), marcas: E.marcasPlan || {} });
+  return [...r.porDia].filter(([, e]) => ['hecha', 'recuperada', 'adelantada', 'hecha_sin_registro'].includes(e.t)).map(([f]) => f);
+}
 export const ctxNucleo = () => ({
   plan: E.plan, hoy: hoy(), respuestas: R(), derivados: D(), indice, evidencia: EVIDENCIA, consentimientos: E.consentimientos, indicaciones: E.indicaciones,
+  hechas: hechasDelPlan(),
 });
 
 /** Cambia el plan local y, con cuenta, lo guarda en el servidor (que lo valida). */

@@ -2,7 +2,8 @@
 // sus imágenes), "Ajustar hoy" (poco tiempo, cansancio, no puedo, otra opción, dolor: siempre pregunta antes de cambiar) y
 // cada ejercicio con su miniatura, su ficha (cómo se hace y por qué), el menú ⋯ y la tabla de series: tipo
 // (calentamiento, normal, al fallo, drop set), lo de la vez anterior, cronómetro de descanso y superseries.
-import { E, guardar, R, D, C, K, indice, hoy, ahora, esc, $, fechaCorta, escala, opcionesRadio, chk, cambiarPlan, numero, coma, mostrarMensaje, avisar, unidadPeso, enUnidad, aKilos, peso, volumenTexto } from './comun.js';
+import { E, guardar, R, D, C, K, indice, hoy, ahora, esc, $, fechaCorta, escala, opcionesRadio, chk, cambiarPlan, numero, coma, mostrarMensaje, avisar, unidadPeso, enUnidad, aKilos, peso, volumenTexto, seriesTexto } from './comun.js';
+import { estadoDelPlan } from '../nucleo/registrado.js';
 import { evaluarDia, ajustarSesion, TEXTO_RECOMENDACION } from '../nucleo/bienestar.js';
 import { checklist } from '../nucleo/suplementos.js';
 import { enlaceVideo } from '../nucleo/explicar.js';
@@ -36,23 +37,82 @@ export function vistaHoy(ir, extra) {
   const b = E.bienestar[f];
   const sups = checklist(E.suplementos, E.tomas, f, ahora());
   const proxima = plan.dias.find(d => d.fecha > f);
+  // Lo registrado (en la app o importado de Hevy) dice qué sesión del plan se hizo y qué quedó pendiente.
+  const reg = estadoDelPlan(plan, E.sesiones, { hoy: f, marcas: E.marcasPlan || {} });
+  const hechaEnHevy = Boolean(dia) && reg.hoy.de === f && Boolean(reg.porDia.get(f)?.sesion?.origen);
   app().innerHTML = `<div id="vista-hoy">
     <span class="sobretitulo">${esc(new Date(f + 'T12:00:00Z').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }))}</span>
     <h1>Hoy</h1>
     ${D().mensaje_alerta ? `<div class="aviso ojo">${esc(D().mensaje_alerta)}</div>` : ''}
     ${avisoCheckin()}
     ${avisoDescargaCorto()}
+    ${pendientesHtml(reg)}
     ${b ? `<div class="tarjeta fila-resumen"><span>Cómo estás: <strong class="num">${b.puntaje}</strong>/100 · ${esc(TEXTO_RECOMENDACION[b.recomendacion])}</span><button type="button" class="enlace" id="rehacer-bienestar">Cambiar</button></div>`
       : E.bienestarSaltado === f ? '<div class="tarjeta fila-resumen"><span class="suave">¿Cómo estás hoy?</span><button type="button" class="enlace" id="responder-bienestar">Responder</button></div>'
         : formularioBienestar()}
     ${sups.length ? `<section class="tarjeta"><h3>Suplementos</h3><ul class="lista-check">${sups.map((s, i) => `<li class="${s.estado}"><button type="button" class="check" data-toma="${s.suplemento_id}" ${s.estado === 'tomada' ? 'disabled aria-pressed="true"' : 'aria-pressed="false"'} aria-label="Marcar ${esc(s.nombre)} como tomado">${s.estado === 'tomada' ? '✓' : ''}</button><span>${esc(s.nombre)}${s.dosis ? ` · ${esc(s.dosis)}` : ''}</span><span class="suave pequeno">${s.hora || ''}${s.estado === 'atrasada' ? ' · atrasado' : ''}</span></li>`).join('')}</ul></section>` : ''}
-    ${dia ? sesionHoy(dia) : `<section class="tarjeta"><h3>Hoy descansas</h3>${proxima ? `<p class="suave">La próxima es ${esc(proxima.foco)}, el ${esc(fechaCorta(proxima.fecha))}.</p>` : ''}<button type="button" class="boton" id="entrenar-igual">Quiero entrenar hoy igual</button></section>`}
+    ${registradoHoyHtml(reg, dia, f, proxima)}
+    ${dia ? (hechaEnHevy ? `<details class="extra plan-hecho"><summary>La sesión del plan, por si quieres anotar algo aquí</summary>${sesionHoy(dia)}</details>` : sesionHoy(dia)) : `<section class="tarjeta"><h3>Hoy descansas</h3>${proxima ? `<p class="suave">La próxima es ${esc(proxima.foco)}, el ${esc(fechaCorta(proxima.fecha))}.</p>` : ''}<button type="button" class="boton" id="entrenar-igual">Quiero entrenar hoy igual</button></section>`}
   </div>`;
   enlazar(ir, dia);
+  enlazarPendientes(ir);
   actualizarPantalla(); // al marcar la primera serie se pide la pantalla encendida; al guardar la sesión, se suelta
   mostrarMensaje();
   // Al volver de la ficha de un ejercicio, la pantalla queda en ese ejercicio.
   if (extra?.ej) requestAnimationFrame(() => document.getElementById(`ej-${extra.ej}`)?.scrollIntoView({ block: 'center' }));
+}
+
+/** Sesiones del plan de los últimos 7 días que quedaron sin registro: la app pregunta qué pasó (como el tablero). */
+function pendientesHtml(reg) {
+  return reg.pendientes.slice(-2).reverse().map(d => `<section class="tarjeta pendiente-plan">
+    <p class="sobretitulo">Quedó sin registro · ${esc(fechaCorta(d.fecha))}</p>
+    <h3>${esc(d.foco)}</h3>
+    <p class="pequeno suave">No hay una sesión registrada que se le parezca. ¿Qué pasó? Si la corres, te muestro cómo queda la semana antes de cambiar nada.</p>
+    <div class="fila-botones"><button type="button" class="boton primario" data-pend-correr="${d.fecha}">Correrla</button><button type="button" class="boton" data-pend-hecha="${d.fecha}">La hice</button><button type="button" class="boton" data-pend-saltar="${d.fecha}">La salto</button></div>
+  </section>`).join('');
+}
+
+/** Lo registrado hoy en Hevy (importado): qué sesión del plan fue, sus cifras y lo que viene. */
+function registradoHoyHtml(reg, dia, f, proxima) {
+  const importadas = reg.hoy.sesiones.filter(s => s.origen && s.origen !== 'ejemplo');
+  if (!importadas.length) return '';
+  const deDia = reg.hoy.de ? sesionDe(E.plan, reg.hoy.de) : null;
+  const series = importadas.flatMap(s => s.series || []);
+  const deTrabajo = x => !['calentamiento', 'drop', 'descarga'].includes(x.tipo);
+  const trabajo = series.filter(deTrabajo);
+  const volumen = trabajo.reduce((a, x) => a + (Number(x.carga_kg) || 0) * (Number(x.reps) || 0), 0);
+  const porEj = [];
+  for (const x of series) {
+    const nombre = indice.porId.get(x.ejercicio_id)?.nombre || x.ejercicio_nombre || 'Ejercicio';
+    let g = porEj.find(y => y.nombre === nombre);
+    if (!g) porEj.push(g = { nombre, series: [] });
+    g.series.push(x);
+  }
+  const texto = xs => {
+    const conReps = xs.filter(x => deTrabajo(x) && x.reps != null);
+    const minutos = Math.round(xs.reduce((a, x) => a + (Number(x.duracion_seg) || 0), 0) / 60);
+    return [conReps.length ? seriesTexto(conReps) : '', minutos ? `${minutos} min` : ''].filter(Boolean).join(' · ') || 'anotado';
+  };
+  const nota = deDia && reg.hoy.de !== f ? `Es la del ${fechaCorta(reg.hoy.de)}${dia ? `; la de hoy, ${dia.foco}, sigue abajo` : ''}.`
+    : reg.hoy.de === f && proxima ? `Después: ${proxima.foco}, el ${fechaCorta(proxima.fecha)}.` : '';
+  return `<section class="tarjeta hecha-hoy">
+    <p class="sobretitulo">Hoy · registrada en Hevy${importadas[0].hora ? ` a las ${esc(importadas[0].hora)}` : ''}</p>
+    <h3>✓ ${esc(deDia?.foco || importadas[0].titulo || 'Entrenamiento')}</h3>
+    <p class="pequeno suave">${trabajo.length} series de trabajo${volumen ? ` · volumen ${esc(volumenTexto(volumen))}` : ''}.${nota ? ` ${esc(nota)}` : ''}</p>
+    <details class="extra"><summary>Ver lo que hiciste</summary><ul class="pequeno detalle-h">${porEj.map(g => {
+      const cal = g.series.filter(x => x.tipo === 'calentamiento').length;
+      return `<li><strong>${esc(g.nombre)}</strong>: ${esc(texto(g.series))}${cal ? ` <span class="suave">(+${cal} de calentamiento)</span>` : ''}</li>`;
+    }).join('')}</ul></details>
+  </section>`;
+}
+
+/** Respuestas a una sesión sin registro: la hice (sin anotarla), la salto, o correrla con vista previa. */
+function enlazarPendientes(ir) {
+  const marcar = (fecha, valor, aviso) => { (E.marcasPlan ||= {})[fecha] = valor; guardar(); vistaHoyMantener(ir); avisar(aviso); };
+  document.querySelectorAll('[data-pend-hecha]').forEach(b => b.onclick = () => marcar(b.dataset.pendHecha, 'hecha', 'Anotado: la hiciste sin registrarla.'));
+  document.querySelectorAll('[data-pend-saltar]').forEach(b => b.onclick = () => marcar(b.dataset.pendSaltar, 'saltada', 'Anotado: esa sesión se salta.'));
+  document.querySelectorAll('[data-pend-correr]').forEach(b => b.onclick = () => proponer({ tipo: 'falte', fecha: b.dataset.pendCorrer },
+    { titulo: 'Correr la sesión', volver: b, alCambiar: r => (r.ir === 'semana' ? ir('semana') : vistaHoyMantener(ir)) }));
 }
 
 function formularioBienestar() {

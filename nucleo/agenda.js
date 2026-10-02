@@ -73,14 +73,17 @@ function libres(plan, desde, hasta, noPuedo, ocupadas = new Set()) {
  * "Falté el martes": la sesión perdida y las que quedan de la semana se reacomodan en los días libres que
  * quedan, sin juntar el mismo grupo. Si no caben, se pierde primero lo opcional y después la de menor prioridad.
  */
-export function marcarFaltada(plan, fecha, { hoy, noPuedo = [] }) {
+export function marcarFaltada(plan, fecha, { hoy, noPuedo = [], hechas = [] }) {
   const s = sesionDe(plan, fecha);
   if (!s) return { ok: false, plan, error: `No hay sesión el ${fecha}.` };
   const nuevo = copiar(plan);
   const domingo = sumarDias(lunesDe(fecha), 6);
-  const desde = sumarDias(hoy > fecha ? hoy : fecha, hoy > fecha ? 0 : 1);
-  // Sesiones por reacomodar: la perdida + las que quedan desde mañana hasta el domingo.
-  const pendientes = nuevo.dias.filter(d => d.fecha === fecha || (d.fecha >= desde && d.fecha <= domingo));
+  // Lo ya hecho (registrado en la app o en Hevy, nucleo/registrado.js) no se mueve; si hoy ya se entrenó, desde mañana.
+  const yaHechas = new Set(hechas);
+  let desde = sumarDias(hoy > fecha ? hoy : fecha, hoy > fecha ? 0 : 1);
+  if (yaHechas.has(desde)) desde = sumarDias(desde, 1);
+  // Sesiones por reacomodar: la perdida + las que quedan desde mañana hasta el domingo, menos las ya hechas.
+  const pendientes = nuevo.dias.filter(d => d.fecha === fecha || (d.fecha >= desde && d.fecha <= domingo && !yaHechas.has(d.fecha)));
   const resto = nuevo.dias.filter(d => !pendientes.includes(d));
   const base = { ...nuevo, dias: resto };
   const dias = libres(base, desde, domingo, noPuedo);

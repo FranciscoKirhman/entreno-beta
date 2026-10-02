@@ -207,7 +207,7 @@ export function calcularCambio(accion, ctx) {
       return { plan: r.plan, ir: 'semana', propone: `${foco} pasaría del ${fechaCorta(accion.de)} al ${fechaCorta(accion.a)}.${r.avisos?.length ? ' Ojo: ' + r.avisos.join(' ') : ''}`, hecho: `Listo: ${foco} quedó para el ${fechaCorta(accion.a)}.` };
     }
     case 'falte': case 'descanso_activo': {
-      const r = marcarFaltada(plan, accion.fecha, { hoy: ctx.hoy, noPuedo });
+      const r = marcarFaltada(plan, accion.fecha, { hoy: ctx.hoy, noPuedo, hechas: ctx.hechas || [] });
       if (!r.ok) return { error: r.error };
       const movs = movidas(r.cambios);
       const semana = movs.length ? `la semana quedaría así: ${movs.join('; ')}.` : 'no queda un día libre esta semana para recuperarla.';
