@@ -48,16 +48,18 @@ export function vistaHoy(ir, extra) {
   const hechaEnHevy = Boolean(dia) && reg.hoy.de === f && Boolean(reg.porDia.get(f)?.sesion?.origen);
   app().innerHTML = `<div id="vista-hoy">
     <span class="sobretitulo">${esc(new Date(f + 'T12:00:00Z').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }))}</span>
-    <h1>Hoy</h1>
-    ${D().mensaje_alerta ? `<div class="aviso ojo">${esc(D().mensaje_alerta)}</div>` : ''}
-    ${avisoCheckin()}
-    ${avisoDescargaCorto()}
-    ${pendientesHtml(reg)}
-    ${bienestarHtml(f, b, dia)}
-    ${sups.length ? `<section class="tarjeta"><h3>Suplementos</h3><ul class="lista-check">${sups.map((s, i) => `<li class="${s.estado}"><button type="button" class="check" data-toma="${s.suplemento_id}" ${s.estado === 'tomada' ? 'disabled aria-pressed="true"' : 'aria-pressed="false"'} aria-label="Marcar ${esc(s.nombre)} como tomado">${s.estado === 'tomada' ? '✓' : ''}</button><span>${esc(s.nombre)}${s.dosis ? ` · ${esc(s.dosis)}` : ''}</span><span class="suave pequeno">${s.hora || ''}${s.estado === 'atrasada' ? ' · atrasado' : ''}</span></li>`).join('')}</ul></section>` : ''}
-    ${registradoHoyHtml(reg, dia, f, proxima)}
+    <h1>${dia && !hechaEnHevy ? esc(dia.foco) : 'Hoy'}</h1>
+    ${dia ? (hechaEnHevy ? `${registradoHoyHtml(reg, dia, f, proxima)}<details class="extra plan-hecho" id="plan-hecho"${planHechoAbierto ? ' open' : ''}><summary>La sesión del plan, por si quieres anotar algo aquí</summary>${sesionHoy(dia)}</details>` : sesionHoy(dia)) : descansoHtml(proxima)}
     <div class="banco-acceso"><button type="button" class="boton" id="agregar-ejercicio-hoy">Agregar ejercicio</button></div>
-    ${dia ? (hechaEnHevy ? `<details class="extra plan-hecho" id="plan-hecho"${planHechoAbierto ? ' open' : ''}><summary>La sesión del plan, por si quieres anotar algo aquí</summary>${sesionHoy(dia)}</details>` : sesionHoy(dia)) : descansoHtml(proxima)}
+    ${!hechaEnHevy ? registradoHoyHtml(reg, dia, f, proxima) : ''}
+    <div class="despues-de-entrenar">
+      ${bienestarHtml(f, b, dia)}
+      ${D().mensaje_alerta ? `<div class="aviso ojo">${esc(D().mensaje_alerta)}</div>` : ''}
+      ${avisoCheckin()}
+      ${avisoDescargaCorto()}
+      ${pendientesHtml(reg)}
+      ${sups.length ? `<section class="tarjeta"><h3>Suplementos</h3><ul class="lista-check">${sups.map(s => `<li class="${s.estado}"><button type="button" class="check" data-toma="${s.suplemento_id}" ${s.estado === 'tomada' ? 'disabled aria-pressed="true"' : 'aria-pressed="false"'} aria-label="Marcar ${esc(s.nombre)} como tomado">${s.estado === 'tomada' ? '✓' : ''}</button><span>${esc(s.nombre)}${s.dosis ? ` · ${esc(s.dosis)}` : ''}</span><span class="suave pequeno">${s.hora || ''}${s.estado === 'atrasada' ? ' · atrasado' : ''}</span></li>`).join('')}</ul></section>` : ''}
+    </div>
   </div>`;
   enlazar(ir, dia);
   enlazarPendientes(ir);
@@ -258,19 +260,25 @@ function sesionHoy(dia) {
   const prim = [...new Set(ejs.flatMap(ej => ej.musculos_primarios))];
   const sec = [...new Set(ejs.flatMap(ej => ej.musculos_secundarios))].filter(m => !prim.includes(m));
   const eligePeso = dia.ejercicios.some(e => /^Elige un peso/.test(e.nota || ''));
-  return `<section class="tarjeta sesion-cab">
-    <div class="fila-titulo"><div><h2>${esc(dia.foco)}</h2><p class="suave pequeno">${dia.hora ? `${esc(dia.hora)} · ` : ''}~${duracionSesion(dia)} min · ${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? '' : 's'}</p></div>
-      <button type="button" class="boton chico" id="ajustar-hoy">${icono('ajustes')} Ajustar hoy</button></div>
-    ${dia.ejercicios.length ? avanceHtml(avance(dia)) : '<p>Hoy no hay ejercicios en esta sesión. Puedes agregar uno desde el banco.</p>'}
+  return `<section class="sesion-cab compacta" aria-label="Sesión de hoy">
+    <div class="sesion-controles">
+      ${dia.ejercicios.length ? avanceHtml(avance(dia)) : '<p class="pequeno suave">Sin ejercicios en esta sesión.</p>'}
+      <button type="button" class="boton chico" id="ajustar-hoy">${icono('ajustes')} Ajustar hoy</button>
+      <button type="button" class="boton-icono" id="ver-detalles-sesion" aria-label="Detalles y calentamiento de la sesión">${icono('info')}</button>
+    </div>
+  </section>
+  <ol class="ejercicios-hoy">${dia.ejercicios.map((e, k) => ejercicioHoy(e, k, f, e.ejercicio_id ? anterior(todas, e.ejercicio_id, f) : null, notas[idDe(e, k)] || {}, dia)).join('')}</ol>
+  ${cardioHtml(dia.cardio)}
+  <div class="fila-botones"><button type="button" class="boton primario grande" id="terminar">${E.sesiones.some(s => s.fecha === f && !s.origen) ? 'Guardar de nuevo' : 'Terminar sesión'}</button></div>
+  <details class="tarjeta detalles-sesion" id="detalles-sesion">
+    <summary>Calentamiento y detalles de la sesión</summary>
+    <p class="suave pequeno">${dia.hora ? `${esc(dia.hora)} · ` : ''}~${duracionSesion(dia)} min · ${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? '' : 's'}</p>
     ${prim.length ? `<div class="hoy-entrenas">${imagenesMusculos(prim.slice(0, 4))}<div><p class="sobretitulo">Hoy entrenas</p><p class="musculos-hoy">${esc(mayuscula(lista(prim.map(m => NOMBRE_MUSCULO[m] || m))))}</p>${sec.length ? `<p class="pequeno suave">Y un poco de ${esc(lista(sec.map(m => (NOMBRE_MUSCULO[m] || m).toLowerCase())))}</p>` : ''}</div></div>` : ''}
     <p class="suave pequeno">${esc(dia.racional || '')}</p>
     ${eligePeso ? '<p class="nota-sesion pequeno">Donde no hay peso, elige uno con el que te sobren las repeticiones de reserva (RIR) en la última serie. Lo anotas y la app ajusta desde ahí.</p>' : ''}
     ${pasosHtml(dia.calentamiento, 'cal', f, 'Calentamiento', dia)}
-  </section>
-  <ol class="ejercicios-hoy">${dia.ejercicios.map((e, k) => ejercicioHoy(e, k, f, e.ejercicio_id ? anterior(todas, e.ejercicio_id, f) : null, notas[idDe(e, k)] || {}, dia)).join('')}</ol>
-  ${cardioHtml(dia.cardio)}
-  ${dia.estiramiento?.length ? `<section class="tarjeta">${pasosHtml(dia.estiramiento, 'est', f, 'Estiramiento de cierre (opcional)', dia)}</section>` : ''}
-  <div class="fila-botones"><button type="button" class="boton primario grande" id="terminar">${E.sesiones.some(s => s.fecha === f && !s.origen) ? 'Guardar de nuevo' : 'Terminar sesión'}</button></div>`;
+    ${dia.estiramiento?.length ? pasosHtml(dia.estiramiento, 'est', f, 'Estiramiento de cierre (opcional)', dia) : ''}
+  </details>`;
 }
 
 function ejercicioHoy(e, k, f, previas, nota, dia) {
@@ -317,14 +325,14 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
       ${ej ? `<button type="button" class="boton-icono" data-ficha="${e.ejercicio_id}" aria-label="Cómo se hace y por qué">${icono('info')}</button>` : ''}
       <button type="button" class="boton-icono" data-mas="${id}" aria-label="Más opciones de ${esc(nombre)}">${icono('puntos')}</button>
     </div>
-    ${e.nota && !/^Elige un peso/.test(e.nota) ? `<p class="pequeno suave">${esc(e.nota)}</p>` : ''}
-    <textarea class="nota-ej" rows="1" data-nota="${id}" data-p="nota" data-visible placeholder="Nota para tu entrenador" aria-label="Nota para tu entrenador sobre ${esc(nombre)}">${esc(nota.nota || '')}</textarea>
     <div class="tabla-series${seg ? ' seg' : ''}">
       <div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : 'Reps'}</span>${seg ? '' : '<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el RIR">RIR</button>'}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>
       ${filasHtml}
     </div>
     <div class="fila-agregar"><button type="button" class="boton agregar-serie" data-agregar="${id}">+ Serie</button>${seg ? '' : `<button type="button" class="boton agregar-serie" data-calentar="${id}">+ Calentamiento</button>`}</div>
     <details class="extra" data-panel="nota-${id}"${Object.keys(nota).some(k => !['nota', 'para_entrenador'].includes(k)) || abiertos.has(`nota-${id}`) ? ' open' : ''}><summary>Cómo te fue</summary>
+    ${e.nota && !/^Elige un peso/.test(e.nota) ? `<p class="pequeno suave">${esc(e.nota)}</p>` : ''}
+    <textarea class="nota-ej" rows="1" data-nota="${id}" data-p="nota" data-visible placeholder="Nota para tu entrenador" aria-label="Nota para tu entrenador sobre ${esc(nombre)}">${esc(nota.nota || '')}</textarea>
       <div class="preguntas-ej">
         ${preguntas.map(p => `<div><span class="pequeno">${esc(p.texto)}</span>${p.tipo === 'escala'
           ? escala(`n-${id}-${p.id}`, p.min, p.max, nota[p.id], p.extremos, `data-nota="${id}" data-p="${p.id}" data-num`)
@@ -378,6 +386,11 @@ function enlazar(ir, dia) {
   $('agregar-ejercicio-hoy')?.addEventListener('click', () => ir('banco', { desde: 'hoy' }));
   if (!dia) return;
 
+  $('ver-detalles-sesion')?.addEventListener('click', () => {
+    const detalles = $('detalles-sesion');
+    detalles.open = true;
+    detalles.scrollIntoView({ block: 'start' });
+  });
   const raiz = $('vista-hoy');
   const repintar = () => vistaHoyMantener(ir);
   const ejercicioDe = id => { const k = dia.ejercicios.findIndex((x, j) => idDe(x, j) === id); return { e: dia.ejercicios[k], k }; };

@@ -1,0 +1,10 @@
+/* Al entrenar se llega primero a las series, con los controles esenciales cerca. */
+#vista-hoy .sesion-cab.compacta{margin:8px 0 12px;padding:0}
+.sesion-controles{display:flex;align-items:center;gap:8px}
+.sesion-controles .avance{flex:1;min-width:0;margin:0}
+.sesion-controles .fila-avance{display:block}
+.sesion-controles .medidor{margin-top:5px;max-width:120px}
+.sesion-controles .boton.chico{flex:0 0 auto;margin:0;font-size:13px;padding:8px 10px}
+.sesion-controles .boton-icono{flex:0 0 36px}
+.detalles-sesion>summary{font-weight:600;min-height:32px;cursor:pointer}
+.despues-de-entrenar{margin-top:20px}
