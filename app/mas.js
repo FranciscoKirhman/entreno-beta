@@ -11,6 +11,16 @@ import { leerPlanTexto, calendarizar } from '../nucleo/importar-plan.js';
 import { listarFotosLocales, guardarFotoLocal, restaurarFotosAtomicas } from './fotos-local.js';
 import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
 import * as nube from './nube.js';
+import { encendidaDisponible, actualizarPantalla } from './pantalla.js';
+
+/** Tema elegido en este teléfono: 'auto' (como el teléfono), 'claro' u 'oscuro'. index.html lo aplica al abrir. */
+function temaElegido() {
+  try { const t = localStorage.getItem('entreno-tema'); return t === 'claro' || t === 'oscuro' ? t : 'auto'; } catch { return 'auto'; }
+}
+function elegirTema(t) {
+  try { if (t === 'auto') localStorage.removeItem('entreno-tema'); else localStorage.setItem('entreno-tema', t); } catch { /* sin almacenamiento: vale solo hasta cerrar */ }
+  if (t === 'auto') delete document.documentElement.dataset.tema; else document.documentElement.dataset.tema = t;
+}
 
 /** Versión de prueba: volver a hacer el cuestionario y el historial de ejemplo. */
 function pruebaHtml() {
@@ -37,6 +47,13 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
       <h3>Unidades</h3>
       <div class="fila-unidad"><span>Peso</span><div class="segmentos" role="group" aria-label="Unidad de peso">${['kg', 'lb'].map(u => `<button type="button" data-unidad="${u}" aria-pressed="${unidadPeso() === u}">${u}</button>`).join('')}</div></div>
       <p class="pequeno suave">Todo se guarda en kilos; en libras se muestra redondeado a media libra. Distancia y medidas del cuerpo se suman cuando la app las registre.</p>
+    </section>
+
+    <section class="tarjeta" id="pantalla">
+      <h3>Pantalla</h3>
+      <div class="fila-unidad"><span>Tema</span><div class="segmentos" role="group" aria-label="Tema">${[['auto', 'Auto'], ['claro', 'Claro'], ['oscuro', 'Oscuro']].map(([v, t]) => `<button type="button" data-elegir-tema="${v}" aria-pressed="${temaElegido() === v}">${t}</button>`).join('')}</div></div>
+      <label class="pequeno casilla"><input type="checkbox" id="pantalla-encendida"${chk(E.pantallaEncendida !== false)}> Mantener la pantalla encendida mientras entrenas</label>
+      <p class="pequeno suave">Auto sigue al teléfono. La pantalla queda encendida desde la primera serie marcada hasta guardar la sesión${encendidaDisponible() ? '' : ' (este navegador no lo permite)'}.</p>
     </section>
 
     <section class="tarjeta" id="conexiones">${conexionesHtml()}</section>
@@ -92,6 +109,12 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
   enlazarRecordatorios();
   document.querySelectorAll('[data-unidad]').forEach(b => b.onclick = () => { R().unidad = b.dataset.unidad; E.mensaje = `Peso en ${b.dataset.unidad === 'lb' ? 'libras' : 'kilos'}.`; guardar(); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); });
   enlazarConexiones(() => vistaMas(ir, { armarPlan, sincronizarAlEntrar }));
+  // data-elegir-tema y no data-tema: <html data-tema> es el que pinta el tema.
+  document.querySelectorAll('[data-elegir-tema]').forEach(b => b.onclick = () => {
+    elegirTema(b.dataset.elegirTema);
+    document.querySelectorAll('[data-elegir-tema]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  });
+  $('pantalla-encendida').onchange = ev => { E.pantallaEncendida = ev.target.checked; guardar(); actualizarPantalla(); };
   $('pedido').oninput = e => { E.pedido = e.target.value; guardar(); };
   $('copiar').onclick = async () => {
     const d = D();

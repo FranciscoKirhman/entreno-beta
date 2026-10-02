@@ -15,6 +15,7 @@ import { avisoCheckin } from './checkin.js';
 import { avisoDescargaCorto } from './temporada.js';
 import { subirACuenta } from './cola.js';
 import { iniciarDescanso, detenerDescanso } from './descanso.js';
+import { actualizarPantalla } from './pantalla.js';
 import { abrirHoja } from './hoja.js';
 import { grupos, unir, separar, copiarSuperseries, despuesDeSerie, etiquetaSuperserie } from '../nucleo/superseries.js';
 import { icono } from './iconos.js';
@@ -48,6 +49,7 @@ export function vistaHoy(ir, extra) {
     ${dia ? sesionHoy(dia) : `<section class="tarjeta"><h3>Hoy descansas</h3>${proxima ? `<p class="suave">La próxima es ${esc(proxima.foco)}, el ${esc(fechaCorta(proxima.fecha))}.</p>` : ''}<button type="button" class="boton" id="entrenar-igual">Quiero entrenar hoy igual</button></section>`}
   </div>`;
   enlazar(ir, dia);
+  actualizarPantalla(); // al marcar la primera serie se pide la pantalla encendida; al guardar la sesión, se suelta
   mostrarMensaje();
   // Al volver de la ficha de un ejercicio, la pantalla queda en ese ejercicio.
   if (extra?.ej) requestAnimationFrame(() => document.getElementById(`ej-${extra.ej}`)?.scrollIntoView({ block: 'center' }));

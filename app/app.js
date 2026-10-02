@@ -19,6 +19,7 @@ import { vistaRapido, vistaPerfil, vistaSeccion, firmaRespuestas, dice, nombreAs
 import { vistaPlan } from './plan.js';
 import { progresoNivel } from '../nucleo/nivel.js';
 import { programarAvisos } from './avisos.js';
+import { actualizarPantalla } from './pantalla.js';
 import { dejarPendiente, subirPendientes } from './cola.js';
 import * as nube from './nube.js';
 import { CONFIG } from './config.js';
@@ -155,6 +156,7 @@ function ir(vista, extra) {
   mostrarMensaje(); // los avisos se muestran una vez, flotando sobre el menú
   window.scrollTo(0, 0);
   programarAvisos(); // recordatorios de hoy con lo último (sesión hecha, suplemento tomado)
+  actualizarPantalla(); // con una sesión en curso, la pantalla no se apaga sola
 }
 $('nav').addEventListener('click', e => { const b = e.target.closest('[data-ir]'); if (b) ir(b.dataset.ir); });
 

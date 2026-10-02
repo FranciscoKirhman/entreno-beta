@@ -11,9 +11,12 @@ function caja() {
     el.id = 'descanso';
     el.setAttribute('role', 'timer');
     el.innerHTML = `<div class="texto"><span class="etiqueta pequeno"></span><strong class="tiempo num"></strong></div>
-      <button type="button" class="boton" data-mas aria-label="Sumar 30 segundos">+30 s</button>
+      <button type="button" class="boton" data-menos aria-label="Restar 15 segundos">−15</button>
+      <button type="button" class="boton" data-mas aria-label="Sumar 15 segundos">+15</button>
       <button type="button" class="boton" data-listo>Listo</button>`;
-    el.querySelector('[data-mas]').onclick = () => { fin = Math.max(fin, Date.now()) + 30_000; if (!reloj) correr(); pintar(); };
+    // Como en Hevy: 15 segundos menos o más. Restar no deja el término antes de ahora.
+    el.querySelector('[data-menos]').onclick = () => { if (!reloj) return; fin = Math.max(Date.now(), fin - 15_000); pintar(); };
+    el.querySelector('[data-mas]').onclick = () => { fin = Math.max(fin, Date.now()) + 15_000; if (!reloj) correr(); pintar(); };
     el.querySelector('[data-listo]').onclick = detenerDescanso;
     document.body.append(el);
   }

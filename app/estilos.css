@@ -10,12 +10,19 @@
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark){
-  :root{
+  :root:not([data-tema="claro"]){
     --bg:#000000; --surface:#1C1C1E; --surface-2:#2C2C2E; --fill:rgba(120,120,128,.24); --ink:#FFFFFF; --ink-muted:#98989F; --border:#38383A; --line:#2C2C2E;
     --accent:#FF7A3D; --accent-ink:#1A0A02; --accent-soft:#3A2116; --good:#30D158; --good-soft:#0E2A16;
     --warning:#FFB340; --warning-soft:#33240A; --critical:#FF6961; --critical-soft:#3A1416; --segmento:#636366;
     color-scheme: dark;
   }
+}
+/* Tema elegido en Más: oscuro aunque el teléfono esté en claro. */
+:root[data-tema="oscuro"]{
+    --bg:#000000; --surface:#1C1C1E; --surface-2:#2C2C2E; --fill:rgba(120,120,128,.24); --ink:#FFFFFF; --ink-muted:#98989F; --border:#38383A; --line:#2C2C2E;
+    --accent:#FF7A3D; --accent-ink:#1A0A02; --accent-soft:#3A2116; --good:#30D158; --good-soft:#0E2A16;
+    --warning:#FFB340; --warning-soft:#33240A; --critical:#FF6961; --critical-soft:#3A1416; --segmento:#636366;
+    color-scheme: dark;
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -212,12 +219,14 @@ a.boton{text-decoration:none;color:inherit}
 
 /* Cronómetro de descanso, sobre el menú */
 #descanso{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 76px);z-index:7;max-width:536px;margin:0 auto;
-  display:none;align-items:center;gap:8px;padding:8px 8px 8px 14px;border-radius:14px;background:var(--ink);color:var(--bg);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+  display:none;align-items:center;gap:6px;padding:8px 8px 8px 14px;border-radius:14px;background:var(--ink);color:var(--bg);box-shadow:0 6px 20px rgba(0,0,0,.25)}
 #descanso.visible{display:flex}
 #descanso .texto{flex:1;min-width:0;display:flex;flex-direction:column}
 #descanso .etiqueta{opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #descanso .tiempo{font-size:26px;line-height:1.15}
 #descanso .boton{min-height:40px;padding:6px 12px;background:transparent;color:inherit;border-color:color-mix(in srgb,currentColor 40%,transparent)}
+/* Restar y sumar 15 s, como en Hevy: botones angostos para que quepa la etiqueta del descanso. */
+#descanso [data-menos],#descanso [data-mas]{min-width:46px;padding:6px 8px;font-variant-numeric:tabular-nums}
 #descanso.termino{background:var(--good);color:var(--accent-ink)}
 body.con-descanso #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 144px)}
 body.con-descanso main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 170px)}
@@ -296,13 +305,21 @@ body.con-descanso main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 170
   --fondo-icono:#E4E7E9; /* detrás de los íconos de máquinas, que son negros */
 }
 @media (prefers-color-scheme: dark){
-  :root{
+  :root:not([data-tema="claro"]){
     --c-ganar_musculo:#E0814F; --c-ganar_fuerza:#7F9EE8; --c-bajar_grasa:#EC7480; --c-recomposicion:#B596E6;
     --c-salud:#5FBE84; --c-deporte:#4EC1CA; --c-volver:#E0B24E; --c-ink:#14171A;
     --c-principiante:#5FBE84; --c-intermedio:#7F9EE8; --c-avanzado:#B596E6;
     --foco-dibujo:rgba(231,229,222,.16);
     --fondo-icono:#D3D7DA;
   }
+}
+/* Tema elegido en Más: oscuro aunque el teléfono esté en claro. */
+:root[data-tema="oscuro"]{
+    --c-ganar_musculo:#E0814F; --c-ganar_fuerza:#7F9EE8; --c-bajar_grasa:#EC7480; --c-recomposicion:#B596E6;
+    --c-salud:#5FBE84; --c-deporte:#4EC1CA; --c-volver:#E0B24E; --c-ink:#14171A;
+    --c-principiante:#5FBE84; --c-intermedio:#7F9EE8; --c-avanzado:#B596E6;
+    --foco-dibujo:rgba(231,229,222,.16);
+    --fondo-icono:#D3D7DA;
 }
 .obj-ganar_musculo{--c:var(--c-ganar_musculo)} .obj-ganar_fuerza{--c:var(--c-ganar_fuerza)} .obj-bajar_grasa{--c:var(--c-bajar_grasa)}
 .obj-recomposicion{--c:var(--c-recomposicion)} .obj-salud{--c:var(--c-salud)} .obj-deporte{--c:var(--c-deporte)} .obj-volver{--c:var(--c-volver)}

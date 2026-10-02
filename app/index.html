@@ -10,6 +10,10 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="iconos/icono.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="iconos/icono-180.png">
+<script>
+// Tema elegido en Más (claro u oscuro); sin elegir, sigue al teléfono. Va antes de pintar para que no parpadee.
+try { const t = localStorage.getItem('entreno-tema'); if (t === 'claro' || t === 'oscuro') document.documentElement.dataset.tema = t; } catch {}
+</script>
 <link rel="stylesheet" href="estilos.css">
 </head>
 <body>
