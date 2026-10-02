@@ -10,3 +10,5 @@
 .banco-ejercicio>p{margin:8px 0 0}
 .banco-acceso{margin:12px 0}
 .banco-acceso .boton{width:100%}
+.banco-busqueda label:has(#banco-fuera){display:flex;align-items:flex-start;gap:8px;line-height:1.4;margin-bottom:12px}
+.banco-busqueda #banco-fuera{flex:0 0 16px;width:16px;margin:2px 0 0}

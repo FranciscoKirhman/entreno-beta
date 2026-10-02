@@ -11,7 +11,7 @@ export function proponerEdicion(accion, { volver, alCambiar }) {
   if (r.error) { avisar(r.error.replace(/[–—]/g, ' a ')); return; }
   const agregar = accion.tipo === 'agregar';
   abrirHoja({ titulo: agregar ? 'Agregar a la sesión de hoy' : 'Quitar de la sesión de hoy', volver,
-    nota: `${r.ejercicio.nombre || 'Ejercicio'}${agregar ? `: ${presc(r.ejercicio)}` : ''}. ${r.cantidad ? `Hoy quedaría con ${r.cantidad} ${r.cantidad === 1 ? 'ejercicio' : 'ejercicios'}, unos ${r.minutos} minutos.` : 'Hoy quedaría sin ejercicios.'} Las otras sesiones se mantienen.`,
+    nota: `${r.ejercicio.nombre || 'Ejercicio'}${agregar ? `: ${presc(r.ejercicio)}` : ''}. ${r.cantidad ? `Hoy quedaría con ${r.cantidad} ${r.cantidad === 1 ? 'ejercicio' : 'ejercicios'}, unos ${r.minutos} minutos.` : 'Hoy quedaría sin ejercicios.'}${r.conservar?.length ? ` ${r.conservar.length === 1 ? 'Se conserva la serie ya hecha' : `Se conservan las ${r.conservar.length} series ya hechas`} al guardar la sesión.` : ''} Las otras sesiones se mantienen.`,
     opciones: [{ valor: 'si', icono: icono(agregar ? 'visto' : 'cerrar'), nombre: agregar ? 'Confirmar y agregar' : 'Confirmar y quitar', peligro: !agregar },
       { valor: 'no', icono: icono('flecha'), nombre: 'Dejar como está' }],
     alElegir: async v => {
@@ -21,6 +21,10 @@ export function proponerEdicion(accion, { volver, alCambiar }) {
       const actual = editarSesion(accion, contexto());
       if (actual.error) return avisar(actual.error.replace(/[–—]/g, ' a '));
       if (JSON.stringify(actual.plan) !== JSON.stringify(r.plan)) return proponerEdicion(accion, { volver, alCambiar });
+      if (!agregar && actual.conservar?.length) {
+        const f = contexto().hoy;
+        ((E.retirados ||= {})[f] ||= {})[accion.ejercicio] = { ejercicio: structuredClone(actual.ejercicio), series: actual.conservar };
+      }
       const aviso = await cambiarPlan(actual.plan, `Se ${agregar ? 'agregó' : 'quitó'} ${r.ejercicio.nombre || 'el ejercicio'} ${agregar ? 'a' : 'de'} la sesión de hoy.`, nube);
       if (aviso) avisar(aviso);
       alCambiar?.();

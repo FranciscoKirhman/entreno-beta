@@ -77,11 +77,11 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
   if (E.planPendiente) { const r = await consultar(() => nube.guardarPlan(E.planPendiente)); E.plan = { ...E.planPendiente, id: r.id }; delete E.planPendiente; guardar(); }
   const respuestas = await consultar(() => nube.cargarRespuestas());
   const plan = await consultar(() => nube.cargarPlan());
-  if (respuestas && plan) {
+  if (respuestas) {
     const borrador = E.firmaPlan && firmaRespuestas(E.firmaPlan) !== firmaRespuestas();
     if (!borrador) E.respuestas = respuestas;
-    E.plan = plan;
   }
+  if (plan) E.plan = plan;
   else if (R().objetivo_principal && E.plan?.dias?.length && !E.plan.bloqueado && !E.plan.id) {
     // Perfil local copiado a una cuenta vacía: se sube su plan tal cual (el servidor lo valida), sin armar otro.
     await consultar(() => nube.guardarCuestionario(R()));
@@ -129,19 +129,20 @@ function vistaBloqueada() {
 function vistaInicio() {
   $('app').innerHTML = `<div id="vista-inicio">
     <h1>Tu compañero de entrenamiento</h1>
-    ${dice('saludo', Object.keys(R()).length ? `¡Hola de nuevo! Soy ${nombreAsistente()}. Seguimos donde quedamos.` : `¡Hola! Soy ${nombreAsistente()}. Te ayudo a armar tu plan y te acompaño en cada entrenamiento.`)}
+    ${dice('saludo', Object.keys(R()).some(k => k !== 'unidad') ? `¡Hola de nuevo! Soy ${nombreAsistente()}. Seguimos donde quedamos.` : `¡Hola! Soy ${nombreAsistente()}. Te ayudo a armar tu plan y te acompaño en cada entrenamiento.`)}
     <p class="pequeno">${nube.hay() ? 'Puedes entrenar con reglas en este teléfono y sincronizar con tu cuenta. En Más puedes conectar ChatGPT para consultar tu plan y recibir propuestas. El ejemplo es ficticio y está separado de tu perfil.' : 'Puedes entrenar con reglas en este teléfono. Tus respuestas y registros se conservan en este navegador. El ejemplo es ficticio y está separado de tu perfil.'}</p>
     <p>Arma tu plan, lo agenda en tu semana, lo ajusta cuando faltas, cuando una máquina está ocupada o cuando dormiste mal, y te explica por qué de cada ejercicio, con evidencia.</p>
     ${nube.hay() && !nube.conectado() ? `<section class="tarjeta"><h3>Entrar con tu correo</h3><p class="pequeno">Puedes recuperar tus sesiones guardadas en otro dispositivo. El coach usa reglas mientras la IA no esté habilitada.</p><button type="button" class="boton primario" id="a-cuenta">Entrar</button></section>` : ''}
-    ${nube.conectado() ? `<p class="pequeno suave">Entraste como ${esc(nube.correo())}.</p>` : ''}
+    ${nube.conectado() ? `<p class="pequeno suave">Entraste como ${esc(nube.correo())}.</p>${!E.plan ? `<section class="tarjeta"><h3>Recuperar mi entrenamiento</h3><p>Tu correo está conectado, pero esta cuenta todavía no tiene un plan disponible. Los datos de otro teléfono o del tablero anterior necesitan trasladarse a ella.</p><button type="button" class="boton primario" id="recuperar-datos">Recuperar mis datos</button></section>` : ''}` : ''}
     <div class="fila-botones">
-      <button type="button" class="boton primario" id="empezar">${Object.keys(R()).length ? 'Seguir con el cuestionario' : 'Empezar el cuestionario'}</button>
+      <button type="button" class="boton primario" id="empezar">${Object.keys(R()).some(k => k !== 'unidad') ? 'Seguir con el cuestionario' : 'Empezar el cuestionario'}</button>
       <button type="button" class="boton" id="ejemplo">Ver un ejemplo</button>
     </div>
     <p class="pequeno">¿Cambiaste de teléfono? <button type="button" class="enlace" id="a-respaldo">Restaurar un respaldo</button></p>
     <p class="suave pequeno" style="margin-top:24px">${esc(C.intro)}</p>
   </div>`;
   $('a-respaldo').onclick = () => ir('mas');
+  $('recuperar-datos')?.addEventListener('click', () => ir('mas'));
   $('a-cuenta')?.addEventListener('click', () => ir('mas'));
   $('empezar').onclick = () => ir('cuestionario');
   $('ejemplo').onclick = () => { if (nube.conectado()) { E.mensaje = 'Sal de tu cuenta antes de abrir el ejemplo local.'; mostrarMensaje(); return; } entrarEjemplo(); E.respuestas = structuredClone(EJEMPLO); E.sesiones = historialDeEjemplo(hoy(), indice); armarPlan(); };

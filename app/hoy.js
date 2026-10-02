@@ -31,6 +31,10 @@ import { nombreAsistente } from './cuestionario.js';
 import * as nube from './nube.js';
 import { descansoHtml } from './estados-visuales.js';
 import { proponerEdicion } from './editar-sesion-ui.js';
+import { serieCompleta } from '../nucleo/serie-completa.js';
+import { elegirCardio } from './cardio-ui.js';
+import { CARDIOS, registroCardio } from '../nucleo/cardio.js';
+import { hayImagen, srcMiniatura } from './imagenes.js';
 
 
 const app = () => $('app');
@@ -50,7 +54,7 @@ export function vistaHoy(ir, extra) {
     <span class="sobretitulo">${esc(new Date(f + 'T12:00:00Z').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }))}</span>
     <h1>${dia && !hechaEnHevy ? esc(dia.foco) : 'Hoy'}</h1>
     ${dia ? (hechaEnHevy ? `${registradoHoyHtml(reg, dia, f, proxima)}<details class="extra plan-hecho" id="plan-hecho"${planHechoAbierto ? ' open' : ''}><summary>La sesión del plan, por si quieres anotar algo aquí</summary>${sesionHoy(dia)}</details>` : sesionHoy(dia)) : descansoHtml(proxima)}
-    <div class="banco-acceso"><button type="button" class="boton" id="agregar-ejercicio-hoy">Agregar ejercicio</button></div>
+    <div class="banco-acceso"><button type="button" class="boton" id="agregar-ejercicio-hoy">Agregar ejercicio desde el banco</button><button type="button" class="boton" data-elegir-cardio>Elegir cardio</button></div>
     ${!hechaEnHevy ? registradoHoyHtml(reg, dia, f, proxima) : ''}
     <div class="despues-de-entrenar">
       ${bienestarHtml(f, b, dia)}
@@ -195,6 +199,7 @@ const abiertos = new Set();
 
 // Calentamiento y estiramiento como en el tablero: cada paso se marca y, si va por tiempo, trae su cronómetro.
 // El calentamiento empieza abierto y se pliega al completarlo; el estiramiento se abre al terminar las series.
+let calentamientoVisible = false;
 const pasosAbiertos = { cal: null, est: null }; // null: automático; true o false: lo eligió la persona
 const reloj = seg => `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')}`;
 function pasosHtml(pasos, tipo, f, titulo, dia) {
@@ -208,10 +213,12 @@ function pasosHtml(pasos, tipo, f, titulo, dia) {
   return `<details class="extra pasos" data-pasos="${tipo}"${abierto ? ' open' : ''}><summary>${esc(titulo)} <span class="pequeno suave">${completo ? 'hecho ✓' : n ? `${n} de ${pasos.length}` : `${pasos.length} pasos`}</span></summary>
     <ol class="lista-pasos">${pasos.map((p, i) => {
       const tramos = tramosDePaso(p.name);
+      const zona = ['codo', 'hombro', 'rodilla', 'cadera', 'tobillo', 'lumbar', 'muneca', 'cuello'].find(z => p.name.toLowerCase().includes(z));
+      const imagen = zona ? `img/articulaciones/${zona}.webp` : /cardio|bicicleta|caminata/i.test(p.name) ? 'img/equipos/bicicleta.webp' : srcMiniatura(dia.ejercicios[0]?.ejercicio_id);
       const total = tramos.reduce((x, t) => x + t.seg, 0);
       return `<li class="paso${hechos[i] ? ' hecho' : ''}">
         <button type="button" class="check" data-paso="${tipo}" data-i="${i}" aria-pressed="${Boolean(hechos[i])}" aria-label="${esc(p.name)}: hecho">${hechos[i] ? '✓' : ''}</button>
-        <div class="paso-texto"><strong>${esc(p.name)}</strong>${p.how ? `<p class="pequeno suave">${esc(p.how)}</p>` : ''}</div>
+        ${imagen && hayImagen(imagen) ? `<img class="paso-imagen" src="${imagen}" alt="" width="56" height="56">` : ''}<div class="paso-texto"><strong>${esc(p.name)}</strong>${p.how ? `<p class="pequeno suave">${esc(p.how)}</p>` : ''}</div>
         ${tramos.length ? `<button type="button" class="boton chico reloj-paso" data-tramos="${esc(JSON.stringify(tramos))}" aria-label="Cronómetro de ${esc(reloj(total))}">▶ ${reloj(total)}</button>` : ''}
       </li>`;
     }).join('')}</ol>
@@ -224,9 +231,11 @@ function cardioHtml(texto) {
   const tramos = tramosDeCardio(texto);
   const total = tramos.reduce((x, t) => x + t.seg, 0);
   const porRpe = tramos.length > 1 && tramos.every(t => t.rpe);
+  const imagen = [...CARDIOS].sort((a, b) => b.nombre.length - a.nombre.length).find(c => texto.toLowerCase().startsWith(c.nombre.toLowerCase().replace(/ estática| al aire libre/g, '')))?.imagen;
   return `<section class="tarjeta cardio">
-    <div class="cab-tarjeta"><h3>Cardio</h3>${total ? `<button type="button" class="boton chico reloj-paso" data-tramos="${esc(JSON.stringify(tramos))}" data-final="¡Cardio listo!">▶ ${reloj(total)}</button>` : ''}</div>
-    <p class="pequeno">${esc(texto)}</p>
+    <div class="cab-tarjeta"><h3>Cardio</h3><button type="button" class="boton chico" data-elegir-cardio>Cambiar</button>${total ? `<button type="button" class="boton chico reloj-paso" data-tramos="${esc(JSON.stringify(tramos))}" data-final="¡Cardio listo!">▶ ${reloj(total)}</button>` : ''}</div>
+    ${imagen && hayImagen(imagen) ? `<img class="cardio-imagen" src="${imagen}" alt="" width="96" height="96">` : ''}<p class="pequeno">${esc(texto)}</p>
+    <button type="button" class="boton chico" id="cardio-hecho" aria-pressed="${Boolean(E.cardioHecho?.[hoy()]?.hecho && E.cardioHecho[hoy()].texto === texto)}">${E.cardioHecho?.[hoy()]?.hecho && E.cardioHecho[hoy()].texto === texto ? 'Cardio hecho ✓' : 'Marcar cardio como hecho'}</button>
     ${porRpe ? `<div class="tramos-cardio" aria-hidden="true">${tramos.map(t => `<i style="flex:${t.seg}"><b>${Math.round(t.seg / 60)}′</b><span>RPE ${esc(t.rpe)}</span></i>`).join('')}</div>` : ''}
   </section>`;
 }
@@ -260,23 +269,32 @@ function sesionHoy(dia) {
   const prim = [...new Set(ejs.flatMap(ej => ej.musculos_primarios))];
   const sec = [...new Set(ejs.flatMap(ej => ej.musculos_secundarios))].filter(m => !prim.includes(m));
   const eligePeso = dia.ejercicios.some(e => /^Elige un peso/.test(e.nota || ''));
+  const calentamiento = dia.calentamiento?.length ? dia.calentamiento : dia.ejercicios.length ? [
+    { name: '5 minutos de cardio suave', how: 'Bicicleta, trotadora o escaladora a ritmo cómodo.' },
+    { name: 'Series de aproximación del primer ejercicio', how: 'Una serie con la mitad del peso y otra con tres cuartos, pocas repeticiones. Usa + Calentamiento para verlas en la tabla.' }
+  ] : [];
   return `<section class="sesion-cab compacta" aria-label="Sesión de hoy">
     <div class="sesion-controles">
       ${dia.ejercicios.length ? avanceHtml(avance(dia)) : '<p class="pequeno suave">Sin ejercicios en esta sesión.</p>'}
       <button type="button" class="boton chico" id="ajustar-hoy">${icono('ajustes')} Ajustar hoy</button>
-      <button type="button" class="boton-icono" id="ver-detalles-sesion" aria-label="Detalles y calentamiento de la sesión">${icono('info')}</button>
+      <button type="button" class="boton-icono" id="ver-detalles-sesion" aria-label="Detalles de la sesión">${icono('info')}</button>
     </div>
   </section>
+  <div class="accesos-entreno">
+    ${calentamiento.length ? `<button type="button" class="boton chico" id="abrir-calentamiento" aria-expanded="${calentamientoVisible}" aria-controls="calentamiento-hoy">Calentar</button>` : ''}
+    <button type="button" class="boton chico" id="banco-hoy-arriba">${icono('mas')} Ejercicios</button>
+    <button type="button" class="boton chico" data-elegir-cardio>Cardio</button>
+  </div>
+  ${calentamiento.length ? `<section class="tarjeta calentamiento-directo" id="calentamiento-hoy"${calentamientoVisible ? '' : ' hidden'}>${pasosHtml(calentamiento, 'cal', f, 'Calentamiento', dia)}</section>` : ''}
   <ol class="ejercicios-hoy">${dia.ejercicios.map((e, k) => ejercicioHoy(e, k, f, e.ejercicio_id ? anterior(todas, e.ejercicio_id, f) : null, notas[idDe(e, k)] || {}, dia)).join('')}</ol>
   ${cardioHtml(dia.cardio)}
   <div class="fila-botones"><button type="button" class="boton primario grande" id="terminar">${E.sesiones.some(s => s.fecha === f && !s.origen) ? 'Guardar de nuevo' : 'Terminar sesión'}</button></div>
   <details class="tarjeta detalles-sesion" id="detalles-sesion">
-    <summary>Calentamiento y detalles de la sesión</summary>
+    <summary>Detalles de la sesión</summary>
     <p class="suave pequeno">${dia.hora ? `${esc(dia.hora)} · ` : ''}~${duracionSesion(dia)} min · ${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? '' : 's'}</p>
     ${prim.length ? `<div class="hoy-entrenas">${imagenesMusculos(prim.slice(0, 4))}<div><p class="sobretitulo">Hoy entrenas</p><p class="musculos-hoy">${esc(mayuscula(lista(prim.map(m => NOMBRE_MUSCULO[m] || m))))}</p>${sec.length ? `<p class="pequeno suave">Y un poco de ${esc(lista(sec.map(m => (NOMBRE_MUSCULO[m] || m).toLowerCase())))}</p>` : ''}</div></div>` : ''}
     <p class="suave pequeno">${esc(dia.racional || '')}</p>
     ${eligePeso ? '<p class="nota-sesion pequeno">Donde no hay peso, elige uno con el que te sobren las repeticiones de reserva (RIR) en la última serie. Lo anotas y la app ajusta desde ahí.</p>' : ''}
-    ${pasosHtml(dia.calentamiento, 'cal', f, 'Calentamiento', dia)}
     ${dia.estiramiento?.length ? pasosHtml(dia.estiramiento, 'est', f, 'Estiramiento de cierre (opcional)', dia) : ''}
   </details>`;
 }
@@ -330,6 +348,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
       ${filasHtml}
     </div>
     <div class="fila-agregar"><button type="button" class="boton agregar-serie" data-agregar="${id}">+ Serie</button>${seg ? '' : `<button type="button" class="boton agregar-serie" data-calentar="${id}">+ Calentamiento</button>`}</div>
+    <div class="ejercicio-editar"><button type="button" class="enlace" data-quitar-ej="${id}">Quitar ejercicio de hoy</button></div>
     <details class="extra" data-panel="nota-${id}"${Object.keys(nota).some(k => !['nota', 'para_entrenador'].includes(k)) || abiertos.has(`nota-${id}`) ? ' open' : ''}><summary>Cómo te fue</summary>
     ${e.nota && !/^Elige un peso/.test(e.nota) ? `<p class="pequeno suave">${esc(e.nota)}</p>` : ''}
     <textarea class="nota-ej" rows="1" data-nota="${id}" data-p="nota" data-visible placeholder="Nota para tu entrenador" aria-label="Nota para tu entrenador sobre ${esc(nombre)}">${esc(nota.nota || '')}</textarea>
@@ -384,7 +403,15 @@ function enlazar(ir, dia) {
   document.querySelectorAll('[data-ir-semana]').forEach(b => b.onclick = () => ir('semana'));
   $('entrenar-igual')?.addEventListener('click', () => ir('coach', 'Hoy no tenía sesión pero quiero entrenar, ¿qué otra opción tienes?'));
   $('agregar-ejercicio-hoy')?.addEventListener('click', () => ir('banco', { desde: 'hoy' }));
+  document.querySelectorAll('[data-elegir-cardio]').forEach(b => b.onclick = () => elegirCardio({ volver: b, alCambiar: () => vistaHoy(ir) }));
   if (!dia) return;
+  $('banco-hoy-arriba').onclick = () => ir('banco', { desde: 'hoy' });
+  $('abrir-calentamiento')?.addEventListener('click', ev => {
+    const caja = $('calentamiento-hoy'); caja.hidden = !caja.hidden; calentamientoVisible = !caja.hidden;
+    ev.currentTarget.setAttribute('aria-expanded', String(!caja.hidden));
+    if (!caja.hidden) caja.querySelector('details').open = true;
+  });
+  document.querySelectorAll('[data-quitar-ej]').forEach(b => b.onclick = () => proponerEdicion({ tipo: 'quitar', ejercicio: b.dataset.quitarEj }, { volver: b, alCambiar: () => vistaHoyMantener(ir) }));
 
   $('ver-detalles-sesion')?.addEventListener('click', () => {
     const detalles = $('detalles-sesion');
@@ -393,6 +420,11 @@ function enlazar(ir, dia) {
   });
   const raiz = $('vista-hoy');
   const repintar = () => vistaHoyMantener(ir);
+  $('cardio-hecho')?.addEventListener('click', () => {
+    const antes = E.cardioHecho?.[f];
+    (E.cardioHecho ||= {})[f] = { texto: dia.cardio, hecho: !(antes?.texto === dia.cardio && antes.hecho) };
+    guardar(); repintar();
+  });
   const ejercicioDe = id => { const k = dia.ejercicios.findIndex((x, j) => idDe(x, j) === id); return { e: dia.ejercicios[k], k }; };
   const lugar = (R().lugares || [])[0];
   /** Consejo para la serie siguiente (nucleo/series.js), según reps, esfuerzo y fallo. Solo en las de trabajo. */
@@ -427,7 +459,17 @@ function enlazar(ir, dia) {
     }
   });
   // Al terminar de escribir el RIR de una serie hecha, se actualiza el consejo para la siguiente.
-  raiz.addEventListener('change', ev => { if (ev.target.dataset.c === 'rir') repintar(); }); // el menú del RIR ya guardó con 'input'
+  const completarAlSalir = ev => {
+    const t = ev.target;
+    if (ev.type === 'focusout' && t.dataset.c === 'rir') return;
+    if (!t.dataset.ej || !['kg', 'reps', 'rir'].includes(t.dataset.c)) return;
+    const { e, k } = ejercicioDe(t.dataset.ej), { lista } = materializar(f, e, k);
+    const r = lista[Number(t.dataset.i)];
+    if (!r.hecho && serieCompleta(r, e)) marcarSerie(t.dataset.ej, Number(t.dataset.i));
+    else if (t.dataset.c === 'rir') repintar();
+  };
+  raiz.addEventListener('change', completarAlSalir);
+  raiz.addEventListener('focusout', completarAlSalir);
   raiz.querySelectorAll('textarea.nota-ej').forEach(t => { if (t.value) { t.style.height = 'auto'; t.style.height = `${t.scrollHeight}px`; } });
   $('vista-hoy').querySelectorAll('[data-ayuda-rir]').forEach(b => b.onclick = () => abrirHoja({
     titulo: 'RIR: repeticiones en reserva', volver: b,
@@ -516,7 +558,7 @@ function enlazar(ir, dia) {
   raiz.querySelectorAll('[data-paso]').forEach(b => b.onclick = () => {
     const lista = (((E.pasos ||= {})[f] ||= {})[b.dataset.paso] ||= []);
     lista[Number(b.dataset.i)] = !lista[Number(b.dataset.i)];
-    const total = (b.dataset.paso === 'cal' ? dia.calentamiento : dia.estiramiento)?.length || 0;
+    const total = raiz.querySelectorAll(`[data-paso="${b.dataset.paso}"]`).length;
     if (lista.filter(Boolean).length === total) pasosAbiertos[b.dataset.paso] = false; // completo: se pliega
     guardar(); repintar();
   });
@@ -524,9 +566,8 @@ function enlazar(ir, dia) {
   raiz.querySelectorAll('.reloj-paso').forEach(b => b.onclick = () => iniciarTramos(JSON.parse(b.dataset.tramos), b.dataset.final || '¡Listo!'));
 
   // Marcar una serie: si no escribió nada, toma lo de la serie anterior de hoy, lo de la vez anterior o lo del plan.
-  raiz.querySelectorAll('[data-hecho]').forEach(b => b.onclick = () => {
-    const { e, k } = ejercicioDe(b.dataset.hecho);
-    const i = Number(b.dataset.i);
+  function marcarSerie(id, i) {
+    const { e, k } = ejercicioDe(id);
     const { lista, n } = materializar(f, e, k);
     const r = { ...lista[i] };
     const t = tipoDe(r);
@@ -575,7 +616,8 @@ function enlazar(ir, dia) {
     } else detenerDescanso();
     repintar();
     if (recs.length) avisar(`Récord en ${nombreDe(e)}: ${recs.map(x => textoRecord(x, { corto: true })).join(', ')}.`, 'bien');
-  });
+  }
+  raiz.querySelectorAll('[data-hecho]').forEach(b => b.onclick = () => marcarSerie(b.dataset.hecho, Number(b.dataset.i)));
 
   raiz.addEventListener('change', ev => {
     const t = ev.target;
@@ -715,13 +757,21 @@ function enlazar(ir, dia) {
         notas.push({ fecha: f, ejercicio_id: e.ejercicio_id, respuestas, nota: nota || null, para_entrenador: Boolean(para_entrenador) });
       }
     });
+    for (const [id, retirado] of Object.entries(E.retirados?.[f] || {})) {
+      if (dia.ejercicios.some(e => e.ejercicio_id === id)) continue;
+      series.push(...retirado.series.map(s => ({ ...s, orden: orden++ })));
+      const n = E.notas[f]?.[id];
+      if (n) { const { nota, para_entrenador, ...respuestas } = n; notas.push({ fecha: f, ejercicio_id: id, respuestas, nota: nota || null, para_entrenador: Boolean(para_entrenador) }); }
+    }
+    const cardio = registroCardio(dia.cardio, E.cardioHecho?.[f]);
+    if (cardio) series.push({ ...cardio, orden: orden++ });
     if (!series.length) { avisar('Marca al menos una serie como hecha.'); return; }
     // El id es del teléfono y se mantiene al guardar de nuevo: así la cuenta la reemplaza en vez de duplicarla.
     // Las sesiones importadas (Hevy) de ese día no se tocan.
     const id = E.sesiones.find(s => s.fecha === f && !s.origen)?.id || crypto.randomUUID();
     E.sesiones = E.sesiones.filter(s => !(s.fecha === f && !s.origen));
     const hora = ahora().slice(11);
-    const minutos = avance(dia).cifras.minutos ?? null;
+    const minutos = avance(dia).cifras.minutos ?? (cardio ? Math.round(cardio.duracion_seg / 60) : null);
     E.sesiones.push({ id, fecha: f, hora, titulo: dia.foco, duracion_min: minutos, series, notas });
     E.mensaje = `Sesión guardada: ${series.length} serie${series.length === 1 ? '' : 's'}.`;
     detenerDescanso();

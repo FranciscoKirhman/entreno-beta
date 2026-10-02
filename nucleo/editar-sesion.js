@@ -3,6 +3,7 @@ import { normalizar, tieneEquipo, nivelAlcanza, articulacionesBloqueadas, cargaZ
 import { prescripcion, comoDescarga, duracionSesion } from './motor-plan.js';
 import { validarPlan } from './validador.js';
 import { grupos } from './superseries.js';
+import { seriesRetiradas } from './series-retiradas.js';
 
 export function buscarEjercicios(indice, { texto = '', musculo = '', equipo = '', nombresMusculos = {}, nombresEquipos = {} } = {}) {
   const palabras = normalizar(texto).split(' ').filter(Boolean);
@@ -58,14 +59,12 @@ export function editarSesion(accion, ctx) {
     if (k < 0) return { error: 'Ese ejercicio ya no está en la sesión.' };
     ejercicio = dia.ejercicios[k];
     if (ejercicio.indicacion) return { error: 'Este ejercicio forma parte de una indicación profesional.' };
-    const marcadas = ctx.registro?.[hoy]?.[accion.ejercicio]?.some(x => x?.hecho);
-    const guardadas = ctx.sesiones?.some(s => s.fecha === hoy && s.series?.some(x => x.ejercicio_id === accion.ejercicio));
-    if (marcadas || guardadas) return { error: 'Ya registraste series de este ejercicio. Se conserva para no perder lo que hiciste.' };
     dia.ejercicios.splice(k, 1);
     const g = grupos(dia.ejercicios);
     dia.ejercicios.forEach((e, i) => { e.orden = i; if (!g[i]) delete e.superserie; });
   } else return { error: 'No reconozco ese cambio.' };
   const v = validarPlan(nuevo, ctx);
   if (!v.ok) return { error: v.errores.map(e => e.mensaje).join(' ') };
-  return { plan: nuevo, ejercicio, minutos: duracionSesion(dia), cantidad: dia.ejercicios.length, advertencias: v.advertencias };
+  return { plan: nuevo, ejercicio, minutos: duracionSesion(dia), cantidad: dia.ejercicios.length, advertencias: v.advertencias,
+    ...(accion.tipo === 'quitar' ? { conservar: seriesRetiradas(ejercicio, ctx) } : {}) };
 }

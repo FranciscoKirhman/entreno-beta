@@ -8,3 +8,16 @@
 .sesion-controles .boton-icono{flex:0 0 36px}
 .detalles-sesion>summary{font-weight:600;min-height:32px;cursor:pointer}
 .despues-de-entrenar{margin-top:20px}
+.accesos-entreno{display:flex;gap:6px;margin:0 0 12px}
+.accesos-entreno .boton{flex:1;min-width:0;padding:9px 5px;font-size:13px;white-space:nowrap}
+.accesos-entreno .icono{width:16px;height:16px}
+.paso-imagen{width:48px;height:48px;object-fit:contain;flex:0 0 48px}
+.calentamiento-directo .lista-pasos .paso{display:flex;flex-wrap:wrap;gap:8px}
+.calentamiento-directo .paso-texto{flex:1;min-width:120px}
+.calentamiento-directo .reloj-paso{margin-left:auto}
+.ejercicio-editar{margin:8px 0;font-size:13px}
+.banco-acceso{display:flex;gap:8px;flex-wrap:wrap}
+.banco-acceso .boton{flex:1;min-width:130px;width:auto}
+.cardio-minutos{display:flex;align-items:center;gap:8px;margin:12px 0}
+.cardio-minutos input{width:64px;min-width:0}
+.cardio-imagen{display:block;object-fit:contain;margin:8px auto;max-width:100%}
