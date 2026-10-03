@@ -39,6 +39,7 @@ import * as nube from './nube.js';
 import { descansoHtml } from './estados-visuales.js';
 import { proponerEdicion, ordenarSesion } from './editar-sesion-ui.js';
 import { serieCompleta } from '../nucleo/serie-completa.js';
+import { proponerSesionVacia } from './sesion-libre-ui.js';
 import { ilustracionesCalentamiento } from '../nucleo/imagenes-calentamiento.js';
 import { IMAGENES } from './comun.js';
 import { elegirCardio } from './cardio-ui.js';
@@ -58,12 +59,12 @@ export function vistaHoy(ir, extra) {
   const proxima = plan.dias.find(d => d.fecha > f);
   // Lo registrado (en la app o importado de Hevy) dice qué sesión del plan se hizo y qué quedó pendiente.
   const reg = estadoDelPlan(plan, E.sesiones, { hoy: f, marcas: E.marcasPlan || {} });
-  const hechaEnHevy = Boolean(dia) && reg.hoy.de === f && Boolean(reg.porDia.get(f)?.sesion?.origen);
+  const hechaEnHevy = Boolean(dia) && !dia.libre && dia.foco !== 'Sesión libre' && reg.hoy.de === f && Boolean(reg.porDia.get(f)?.sesion?.origen);
   app().innerHTML = `<div id="vista-hoy">
     <span class="sobretitulo">${esc(new Date(f + 'T12:00:00Z').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }))}</span>
     <h1>${dia && !hechaEnHevy ? esc(dia.foco) : 'Hoy'}</h1>
     ${dia ? (hechaEnHevy ? `${registradoHoyHtml(reg, dia, f, proxima)}<details class="extra plan-hecho" id="plan-hecho"${planHechoAbierto ? ' open' : ''}><summary>La sesión del plan, por si quieres anotar algo aquí</summary>${sesionHoy(dia)}</details>` : sesionHoy(dia)) : descansoHtml(proxima)}
-    <div class="banco-acceso"><button type="button" class="boton" id="agregar-ejercicio-hoy">Agregar ejercicio desde el banco</button><button type="button" class="boton" data-elegir-cardio>Elegir cardio</button></div>
+    <div class="banco-acceso"><button type="button" class="boton" id="sesion-vacia-hoy">Empezar sesión vacía</button><button type="button" class="boton" id="agregar-ejercicio-hoy">Agregar ejercicio desde el banco</button><button type="button" class="boton" data-elegir-cardio>Elegir cardio</button></div>
     ${!hechaEnHevy ? registradoHoyHtml(reg, dia, f, proxima) : ''}
     <div class="despues-de-entrenar">
       ${bienestarHtml(f, b, dia)}
@@ -316,7 +317,7 @@ function sesionHoy(dia) {
   const calentamiento = calentamientoDeSesion({ dia, porId: indice.porId, equipo: lugar?.equipamiento || [], bloqueadas: articulacionesBloqueadas(R().lesiones, f), cargas, opcionesCarga });
   return `<section class="sesion-cab compacta" aria-label="Sesión de hoy">
     <div class="sesion-controles">
-      ${dia.ejercicios.length ? avanceHtml(avance(dia)) : '<p class="pequeno suave">Sin ejercicios en esta sesión.</p>'}
+      ${dia.ejercicios.length ? avanceHtml(avance(dia)) : '<p class="pequeno suave">Sesión vacía. Abre Ejercicios para elegir desde el banco o ver recomendaciones para ti.</p>'}
       <button type="button" class="boton chico" id="ajustar-hoy">${icono('ajustes')} Ajustar hoy</button>
       <button type="button" class="boton-icono" id="ver-detalles-sesion" aria-label="Detalles de la sesión">${icono('info')}</button>
     </div>
@@ -325,6 +326,7 @@ function sesionHoy(dia) {
     ${calentamiento.length ? `<button type="button" class="boton chico" id="abrir-calentamiento" aria-expanded="${calentamientoVisible}" aria-controls="calentamiento-hoy">Calentar</button>` : ''}
     <button type="button" class="boton chico" id="banco-hoy-arriba">${icono('mas')} Ejercicios</button>
     <button type="button" class="boton chico" data-elegir-cardio>Cardio</button>
+    ${dia.ejercicios.length ? '<button type="button" class="boton chico" id="sesion-vacia-arriba">Empezar vacía</button>' : ''}
   </div>
   ${calentamiento.length ? `<section class="tarjeta calentamiento-directo" id="calentamiento-hoy"${calentamientoVisible ? '' : ' hidden'}><div class="calentamiento-intro"><p class="sobretitulo">Preparación para ${esc(dia.foco)}</p><h2>Calienta para esta sesión</h2><p class="suave pequeno">~${minutosCalentamiento(calentamiento)} min estimados · movilidad, activación y cargas progresivas. Termina preparado, con energía para las series de trabajo.</p></div>${pasosHtml(calentamiento, 'cal', f, 'Tus pasos', dia)}</section>` : ''}
   <ol class="ejercicios-hoy">${dia.ejercicios.map((e, k) => ejercicioHoy(e, k, f, e.ejercicio_id ? anterior(todas, e.ejercicio_id, f) : null, notas[idDe(e, k)] || {}, dia)).join('')}</ol>
@@ -472,6 +474,9 @@ function enlazar(ir, dia) {
   document.querySelectorAll('[data-ir-checkin]').forEach(b => b.onclick = () => ir('checkin', b.dataset.irCheckin));
   document.querySelectorAll('[data-ir-semana]').forEach(b => b.onclick = () => ir('semana'));
   $('entrenar-igual')?.addEventListener('click', () => ir('coach', 'Hoy no tenía sesión pero quiero entrenar, ¿qué otra opción tienes?'));
+  const empezarVacia = volver => proponerSesionVacia({ volver, alCambiar: () => { calentamientoVisible = false; ir('hoy'); } });
+  $('sesion-vacia-hoy')?.addEventListener('click', ev => empezarVacia(ev.currentTarget));
+  $('sesion-vacia-arriba')?.addEventListener('click', ev => empezarVacia(ev.currentTarget));
   $('agregar-ejercicio-hoy')?.addEventListener('click', () => ir('banco', { desde: 'hoy' }));
   document.querySelectorAll('[data-elegir-cardio]').forEach(b => b.onclick = () => elegirCardio({ volver: b, alCambiar: () => vistaHoy(ir) }));
   if (!dia) return;

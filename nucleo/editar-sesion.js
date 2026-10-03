@@ -5,6 +5,7 @@ import { prescripcion, comoDescarga, duracionSesion } from './motor-plan.js';
 import { validarCambio } from './validador.js';
 import { grupos } from './superseries.js';
 import { seriesRetiradas } from './series-retiradas.js';
+import { calentamientoDeSesion } from './calentamiento-sesion.js';
 
 export function buscarEjercicios(indice, { texto = '', musculo = '', equipo = '', nombresMusculos = {}, nombresEquipos = {} } = {}) {
   const palabras = normalizar(texto).split(' ').filter(Boolean);
@@ -91,6 +92,11 @@ export function editarSesion(accion, ctx) {
     ordenar(dia);
     for (const x of siguientes(nuevo, dia, accion)) { const antes = x.ejercicios.map(e => e.ejercicio_id).join(); ordenar(x); if (x.ejercicios.map(e => e.ejercicio_id).join() !== antes) afectados++; }
   } else return { error: 'No reconozco ese cambio.' };
+  // La preparación y sus minutos siguen a los ejercicios elegidos; las indicaciones importadas se conservan.
+  if (accion.tipo === 'agregar' || accion.tipo === 'quitar') for (const x of [dia, ...siguientes(nuevo, dia, accion)]) {
+    const lugar = ctx.respuestas.lugares?.find(l => l.nombre === x.lugar) || ctx.respuestas.lugares?.find(l => l.principal) || ctx.respuestas.lugares?.[0];
+    x.calentamiento = calentamientoDeSesion({ dia: x, porId: indice.porId, equipo: lugar?.equipamiento || [], bloqueadas: articulacionesBloqueadas(ctx.respuestas.lesiones || [], x.fecha) });
+  }
   // Un error que el plan ya traía no bloquea agregar ni quitar (nucleo/validador.js: validarCambio).
   const v = validarCambio(plan, nuevo, ctx);
   if (!v.ok) return { error: v.errores.map(e => e.mensaje).join(' ') };

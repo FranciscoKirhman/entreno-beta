@@ -1,7 +1,7 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
 // Red primero, con límite de tiempo, y la copia guardada como respaldo (igual que el tablero).
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-03 04:29 · b7fe45f";
+const VERSION = "2026-10-03 04:43 · 8d54ca1";
 const ARCHIVOS = [
  "./",
  "app.js",
@@ -563,8 +563,10 @@ const ARCHIVOS = [
  "plan.js",
  "progreso-ejercicio.js",
  "progreso.js",
+ "recomendaciones-ui.js",
  "resumen.js",
  "semana.js",
+ "sesion-libre-ui.js",
  "temporada.js",
  "../contenido/checkin.json",
  "../contenido/cuestionario.json",
@@ -610,6 +612,7 @@ const ARCHIVOS = [
  "../nucleo/progresion.js",
  "../nucleo/progreso-ejercicio.js",
  "../nucleo/propios.js",
+ "../nucleo/recomendar-ejercicios.js",
  "../nucleo/recordatorios.js",
  "../nucleo/records.js",
  "../nucleo/registrado.js",
@@ -622,6 +625,7 @@ const ARCHIVOS = [
  "../nucleo/serie-completa.js",
  "../nucleo/series-retiradas.js",
  "../nucleo/series.js",
+ "../nucleo/sesion-vacia.js",
  "../nucleo/sincronizacion.js",
  "../nucleo/superseries.js",
  "../nucleo/suplementos.js",

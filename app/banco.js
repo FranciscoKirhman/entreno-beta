@@ -7,6 +7,7 @@ import { NOMBRE_MUSCULO, mayuscula } from './musculos.js';
 import { icono } from './iconos.js';
 import { proponerEdicion } from './editar-sesion-ui.js';
 import { elegirCardio } from './cardio-ui.js';
+import { pintarRecomendaciones } from './recomendaciones-ui.js';
 
 let texto = '', musculo = '', equipo = '', ultimoDesde = 'mas', soloFuera = true, creando = false;
 const EQUIPO = Object.fromEntries(C.secciones.flatMap(s => s.preguntas || []).find(p => p.equipamiento)?.equipamiento || []);
@@ -37,12 +38,15 @@ export function vistaBanco(ir, { desde = ultimoDesde } = {}) {
         <p class="pequeno suave">Queda en este teléfono, en tu respaldo y, si entraste, en tu cuenta. Sin imagen ni técnica: es tuyo. Se puede agregar a una sesión como cualquier otro.</p>
       </form>
     </details>
+    <section class="banco-recomendaciones" id="banco-recomendaciones" aria-label="Recomendaciones de ejercicios"></section>
+    <h2>Explorar todos los ejercicios</h2>
     <p id="banco-cantidad" class="pequeno suave" role="status" aria-live="polite"></p>
     <ul id="banco-lista" class="banco-lista"></ul>
   </div>`;
   const pintar = () => {
     const enHoy = new Set(ctxNucleo().plan?.dias.find(d => d.fecha === ctxNucleo().hoy)?.ejercicios.map(e => e.ejercicio_id) || []);
     const xs = buscarEjercicios(indice, { texto, musculo, equipo, nombresMusculos: NOMBRE_MUSCULO, nombresEquipos: EQUIPO }).filter(e => !soloFuera || !enHoy.has(e.id));
+    pintarRecomendaciones(xs, ir);
     $('banco-cantidad').textContent = `${xs.length} ${xs.length === 1 ? 'ejercicio encontrado' : 'ejercicios encontrados'}`;
     $('banco-lista').innerHTML = xs.length ? xs.map(e => {
       const motivo = motivoNoAgregar(e, ctxNucleo());
