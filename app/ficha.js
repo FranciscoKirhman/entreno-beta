@@ -12,6 +12,7 @@ import { NOMBRE_MUSCULO, lista, mayuscula, imagenesMusculos } from './musculos.j
 import { dibujoEjercicio, maquinaDe, miniatura } from './imagenes.js';
 import { icono } from './iconos.js';
 import { proponer } from './cambios-ui.js';
+import { sufijo } from '../nucleo/unidades.js';
 import { progresoEjercicioHtml, enlazarProgresoEjercicio } from './progreso-ejercicio.js';
 
 const VOLVER = { hoy: 'Hoy', semana: 'Semana', plan: 'Tu plan', progreso: 'Progreso', banco: 'Banco de ejercicios', ejercicio: 'Atrás' };
@@ -62,7 +63,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
       </div>
     </section>
 
-    ${p?.esHoy ? `<section class="tarjeta fila-resumen"><span><strong>Hoy:</strong> <span class="num">${esc(`${p.e.series} × ${p.e.reps_min}${p.e.reps_max !== p.e.reps_min ? ` a ${p.e.reps_max}` : ''}${p.e.unidad === 'seg' ? ' s' : ''} · RIR ${p.e.rir}${p.e.carga_kg ? ` · ${peso(p.e.carga_kg)}` : ''}`)}</span></span><button type="button" class="enlace" id="cambiar-hoy">Cambiar</button></section>` : ''}
+    ${p?.esHoy ? `<section class="tarjeta fila-resumen"><span><strong>Hoy:</strong> <span class="num">${esc(`${p.e.series} × ${p.e.reps_min}${p.e.reps_max !== p.e.reps_min ? ` a ${p.e.reps_max}` : ''}${sufijo(p.e)}${p.e.unidad === 'm' ? '' : ` · RIR ${p.e.rir}`}${p.e.carga_kg ? ` · ${peso(p.e.carga_kg)}` : ''}`)}</span></span><button type="button" class="enlace" id="cambiar-hoy">Cambiar</button></section>` : ''}
 
     <section class="tarjeta">
       <h2>Cómo se hace</h2>
@@ -79,7 +80,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
         ${m.mejor ? `<div><span class="num grande">${esc(kg(m.mejor.estimado))}</span><span class="pequeno suave">Lo que levantarías 1 vez (estimado)</span></div>` : ''}
         ${!m.pesada && !m.menorAyuda && m.reps ? `<div><span class="num grande">${m.reps.reps}${seg ? ' s' : ''}</span><span class="pequeno suave">Tu mejor serie</span></div>` : ''}
       </div>
-      <p class="pequeno suave">Anotado ${m.veces === 1 ? '1 vez' : `${m.veces} veces`}. La última, el ${esc(fechaCorta(m.ultima.fecha))}: <span class="num">${esc(m.ultima.series.map(s => (s.carga_kg ? `${coma(enUnidad(s.carga_kg))} × ${s.reps ?? ''}` : `${s.reps ?? ''}${seg ? ' s' : ''}`)).join(', '))}</span></p>`
+      <p class="pequeno suave">Anotado ${m.veces === 1 ? '1 vez' : `${m.veces} veces`}. La última, el ${esc(fechaCorta(m.ultima.fecha))}: <span class="num">${esc(m.ultima.series.map(s => (s.carga_kg ? `${coma(enUnidad(s.carga_kg))} × ${s.reps ?? (s.distancia_m != null ? `${s.distancia_m} m` : '')}` : `${s.reps ?? s.duracion_seg ?? ''}${seg || s.duracion_seg != null ? ' s' : ''}`)).join(', '))}</span></p>`
         : '<p class="suave pequeno">Todavía no lo anotas. Cuando lo hagas, aquí vas a ver tu serie más pesada, tu máximo estimado y cómo te fue la última vez.</p>'}
     </section>
 

@@ -134,7 +134,7 @@ export function aplicarFase(plan, bloque, { minutos = null } = {}) {
     if (d.semana === nuevo.semana_descarga) continue;
     const antes = new Map(d.ejercicios.map(e => [e, e.series]));
     for (const e of d.ejercicios) {
-      if (e.unidad === 'seg') continue;
+      if (e.unidad === 'seg' || e.unidad === 'm') continue;
       e.series = Math.max(1, Math.min(6, Math.round(e.series * bloque.series)));
       if (bloque.reps && e.prioridad === 1) {
         e.reps_min = Math.max(3, e.reps_min + bloque.reps);

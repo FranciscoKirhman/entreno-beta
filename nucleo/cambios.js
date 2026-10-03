@@ -126,7 +126,7 @@ const NOMBRE_DIA = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 export function promptParaIA({ derivados: d, plan, permitidos, historial = [], pedido = '' }) {
   const semana = plan.dias.filter(x => x.semana === 1);
   const lineasPlan = semana.map(x => `- ${x.plantilla} (${NOMBRE_DIA[new Date(x.fecha + 'T12:00:00Z').getUTCDay()]}${x.firme ? '' : ', opcional'}): `
-    + x.ejercicios.map(e => `${e.ejercicio_id} ${e.series}×${e.reps_min}-${e.reps_max}${e.unidad === 'seg' ? 's' : ''} RIR${e.rir}${e.carga_kg ? ` ${e.carga_kg}kg` : ''}`).join('; '));
+    + x.ejercicios.map(e => `${e.ejercicio_id} ${e.series}×${e.reps_min}-${e.reps_max}${e.unidad === 'seg' ? 's' : e.unidad === 'm' ? 'm' : ''} RIR${e.rir}${e.carga_kg ? ` ${e.carga_kg}kg` : ''}`).join('; '));
   const lineasHist = historial.slice(-12).map(h => `- ${h.fecha} ${h.ejercicio_id}: ${h.carga_kg ?? 'pc'}kg × ${h.reps}${h.rpe != null ? ` @RPE${h.rpe}` : ''}`);
   return [
     'Te paso mi plan de gimnasio de la app Entreno para que me ayudes a ajustarlo. Responde en español.',

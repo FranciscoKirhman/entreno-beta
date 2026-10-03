@@ -2,7 +2,7 @@
 // (que abre su ficha con gráficos e historial), sueño y ánimo, el historial con buscador,
 // fotos de progreso privadas, suplementos, indicaciones de tu médico o kinesiólogo, y lo que anotaste para el
 // entrenador.
-import { E, guardar, C, esc, $, fechaCorta, hoy, indice, cambiarPlan, opcionesRadio, chk, mostrarMensaje, seriesTexto, volumenTexto } from './comun.js';
+import { E, guardar, C, esc, $, fechaCorta, hoy, indice, cambiarPlan, opcionesRadio, chk, mostrarMensaje, seriesTexto, volumenTexto, peso } from './comun.js';
 import { tipoParaGuardar } from '../nucleo/registro.js';
 import { sesionDe, sumarDias, diaSemana } from '../nucleo/agenda.js';
 import { constancia } from '../nucleo/suplementos.js';
@@ -166,7 +166,7 @@ function listaHistorialHtml(h = historial()) {
   const resumen = semana.length ? `Esta semana: ${semana.length} ${semana.length === 1 ? 'sesión' : 'sesiones'} · ${series(semana.reduce((a, s) => a + s.series.filter(deTrabajo).length, 0))} de trabajo · volumen ${volumenTexto(semana.reduce((a, s) => a + volumen(s.series), 0))}.` : 'Esta semana todavía no entrenas.';
   // Cardio importado de Hevy: distancia y tiempo en vez de peso y repeticiones.
   const textoSeries = xs => (xs.some(x => x.distancia_m || (x.duracion_seg && !x.carga_kg))
-    ? xs.map(x => [x.distancia_m && distancia(x.distancia_m), x.duracion_seg && reloj(x.duracion_seg)].filter(Boolean).join(' en ')).filter(Boolean).join(', ')
+    ? xs.map(x => `${x.carga_kg ? `${peso(x.carga_kg)} × ` : ''}${[x.distancia_m && distancia(x.distancia_m), x.duracion_seg && reloj(x.duracion_seg)].filter(Boolean).join(' en ')}`).filter(Boolean).join(', ')
     : seriesTexto(xs));
   const item = s => {
     const porEj = [];

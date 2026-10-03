@@ -7,6 +7,7 @@ import { estadoDelPlan } from '../nucleo/registrado.js';
 import { recordsDeSerie } from '../nucleo/records.js';
 import { textoRecord } from './resumen.js';
 import { esAsistido, conLastre, sinCargaExterna } from '../nucleo/catalogo.js';
+import { sufijo, porReps, camposGuardados } from '../nucleo/unidades.js';
 import { evaluarDia, ajustarSesion, TEXTO_RECOMENDACION } from '../nucleo/bienestar.js';
 import { cicloActivo, estadoCiclo, registrarInicio, NOMBRE_FASE, SINTOMAS } from '../nucleo/ciclo-menstrual.js';
 import { discosPorLado, discosDisponibles, BARRAS_KG, BARRAS_LB } from '../nucleo/discos.js';
@@ -273,6 +274,7 @@ function cardioHtml(texto) {
     <div class="cab-tarjeta"><h3>Cardio</h3><button type="button" class="boton chico" data-elegir-cardio>Cambiar</button>${total ? `<button type="button" class="boton chico reloj-paso" data-tramos="${esc(JSON.stringify(tramos))}" data-final="¡Cardio listo!">▶ ${reloj(total)}</button>` : ''}</div>
     ${imagen && hayImagen(imagen) ? `<img class="cardio-imagen" src="${imagen}" alt="" width="96" height="96">` : ''}<p class="pequeno">${esc(texto)}</p>
     <button type="button" class="boton chico" id="cardio-hecho" aria-pressed="${Boolean(E.cardioHecho?.[hoy()]?.hecho && E.cardioHecho[hoy()].texto === texto)}">${E.cardioHecho?.[hoy()]?.hecho && E.cardioHecho[hoy()].texto === texto ? 'Cardio hecho ✓' : 'Marcar cardio como hecho'}</button>
+    ${E.cardioHecho?.[hoy()]?.hecho && E.cardioHecho[hoy()].texto === texto ? `<div class="fila-cardio"><label class="pequeno">Minutos <input type="text" inputmode="numeric" id="cardio-min" value="${esc(E.cardioHecho[hoy()].minutos ?? '')}" placeholder="${total ? Math.round(total / 60) : ''}" aria-label="Minutos de cardio (opcional)"></label><label class="pequeno">Distancia <input type="text" inputmode="decimal" id="cardio-km" value="${esc(coma(E.cardioHecho[hoy()].distancia_km ?? ''))}" placeholder="km" aria-label="Distancia en kilómetros (opcional)"> km</label></div>` : ''}
     ${porRpe ? `<div class="tramos-cardio" aria-hidden="true">${tramos.map(t => `<i style="flex:${t.seg}"><b>${Math.round(t.seg / 60)}′</b><span>RPE ${esc(t.rpe)}</span></i>`).join('')}</div>` : ''}
   </section>`;
 }
@@ -345,6 +347,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
   const etiq = etiquetas(filas);
   const u = unidadPeso();
   const seg = e.unidad === 'seg';
+  const dist = e.unidad === 'm'; // peso y distancia, como la caminata del granjero
   // Qué es el peso anotado: la ayuda de la máquina (asistidos) o lo que se agrega al cuerpo (lastre).
   const ejCat = indice.porId.get(e.ejercicio_id);
   const queEs = esAsistido(ejCat) ? 'ayuda' : conLastre(ejCat) ? 'lastre' : '';
@@ -357,15 +360,17 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     // En gris va lo que se guarda si marcas sin escribir: lo que ya levantaste hoy, el plan o la vez anterior.
     const kgGris = trabajo ? (kgHoy ?? e.carga_kg ?? prev?.carga_kg ?? null) : null;
     if (trabajo && r.kg != null) kgHoy = r.kg;
-    const repsGris = seg ? e.reps_min : trabajo ? e.reps_max : null;
+    const repsGris = seg ? e.reps_min : trabajo || dist ? e.reps_max : null;
     const rir = r.rir ?? (r.rpe != null ? Math.max(0, 10 - r.rpe) : null);
-    const antes = prev ? (seg ? ((prev.duracion_seg ?? prev.reps) != null ? `${prev.duracion_seg ?? prev.reps} s` : '') : `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.reps ?? ''}`) : '';
-    return `<div class="serie tipo-${t}${r.hecho ? ' hecha' : ''}${seg ? ' seg' : ''}">
+    const antes = prev ? (seg ? ((prev.duracion_seg ?? prev.reps) != null ? `${prev.duracion_seg ?? prev.reps} s` : '')
+      : dist ? `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.distancia_m != null ? `${prev.distancia_m} m` : ''}`
+      : `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.reps ?? ''}`) : '';
+    return `<div class="serie tipo-${t}${r.hecho ? ' hecha' : ''}${seg ? ' seg' : dist ? ' dist' : ''}">
       <button type="button" class="tipo-serie" data-tipo-serie="${id}" data-i="${i}" aria-label="Serie ${etiq[i]}, ${TIPOS_SERIE[t].nombre.toLowerCase()}. Cambiar el tipo">${etiq[i]}</button>
       <span class="antes num">${esc(antes)}</span>
       ${seg ? '' : `<input type="text" inputmode="decimal" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="kg" value="${esc(coma(enUnidad(r.kg)))}" placeholder="${esc(coma(enUnidad(kgGris)))}" aria-label="${u === 'lb' ? 'Libras' : 'Kilos'}${queEs ? ` de ${queEs}` : ''}, serie ${etiq[i]}">`}
-      <input type="text" inputmode="numeric" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="reps" value="${esc(r.reps ?? '')}" placeholder="${esc(repsGris ?? '')}" aria-label="${seg ? 'Segundos' : 'Repeticiones'}, serie ${etiq[i]}">
-      ${seg ? (r.hecho ? '<span aria-hidden="true"></span>' : `<button type="button" class="crono-serie" data-crono="${id}" data-i="${i}" aria-label="Contar los segundos de la serie ${etiq[i]}">${icono('reloj', 'icono')}</button>`) : trabajo ? cajaRir(id, i, rir, e.rir, etiq[i]) : '<span aria-hidden="true"></span>'}
+      <input type="text" inputmode="numeric" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="reps" value="${esc(r.reps ?? '')}" placeholder="${esc(repsGris ?? '')}" aria-label="${seg ? 'Segundos' : dist ? 'Metros' : 'Repeticiones'}, serie ${etiq[i]}">
+      ${seg ? (r.hecho ? '<span aria-hidden="true"></span>' : `<button type="button" class="crono-serie" data-crono="${id}" data-i="${i}" aria-label="Contar los segundos de la serie ${etiq[i]}">${icono('reloj', 'icono')}</button>`) : dist ? '' : trabajo ? cajaRir(id, i, rir, e.rir, etiq[i]) : '<span aria-hidden="true"></span>'}
       <button type="button" class="check" data-hecho="${id}" data-i="${i}" aria-pressed="${Boolean(r.hecho)}" aria-label="Serie ${etiq[i]} hecha">${r.hecho ? '✓' : ''}</button>
       ${(r.consejo || r.record?.length) && trabajo ? `<p class="consejo ${r.consejo?.tipo || 'bien'}">${r.record?.length ? '<span class="chip-record">Récord</span> ' : ''}${esc(r.consejo?.texto || '')}</p>` : ''}</div>`;
   }).join('');
@@ -379,14 +384,14 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     <div class="ej-cab">
       ${ej ? `<button type="button" class="ej-abrir" data-ficha="${e.ejercicio_id}" aria-label="${esc(nombre)}: cómo se hace y por qué">${miniatura(e.ejercicio_id)}</button>` : `<span class="miniatura vacia"></span>`}
       <div class="ej-textos"><span class="nombre">${g ? `<span class="chip-ss">${etiquetaSuperserie(g)}</span>` : ''}${esc(nombre)}</span>
-        <span class="ej-sub num">${esc(`${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${seg ? ' s' : ''} · RIR ${e.rir}${e.carga_kg ? ` · ${peso(e.carga_kg)}${queEs ? ` de ${queEs}` : ''}` : ''} · ${descTexto}`)}</span>
+        <span class="ej-sub num">${esc(`${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${sufijo(e)}${dist ? '' : ` · RIR ${e.rir}`}${e.carga_kg ? ` · ${peso(e.carga_kg)}${queEs ? ` de ${queEs}` : ''}` : ''} · ${descTexto}`)}</span>
         ${ej ? '' : '<span class="chip">Indicado por tu profesional</span>'}
         ${ej && E.notasFijas?.[e.ejercicio_id] ? `<button type="button" class="nota-fija" data-nota-fija="${id}" aria-label="Nota fija: ${esc(E.notasFijas[e.ejercicio_id])}. Editar">${icono('lapiz', 'icono icono-chico')}<span>${esc(E.notasFijas[e.ejercicio_id])}</span></button>` : ''}</div>
       ${ej ? `<button type="button" class="boton-icono" data-ficha="${e.ejercicio_id}" aria-label="Cómo se hace y por qué">${icono('info')}</button>` : ''}
       <button type="button" class="boton-icono" data-mas="${id}" aria-label="Más opciones de ${esc(nombre)}">${icono('puntos')}</button>
     </div>
-    <div class="tabla-series${seg ? ' seg' : ''}">
-      <div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${queEs || u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : 'Reps'}</span>${seg ? '<span aria-hidden="true"></span>' : '<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el RIR">RIR</button>'}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>
+    <div class="tabla-series${seg ? ' seg' : dist ? ' dist' : ''}">
+      <div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${queEs || u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : dist ? 'Metros' : 'Reps'}</span>${seg ? '<span aria-hidden="true"></span>' : dist ? '' : '<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el RIR">RIR</button>'}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>
       ${filasHtml}
     </div>
     <div class="fila-agregar"><button type="button" class="boton agregar-serie" data-agregar="${id}">+ Serie</button>${seg ? '' : `<button type="button" class="boton agregar-serie" data-calentar="${id}">+ Calentamiento</button>`}</div>
@@ -488,6 +493,9 @@ function enlazar(ir, dia) {
     (E.cardioHecho ||= {})[f] = { texto: dia.cardio, hecho: !(antes?.texto === dia.cardio && antes.hecho) };
     guardar(); repintar();
   });
+  // Opcional, como el cardio por distancia y tiempo de Hevy: los minutos reales y los kilómetros.
+  $('cardio-min')?.addEventListener('input', ev => { E.cardioHecho[f].minutos = numero(ev.target.value); guardar(); });
+  $('cardio-km')?.addEventListener('input', ev => { E.cardioHecho[f].distancia_km = numero(ev.target.value); guardar(); });
   const ejercicioDe = id => { const k = dia.ejercicios.findIndex((x, j) => idDe(x, j) === id); return { e: dia.ejercicios[k], k }; };
   const lugar = (R().lugares || [])[0];
   /** Consejo para la serie siguiente (nucleo/series.js), según reps, esfuerzo y fallo. Solo en las de trabajo. */
@@ -680,8 +688,7 @@ function enlazar(ir, dia) {
     // Récord, como en Hevy: contra todo lo anterior de ese ejercicio y las series previas de hoy.
     let recs = [];
     if (r.hecho && deTrabajo(t) && e.ejercicio_id) {
-      const seg = e.unidad === 'seg';
-      const comoSerie = x => ({ carga_kg: seg ? null : x.kg ?? null, reps: seg ? null : x.reps ?? null, duracion_seg: seg ? x.reps ?? null : null, rir: x.rir ?? (x.rpe != null ? 10 - x.rpe : null) });
+      const comoSerie = x => ({ ...camposGuardados(e, x), rir: x.rir ?? (x.rpe != null ? 10 - x.rpe : null) });
       // Lo anterior incluye otra sesión de hoy ya guardada (por ejemplo, una de Hevy en la mañana).
       const previas = [...seriesAnotadas(E.sesiones, {}).filter(x => x.ejercicio_id === e.ejercicio_id && x.fecha <= f),
         ...lista.slice(0, i).filter(x => x?.hecho && deTrabajo(tipoDe(x))).map(comoSerie)];
@@ -749,7 +756,7 @@ function enlazar(ir, dia) {
         ...(ej ? [{ valor: 'nota-fija', icono: icono('lapiz'), nombre: E.notasFijas?.[e.ejercicio_id] ? 'Editar la nota fija' : 'Nota fija (aparece siempre)' }] : []),
         { valor: 'descanso', icono: icono('reloj'), nombre: `Descanso: ${mmss(desc)}${g ? ' (al terminar la vuelta)' : ''}` },
         ...(ej ? [{ valor: 'superserie', icono: icono('cadena'), nombre: g ? `Superserie ${g.letra}` : 'Hacer superserie' }] : []),
-        ...(ej && e.unidad !== 'seg' ? [{ valor: 'prioriza', icono: icono('objetivo'), nombre: 'Si no me salen las repeticiones' }] : []),
+        ...(ej && porReps(e) ? [{ valor: 'prioriza', icono: icono('objetivo'), nombre: 'Si no me salen las repeticiones' }] : []),
         ...(ej ? [{ valor: 'video', icono: icono('video'), nombre: 'Ver videos de técnica' }] : []),
         ...(dia.ejercicios.length > 1 ? [{ valor: 'ordenar', icono: icono('ajustes'), nombre: 'Ordenar los ejercicios de hoy' }] : []),
         { valor: 'quitar-hoy', icono: icono('cerrar'), nombre: 'Quitar de esta sesión', peligro: true },
@@ -902,7 +909,7 @@ function enlazar(ir, dia) {
       for (const r of filasDe(f, e, k).filter(x => x.hecho)) {
         const tipo = tipoParaGuardar(r);
         series.push({ orden: orden++, ejercicio_id: e.ejercicio_id, ejercicio_nombre: e.nombre || indice.porId.get(e.ejercicio_id)?.nombre || id, tipo,
-          carga_kg: e.unidad === 'seg' ? null : r.kg ?? null, reps: e.unidad === 'seg' ? null : r.reps ?? null, duracion_seg: e.unidad === 'seg' ? r.reps ?? null : null,
+          ...camposGuardados(e, r),
           rpe: r.rpe ?? null, rir: tipo === 'fallo' ? 0 : r.rpe != null ? 10 - r.rpe : null });
       }
       const n = (E.notas[f] || {})[id];

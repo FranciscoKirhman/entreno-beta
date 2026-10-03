@@ -20,7 +20,7 @@ export function validarRespaldo(r, ids = null) {
   const ejercicio = e => {
     exigir(objeto(e) && numero(e.series, 1, 100) && numero(e.reps_min, 0, 3600) && numero(e.reps_max, e.reps_min, 3600) && numero(e.descanso_seg, 0, 3600), 'una prescripción inválida');
     exigir(e.ejercicio_id === null && e.indicacion === true || typeof e.ejercicio_id === 'string' && (!ids || ids.has(e.ejercicio_id)), 'un ejercicio desconocido');
-    exigir(numero(e.rir, 0, 5) && [undefined, 'reps', 'seg'].includes(e.unidad), 'un esfuerzo o unidad inválida');
+    exigir(numero(e.rir, 0, 5) && [undefined, 'reps', 'seg', 'm'].includes(e.unidad), 'un esfuerzo o unidad inválida');
     exigir(e.carga_kg == null || numero(e.carga_kg, 0, 1000), 'una carga inválida');
   };
   for (const k of ['lugares', 'lesiones', 'favoritos', 'prohibidos', 'musculos_prioridad', 'dias_no_puedo', 'cardio_actual']) exigir(r.estado.respuestas[k] === undefined || Array.isArray(r.estado.respuestas[k]), `un campo de perfil ${k} inválido`);

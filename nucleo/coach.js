@@ -3,6 +3,7 @@
 // "hoy no quiero piernas", máquina ocupada, poco tiempo, dormir mal, dolor, "¿por qué?" y "¿qué me toca?".
 // Nada cambia el plan sin preguntar: primero se muestra cómo queda la sesión de hoy o la semana, y se aplica solo
 // cuando la persona confirma (y elige si es solo hoy o desde hoy en adelante, cuando corresponde).
+import { sufijo } from './unidades.js';
 import { normalizar } from './catalogo.js';
 import { marcarFaltada, moverSesion, intercambiar, opcionesParaHoy, sesionDe, sumarDias, diaSemana, nombreDia, familia } from './agenda.js';
 import { alternativas, recortarSesion } from './checkin.js';
@@ -177,7 +178,7 @@ function opcionesAlternativa(ctx, fecha, id) {
 // ── Cambios al plan: primero la vista previa, después la confirmación ──────────────
 const CAMBIAN_PLAN = new Set(['intercambiar', 'mover', 'falte', 'descanso_activo', 'ajustar_hoy', 'recortar_hoy', 'reemplazar_hoy', 'quitar_zona_hoy']);
 const fechaCorta = f => `${nombreDia(f)} ${Number(f.slice(8))}`;
-const prescCorta = e => `${e.nombre} ${e.series}×${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${e.unidad === 'seg' ? ' s' : ''}`;
+const prescCorta = e => `${e.nombre} ${e.series}×${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${sufijo(e)}`;
 const finDeSemana = f => sumarDias(f, (7 - diaSemana(f)) % 7);
 const movidas = cambios => cambios.map(c => (c.tipo === 'intercambiar' ? `el ${nombreDia(c.fechas[0])} y el ${nombreDia(c.fechas[1])} se cambian` : `${c.foco} del ${nombreDia(c.de)} al ${fechaCorta(c.a)}`));
 

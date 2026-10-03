@@ -49,7 +49,7 @@ export function validarPlan(plan, { derivados: d, respuestas: r, indice, hoy }) 
       if (cargaZonaBloqueada(ej, bloqueadas)) err('zona_lesionada', `${ej.nombre} carga ${ej.carga_articular.filter(a => bloqueadas.has(a)).join(', ')}, que está lesionado.`, en);
       if (!nivelAlcanza(d.nivel, ej.nivel_minimo)) err('nivel', `${ej.nombre} es para nivel ${ej.nivel_minimo}.`, en);
       if (!Number.isInteger(e.series) || e.series < 1 || e.series > 10) err('series', `${ej.nombre}: ${e.series} series no es válido (1 a 10).`, en);
-      const tope = e.unidad === 'seg' ? 180 : 30;
+      const tope = e.unidad === 'seg' ? 180 : e.unidad === 'm' ? 400 : 30;
       if (!(e.reps_min >= 1 && e.reps_max >= e.reps_min && e.reps_max <= tope)) err('repeticiones', `${ej.nombre}: rango ${e.reps_min}–${e.reps_max} no es válido.`, en);
       if (!(e.rir >= rirMinimo && e.rir <= 5)) err('reserva', `${ej.nombre}: ${e.rir} repeticiones de reserva; el mínimo para ti es ${rirMinimo}.`, en);
       if (e.carga_kg != null) {

@@ -25,6 +25,12 @@ export function ajustarEjercicio({ objetivo: o, hechas, semanas = [], subioRecie
   const mantener = (regla, motivo) => ({ accion: 'mantener', carga_kg: carga, reps_min: o.reps_min, reps_max: o.reps_max, regla, motivo });
   if (!hechas.length) return mantener('sin_registro', 'No hay series registradas esta semana.');
   if (o.unidad === 'seg') return mantener('isometrico', 'Los isométricos progresan en segundos dentro del rango.');
+  // Transporte (metros): con todas las series en el tope de metros se sube el peso; si no, más metros con el mismo.
+  if (o.unidad === 'm') {
+    const alTope = hechas.length >= o.series && hechas.slice(0, o.series).every(s => s.reps >= o.reps_max);
+    if (alTope && incremento && carga) return { accion: 'subir_carga', carga_kg: carga + incremento, reps_min: o.reps_min, reps_max: o.reps_max, regla: 'doble_progresion', motivo: `Todas las series en ${o.reps_max} metros: sube ${kg(incremento)}.` };
+    return mantener('metros_primero', 'Mismo peso y unos metros más hasta completar el tope en todas las series.');
+  }
   if (!carga && incremento) return mantener('sin_carga', 'No anotaste el peso: anótalo en la próxima sesión para poder ajustarlo.');
 
   const completas = hechas.length >= o.series;

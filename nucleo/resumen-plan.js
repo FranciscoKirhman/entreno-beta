@@ -44,7 +44,7 @@ export function resumenPlan({ plan, respuestas: r, derivados: d, indice, hoy }) 
 
   // Objetivo: el rango de repeticiones y la reserva que quedaron.
   const obj = OBJETIVOS[d.objetivo] || OBJETIVOS.salud;
-  const conReps = todos.filter(t => t.e.unidad !== 'seg');
+  const conReps = todos.filter(t => (t.e.unidad || 'reps') === 'reps');
   const principales = conReps.filter(t => t.e.prioridad === 1);
   const base = principales.length ? principales : conReps;
   const repsTxt = base.length ? `${rango(Math.min(...base.map(t => t.e.reps_min)), Math.max(...base.map(t => t.e.reps_max)))} repeticiones` : null;

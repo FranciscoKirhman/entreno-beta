@@ -30,7 +30,7 @@ export function reservaDe(s) {
 export function prioridadEsfuerzo(e, ej, d = {}, zonasConMolestia = []) {
   const grande = ej?.tipo === 'compuesto';
   const cuidado = d.nivel === 'principiante' || (d.rir_minimo ?? 0) >= 3 || (ej?.carga_articular || []).some(a => zonasConMolestia.includes(a));
-  if (grande || cuidado || e.unidad === 'seg') {
+  if (grande || cuidado || e.unidad === 'seg' || e.unidad === 'm') {
     return { prioriza: 'rir', texto: `Prioriza la reserva: deja ${e.rir} repeticiones sin hacer. Si con ${e.rir} en reserva no llegas a ${e.reps_min}, para ahí y no fuerces; es mejor una repetición menos que llegar al fallo.` };
   }
   return { prioriza: 'reps', texto: `Prioriza las repeticiones: completa ${e.reps_min} a ${e.reps_max} aunque te quede menos reserva. En la última serie puedes llegar cerca del fallo.` };
@@ -44,7 +44,7 @@ export function prioridadEsfuerzo(e, ej, d = {}, zonasConMolestia = []) {
  */
 export function consejoSerie(e, s, incremento = null, { asistido = false } = {}) {
   const reps = Number(s.reps);
-  if (!reps || e.unidad === 'seg') return null;
+  if (!reps || e.unidad === 'seg' || e.unidad === 'm') return null;
   const r = reservaDe(s);
   const ajuste = incremento ? ` (${String(incremento).replace('.', ',')} kg)` : '';
   // En los asistidos el peso es ayuda: costar más es subir la ayuda, y progresar es bajarla.

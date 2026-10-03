@@ -62,7 +62,8 @@ export function explicarEjercicio(p) {
   agregar(`¿Por qué ${e.series} series?`, 'Las series de cada ejercicio suman las series semanales de cada músculo, que es lo que más pesa para ganar músculo. Se parte en un rango moderado y se sube solo si te recuperas bien.', seccion(evidencia, P, 'Suficientes series'));
 
   // Repeticiones o segundos
-  if (e.unidad === 'seg') agregar(`¿Por qué ${e.reps_min} a ${e.reps_max} segundos?`, 'Es un ejercicio de estabilidad: lo que cuenta es sostener la posición con buena técnica, no cuántas veces se repite.', null);
+  if (e.unidad === 'm') agregar(`¿Por qué ${e.reps_min} a ${e.reps_max} metros?`, 'Es un ejercicio de transporte: lo que cuenta es caminar firme con el peso, sin que se te caiga ni te inclines, la distancia indicada.', null);
+  else if (e.unidad === 'seg') agregar(`¿Por qué ${e.reps_min} a ${e.reps_max} segundos?`, 'Es un ejercicio de estabilidad: lo que cuenta es sostener la posición con buena técnica, no cuántas veces se repite.', null);
   else agregar(`¿Por qué ${e.reps_min} a ${e.reps_max} repeticiones?`, e.reps_max <= 6
     ? 'Rangos bajos con carga alta, porque tu objetivo incluye fuerza máxima.'
     : 'Cargas diferentes pueden favorecer una hipertrofia similar en adultos sanos cuando el esfuerzo es suficiente. Los estudios no demuestran menor daño articular para este rango.', seccion(evidencia, P, 'Pesado o liviano'));
@@ -79,7 +80,8 @@ export function explicarEjercicio(p) {
   if (e.descanso_seg) agregar(`¿Por qué descansar ${String(Math.round(e.descanso_seg / 60 * 10) / 10).replace('.', ',')} minutos?`, 'Con descansos cortos la serie siguiente sale con menos repeticiones.', seccion(evidencia, P, 'Descansar'));
 
   // Carga y progresión
-  if (e.unidad !== 'seg') agregar('¿Cuándo subo el peso?', 'Cuando completes todas las series en el tope de repeticiones con la reserva indicada. Antes, apunta a una repetición más con el mismo peso.', seccion(evidencia, P, 'Progresar de a poco'));
+  if (e.unidad === 'm') agregar('¿Cuándo subo el peso?', 'Cuando completes todas las series en el tope de metros sin soltar ni parar. Antes, apunta a unos metros más con el mismo peso.', seccion(evidencia, P, 'Progresar de a poco'));
+  else if (e.unidad !== 'seg') agregar('¿Cuándo subo el peso?', 'Cuando completes todas las series en el tope de repeticiones con la reserva indicada. Antes, apunta a una repetición más con el mismo peso.', seccion(evidencia, P, 'Progresar de a poco'));
 
   // Descarga
   if (plan && dia && dia.semana === plan.semana_descarga) agregar('¿Por qué esta semana es más liviana?', 'Es la semana de descarga: la mitad de las series y más reserva, para que la fatiga baje y llegues mejor al próximo bloque.', seccion(evidencia, P, 'Semanas de descarga'));

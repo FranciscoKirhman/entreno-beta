@@ -51,6 +51,9 @@ function textoMal(m) {
 function textoSeries(xs) {
   const conReps = xs.filter(x => x.reps != null);
   if (conReps.length) return seriesTexto(conReps);
+  // Peso y distancia (caminata del granjero) o cardio con distancia: "24 kg × 30 m".
+  const conDistancia = xs.filter(x => x.distancia_m != null);
+  if (conDistancia.length) return conDistancia.map(x => `${x.carga_kg ? `${peso(x.carga_kg)} × ` : ''}${x.distancia_m >= 1000 ? `${String(Math.round(x.distancia_m / 100) / 10).replace('.', ',')} km` : `${x.distancia_m} m`}`).join(', ');
   const seg = xs.reduce((a, x) => a + (Number(x.duracion_seg) || 0), 0);
   return seg ? tiempo(seg) : `${xs.length} ${xs.length === 1 ? 'serie' : 'series'}`;
 }

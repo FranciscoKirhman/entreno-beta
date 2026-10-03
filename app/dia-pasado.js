@@ -33,18 +33,18 @@ export function vistaDiaPasado(ir, { id = null } = {}) {
   const n = x => coma(enUnidad(x));
 
   const tarjeta = (e, k) => {
-    const seg = e.unidad === 'seg';
+    const seg = e.unidad === 'seg', dist = e.unidad === 'm';
     const p = e.plan;
-    const pista = p ? `Plan: ${p.series} × ${p.reps_min}${p.reps_max !== p.reps_min ? ` a ${p.reps_max}` : ''}${seg ? ' s' : ''}${p.carga_kg ? ` · ${n(p.carga_kg)} ${u}` : ''}` : '';
+    const pista = p ? `Plan: ${p.series} × ${p.reps_min}${p.reps_max !== p.reps_min ? ` a ${p.reps_max}` : ''}${seg ? ' s' : dist ? ' m' : ''}${p.carga_kg ? ` · ${n(p.carga_kg)} ${u}` : ''}` : '';
     return `<section class="tarjeta ej-pasado">
       <div class="cab-pasado">${e.ejercicio_id ? miniatura(e.ejercicio_id) : '<span class="miniatura vacia"></span>'}<div><strong>${esc(e.nombre)}</strong>${pista ? `<span class="pequeno suave">${esc(pista)}</span>` : ''}</div>
         <button type="button" class="boton-icono" data-quitar-ej="${k}" aria-label="Quitar ${esc(e.nombre)}">${icono('cerrar')}</button></div>
-      <div class="filas-pasado${seg ? ' seg' : ''}">
-        <span class="cab">Serie</span>${seg ? '' : `<span class="cab">${u}</span>`}<span class="cab">${seg ? 'Seg' : 'Reps'}</span>${seg ? '' : '<span class="cab">RIR</span>'}<span></span>
+      <div class="filas-pasado${seg ? ' seg' : dist ? ' dist' : ''}">
+        <span class="cab">Serie</span>${seg ? '' : `<span class="cab">${u}</span>`}<span class="cab">${seg ? 'Seg' : dist ? 'Metros' : 'Reps'}</span>${seg || dist ? '' : '<span class="cab">RIR</span>'}<span></span>
         ${e.series.map((s, i) => `<button type="button" class="tipo-serie tipo-${s.tipo === 'efectiva' ? 'normal' : s.tipo}" data-tipo="${k}.${i}" aria-label="Serie ${i + 1}, tocar para cambiar el tipo">${TIPO[s.tipo] || i + 1}</button>
           ${seg ? '' : `<input type="text" inputmode="decimal" autocomplete="off" data-c="kg" data-k="${k}" data-i="${i}" value="${esc(n(s.kg))}" placeholder="${esc(n(p?.carga_kg))}" aria-label="${u === 'lb' ? 'Libras' : 'Kilos'}, serie ${i + 1}">`}
-          <input type="text" inputmode="numeric" autocomplete="off" data-c="reps" data-k="${k}" data-i="${i}" value="${esc(s.reps ?? '')}" placeholder="${esc(seg ? p?.reps_min ?? '' : p?.reps_max ?? '')}" aria-label="${seg ? 'Segundos' : 'Repeticiones'}, serie ${i + 1}">
-          ${seg ? '' : `<select data-c="rir" data-k="${k}" data-i="${i}" aria-label="RIR, serie ${i + 1}"><option value="">·</option>${RIR.map(r => `<option value="${r}"${s.rir === r ? ' selected' : ''}>${r}</option>`).join('')}</select>`}
+          <input type="text" inputmode="numeric" autocomplete="off" data-c="reps" data-k="${k}" data-i="${i}" value="${esc(s.reps ?? '')}" placeholder="${esc(seg ? p?.reps_min ?? '' : p?.reps_max ?? '')}" aria-label="${seg ? 'Segundos' : dist ? 'Metros' : 'Repeticiones'}, serie ${i + 1}">
+          ${seg || dist ? '' : `<select data-c="rir" data-k="${k}" data-i="${i}" aria-label="RIR, serie ${i + 1}"><option value="">·</option>${RIR.map(r => `<option value="${r}"${s.rir === r ? ' selected' : ''}>${r}</option>`).join('')}</select>`}
           <button type="button" class="boton-icono" data-quitar-serie="${k}.${i}" aria-label="Quitar la serie ${i + 1}">${icono('cerrar', 'icono icono-chico')}</button>`).join('')}
       </div>
       <button type="button" class="boton agregar-serie" data-mas-serie="${k}">+ Serie</button>
@@ -120,8 +120,9 @@ export function vistaDiaPasado(ir, { id = null } = {}) {
     $('p-resultados').innerHTML = xs.map(e => `<li><button type="button" class="fila-ejercicio" data-agregar-ej="${e.id}">${miniatura(e.id)}<span><span class="nombre">${esc(e.nombre)}</span></span>${icono('mas', 'icono chevron')}</button></li>`).join('');
     $('p-resultados').querySelectorAll('[data-agregar-ej]').forEach(x => x.onclick = () => {
       const ej = indice.porId.get(x.dataset.agregarEj);
-      const seg = ej.tipo === 'cardio' || ej.tipo === 'movilidad' || prescripcion(ej, 2, D()).unidad === 'seg';
-      b.ejercicios.push({ ejercicio_id: ej.id, nombre: ej.nombre, unidad: seg ? 'seg' : 'reps', series: [nuevaSerie(), nuevaSerie(), nuevaSerie()] });
+      const p = prescripcion(ej, 2, D());
+      const unidad = ej.tipo === 'cardio' || ej.tipo === 'movilidad' ? 'seg' : p.unidad || 'reps';
+      b.ejercicios.push({ ejercicio_id: ej.id, nombre: ej.nombre, unidad, series: [nuevaSerie(), nuevaSerie(), nuevaSerie()] });
       buscar = ''; guardar(); repintar();
     });
   };

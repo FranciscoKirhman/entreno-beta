@@ -7,12 +7,12 @@ import { porSesion, medidasCon, desdePeriodo, ritmo, PERIODOS } from '../nucleo/
 import { recordsPorRepeticiones } from '../nucleo/records.js';
 import { lineaSimple } from './grafico.js';
 
-const NOMBRE = { peso: 'Carga más alta', e1rm: 'Máximo estimado', volumen: 'Volumen', reps: 'Repeticiones', duracion: 'Tiempo' };
+const NOMBRE = { peso: 'Carga más alta', e1rm: 'Máximo estimado', volumen: 'Volumen', reps: 'Repeticiones', duracion: 'Tiempo', distancia: 'Distancia' };
 const elegido = new Map(); // por ejercicio: {medida, periodo}, mientras la app está abierta
 let historialCompleto = false;
 
 const num = x => coma(Math.round(x * 10) / 10);
-const campoRitmo = (filas, asistido) => (asistido ? 'peso' : filas.some(f => f.e1rm != null) ? 'e1rm' : filas.some(f => f.reps != null) ? 'reps' : 'duracion');
+const campoRitmo = (filas, asistido) => (asistido ? 'peso' : filas.some(f => f.e1rm != null) ? 'e1rm' : filas.some(f => f.reps != null) ? 'reps' : filas.some(f => f.peso != null) ? 'peso' : 'duracion');
 
 /** El ritmo en una frase. corto: para la lista de Progreso. */
 export function textoRitmo(r, { asistido = false, corto = false } = {}) {
@@ -46,6 +46,7 @@ function textoPunto(f, medida) {
     case 'e1rm': return `${peso(f.e1rm)} estimado`;
     case 'volumen': return volumenTexto(f.volumen);
     case 'reps': return `${f.reps} repeticiones`;
+    case 'distancia': return `${f.distancia} m`;
     default: return `${f.duracion} s`;
   }
 }
@@ -57,11 +58,11 @@ function escala(valores, medida) {
   if (lo === hi) { lo -= Math.max(1, lo * 0.1); hi += Math.max(1, hi * 0.1); }
   const margen = (hi - lo) * 0.12;
   lo = Math.max(0, lo - margen); hi += margen;
-  const etiqueta = v => (medida === 'reps' ? `${Math.round(v)}` : medida === 'duracion' ? `${Math.round(v)} s` : medida === 'volumen' ? Math.round(v).toLocaleString('es-CL') : `${coma(Math.round(v * 10) / 10)} ${u}`);
+  const etiqueta = v => (medida === 'reps' ? `${Math.round(v)}` : medida === 'duracion' ? `${Math.round(v)} s` : medida === 'distancia' ? `${Math.round(v)} m` : medida === 'volumen' ? Math.round(v).toLocaleString('es-CL') : `${coma(Math.round(v * 10) / 10)} ${u}`);
   // Líneas en números redondos (1, 2, 2,5 o 5 por una potencia de 10), unas tres en la altura del gráfico.
   const bruto = (hi - lo) / 3, base = 10 ** Math.floor(Math.log10(bruto));
   let paso = [1, 2, 2.5, 5, 10].map(k => k * base).find(k => k >= bruto);
-  if (medida === 'reps' || medida === 'duracion') paso = Math.max(1, Math.round(paso)); // sin medias repeticiones
+  if (['reps', 'duracion', 'distancia'].includes(medida)) paso = Math.max(1, Math.round(paso)); // sin medias repeticiones
   const marcas = [];
   for (let v = Math.ceil(lo / paso) * paso; v <= hi + 1e-9; v += paso) marcas.push({ valor: v, texto: etiqueta(v) });
   return { min: lo, max: hi, marcas };
@@ -89,7 +90,7 @@ export function progresoEjercicioHtml(id, { asistido = false } = {}) {
   const nombre = m => (asistido && m === 'peso' ? 'Ayuda' : NOMBRE[m]);
   const sesiones = [...filas].reverse();
   const u = unidadPeso();
-  const textoSesion = f => (f.series.some(s => Number(s.carga_kg) > 0) ? seriesTexto(f.series) : f.series.map(s => (s.duracion_seg ? `${s.duracion_seg} s` : s.reps ?? '?')).join(', '));
+  const textoSesion = f => (f.series.some(s => s.distancia_m != null) ? f.series.map(s => `${s.carga_kg ? `${peso(s.carga_kg)} × ` : ''}${s.distancia_m ?? '?'} m`).join(', ') : f.series.some(s => Number(s.carga_kg) > 0) ? seriesTexto(f.series) : f.series.map(s => (s.duracion_seg ? `${s.duracion_seg} s` : s.reps ?? '?')).join(', '));
   return `<section class="tarjeta" id="progreso-ejercicio">
     <h2>Tu progreso</h2>
     <p class="pequeno">${esc(textoRitmo(r, { asistido }) || 'Con 3 sesiones en al menos 2 semanas vas a ver aquí tu ritmo de progreso.')}</p>

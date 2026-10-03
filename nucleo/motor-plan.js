@@ -111,6 +111,8 @@ export function prescripcion(ej, prioridad, d) {
   if (suave && !compuesto) series = 2;
   const rir = Math.max(compuesto ? d.rir_objetivo.compuestos : d.rir_objetivo.aislamiento, d.rir_minimo);
   const descanso = ej.tipo === 'core' ? 60 : !compuesto ? 75 : prioridad === 1 ? (fuerza ? 180 : 150) : 120;
+  // Transporte con peso (caminata del granjero): se mide en metros, con descanso de accesorio.
+  if (ej.patron === 'transporte') return { series: suave ? 2 : 3, reps_min: 20, reps_max: 40, unidad: 'm', rir: Math.min(5, rir), descanso_seg: 90 };
   return { series, reps_min: reps[0], reps_max: reps[1], unidad: ISOMETRICOS.has(ej.id) ? 'seg' : 'reps', rir: Math.min(5, rir), descanso_seg: descanso };
 }
 
@@ -122,7 +124,8 @@ export function duracionEstimada(ejercicios, calentamientoMin = 8) {
   let seg = calentamientoMin * 60;
   const g = grupos(ejercicios);
   ejercicios.forEach((e, i) => {
-    const trabajo = e.unidad === 'seg' ? (e.reps_min + e.reps_max) / 2 : ((e.reps_min + e.reps_max) / 2) * 4;
+    // Segundos tal cual; metros a 1 metro por segundo (caminando con peso); repeticiones a 4 segundos cada una.
+    const trabajo = e.unidad === 'seg' || e.unidad === 'm' ? (e.reps_min + e.reps_max) / 2 : ((e.reps_min + e.reps_max) / 2) * 4;
     seg += e.series * (trabajo + (g[i] ? 15 : e.descanso_seg)) + 60;
     if (g[i]?.pos === 1) {
       const vueltas = Math.max(...g[i].miembros.map(m => ejercicios[m].series));

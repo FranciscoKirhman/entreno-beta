@@ -38,7 +38,7 @@ export function resumenSesion({ sesion, dia = null, historial = [], asistidos = 
   const mal = [];
   for (const g of porEjercicio) {
     const p = g.plan, conPeso = !asistidos.has(g.ejercicio_id) && g.series.some(s => n(s.carga_kg) > 0);
-    if (p && p.unidad !== 'seg') {
+    if (p && (p.unidad || 'reps') === 'reps') {
       const reps = g.series.map(s => n(s.reps)).filter(x => x != null);
       if (g.series.length >= p.series && reps.length && reps.every(r => r >= p.reps_max)) bien.push({ tipo: 'rango_completo', ejercicio_id: g.ejercicio_id, reps_max: p.reps_max });
       const baja = Math.min(...reps);

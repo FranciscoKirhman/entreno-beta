@@ -3,6 +3,8 @@
 // kg va siempre en kilos; en las series por tiempo, reps son segundos. Al guardar se arma la sesión con el mismo
 // formato que guarda Hoy, así el historial, los récords, el resumen y la cuenta la tratan igual.
 
+import { unidadDe, camposGuardados } from './unidades.js';
+
 const vacia = () => ({ kg: null, reps: null, rir: null, tipo: 'efectiva' });
 
 /** Un borrador nuevo para una fecha: con los ejercicios del plan de ese día (series vacías), o vacío. */
@@ -10,7 +12,7 @@ export function borradorNuevo(fecha, dia = null) {
   return {
     fecha, titulo: dia?.foco || 'Sesión', duracion_min: null, comentario: '',
     ejercicios: (dia?.ejercicios || []).filter(e => e.ejercicio_id).map(e => ({
-      ejercicio_id: e.ejercicio_id, nombre: e.nombre, unidad: e.unidad === 'seg' ? 'seg' : 'reps',
+      ejercicio_id: e.ejercicio_id, nombre: e.nombre, unidad: unidadDe(e),
       plan: { series: e.series, reps_min: e.reps_min, reps_max: e.reps_max, rir: e.rir, carga_kg: e.carga_kg ?? null },
       series: Array.from({ length: e.series || 1 }, vacia),
     })),
@@ -23,8 +25,8 @@ export function borradorDeSesion(s, indice) {
   for (const x of s.series || []) {
     const clave = x.ejercicio_id || x.ejercicio_nombre;
     let g = ejercicios.find(e => (e.ejercicio_id || e.nombre) === clave);
-    if (!g) ejercicios.push(g = { ejercicio_id: x.ejercicio_id || null, nombre: x.ejercicio_nombre || indice?.porId.get(x.ejercicio_id)?.nombre || 'Ejercicio', unidad: x.duracion_seg != null && x.reps == null ? 'seg' : 'reps', series: [] });
-    g.series.push({ kg: x.carga_kg ?? null, reps: g.unidad === 'seg' ? x.duracion_seg ?? null : x.reps ?? null, rir: x.rir ?? (x.rpe != null ? Math.max(0, 10 - x.rpe) : null), tipo: x.tipo || 'efectiva', distancia_m: x.distancia_m });
+    if (!g) ejercicios.push(g = { ejercicio_id: x.ejercicio_id || null, nombre: x.ejercicio_nombre || indice?.porId.get(x.ejercicio_id)?.nombre || 'Ejercicio', unidad: x.reps != null ? 'reps' : x.duracion_seg != null ? 'seg' : x.distancia_m != null ? 'm' : 'reps', series: [] });
+    g.series.push({ kg: x.carga_kg ?? null, reps: g.unidad === 'seg' ? x.duracion_seg ?? null : g.unidad === 'm' ? x.distancia_m ?? null : x.reps ?? null, rir: x.rir ?? (x.rpe != null ? Math.max(0, 10 - x.rpe) : null), tipo: x.tipo || 'efectiva', distancia_m: x.distancia_m });
   }
   return { id: s.id, fecha: s.fecha, hora: s.hora, titulo: s.titulo || 'Sesión', duracion_min: s.duracion_min ?? null, comentario: s.comentario || '', notas: s.notas || [], ejercicios };
 }
@@ -38,11 +40,10 @@ export function seriesDelBorrador(b) {
   for (const e of b.ejercicios) {
     for (const s of e.series) {
       if (!(Number(s.reps) > 0)) continue;
-      const seg = e.unidad === 'seg';
-      const rir = s.tipo === 'fallo' ? 0 : s.rir ?? null;
+      const rir = s.tipo === 'fallo' || e.unidad === 'm' ? (s.tipo === 'fallo' ? 0 : null) : s.rir ?? null;
       out.push({ orden: orden++, ejercicio_id: e.ejercicio_id, ejercicio_nombre: e.nombre, tipo: s.tipo || 'efectiva',
-        carga_kg: seg ? null : s.kg ?? null, reps: seg ? null : Number(s.reps), duracion_seg: seg ? Number(s.reps) : null,
-        rpe: rir == null ? null : 10 - rir, rir, ...(s.distancia_m ? { distancia_m: s.distancia_m } : {}) });
+        ...camposGuardados(e, { ...s, reps: Number(s.reps) }), rpe: rir == null ? null : 10 - rir, rir,
+        ...(s.distancia_m && e.unidad !== 'm' ? { distancia_m: s.distancia_m } : {}) });
     }
   }
   return out;

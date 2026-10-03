@@ -2,6 +2,7 @@
 // qué se armó y por qué: el objetivo y el nivel, la semana, lo que pediste punto por punto y cómo quedó, las
 // series por músculo, cómo vas a progresar, el bloque con su descarga y cuánto te falta para subir de nivel.
 // El objetivo se puede cambiar desde acá; lo demás, en el perfil.
+import { sufijo } from '../nucleo/unidades.js';
 import { E, guardar, R, D, esc, $, hoy, indice, C, mostrarMensaje } from './comun.js';
 import { resumenPlan } from '../nucleo/resumen-plan.js';
 import { progresoNivel } from '../nucleo/nivel.js';
@@ -60,7 +61,7 @@ export function vistaPlan(ir, { armarPlan, nuevo = false } = {}) {
 
     <h2>Cada día</h2>
     ${s.dias.map(x => `<details class="tarjeta dia-plan"><summary><span class="dia-nombre">${esc(mayus(x.nombre_dia))}</span><span class="dia-foco">${esc(x.foco)}</span><span class="chip num">~${x.minutos} min</span></summary>
-      <ul class="ejercicios-plan">${x.ejercicios.map((e, k, todos) => { const g = grupos(todos)[k]; return `<li class="con-mini${g ? ` en-superserie ss-${g.letra}` : ''}"><span class="ej-semana">${miniatura(e.id, 'miniatura chica')}<span class="nombre">${g ? `<span class="chip-ss">${etiquetaSuperserie(g)}</span>` : ''}${favoritos.has(e.id) ? `<span title="Favorito" aria-label="Favorito">${icono('estrella', 'icono-estrella')}</span> ` : ''}${esc(e.nombre)}${trabajaPrioridad(e.id) ? ' <span class="punto-prioridad" title="Trabaja una zona prioritaria" aria-label="Zona prioritaria"></span>' : ''}</span></span><span class="num">${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${e.unidad === 'seg' ? ' s' : ''}</span></li>`; }).join('')}</ul>
+      <ul class="ejercicios-plan">${x.ejercicios.map((e, k, todos) => { const g = grupos(todos)[k]; return `<li class="con-mini${g ? ` en-superserie ss-${g.letra}` : ''}"><span class="ej-semana">${miniatura(e.id, 'miniatura chica')}<span class="nombre">${g ? `<span class="chip-ss">${etiquetaSuperserie(g)}</span>` : ''}${favoritos.has(e.id) ? `<span title="Favorito" aria-label="Favorito">${icono('estrella', 'icono-estrella')}</span> ` : ''}${esc(e.nombre)}${trabajaPrioridad(e.id) ? ' <span class="punto-prioridad" title="Trabaja una zona prioritaria" aria-label="Zona prioritaria"></span>' : ''}</span></span><span class="num">${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${sufijo(e)}</span></li>`; }).join('')}</ul>
       ${x.cardio ? `<p class="pequeno suave">Cardio: ${esc(x.cardio)}</p>` : ''}
       ${x.firme ? '' : '<p class="pequeno suave">Día opcional: si no alcanzas, no se pierde nada importante.</p>'}
     </details>`).join('')}

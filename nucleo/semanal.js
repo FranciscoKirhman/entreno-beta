@@ -7,6 +7,7 @@ import { conReservaReportada, doloresDeNotas } from './notas.js';
 import { detectarBanderas } from './checkin.js';
 import { sumarDias, diaSemana } from './agenda.js';
 import { esDeTrabajo, esDeTrabajoGuardada, tipoDe as tipoSerie } from './registro.js';
+import { POR_DISTANCIA } from './unidades.js';
 
 const lunesDe = iso => sumarDias(iso, -((diaSemana(iso) + 6) % 7));
 const ZONA = { hombro: 'el hombro', codo: 'el codo', muneca: 'la muñeca', lumbar: 'la zona lumbar', cadera: 'la cadera', rodilla: 'la rodilla', tobillo: 'el tobillo', cuello: 'el cuello' };
@@ -63,7 +64,7 @@ export function datosDeLaSemana({ plan, semana, sesiones = [], registro = {}, no
     let series = [];
     if (ses) {
       series = (ses.series || []).filter(s => s.ejercicio_id && esDeTrabajoGuardada(s))
-        .map(s => ({ ejercicio_id: s.ejercicio_id, carga_kg: s.carga_kg ?? null, reps: s.reps ?? null, rir: s.tipo === 'fallo' ? 0 : s.rir ?? null, rpe: s.rpe ?? null }));
+        .map(s => ({ ejercicio_id: s.ejercicio_id, carga_kg: s.carga_kg ?? null, reps: s.reps ?? s.distancia_m ?? null, rir: s.tipo === 'fallo' ? 0 : s.rir ?? null, rpe: s.rpe ?? null }));
     } else {
       for (const e of dia.ejercicios.filter(x => x.ejercicio_id)) {
         for (const x of (registro[dia.fecha]?.[e.ejercicio_id] || []).filter(y => y?.hecho && esDeTrabajo(y))) {
@@ -97,13 +98,13 @@ export function seriesAnotadas(sesiones = [], registro = {}, desde = '') {
   const conSesion = new Set(sesiones.map(s => s.fecha));
   for (const ses of sesiones) {
     if (ses.fecha < desde) continue;
-    for (const s of ses.series || []) if (s.ejercicio_id && esDeTrabajoGuardada(s)) out.push({ fecha: ses.fecha, ejercicio_id: s.ejercicio_id, carga_kg: s.carga_kg ?? null, reps: s.reps ?? null, duracion_seg: s.duracion_seg ?? null, rir: s.tipo === 'fallo' ? 0 : s.rir ?? null, rpe: s.rpe ?? null });
+    for (const s of ses.series || []) if (s.ejercicio_id && esDeTrabajoGuardada(s)) out.push({ fecha: ses.fecha, ejercicio_id: s.ejercicio_id, carga_kg: s.carga_kg ?? null, reps: s.reps ?? null, duracion_seg: s.duracion_seg ?? null, distancia_m: s.distancia_m ?? null, rir: s.tipo === 'fallo' ? 0 : s.rir ?? null, rpe: s.rpe ?? null });
   }
   for (const [fecha, porEj] of Object.entries(registro)) {
     if (fecha < desde || conSesion.has(fecha)) continue;
     for (const [id, lista] of Object.entries(porEj || {})) {
       if (/^i\d+$/.test(id)) continue; // ejercicio indicado por un profesional, sin id del catálogo
-      for (const x of (lista || []).filter(y => y?.hecho && esDeTrabajo(y))) out.push({ fecha, ejercicio_id: id, carga_kg: x.kg ?? null, reps: x.reps ?? null, rpe: x.rpe ?? null, rir: tipoSerie(x) === 'fallo' ? 0 : x.rpe != null ? 10 - x.rpe : null });
+      for (const x of (lista || []).filter(y => y?.hecho && esDeTrabajo(y))) out.push({ fecha, ejercicio_id: id, carga_kg: x.kg ?? null, ...(POR_DISTANCIA.has(id) ? { reps: null, distancia_m: x.reps ?? null } : { reps: x.reps ?? null }), rpe: x.rpe ?? null, rir: tipoSerie(x) === 'fallo' ? 0 : x.rpe != null ? 10 - x.rpe : null });
     }
   }
   return out.sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));

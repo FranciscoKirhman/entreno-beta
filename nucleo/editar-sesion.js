@@ -66,7 +66,7 @@ export function editarSesion(accion, ctx) {
       if (ej.tipo === 'cardio') Object.assign(p, { series: 1, reps_min: 120, reps_max: 180, unidad: 'seg', descanso_seg: 0 });
       if (ej.tipo === 'movilidad') Object.assign(p, { series: 1, reps_min: 30, reps_max: 45, unidad: 'seg', descanso_seg: 0 });
       const nuevoE = { ejercicio_id: ej.id, nombre: ej.nombre, ...p, prioridad: 2, orden: x.ejercicios.length, carga_kg: null,
-        nota: p.unidad === 'seg' ? 'Agregado por ti. Registra los segundos de cada serie.' : 'Agregado por ti. Elige un peso con la reserva indicada.' };
+        nota: p.unidad === 'seg' ? 'Agregado por ti. Registra los segundos de cada serie.' : p.unidad === 'm' ? 'Agregado por ti. Anota el peso y los metros de cada serie.' : 'Agregado por ti. Elige un peso con la reserva indicada.' };
       return descarga ? comoDescarga(nuevoE) : nuevoE;
     };
     ejercicio = nuevoEj(dia, !fueraDelPlan && dia.semana === plan.semana_descarga);

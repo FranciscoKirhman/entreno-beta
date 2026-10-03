@@ -19,13 +19,17 @@ export const CARDIOS = [
 export function cardioDeTexto(texto) {
   return [...CARDIOS].sort((a, b) => b.nombre.length - a.nombre.length).find(c => String(texto || '').toLowerCase().startsWith(c.nombre.toLowerCase().replace(/ estática| al aire libre/g, ''))) || null;
 }
+/** El cardio marcado como hecho → una serie para guardar. La marca puede traer los minutos reales y la distancia
+ *  (opcionales, como el cardio por distancia y tiempo de Hevy); si no, cuentan los minutos del plan. */
 export function registroCardio(texto, marca) {
   if (!texto || !marca?.hecho || marca.texto !== texto) return null;
-  const seg = tramosDeCardio(texto).reduce((n, t) => n + t.seg, 0);
+  const minutos = Number(marca.minutos), km = Number(marca.distancia_km);
+  const seg = minutos > 0 ? Math.round(minutos * 60) : tramosDeCardio(texto).reduce((n, t) => n + t.seg, 0);
   if (!seg) return null;
   const c = cardioDeTexto(texto);
   return { ejercicio_id: ['bicicleta', 'remoergometro'].includes(c?.id) ? null : c?.id || null,
-    ejercicio_nombre: c?.nombre || 'Cardio', tipo: 'efectiva', carga_kg: null, reps: null, duracion_seg: seg, rir: null, rpe: null };
+    ejercicio_nombre: c?.nombre || 'Cardio', tipo: 'efectiva', carga_kg: null, reps: null, duracion_seg: seg, rir: null, rpe: null,
+    ...(km > 0 ? { distancia_m: Math.round(km * 1000) } : {}) };
 }
 
 export function motivoNoCardio(cardio, ctx) {

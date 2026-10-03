@@ -1,3 +1,4 @@
+import { sufijo } from '../nucleo/unidades.js';
 import { validarRespaldo } from '../nucleo/respaldo.js';
 // Estado y utilidades que comparten las vistas de la app. Todo funciona sin cuenta (en este navegador);
 // con cuenta, nube.js sincroniza con Supabase.
@@ -17,7 +18,7 @@ export const ahora = () => new Date().toLocaleString('sv-SE', { timeZone: 'Ameri
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const $ = id => document.getElementById(id);
 export const fechaCorta = iso => new Date(iso + 'T12:00:00Z').toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
-export const presc = e => `${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${e.unidad === 'seg' ? ' s' : ''} · RIR ${e.rir}${e.carga_kg ? ` · ${peso(e.carga_kg)}` : ''}`;
+export const presc = e => `${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${sufijo(e)}${e.unidad === 'm' ? '' : ` · RIR ${e.rir}`}${e.carga_kg ? ` · ${peso(e.carga_kg)}` : ''}`;
 
 // ── Unidad de peso: se guarda siempre en kilos; se muestra y se escribe en la unidad de la persona ─
 const LB = 0.45359237;

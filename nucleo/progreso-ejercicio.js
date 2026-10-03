@@ -11,21 +11,23 @@ const medio = x => Math.round(x * 2) / 2;
 
 /**
  * Una fila por sesión en que se hizo el ejercicio, de la más antigua a la más nueva.
- * @returns [{fecha, peso, e1rm, volumen, reps, duracion, series}] peso: la carga más alta (en asistidos, la menor ayuda)
+ * @returns [{fecha, peso, e1rm, volumen, reps, duracion, distancia, series}] peso: la carga más alta (en asistidos, la menor ayuda)
  */
 export function porSesion(series, id, { asistido = false } = {}) {
   const fechas = new Map();
-  for (const s of series) if (s.ejercicio_id === id && (n(s.reps) > 0 || n(s.duracion_seg) > 0)) (fechas.get(s.fecha) || fechas.set(s.fecha, []).get(s.fecha)).push(s);
+  for (const s of series) if (s.ejercicio_id === id && (n(s.reps) > 0 || n(s.duracion_seg) > 0 || n(s.distancia_m) > 0)) (fechas.get(s.fecha) || fechas.set(s.fecha, []).get(s.fecha)).push(s);
   return [...fechas.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([fecha, xs]) => {
     const conPeso = xs.filter(s => n(s.carga_kg) > 0 && n(s.reps) > 0);
+    const conKg = xs.filter(s => n(s.carga_kg) > 0); // también las de peso y distancia
     const max = f => (xs.length ? Math.max(0, ...xs.map(s => n(f(s)) || 0)) : 0) || null;
     return {
       fecha, series: xs,
-      peso: conPeso.length ? (asistido ? Math.min(...conPeso.map(s => n(s.carga_kg))) : Math.max(...conPeso.map(s => n(s.carga_kg)))) : null,
+      peso: conKg.length ? (asistido ? Math.min(...conKg.map(s => n(s.carga_kg))) : Math.max(...conKg.map(s => n(s.carga_kg)))) : null,
       e1rm: !asistido && conPeso.length ? medio(Math.max(...conPeso.map(e1rm))) : null,
       volumen: !asistido && conPeso.length ? Math.round(conPeso.reduce((a, s) => a + n(s.carga_kg) * n(s.reps), 0)) : null,
       reps: max(s => s.reps),
       duracion: max(s => s.duracion_seg),
+      distancia: max(s => s.distancia_m),
     };
   });
 }
@@ -33,7 +35,7 @@ export function porSesion(series, id, { asistido = false } = {}) {
 /** Qué medidas tienen datos, en el orden en que se muestran. */
 export function medidasCon(filas, { asistido = false } = {}) {
   const hay = k => filas.filter(f => f[k] != null).length >= 1;
-  return (asistido ? ['peso', 'reps'] : ['peso', 'e1rm', 'volumen', 'reps', 'duracion']).filter(hay);
+  return (asistido ? ['peso', 'reps'] : ['peso', 'e1rm', 'volumen', 'reps', 'duracion', 'distancia']).filter(hay);
 }
 
 export const PERIODOS = [['3m', '3 meses', 91], ['1a', '1 año', 365], ['todo', 'Todo', null]];

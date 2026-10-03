@@ -2,6 +2,7 @@
 // 1. avisos de la app web mientras está abierta (app/avisos.js),
 // 2. alarmas en el calendario del teléfono (.ics), que suenan aunque la app esté cerrada,
 // 3. más adelante, avisos enviados por el servidor (web push) con el mismo cálculo.
+import { sufijo } from './unidades.js';
 import { checklist } from './suplementos.js';
 import { duracionEstimada } from './motor-plan.js';
 
@@ -48,7 +49,7 @@ export function eventosCalendario({ plan, suplementos = [], desde, config = CONF
   if (config.entrenar) {
     for (const d of (plan?.dias || []).filter(x => x.fecha >= desde && x.ejercicios?.length)) {
       const min = duracionEstimada(d.ejercicios);
-      const ejercicios = d.ejercicios.map(e => `- ${e.nombre || e.ejercicio_id}: ${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? `-${e.reps_max}` : ''}${e.unidad === 'seg' ? ' s' : ''}${e.carga_kg ? `, ${String(e.carga_kg).replace('.', ',')} kg` : ''}`).join('\n');
+      const ejercicios = d.ejercicios.map(e => `- ${e.nombre || e.ejercicio_id}: ${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? `-${e.reps_max}` : ''}${sufijo(e)}${e.carga_kg ? `, ${String(e.carga_kg).replace('.', ',')} kg` : ''}`).join('\n');
       out.push({
         uid: `sesion-${d.fecha}`, titulo: `Entreno: ${d.foco}`, descripcion: `Unos ${min} minutos.\n${ejercicios}\n\nSi la app movió la sesión, vuelve a agregar el calendario desde Más.`,
         ...(d.hora ? { inicio: `${d.fecha}T${d.hora}`, minutos: min, alarmaMin: -config.minutosAntes } : { inicio: d.fecha, alarmaMin: aMin(config.horaEntreno) }),
