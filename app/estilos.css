@@ -798,11 +798,10 @@ span.ej-semana{cursor:default}
 
 /* Selector temporal: sus etiquetas llegan únicamente desde el archivo privado del teléfono. */
 .perfiles-prueba{max-width:560px;margin:0 auto;padding:12px 16px 0;overflow-wrap:anywhere}
-.perfiles-prueba-selector,.perfiles-prueba-importar{background:var(--surface);border-radius:14px;padding:12px 14px}
+.perfiles-prueba-selector{background:var(--surface);border-radius:14px;padding:12px 14px}
 .perfiles-prueba-botones{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0}
 .perfiles-prueba-botones .boton{min-width:0;overflow-wrap:anywhere}
 .perfiles-prueba-botones [aria-pressed="true"],.tablero-dias [aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
-.perfiles-prueba-importar>summary{color:var(--accent);font-weight:600;cursor:pointer;min-height:32px}
 .perfiles-prueba-importar input{display:block;width:100%;margin-top:8px}
 .perfil-prueba-previa{margin-top:12px;padding:12px 0;border-top:1px solid var(--line)}
 .tablero-texto,.tablero-pasos,.tablero-ciclo{overflow-wrap:anywhere}

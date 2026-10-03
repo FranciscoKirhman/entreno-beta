@@ -4,11 +4,14 @@ import { validarRespaldo } from './respaldo.js';
 
 export const CLAVE_PERFILES_PRUEBA = 'entreno-perfiles-prueba-v1';
 export const CLAVE_ACTIVO_PRUEBA = 'entreno-perfil-prueba-activo-v1';
+export const MAX_PERFILES_PRUEBA = 4;
 
 const objeto = x => x !== null && typeof x === 'object' && !Array.isArray(x);
 const idValido = id => typeof id === 'string' && /^[a-z][a-z0-9_]{0,31}$/.test(id);
 const nombreValido = nombre => typeof nombre === 'string' && nombre.length >= 1 && nombre.length <= 40
   && nombre.trim().length > 0 && !/[\p{Cc}\p{Cf}\u2028\u2029]/u.test(nombre);
+// La versión publicada de cada perfil (herramientas/cifrar-perfiles.mjs): sirve para avisar cuando hay una revisada.
+const versionValida = v => typeof v === 'string' && /^[a-f0-9]{8,64}$/.test(v);
 const fechaIso = creado => typeof creado === 'string'
   && /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,9})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(creado)
   && Number.isFinite(Date.parse(creado))
@@ -28,21 +31,23 @@ export function claveSesionPerfilPrueba(id = null) {
 }
 
 function validarEtiquetas(perfiles, mensaje) {
-  exigir(Array.isArray(perfiles) && perfiles.length === 2, mensaje);
+  exigir(Array.isArray(perfiles) && perfiles.length >= 1 && perfiles.length <= MAX_PERFILES_PRUEBA, mensaje);
   const vistos = new Set();
   for (const p of perfiles) {
     exigir(objeto(p) && idValido(p.id) && nombreValido(p.nombre), 'Hay un identificador o nombre de perfil inválido.');
-    exigir(!vistos.has(p.id), 'Los dos perfiles necesitan identificadores distintos.');
+    exigir(p.version === undefined || versionValida(p.version), 'Hay una versión de perfil inválida.');
+    exigir(!vistos.has(p.id), 'Cada perfil necesita un identificador distinto.');
     vistos.add(p.id);
   }
 }
+const etiqueta = ({ id, nombre, version }) => ({ id, nombre, ...(version ? { version } : {}) });
 
-/** Revisa los dos respaldos completos antes de guardar cualquiera. Cada perfil conoce solo sus propios ejercicios. */
+/** Revisa todos los respaldos completos antes de guardar cualquiera. Cada perfil conoce solo sus propios ejercicios. */
 export function validarPaquetePerfilesPrueba(paquete, ids = null) {
   exigir(objeto(paquete) && paquete.app === 'entreno-perfiles-prueba' && paquete.version === 1,
     'Ese archivo no es un paquete de perfiles compatible con Entreno.');
   exigir(fechaIso(paquete.creado), 'El paquete tiene una fecha de creación inválida.');
-  validarEtiquetas(paquete.perfiles, 'El paquete debe contener exactamente dos perfiles.');
+  validarEtiquetas(paquete.perfiles, `El paquete debe contener entre 1 y ${MAX_PERFILES_PRUEBA} perfiles.`);
   for (const p of paquete.perfiles) {
     exigir(objeto(p.respaldo) && p.respaldo.version === 2, 'Cada perfil necesita un respaldo completo de la versión 2.');
     exigir(Array.isArray(p.respaldo.fotos) && p.respaldo.fotos.length === 0,
@@ -64,7 +69,7 @@ export function leerPerfilesPrueba(storage) {
   catch { throw new Error('No pude leer los perfiles de prueba guardados. Sus datos se conservan.'); }
   exigir(objeto(registro) && fechaIso(registro.creado), 'El registro de perfiles de prueba está dañado.');
   validarEtiquetas(registro.perfiles, 'El registro de perfiles de prueba está dañado.');
-  return { creado: registro.creado, perfiles: registro.perfiles.map(({ id, nombre }) => ({ id, nombre })) };
+  return { creado: registro.creado, perfiles: registro.perfiles.map(etiqueta) };
 }
 
 export function perfilPruebaActivo(storage) {
@@ -101,19 +106,57 @@ function escribirVerificado(storage, cambios) {
   }
 }
 
-/** Instala una pareja nueva sin sobrescribir perfiles existentes ni el perfil normal del teléfono. */
-export function instalarPerfilesPrueba(paquete, storage, ids = null) {
+/** Agrega los perfiles del paquete a los que ya hay, sin sobrescribir ninguno ni el perfil normal del teléfono.
+ *  `versiones` (id → versión publicada) queda en el registro para avisar cuando haya una revisada. */
+export function instalarPerfilesPrueba(paquete, storage, ids = null, versiones = {}) {
   validarPaquetePerfilesPrueba(paquete, ids);
   const existente = leerPerfilesPrueba(storage);
-  exigir(existente.perfiles.length === 0, 'Ya hay perfiles de prueba en este teléfono. No los reemplazo con otra pareja.');
   for (const p of paquete.perfiles) {
+    exigir(!existente.perfiles.some(x => x.id === p.id), `${p.nombre} ya está en este teléfono. No lo reemplazo.`);
     exigir(storage.getItem(clavePerfilPrueba(p.id)) == null, 'Ese perfil ya tiene datos guardados en este teléfono.');
   }
-  const registro = { creado: paquete.creado, perfiles: paquete.perfiles.map(({ id, nombre }) => ({ id, nombre })) };
+  const registro = { creado: existente.creado || paquete.creado,
+    perfiles: [...existente.perfiles, ...paquete.perfiles.map(({ id, nombre }) => etiqueta({ id, nombre, version: versiones[id] }))] };
+  validarEtiquetas(registro.perfiles, `Caben hasta ${MAX_PERFILES_PRUEBA} perfiles de prueba en este teléfono.`);
   const cambios = paquete.perfiles.map(p => [clavePerfilPrueba(p.id), JSON.stringify(structuredClone(p.respaldo.estado))]);
   cambios.push([CLAVE_PERFILES_PRUEBA, JSON.stringify(registro)]);
   escribirVerificado(storage, cambios);
   return registro;
+}
+
+const vacio = x => x == null || (Array.isArray(x) ? x.length === 0 : objeto(x) && Object.keys(x).length === 0);
+
+/** La versión revisada de un perfil sobre la copia del teléfono. De la revisada vienen el perfil (respuestas), la
+ *  importación y el historial publicado; lo demás es del teléfono: el plan (solo cambia con vista previa y
+ *  confirmación), las sesiones que se registraron ahí y todo lo anotado en la app. */
+export function unirVersionRevisada(local, revisado) {
+  const r = structuredClone(local);
+  r.respuestas = { ...(objeto(local.respuestas) ? local.respuestas : {}), ...structuredClone(revisado.respuestas) };
+  for (const k of ['importacionTablero', 'tableroOrigen']) if (k in revisado) r[k] = structuredClone(revisado[k]);
+  const publicadas = Array.isArray(revisado.sesiones) ? structuredClone(revisado.sesiones) : [];
+  const ids = new Set(publicadas.map(s => s?.id));
+  r.sesiones = [...publicadas, ...(Array.isArray(local.sesiones) ? local.sesiones : []).filter(s => !ids.has(s?.id))];
+  for (const [k, v] of Object.entries(revisado)) if (!(k in r) || (vacio(r[k]) && !vacio(v))) r[k] = structuredClone(v);
+  return r;
+}
+
+/** Cambia un perfil instalado por su versión revisada (paquete de un perfil), con unirVersionRevisada. */
+export function actualizarPerfilPrueba(paquete, storage, ids = null, version = null) {
+  validarPaquetePerfilesPrueba(paquete, ids);
+  exigir(paquete.perfiles.length === 1, 'La versión revisada trae un perfil a la vez.');
+  exigir(version === null || versionValida(version), 'La versión publicada no es válida.');
+  const [p] = paquete.perfiles;
+  const registro = leerPerfilesPrueba(storage);
+  const i = registro.perfiles.findIndex(x => x.id === p.id);
+  exigir(i >= 0, 'Ese perfil no está en este teléfono.');
+  let local = null;
+  try { local = JSON.parse(storage.getItem(clavePerfilPrueba(p.id))); } catch { /* se informa abajo */ }
+  exigir(objeto(local), 'No pude leer la copia de este perfil. Respáldalo antes de continuar.');
+  // Lo publicado ya se validó arriba; lo del teléfono es lo que la app misma guardó.
+  const unido = unirVersionRevisada(local, p.respaldo.estado);
+  registro.perfiles[i] = etiqueta({ id: p.id, nombre: p.nombre, version });
+  escribirVerificado(storage, [[clavePerfilPrueba(p.id), JSON.stringify(unido)], [CLAVE_PERFILES_PRUEBA, JSON.stringify(registro)]]);
+  return registro.perfiles[i];
 }
 
 /** El llamador guarda su estado actual antes de elegir y recarga la app después. null vuelve al perfil normal. */
