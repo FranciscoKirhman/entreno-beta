@@ -4,6 +4,7 @@
 // En los ejercicios asistidos el peso es la ayuda de la máquina: ahí el récord es usar menos ayuda que nunca, o hacer
 // más repeticiones con la misma ayuda o menos.
 import { e1rm } from './motor-plan.js';
+import { esDeTrabajoGuardada } from './registro.js';
 
 const n = v => (v == null || v === '' ? null : Number(v));
 const conPeso = s => n(s.carga_kg) > 0 && n(s.reps) > 0;
@@ -85,4 +86,24 @@ export function recordsPorRepeticiones(series) {
     if (!mejor.has(r) || n(s.carga_kg) > mejor.get(r).carga_kg) mejor.set(r, { reps: r, carga_kg: n(s.carga_kg), fecha: s.fecha });
   }
   return [...mejor.values()].sort((a, b) => a.reps - b.reps);
+}
+
+/**
+ * Récords de cada sesión guardada contra todas las anteriores, para marcarlos en el historial. Recorre las sesiones
+ * en orden una sola vez.
+ * @returns Map de la id de la sesión (o su fecha, si no tiene) a sus récords [{tipo, valor, ejercicio_id, ...}]
+ */
+export function recordsPorSesion(sesiones, { asistidos = new Set() } = {}) {
+  const orden = [...sesiones].sort((a, b) => `${a.fecha} ${a.hora || ''}`.localeCompare(`${b.fecha} ${b.hora || ''}`));
+  const previas = new Map(), out = new Map();
+  for (const ses of orden) {
+    const trabajo = (ses.series || []).filter(s => s.ejercicio_id && esDeTrabajoGuardada(s))
+      .map(s => ({ ejercicio_id: s.ejercicio_id, carga_kg: s.carga_kg ?? null, reps: s.reps ?? null, duracion_seg: s.duracion_seg ?? null, rir: s.rir ?? null }));
+    const ids = new Set(trabajo.map(s => s.ejercicio_id));
+    const historial = [...ids].flatMap(id => previas.get(id) || []);
+    const recs = recordsDeSesion(historial, trabajo, { asistidos });
+    if (recs.length) out.set(ses.id || ses.fecha, recs);
+    for (const s of trabajo) (previas.get(s.ejercicio_id) || previas.set(s.ejercicio_id, []).get(s.ejercicio_id)).push(s);
+  }
+  return out;
 }

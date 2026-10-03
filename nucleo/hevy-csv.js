@@ -201,7 +201,7 @@ export function importarParaTelefono(texto, indice, existentes = []) {
     series.filter(s => !s.ejercicio_id).forEach(s => sinCatalogo.add(s.ejercicio_nombre));
     return {
       id: `hevy-${w.id}`, origen: 'hevy', id_externo: w.id, clave: claveSesion(w), fecha: w.start_time.slice(0, 10), hora: w.start_time.slice(11, 16),
-      titulo: sesion.titulo, duracion_min: sesion.duracion_min, notas: [],
+      titulo: sesion.titulo, duracion_min: sesion.duracion_min, comentario: sesion.comentario, notas: [],
       series: series.map(s => ({ ...s, rir: s.tipo === 'fallo' ? 0 : s.rpe != null ? Math.max(0, 10 - s.rpe) : null })),
     };
   });

@@ -1,6 +1,7 @@
 // Ficha de un ejercicio, como en Hevy: el dibujo de cómo se hace (o su máquina), los músculos que trabaja (con su
 // imagen), cómo se hace y los errores comunes, tus marcas, por qué está en tu plan (con los papers que lo respaldan)
-// y con qué se puede cambiar. Se abre desde la ⓘ de cada ejercicio.
+// tu progreso (gráficos, ritmo e historial, en app/progreso-ejercicio.js) y con qué se puede cambiar. Se abre desde la
+// ⓘ de cada ejercicio y desde Progreso.
 import { E, R, D, C, TECNICA, EVIDENCIA, indice, hoy, esc, $, fechaCorta, coma, enUnidad, unidadPeso, peso } from './comun.js';
 import { explicarEjercicio, enlaceVideo } from '../nucleo/explicar.js';
 import { alternativas } from '../nucleo/checkin.js';
@@ -11,6 +12,7 @@ import { NOMBRE_MUSCULO, lista, mayuscula, imagenesMusculos } from './musculos.j
 import { dibujoEjercicio, maquinaDe, miniatura } from './imagenes.js';
 import { icono } from './iconos.js';
 import { proponer } from './cambios-ui.js';
+import { progresoEjercicioHtml, enlazarProgresoEjercicio } from './progreso-ejercicio.js';
 
 const VOLVER = { hoy: 'Hoy', semana: 'Semana', plan: 'Tu plan', progreso: 'Progreso', banco: 'Banco de ejercicios', ejercicio: 'Atrás' };
 const EQUIPO = Object.fromEntries(C.secciones.flatMap(s => s.preguntas || []).find(p => p.equipamiento)?.equipamiento || []);
@@ -80,6 +82,8 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
         : '<p class="suave pequeno">Todavía no lo anotas. Cuando lo hagas, aquí vas a ver tu serie más pesada, tu máximo estimado y cómo te fue la última vez.</p>'}
     </section>
 
+    ${progresoEjercicioHtml(id, { asistido: esAsistido(ej) })}
+
     ${ex ? `<section class="tarjeta porque">
       <h2>Por qué está en tu plan</h2>
       <ul class="lista-porque">${ex.motivos.map(x => `<li><details><summary>${esc(x.pregunta)}</summary><p>${esc(x.respuesta)}</p>${x.fuente ? `<p class="pequeno suave">Fuente: ${esc(x.fuente.documento)}, ${esc(x.fuente.seccion)}${x.refs.length ? ` [${x.refs.join(', ')}]` : ''}</p>` : ''}</details></li>`).join('')}</ul>
@@ -95,6 +99,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
 
   const atras = () => (antes ? vistaFicha(ir, antes) : ir(desde, desde === 'hoy' ? { ej: id } : undefined));
   $('volver').onclick = atras;
+  enlazarProgresoEjercicio(id, { asistido: esAsistido(ej) });
   document.querySelectorAll('[data-ver]').forEach(b => b.onclick = () => { vistaFicha(ir, { id: b.dataset.ver, desde, antes: { id, desde, antes } }); window.scrollTo(0, 0); });
   $('cambiar-hoy')?.addEventListener('click', ev => proponer({ tipo: 'elegir_alternativa', fecha: f, ejercicio: id }, {
     titulo: `Cambiar ${ej.nombre}`, volver: ev.currentTarget, alCambiar: () => ir('hoy'),

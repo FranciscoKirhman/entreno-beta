@@ -682,3 +682,23 @@ span.ej-semana{cursor:default}
 .ficha-musculos{flex-direction:row;align-items:center;gap:14px}
 
 .correo-cuenta{overflow-wrap:anywhere}
+/* Progreso de un ejercicio en su ficha: medida, período, mejor peso por repeticiones e historial. */
+.chips-medida{margin:10px 0 2px;gap:6px}
+.chips-medida .chip-opcion{min-height:36px;padding:6px 12px;font-size:14px;background:var(--fill)}
+.segmentos.periodo{display:flex;margin-top:10px}
+.segmentos.periodo button{flex:1;min-width:0}
+.por-reps li{align-items:baseline}
+.historial-ejercicio{margin-top:6px}
+/* Progreso: constancia (calendario de 12 semanas) y buscador del historial. */
+.calendario-constancia{display:grid;grid-template-columns:14px repeat(12,minmax(0,1fr));gap:4px;align-items:center;margin:12px 0 6px}
+.cal-mes{font:600 10px/1 var(--f-texto);color:var(--ink-muted);white-space:nowrap;overflow:visible}
+.cal-letra{font:500 10px/1 var(--f-texto);color:var(--ink-muted);text-align:center}
+.cal-dia{aspect-ratio:1;border-radius:5px;background:var(--fill)}
+.cal-dia.hecho{background:var(--accent)}
+.cal-dia.futuro{background:none;box-shadow:inset 0 0 0 1px var(--line)}
+.cal-dia.hoy{box-shadow:inset 0 0 0 2px var(--ink)}
+.cal-total{font-size:11px;color:var(--ink-muted);text-align:center;min-height:12px}
+.buscador-historial{display:block;margin:4px 0 8px}
+.buscador-historial input{width:100%}
+.comentario-h{margin:0 0 6px;color:var(--ink-muted);font-style:italic}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
