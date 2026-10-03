@@ -13,7 +13,9 @@ import { cuentaNuevaHtml, enlazarCuentaNueva } from './cuenta-ui.js';
 const nombreEj = (id, respaldo) => indice.porId.get(id)?.nombre || respaldo || 'Ejercicio';
 // Insignia de cada récord (hoja RS01 del banco de imágenes). Mientras no esté cortada, se muestra la etiqueta "Récord".
 const INSIGNIA = { peso: 'peso', e1rm: 'e1rm', volumen: 'volumen', reps_con_peso: 'repeticiones', reps: 'repeticiones', duracion: 'tiempo', menos_ayuda: 'peso', reps_con_ayuda: 'repeticiones' };
-const insignia = tipo => { const src = `img/resumen/${INSIGNIA[tipo] || 'completa'}.webp`; return IMAGENES.has(src) ? `<img class="insignia" src="${src}" alt="" width="40" height="40" decoding="async">` : '<span class="chip-record">Récord</span>'; };
+/** La medalla de cada tipo de récord (también la usa la medalla que aparece al marcar la serie). */
+export const srcInsignia = tipo => `img/resumen/${INSIGNIA[tipo] || 'completa'}.webp`;
+const insignia = tipo => { const src = srcInsignia(tipo); return IMAGENES.has(src) ? `<img class="insignia" src="${src}" alt="" width="40" height="40" decoding="async">` : '<span class="chip-record">Récord</span>'; };
 /** 45 → "45 segundos"; 1200 → "20 minutos"; 90 → "1:30 minutos". */
 const tiempo = seg => (seg < 60 ? `${seg} segundos` : seg % 60 ? `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')} minutos` : `${seg / 60} minutos`);
 

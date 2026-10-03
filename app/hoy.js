@@ -6,7 +6,6 @@ import { datoCambiado, cicloCambiado } from './datos-nube.js';
 import { E, guardar, R, D, C, K, indice, hoy, ahora, esc, $, fechaCorta, ctxNucleo, escala, opcionesRadio, chk, cambiarPlan, numero, coma, mostrarMensaje, avisar, unidadPeso, enUnidad, aKilos, peso, volumenTexto, seriesTexto } from './comun.js';
 import { estadoDelPlan } from '../nucleo/registrado.js';
 import { recordsDeSerie } from '../nucleo/records.js';
-import { textoRecord } from './resumen.js';
 import { esAsistido, conLastre, sinCargaExterna } from '../nucleo/catalogo.js';
 import { sufijo, porReps, camposGuardados } from '../nucleo/unidades.js';
 import { evaluarDia, ajustarSesion, TEXTO_RECOMENDACION } from '../nucleo/bienestar.js';
@@ -39,6 +38,7 @@ import * as nube from './nube.js';
 import { descansoHtml, sesionCompletaHtml } from './estados-visuales.js';
 import { srcArticulacion } from './articulaciones.js';
 import { repintarConservando, celebrar, sinMovimiento } from './movimiento.js';
+import { mostrarMedalla } from './medalla.js';
 import { proponerEdicion, ordenarSesion } from './editar-sesion-ui.js';
 import { serieCompleta } from '../nucleo/serie-completa.js';
 import { proponerSesionVacia } from './sesion-libre-ui.js';
@@ -94,6 +94,16 @@ export function irAlEjercicioEnCurso() {
   if (ultima < 0) return;
   const sigue = checks.slice(ultima + 1).find(c => c.getAttribute('aria-pressed') !== 'true') || checks.find(c => c.getAttribute('aria-pressed') !== 'true');
   sigue?.closest('.ej')?.scrollIntoView({ block: 'start' });
+}
+
+/** La serie recién marcada: el visto se dibuja, la fila toma su color y la barra de avance crece desde donde estaba.
+ *  Solo esa serie y una vez: el próximo repintado ya no trae la clase. */
+function serieRecienMarcada(id, i, anchoAntes) {
+  const check = document.querySelector(`#vista-hoy [data-hecho="${CSS.escape(id)}"][data-i="${i}"]`);
+  check?.classList.add('recien');
+  check?.closest('.serie')?.classList.add('recien');
+  const barra = document.querySelector('#avance .medidor i');
+  if (barra && !sinMovimiento() && barra.style.width !== anchoAntes) barra.animate([{ width: anchoAntes }, { width: barra.style.width }], { duration: 280, easing: 'cubic-bezier(.2,.7,.3,1)' });
 }
 
 // La sesión completa se celebra una sola vez: al pasar de series pendientes a todas hechas en esta misma pantalla.
@@ -408,7 +418,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
       ${seg ? '' : `<input type="text" inputmode="decimal" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="kg" value="${esc(coma(enUnidad(r.kg)))}" placeholder="${esc(coma(enUnidad(kgGris)))}" aria-label="${u === 'lb' ? 'Libras' : 'Kilos'}${queEs ? ` de ${queEs}` : ''}, serie ${etiq[i]}">`}
       <input type="text" inputmode="numeric" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="reps" value="${esc(r.reps ?? '')}" placeholder="${esc(repsGris ?? '')}" aria-label="${seg ? 'Segundos' : dist ? 'Metros' : 'Repeticiones'}, serie ${etiq[i]}">
       ${seg ? (r.hecho ? '<span aria-hidden="true"></span>' : `<button type="button" class="crono-serie" data-crono="${id}" data-i="${i}" aria-label="Contar los segundos de la serie ${etiq[i]}">${icono('reloj', 'icono')}</button>`) : dist ? '' : trabajo ? cajaRir(id, i, rir, e.rir, etiq[i]) : '<span aria-hidden="true"></span>'}
-      <button type="button" class="check" data-hecho="${id}" data-i="${i}" aria-pressed="${Boolean(r.hecho)}" aria-label="Serie ${etiq[i]} hecha">${r.hecho ? '✓' : ''}</button>
+      <button type="button" class="check" data-hecho="${id}" data-i="${i}" aria-pressed="${Boolean(r.hecho)}" aria-label="Serie ${etiq[i]} hecha">${r.hecho ? icono('visto', 'visto-serie') : ''}</button>
       ${(r.consejo || r.record?.length) && trabajo ? `<p class="consejo ${r.consejo?.tipo || 'bien'}">${r.record?.length ? '<span class="chip-record">Récord</span> ' : ''}${esc(r.consejo?.texto || '')}</p>` : ''}</div>`;
   }).join('');
   const preguntas = K.por_ejercicio.preguntas.filter(p => !p.mostrar_si || Object.entries(p.mostrar_si).every(([q, vals]) => vals.includes(nota[q])));
@@ -759,8 +769,10 @@ function enlazar(ir, dia) {
         }
       } else if (seg) iniciarDescanso(seg, quedan ? `Descanso · falta${quedan === 1 ? '' : 'n'} ${quedan} serie${quedan === 1 ? '' : 's'}` : 'Descanso · sigue otro ejercicio');
     } else detenerDescanso();
+    const anchoAntes = document.querySelector('#avance .medidor i')?.style.width || '0%';
     repintar();
-    if (recs.length) avisar(`Récord en ${nombreDe(e)}: ${recs.map(x => textoRecord(x, { corto: true })).join(', ')}.`, 'bien');
+    if (r.hecho) serieRecienMarcada(id, i, anchoAntes);
+    if (recs.length) mostrarMedalla(recs, nombreDe(e));
   }
   raiz.querySelectorAll('[data-hecho]').forEach(b => b.onclick = () => marcarSerie(b.dataset.hecho, Number(b.dataset.i)));
 

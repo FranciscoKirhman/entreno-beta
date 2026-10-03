@@ -826,6 +826,32 @@ span.ej-semana{cursor:default}
 @keyframes entrar-pose{from{opacity:0;translate:0 6px}}
 #app.entrando .estado-personaje{animation:entrar-pose .24s cubic-bezier(.2,.7,.3,1) .06s backwards}
 @media (prefers-reduced-motion:reduce){#app.entrando .estado-personaje{animation:none}}
+/* Serie recién marcada: el visto se dibuja y la fila toma su color (solo esa, una vez). */
+.check .visto-serie{display:block;width:20px;height:20px;margin:auto;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.check.recien{animation:marcar-serie .16s ease-out}
+.check.recien .visto-serie path{stroke-dasharray:22;stroke-dashoffset:22;animation:trazar-visto .2s ease-out .04s forwards}
+.serie.recien{animation:fila-hecha .16s ease-out}
+@keyframes marcar-serie{from{background-color:var(--fill)}}
+@keyframes trazar-visto{to{stroke-dashoffset:0}}
+@keyframes fila-hecha{from{background-color:transparent}}
+@media (prefers-reduced-motion:reduce){.check.recien,.serie.recien{animation:none}.check.recien .visto-serie path{animation:none;stroke-dashoffset:0}}
+/* Anillo del descanso: se vacía alrededor del asistente; en los últimos 3 segundos cambia de color. */
+#descanso .descanso-anillo{position:relative;display:grid;place-items:center;flex:0 0 48px;width:48px;height:48px}
+#descanso .descanso-anillo svg{position:absolute;inset:0;width:100%;height:100%;rotate:-90deg;overflow:visible}
+#descanso .descanso-anillo circle{fill:none;stroke-width:3}
+#descanso .descanso-anillo .pista{stroke:color-mix(in srgb,currentColor 22%,transparent)}
+#descanso .descanso-anillo .progreso{stroke:var(--accent);stroke-linecap:round;transition:stroke-dashoffset .25s linear,stroke .2s}
+#descanso.ultimos .descanso-anillo .progreso{stroke:var(--good)}
+#descanso .descanso-anillo .descanso-asistente{flex:none;width:38px;height:38px}
+/* Medalla de récord: sobre el menú (y sobre el descanso si corre), se va sola o al tocarla. */
+.medalla-record{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 76px);z-index:9;max-width:536px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:16px;background:var(--surface);color:var(--ink);box-shadow:0 8px 24px rgba(0,0,0,.22);opacity:0;translate:0 12px;transition:opacity .22s ease-out,translate .22s cubic-bezier(.2,.7,.3,1);cursor:pointer}
+.medalla-record.visible{opacity:1;translate:0 0}
+body.con-descanso .medalla-record{bottom:calc(env(safe-area-inset-bottom,0px) + 144px)}
+.medalla-img{flex:0 0 64px;width:64px;height:64px;object-fit:contain}
+.medalla-texto{display:flex;flex-direction:column;gap:2px;min-width:0}
+.medalla-texto strong{font-size:17px}
+.medalla-texto span{font-size:14px;color:var(--ink-muted);overflow-wrap:anywhere}
+@media (prefers-reduced-motion:reduce){.medalla-record{transition:none;translate:none}}
 /* Gesto de volver: la burbuja con la flecha sigue al dedo desde el borde izquierdo y se llena al pasar el umbral. */
 .atras-gesto{position:fixed;left:0;top:0;z-index:30;display:grid;place-items:center;width:44px;height:44px;margin-top:-22px;border-radius:50%;background:var(--surface);color:var(--accent);box-shadow:0 4px 16px rgba(0,0,0,.2);pointer-events:none;opacity:0;will-change:transform,opacity;transition:background-color .12s,color .12s}
 .atras-gesto.listo{background:var(--accent);color:var(--accent-ink)}
