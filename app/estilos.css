@@ -733,3 +733,13 @@ span.ej-semana{cursor:default}
 .lista-orden .boton-icono:disabled{opacity:.3}
 .icono.flecha-arriba{transform:rotate(-90deg)}
 .icono.flecha-abajo{transform:rotate(90deg)}
+/* Anotar un día pasado o corregir una sesión. */
+.campos-pasado{display:flex;flex-direction:column;gap:10px}
+.campos-pasado label{display:flex;flex-direction:column;gap:4px}
+.cab-pasado{display:grid;grid-template-columns:48px minmax(0,1fr) 40px;gap:10px;align-items:center;margin-bottom:8px}
+.cab-pasado div{display:flex;flex-direction:column;gap:2px}
+.filas-pasado{display:grid;grid-template-columns:30px minmax(0,1fr) minmax(0,1fr) 54px 36px;gap:6px;align-items:center}
+.filas-pasado.seg{grid-template-columns:30px minmax(0,1fr) 36px}
+.filas-pasado .cab{font-size:11.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--ink-muted);text-align:center}
+.filas-pasado input,.filas-pasado select{min-height:38px;text-align:center;font-weight:600;font-variant-numeric:tabular-nums;padding:4px}
+.ej-pasado .agregar-serie{margin-top:8px;width:100%}

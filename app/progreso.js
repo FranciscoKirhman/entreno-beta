@@ -150,8 +150,10 @@ const reloj = seg => (seg < 60 ? `${Math.round(seg)} s` : `${Math.floor(seg / 60
 
 function historialHtml() {
   const h = historial();
-  if (!h.length) return historialVacio();
-  return `<label class="buscador-historial"><span class="sr-only">Buscar en el historial</span><input type="search" id="buscar-historial" placeholder="Buscar ejercicio, sesión o fecha" value="${esc(buscar)}" autocomplete="off"></label>
+  const anotar = `<div class="fila-botones"><button type="button" class="boton" id="anotar-pasado">${E.borradorPasado && !E.borradorPasado.id ? `Seguir anotando el ${esc(fechaCorta(E.borradorPasado.fecha))}` : 'Anotar un día pasado'}</button></div>`;
+  if (!h.length) return historialVacio() + anotar;
+  return `${anotar}
+    <label class="buscador-historial"><span class="sr-only">Buscar en el historial</span><input type="search" id="buscar-historial" placeholder="Buscar ejercicio, sesión o fecha" value="${esc(buscar)}" autocomplete="off"></label>
     <div id="lista-historial">${listaHistorialHtml(h)}</div>`;
 }
 
@@ -176,7 +178,7 @@ function listaHistorialHtml(h = historial()) {
     const recs = (s.id && records.get(s.id)) || [];
     return `<li><details><summary><span class="fecha-h">${esc(fechaCorta(s.fecha))}</span><span class="titulo-h">${esc(s.titulo || 'Sesión')}${s.origen === 'hevy' ? ' <span class="chip">Hevy</span>' : s.origen === 'ejemplo' ? ' <span class="chip">Ejemplo</span>' : ''}${s.sinTerminar && s.fecha === hoy() ? ' <span class="chip">en curso</span>' : ''}${recs.length ? ` <span class="chip-record">${recs.length === 1 ? '1 récord' : `${recs.length} récords`}</span>` : ''}</span><span class="cifra-h num">${series(s.series.filter(deTrabajo).length)}</span></summary>
       ${s.comentario ? `<p class="pequeno comentario-h">"${esc(s.comentario)}"</p>` : ''}
-      <ul class="pequeno detalle-h">${porEj.map(g => `<li><strong>${esc(g.nombre)}</strong>: ${esc(textoSeries(g.trabajo) || 'sin series de trabajo')}${g.calentamiento ? ` <span class="suave">(+${g.calentamiento} de calentamiento)</span>` : ''}</li>`).join('')}</ul>${s.id && !s.sinTerminar ? `<button type="button" class="enlace pequeno" data-resumen="${esc(s.id)}">Ver resumen: récords y cómo te fue</button>` : ''}</details></li>`;
+      <ul class="pequeno detalle-h">${porEj.map(g => `<li><strong>${esc(g.nombre)}</strong>: ${esc(textoSeries(g.trabajo) || 'sin series de trabajo')}${g.calentamiento ? ` <span class="suave">(+${g.calentamiento} de calentamiento)</span>` : ''}</li>`).join('')}</ul>${s.id && !s.sinTerminar ? `<button type="button" class="enlace pequeno" data-resumen="${esc(s.id)}">Ver resumen: récords y cómo te fue</button>` : ''}${s.id && !s.origen && !s.sinTerminar && s.fecha < hoy() ? ` <button type="button" class="enlace pequeno" data-corregir="${esc(s.id)}">Corregir esta sesión</button>` : ''}</details></li>`;
   };
   if (palabras.length && !encontradas.length) return `<p class="pequeno suave">No encontré sesiones con "${esc(buscar)}". Prueba con un ejercicio, el nombre de la sesión o una fecha, como "sept" o "15 sept".</p>`;
   const lista = encontradas;
@@ -257,6 +259,7 @@ export async function vistaProgreso(ir) {
 
   document.querySelector('[data-ir-mas]')?.addEventListener('click', () => ir('mas'));
   enlazarHistorial(ir);
+  $('anotar-pasado')?.addEventListener('click', () => ir('pasado'));
   // El buscador repinta solo la lista, para no perder el teclado.
   $('buscar-historial')?.addEventListener('input', ev => { buscar = ev.target.value; verTodo = false; $('lista-historial').innerHTML = listaHistorialHtml(); enlazarHistorial(ir); });
   document.querySelectorAll('[data-ficha]').forEach(b => b.onclick = () => { ir('ejercicio', { id: b.dataset.ficha, desde: 'progreso' }); scrollTo(0, 0); });
@@ -325,6 +328,7 @@ export async function vistaProgreso(ir) {
 
 function enlazarHistorial(ir) {
   document.querySelectorAll('[data-resumen]').forEach(b => b.onclick = () => ir('resumen', { id: b.dataset.resumen, desde: 'progreso' }));
+  document.querySelectorAll('[data-corregir]').forEach(b => b.onclick = () => ir('pasado', { id: b.dataset.corregir }));
   $('ver-todo')?.addEventListener('click', () => { verTodo = !verTodo; const y = scrollY; $('lista-historial').innerHTML = listaHistorialHtml(); enlazarHistorial(ir); scrollTo(0, y); });
 }
 

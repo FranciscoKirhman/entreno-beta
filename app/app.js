@@ -9,6 +9,7 @@ import { derivar } from '../nucleo/derivar.js';
 import { generarPlan } from '../nucleo/motor-plan.js';
 import { vistaHoy } from './hoy.js';
 import { vistaFicha } from './ficha.js';
+import { vistaDiaPasado } from './dia-pasado.js';
 import { vistaSemana } from './semana.js';
 import { vistaCoach } from './coach-ui.js';
 import { vistaProgreso } from './progreso.js';
@@ -151,7 +152,7 @@ function vistaInicio() {
 
 // ── Navegación ──────────────────────────────────────────────────────────────
 const VISTAS_CON_PLAN = ['hoy', 'semana', 'coach', 'progreso', 'checkin', 'plan', 'resumen'];
-const PESTANA = { banco: 'mas', checkin: 'semana', plan: 'semana', perfil: 'mas', seccion: 'mas' };
+const PESTANA = { banco: 'mas', checkin: 'semana', plan: 'semana', perfil: 'mas', seccion: 'mas', pasado: 'progreso' };
 function ir(vista, extra) {
   if (VISTAS_CON_PLAN.includes(vista) && (!E.plan)) vista = 'inicio';
   if (VISTAS_CON_PLAN.includes(vista) && E.plan?.bloqueado) { vistaBloqueada(); return; }
@@ -163,7 +164,7 @@ function ir(vista, extra) {
   const vistas = {
     inicio: vistaInicio, cuestionario: () => vistaRapido(ir, armarPlan), perfil: () => vistaPerfil(ir, armarPlan), seccion: () => vistaSeccion(ir),
     plan: () => vistaPlan(ir, { armarPlan, nuevo: extra?.nuevo }), hoy: () => vistaHoy(ir, extra), ejercicio: () => vistaFicha(ir, extra || {}), semana: () => vistaSemana(ir),
-    banco: () => vistaBanco(ir, extra || {}), coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), resumen: () => vistaResumen(ir, extra || {}), progreso: () => vistaProgreso(ir), mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar }),
+    banco: () => vistaBanco(ir, extra || {}), coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), resumen: () => vistaResumen(ir, extra || {}), progreso: () => vistaProgreso(ir), pasado: () => vistaDiaPasado(ir, extra || {}), mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar }),
   };
   (vistas[vista] || vistaInicio)();
   mostrarMensaje(); // los avisos se muestran una vez, flotando sobre el menú
