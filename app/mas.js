@@ -1,7 +1,8 @@
 import { validarRespaldo } from '../nucleo/respaldo.js';
 // Vista Más: cuenta, ajustar con tu IA (copiar y pegar o conexión directa), importar un plan escrito y reiniciar.
-import { E, guardar, reiniciar, empezarDeNuevo, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje, unidadPeso, modoEjemplo, activarCuenta, resumenLocal, traerPerfilLocal } from './comun.js';
+import { E, guardar, reiniciar, empezarDeNuevo, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje, unidadPeso, modoEjemplo, activarCuenta, resumenLocal, traerPerfilLocal, avisar } from './comun.js';
 import { esExportacionHevy, importarParaTelefono } from '../nucleo/hevy-csv.js';
+import { claveHevy, ultimaHevy, guardarClaveHevy, sincronizarHevy } from './hevy-auto.js';
 import { soporte, configAvisos, cambiarAvisos, activarAvisos, notificar, enlaceCalendario } from './avisos.js';
 import { CONFIG } from './config.js';
 import { conexionIAHtml, enlazarConexionIA } from './conexion-ia.js';
@@ -271,6 +272,12 @@ function conexionesHtml() {
         <div class="cab-conexion">${icono('hevy')}<strong>Hevy</strong><label class="accion-conexion">Importar<input type="file" id="archivo-hevy" accept=".csv,text/csv" hidden></label></div>
         <p class="pequeno suave">Trae tu historial de Hevy: la app lo usa para "la vez anterior" y para partir el plan con tus pesos reales. En Hevy: Perfil → Ajustes → Exportar e importar datos → Exportar entrenamientos; guarda el archivo y elígelo aquí.</p>
         ${importadas.length ? `<p class="pequeno">Importadas: ${importadas.length} ${importadas.length === 1 ? 'sesión' : 'sesiones'} (la última, ${esc(fechaCorta(ultima))}). <button type="button" class="enlace" id="quitar-hevy">Quitar lo importado</button></p>` : ''}
+        <details class="extra"${claveHevy() ? ' open' : ''}><summary>Con Hevy Pro, que entren solas</summary>
+          <p class="pequeno suave">Con la clave de la API de Hevy (en Hevy: Ajustes, Desarrollador), al abrir la app se traen tus entrenamientos nuevos, sin exportar el archivo. La clave queda solo en este teléfono: no va en el respaldo ni a tu cuenta.</p>
+          ${claveHevy() ? `<p class="pequeno">Clave guardada.${ultimaHevy() ? ` Última revisión: ${esc(new Date(ultimaHevy()).toLocaleString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}.` : ''}</p>
+            <div class="fila-botones"><button type="button" class="boton" id="hevy-traer">Traer ahora</button><button type="button" class="enlace" id="hevy-quitar-clave">Quitar la clave</button></div>`
+          : `<form id="form-hevy-clave" class="fila-chat"><input type="password" id="hevy-clave" autocomplete="off" placeholder="Clave de la API de Hevy" aria-label="Clave de la API de Hevy" required><button type="submit" class="boton primario">Guardar y traer</button></form>`}
+        </details>
         <div id="estado-hevy"></div>
       </li>
       <li>
@@ -304,6 +311,25 @@ function enlazarConexiones(repintar) {
     if (r.sinCatalogo.length) E.mensaje += ` ${r.sinCatalogo.length} ejercicio${r.sinCatalogo.length === 1 ? '' : 's'} no calza${r.sinCatalogo.length === 1 ? '' : 'n'} con el catálogo y no cuenta${r.sinCatalogo.length === 1 ? '' : 'n'} para "la vez anterior": ${r.sinCatalogo.slice(0, 4).join(', ')}${r.sinCatalogo.length > 4 ? '…' : ''}.`;
     guardar(); repintar();
   };
+  // Hevy por la API: guardar la clave, traer ahora o quitarla.
+  const traer = async (boton, { nueva = false } = {}) => {
+    const out = $('estado-hevy');
+    if (boton) boton.disabled = true;
+    out.innerHTML = '<p class="pequeno suave" role="status">Trayendo de Hevy…</p>';
+    try {
+      const r = await sincronizarHevy();
+      E.mensaje = r.nuevas.length ? `Llegaron ${r.nuevas.length === 1 ? '1 sesión' : `${r.nuevas.length} sesiones`} de Hevy.` : 'No había sesiones nuevas en Hevy.';
+      if (r.sinCatalogo.length) E.mensaje += ` ${r.sinCatalogo.length} ejercicio${r.sinCatalogo.length === 1 ? '' : 's'} no calza${r.sinCatalogo.length === 1 ? '' : 'n'} con el catálogo: ${r.sinCatalogo.slice(0, 4).join(', ')}${r.sinCatalogo.length > 4 ? '…' : ''}.`;
+      const aviso = E.mensaje; E.mensaje = null;
+      guardar(); repintar(); avisar(aviso);
+    } catch (e) {
+      if (nueva) guardarClaveHevy(null); // una clave que no funcionó no se guarda
+      out.innerHTML = `<div class="aviso alerta">${esc(e.message)}</div>`; if (boton) boton.disabled = false;
+    }
+  };
+  $('form-hevy-clave')?.addEventListener('submit', ev => { ev.preventDefault(); guardarClaveHevy($('hevy-clave').value); traer(ev.submitter, { nueva: true }); });
+  $('hevy-traer')?.addEventListener('click', ev => traer(ev.currentTarget));
+  $('hevy-quitar-clave')?.addEventListener('click', () => { guardarClaveHevy(null); E.mensaje = 'Quité la clave de Hevy. Lo ya traído se queda.'; guardar(); repintar(); });
   $('quitar-hevy')?.addEventListener('click', ev => {
     const b = ev.currentTarget;
     if (!b.dataset.confirmar) { b.dataset.confirmar = '1'; b.textContent = 'Toca de nuevo para quitarlo'; return; }
