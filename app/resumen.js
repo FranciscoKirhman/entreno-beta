@@ -7,6 +7,7 @@ import { estadoDelPlan } from '../nucleo/registrado.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { dice } from './cuestionario.js';
 import { esAsistido } from '../nucleo/catalogo.js';
+import { imagenSesion } from './imagen-sesion.js';
 
 const nombreEj = (id, respaldo) => indice.porId.get(id)?.nombre || respaldo || 'Ejercicio';
 // Insignia de cada récord (hoja RS01 del banco de imágenes). Mientras no esté cortada, se muestra la etiqueta "Récord".
@@ -127,9 +128,34 @@ export function vistaResumen(ir, { id } = {}) {
       <p class="pequeno" id="copiado-ia" role="status"></p>
       <div class="fila-botones enlaces-ia"><a class="boton" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer">Abrir ChatGPT</a><a class="boton" href="https://claude.ai/new" target="_blank" rel="noopener noreferrer">Abrir Claude</a><a class="boton" href="https://gemini.google.com/" target="_blank" rel="noopener noreferrer">Abrir Gemini</a></div>
     </details>
-    <div class="fila-botones"><button type="button" class="boton" id="compartir-resumen">Compartir</button><button type="button" class="boton primario" id="volver-hoy">Listo</button></div>
+    <div class="fila-botones"><button type="button" class="boton" id="compartir-resumen">Compartir</button><button type="button" class="boton" id="imagen-resumen">Imagen para compartir</button></div>
+    <div id="imagen-compartir"></div>
+    <div class="fila-botones"><button type="button" class="boton primario" id="volver-hoy">Listo</button></div>
   </div>`;
   $('volver-hoy').onclick = () => ir('hoy');
+  // Imagen para historias, como Hevy: sin peso corporal ni fotos. Si el teléfono deja compartir archivos, abre su menú;
+  // si no, se muestra para guardarla.
+  $('imagen-resumen').onclick = async ev => {
+    const b = ev.currentTarget; b.disabled = true;
+    try {
+      const mejor = xs => {
+        const conPeso = xs.filter(x => Number(x.carga_kg) > 0);
+        if (conPeso.length) { const m = conPeso.reduce((a, x) => (Number(x.carga_kg) * 100 + (Number(x.reps) || 0) > Number(a.carga_kg) * 100 + (Number(a.reps) || 0) ? x : a)); return `${peso(m.carga_kg)} × ${m.reps ?? (m.distancia_m != null ? `${m.distancia_m} m` : '')}`; }
+        return textoSeries(xs);
+      };
+      const blob = await imagenSesion({
+        titulo: foco, fecha: fechaCorta(sesion.fecha),
+        cifras: [[r.minutos ?? '·', 'minutos'], [volumenTexto(r.volumen), 'levantados'], [r.seriesTrabajo, 'series']],
+        ejercicios: r.porEjercicio.map(g => [nombreEj(g.ejercicio_id, g.nombre), mejor(g.series)]),
+        records: r.records.map(x => `${nombreEj(x.ejercicio_id)}: ${textoRecord(x, { corto: true })}`),
+      });
+      const archivo = new File([blob], `entreno-${sesion.fecha}.png`, { type: 'image/png' });
+      if (navigator.canShare?.({ files: [archivo] })) { try { await navigator.share({ files: [archivo], title: foco }); } catch { /* cerró el menú */ } return; }
+      const url = URL.createObjectURL(blob);
+      $('imagen-compartir').innerHTML = `<img class="imagen-sesion" src="${url}" alt="Imagen de la sesión para compartir" width="270" height="480"><div class="fila-botones"><a class="boton" href="${url}" download="${archivo.name}">Guardar la imagen</a></div>`;
+    } catch (e) { avisar(e.message || 'No pude armar la imagen.'); }
+    finally { b.disabled = false; }
+  };
   // Como el botón de Hevy para ChatGPT y Claude: el texto se copia y la persona lo pega en su IA (la app no lo envía).
   $('copiar-ia').onclick = async () => {
     const texto = textoParaIA({ sesion, r, dia, foco });

@@ -775,3 +775,5 @@ span.ej-semana{cursor:default}
 /* Resumen del mes o del año. */
 .cifras-resumen .sube{color:var(--good)}
 .cifras-resumen .baja{color:var(--ink-muted)}
+/* Imagen de la sesión para compartir (vista previa). */
+.imagen-sesion{display:block;width:min(270px,70%);height:auto;margin:10px auto;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.2)}
