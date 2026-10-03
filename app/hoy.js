@@ -436,9 +436,9 @@ function enlazar(ir, dia) {
     bienestarAbierto = true;
     E.mensaje = fecha === f ? 'Anotado: te llegó hoy. Recalculé tu ciclo.' : `Anotado: te llegó el ${fechaCorta(fecha)}. Recalculé tu ciclo.`;
     guardar();
+    cicloCambiado();
     vistaHoyMantener(ir);
   };
-    cicloCambiado();
   $('ciclo-hoy')?.addEventListener('click', () => marcarRegla(f));
   $('ciclo-otro')?.addEventListener('change', ev => ev.target.value && marcarRegla(ev.target.value));
   function guardarBienestarDia(datos, { mantenerAbierto = false } = {}) {
