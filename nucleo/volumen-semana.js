@@ -49,3 +49,38 @@ export function semanaPorMusculo({ series, plan, indice, hoy }) {
   }).sort((a, b) => b.planeadas - a.planeadas || b.hechas - a.hechas);
   return { desde, hasta, filas, intensidad: Object.fromEntries(filas.map(f => [f.musculo, f.avance])) };
 }
+
+const sumarDias = (f, n) => new Date(Date.parse(f + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+// Los músculos que tienen franja recomendada (los mismos que revisa el validador).
+export const CON_FRANJA = ['gluteo', 'cuadriceps', 'femoral', 'aductor_abductor', 'espalda', 'pecho', 'hombro', 'biceps', 'triceps'];
+
+/**
+ * Músculos contra lo recomendado, como el tablero: las series de los últimos 12 días llevadas a una semana, contra
+ * la franja de tu nivel; si subiste o bajaste respecto de los 12 días anteriores; tu promedio por semana desde que
+ * hay registro (hasta 12 semanas); y las semanas anteriores, una por una (de lunes a domingo).
+ * @param rango [mínimo, máximo] de series por semana (derivados.series_rango)
+ * @returns {{filas: [{musculo, reciente, anterior, cambio, promedio, estado, seguido}], semanas: [{lunes, porMusculo}]}}
+ *   estado: 'bajo' (menos de la mitad del mínimo), 'cerca' (bajo el mínimo), 'bien' o 'alto' (más de 4 sobre el
+ *   máximo). seguido: lleva los dos períodos de 12 días bajo el mínimo.
+ */
+export function musculosContraFranja({ series, indice, hoy, rango: [lo, hi], semanas = 6 }) {
+  const DIAS = 12;
+  const ini = sumarDias(hoy, -(DIAS - 1)), iniAnt = sumarDias(ini, -DIAS), finAnt = sumarDias(ini, -1);
+  const porSemana = n => Math.round(n * 7 / DIAS * 10) / 10;
+  const rec = hechasPorMusculo(series, indice, ini, hoy), ant = hechasPorMusculo(series, indice, iniAnt, finAnt);
+  const primera = series.map(s => s.fecha).filter(Boolean).sort()[0];
+  const desde = primera && primera > sumarDias(hoy, -83) ? primera : sumarDias(hoy, -83);
+  const total = hechasPorMusculo(series, indice, desde, hoy);
+  const semanasHistorial = primera ? Math.max(1, Math.round((Date.parse(hoy) - Date.parse(desde)) / 864e5 + 1) / 7) : 1;
+  const estado = v => (v > hi + 4 ? 'alto' : v >= lo ? 'bien' : v >= lo / 2 ? 'cerca' : 'bajo');
+  const filas = CON_FRANJA.map(m => {
+    const reciente = porSemana(rec[m] || 0), anterior = porSemana(ant[m] || 0);
+    return { musculo: m, reciente, anterior, cambio: Math.round((reciente - anterior) * 10) / 10,
+      promedio: Math.round((total[m] || 0) / semanasHistorial * 10) / 10, estado: estado(reciente),
+      seguido: reciente < lo && anterior < lo && primera <= iniAnt };
+  }).filter(f => f.reciente || f.anterior || f.promedio);
+  const lunesHoy = lunesDe(hoy);
+  const lista = Array.from({ length: semanas }, (_, i) => sumarDias(lunesHoy, -7 * (semanas - i)))
+    .map(lunes => ({ lunes, porMusculo: hechasPorMusculo(series, indice, lunes, sumarDias(lunes, 6)) }));
+  return { filas, semanas: lista };
+}

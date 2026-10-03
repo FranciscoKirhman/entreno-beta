@@ -2,7 +2,7 @@
 // (que abre su ficha con gráficos e historial), sueño y ánimo, el historial con buscador,
 // fotos de progreso privadas, suplementos, indicaciones de tu médico o kinesiólogo, y lo que anotaste para el
 // entrenador.
-import { E, guardar, C, esc, $, fechaCorta, hoy, indice, cambiarPlan, opcionesRadio, chk, mostrarMensaje, seriesTexto, volumenTexto, peso } from './comun.js';
+import { E, D, guardar, C, esc, $, fechaCorta, hoy, indice, cambiarPlan, opcionesRadio, chk, mostrarMensaje, seriesTexto, volumenTexto, peso } from './comun.js';
 import { tipoParaGuardar } from '../nucleo/registro.js';
 import { sesionDe, sumarDias, diaSemana } from '../nucleo/agenda.js';
 import { constancia } from '../nucleo/suplementos.js';
@@ -12,7 +12,7 @@ import { reconocer } from '../nucleo/importar-plan.js';
 import { guardarFotoLocal, listarFotosLocales, borrarFotoLocal, guardarArchivoLocal } from './fotos-local.js';
 import { subirACuenta, subirPendientes, estadoCola } from './cola.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
-import { semanaPorMusculo } from '../nucleo/volumen-semana.js';
+import { semanaPorMusculo, musculosContraFranja } from '../nucleo/volumen-semana.js';
 import { NOMBRE_MUSCULO, mayuscula, imagenMusculo } from './musculos.js';
 import * as nube from './nube.js';
 import { esAsistido } from '../nucleo/catalogo.js';
@@ -60,6 +60,40 @@ function semanaHtml() {
     <h3>Esta semana</h3>
     <p class="pequeno suave">Series hechas de las que tocan esta semana, por músculo.</p>
     <ul class="barras-semana">${r.filas.filter(f => f.planeadas >= 1 || f.hechas >= 1).map(f => `<li>${img(f.musculo)}<span class="nombre-musculo">${esc(nombre(f.musculo))}</span><span class="pista" aria-hidden="true"><i style="width:${Math.round(f.avance * 100)}%"></i></span><span class="num pequeno">${n(f.hechas)}${f.planeadas ? ` de ${n(f.planeadas)}` : ''}</span></li>`).join('')}</ul>
+  </section>`;
+}
+
+/** Músculos contra lo recomendado, como el tablero: los últimos 12 días llevados a una semana, contra la franja de tu
+ *  nivel, con el cambio respecto de los 12 días anteriores, tu promedio y las semanas anteriores (plegadas). */
+const ESTADO = { bajo: 'Muy bajo', cerca: 'Bajo', bien: 'En la franja', alto: 'Sobre la franja' };
+function franjaHtml() {
+  const rango = D().series_rango;
+  if (!rango) return '';
+  const r = musculosContraFranja({ series: seriesAnotadas(E.sesiones, E.registro), indice, hoy: hoy(), rango });
+  if (!r.filas.length) return '';
+  const [lo, hi] = rango;
+  const n = x => String(x).replace('.', ',');
+  const prioridad = new Set(E.respuestas?.musculos_prioridad || []);
+  const filas = [...r.filas].sort((a, b) => (prioridad.has(b.musculo) - prioridad.has(a.musculo)) || b.reciente - a.reciente);
+  const tope = Math.max(hi + 6, ...filas.map(f => f.reciente));
+  const pct = v => `${Math.min(100, Math.round(v / tope * 100))}%`;
+  const nombre = m => mayuscula(NOMBRE_MUSCULO[m] || m);
+  const seguido = filas.filter(f => f.seguido);
+  const cambio = f => (Math.abs(f.cambio) < 0.5 ? 'igual que antes' : `${f.cambio > 0 ? 'subió' : 'bajó'} ${n(Math.abs(f.cambio))}`);
+  return `<section class="tarjeta">
+    <h3>Músculos contra lo recomendado</h3>
+    <p class="pequeno suave">Series de los últimos 12 días, llevadas a una semana. La franja de tu nivel es de ${lo} a ${hi} por semana${prioridad.size ? '; tus zonas prioritarias pueden pasarse un poco' : ''}.</p>
+    ${seguido.length ? `<p class="aviso ojo pequeno">${esc(seguido.map(f => nombre(f.musculo)).join(', '))} ${seguido.length === 1 ? 'lleva' : 'llevan'} más de 3 semanas bajo la franja.</p>` : ''}
+    <ul class="franja-musculos">${filas.map(f => `<li>
+      <span class="nombre-musculo">${esc(nombre(f.musculo))}${prioridad.has(f.musculo) ? ' <span class="chip">Prioridad</span>' : ''}</span>
+      <span class="num estado-${f.estado}">${n(f.reciente)}</span>
+      <span class="pista-franja" aria-hidden="true"><b style="left:${pct(lo)};width:calc(${pct(hi)} - ${pct(lo)})"></b><i class="estado-${f.estado}" style="width:${pct(f.reciente)}"></i></span>
+      <span class="pequeno suave detalle-franja">${esc(`${ESTADO[f.estado]} · ${cambio(f)} · promedio ${n(f.promedio)}`)}</span></li>`).join('')}</ul>
+    <details class="extra"><summary>Semanas anteriores, una por una</summary>
+      <div class="tabla-semanas" style="--cols:${r.semanas.length}"><span></span>${r.semanas.map(w => `<span class="cab" title="Semana del ${esc(fechaCorta(w.lunes))}">${Number(w.lunes.slice(8, 10))}/${Number(w.lunes.slice(5, 7))}</span>`).join('')}
+      ${filas.map(f => `<span class="nombre-musculo">${esc(nombre(f.musculo))}</span>${r.semanas.map(w => { const v = Math.round((w.porMusculo[f.musculo] || 0) * 10) / 10; return `<span class="num ${v >= lo ? 'estado-bien' : v >= lo / 2 ? 'estado-cerca' : 'estado-bajo'}">${n(v)}</span>`; }).join('')}`).join('')}</div>
+      <p class="pequeno suave">Cada columna es una semana, desde el lunes que dice (día/mes). Lo que ayuda cuenta media serie.</p>
+    </details>
   </section>`;
 }
 
@@ -199,6 +233,7 @@ export async function vistaProgreso(ir) {
     <h1>Progreso</h1>
     ${bienvenidaProgreso()}
     ${semanaHtml()}
+    ${franjaHtml()}
     ${constanciaHtml()}
     ${ejerciciosHtml()}
     ${suenoAnimoHtml()}

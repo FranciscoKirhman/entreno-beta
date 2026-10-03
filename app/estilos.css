@@ -756,3 +756,19 @@ span.ej-semana{cursor:default}
 .campos-propio .chips label{flex-direction:row;align-items:center;gap:6px}
 .campos-propio fieldset{border:0;margin:0;padding:0}
 .campos-propio legend{margin-bottom:6px}
+/* Músculos contra lo recomendado (franja de tu nivel). */
+.franja-musculos{list-style:none;margin:10px 0 4px;padding:0;display:flex;flex-direction:column;gap:10px}
+.franja-musculos li{display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:2px 8px;align-items:center}
+.franja-musculos .nombre-musculo{font-weight:600}
+.franja-musculos .num{text-align:right;font-weight:700}
+.pista-franja{grid-column:1 / -1;position:relative;height:10px;border-radius:10px;background:var(--fill);overflow:hidden}
+.pista-franja b{position:absolute;top:0;bottom:0;background:var(--good-soft);box-shadow:inset 0 0 0 1px var(--good)}
+.pista-franja i{position:absolute;left:0;top:3px;bottom:3px;border-radius:6px;background:var(--accent)}
+.pista-franja i.estado-bien{background:var(--good)}
+.pista-franja i.estado-bajo{background:var(--critical)}
+.detalle-franja{grid-column:1 / -1}
+.num.estado-bien{color:var(--good)}.num.estado-cerca{color:var(--warning)}.num.estado-bajo{color:var(--critical)}.num.estado-alto{color:var(--warning)}
+.tabla-semanas{display:grid;grid-template-columns:minmax(0,1fr) repeat(var(--cols),36px);gap:6px 4px;align-items:center;margin-top:8px;font-size:13px}
+.tabla-semanas .cab{font-size:11px;color:var(--ink-muted);text-align:right;white-space:nowrap}
+.tabla-semanas .num{text-align:right}
+.tabla-semanas .nombre-musculo{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
