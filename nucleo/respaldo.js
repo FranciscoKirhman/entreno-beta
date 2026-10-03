@@ -25,6 +25,9 @@ export function validarRespaldo(r, ids = null) {
   };
   for (const k of ['lugares', 'lesiones', 'favoritos', 'prohibidos', 'musculos_prioridad', 'dias_no_puedo', 'cardio_actual']) exigir(r.estado.respuestas[k] === undefined || Array.isArray(r.estado.respuestas[k]), `un campo de perfil ${k} inválido`);
   for (const l of r.estado.respuestas.lugares || []) exigir(objeto(l) && Array.isArray(l.equipamiento) && l.equipamiento.every(x => typeof x === 'string'), 'un lugar inválido');
+  exigir(r.estado.ejerciciosPropios === undefined || (Array.isArray(r.estado.ejerciciosPropios) && r.estado.ejerciciosPropios.every(e => objeto(e)
+    && typeof e.id === 'string' && /^propio_[a-z0-9_]{1,40}$/.test(e.id) && typeof e.nombre === 'string' && e.nombre.length <= 60
+    && Array.isArray(e.musculos_primarios) && Array.isArray(e.equipamiento))), 'un ejercicio propio inválido');
   const p = r.estado.plan;
   if (p != null) {
     exigir(objeto(p), 'un plan inválido');

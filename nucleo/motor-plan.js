@@ -104,7 +104,8 @@ export function prescripcion(ej, prioridad, d) {
   const suave = obj === 'salud' || obj === 'volver' || d.nivel === 'principiante';
   const compuesto = ej.tipo === 'compuesto';
   let series = 3, reps = [8, 12];
-  if (ej.tipo === 'core') reps = ISOMETRICOS.has(ej.id) ? [30, 45] : [10, 15];
+  const porTiempo = ISOMETRICOS.has(ej.id) || ej.medida === 'seg'; // ej.medida: la de un ejercicio propio
+  if (ej.tipo === 'core') reps = porTiempo ? [30, 45] : [10, 15];
   else if (fuerza && compuesto && prioridad === 1) { series = d.nivel === 'principiante' ? 3 : 4; reps = d.nivel === 'principiante' ? [5, 8] : [3, 6]; }
   else if (compuesto && prioridad === 1) reps = suave ? [8, 12] : [6, 10];
   else if (!compuesto) reps = [10, 15];
@@ -113,7 +114,7 @@ export function prescripcion(ej, prioridad, d) {
   const descanso = ej.tipo === 'core' ? 60 : !compuesto ? 75 : prioridad === 1 ? (fuerza ? 180 : 150) : 120;
   // Transporte con peso (caminata del granjero): se mide en metros, con descanso de accesorio.
   if (ej.patron === 'transporte') return { series: suave ? 2 : 3, reps_min: 20, reps_max: 40, unidad: 'm', rir: Math.min(5, rir), descanso_seg: 90 };
-  return { series, reps_min: reps[0], reps_max: reps[1], unidad: ISOMETRICOS.has(ej.id) ? 'seg' : 'reps', rir: Math.min(5, rir), descanso_seg: descanso };
+  return { series, reps_min: reps[0], reps_max: reps[1], unidad: porTiempo ? 'seg' : 'reps', rir: Math.min(5, rir), descanso_seg: descanso };
 }
 
 /**

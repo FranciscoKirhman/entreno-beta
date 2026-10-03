@@ -2,6 +2,7 @@
 // que el servidor: nucleo/*.js.
 //
 //   node herramientas/servir.mjs  →  http://127.0.0.1:5173/app/
+import { conPropios, idsPropios } from '../nucleo/propios.js';
 import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo, entrarEjemplo, salirEjemplo, modoEjemplo, errorGuardado, activarCuenta } from './comun.js';
 import { prepararSesion, unirSesiones } from '../nucleo/sincronizacion.js';
 import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
@@ -82,7 +83,7 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
     const borrador = E.firmaPlan && firmaRespuestas(E.firmaPlan) !== firmaRespuestas();
     if (!borrador) E.respuestas = respuestas;
   }
-  if (plan) E.plan = plan;
+  if (plan) E.plan = conPropios(plan, E.plan);
   else if (R().objetivo_principal && E.plan?.dias?.length && !E.plan.bloqueado && !E.plan.id) {
     // Perfil local copiado a una cuenta vacía: se sube su plan tal cual (el servidor lo valida), sin armar otro.
     await consultar(() => nube.guardarCuestionario(R()));
@@ -115,7 +116,7 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
   catch (e) { console.warn('No se pudieron traer las indicaciones de la cuenta', e); }
   guardar();
   await consultar(() => subirPendientes({ forzar }));
-  E.sesiones = unirSesiones(E.sesiones, await consultar(() => nube.cargarSesiones()), E.pendientes || []);
+  E.sesiones = unirSesiones(E.sesiones, idsPropios(await consultar(() => nube.cargarSesiones()), E.ejerciciosPropios || []), E.pendientes || []);
   E.bienestar = { ...await consultar(() => nube.cargarBienestar()), ...Object.fromEntries(Object.entries(E.bienestar).filter(([, b]) => !b.enCuenta)) };
   guardar();
 }

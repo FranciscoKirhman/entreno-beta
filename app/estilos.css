@@ -749,3 +749,10 @@ span.ej-semana{cursor:default}
 .fila-cardio{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:8px}
 .fila-cardio label{display:flex;align-items:center;gap:6px}
 .fila-cardio input{width:72px;min-height:38px;text-align:center}
+/* Crear un ejercicio propio, en el banco. */
+.crear-propio summary{font-weight:600;cursor:pointer}
+.campos-propio{display:flex;flex-direction:column;gap:12px;margin-top:10px}
+.campos-propio label{display:flex;flex-direction:column;gap:4px}
+.campos-propio .chips label{flex-direction:row;align-items:center;gap:6px}
+.campos-propio fieldset{border:0;margin:0;padding:0}
+.campos-propio legend{margin-bottom:6px}

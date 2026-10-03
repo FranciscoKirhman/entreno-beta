@@ -59,7 +59,17 @@ try {
   const viejo = JSON.parse(localStorage.getItem('entreno-demo-v1') || 'null');
   E = { ...E, ...(viejo ? { respuestas: viejo.respuestas, plan: viejo.plan } : {}), ...JSON.parse(localStorage.getItem(CLAVE) || '{}') };
 } catch { lecturaFallida = true; errorGuardado = 'No pude leer tus datos guardados. Descarga un respaldo de esta sesión antes de cerrar.'; }
+// Los ejercicios que crea la persona (nucleo/propios.js) se suman al catálogo del teléfono: así el banco, Hoy, el
+// validador y el historial los tratan como cualquier otro. Se rehace en cada guardado (cambia con la cuenta o el ejemplo).
+export function alinearPropios() {
+  if (!Array.isArray(indice.ejercicios)) return;
+  const propios = Array.isArray(E.ejerciciosPropios) ? E.ejerciciosPropios : [];
+  for (const [id, e] of indice.porId) if (e.propio) indice.porId.delete(id);
+  for (let i = indice.ejercicios.length - 1; i >= 0; i--) if (indice.ejercicios[i].propio) indice.ejercicios.splice(i, 1);
+  for (const e of propios) if (e?.id && !indice.porId.has(e.id)) { const ej = { ...e, propio: true }; indice.ejercicios.push(ej); indice.porId.set(ej.id, ej); }
+}
 export function guardar() {
+  alinearPropios();
   try {
     if (lecturaFallida) throw new Error('Los datos anteriores no se pudieron leer');
     if (ambitoDatos !== 'local' && !modoEjemplo && E.firmaPreferenciasCuenta) {
@@ -85,6 +95,7 @@ export function guardar() {
 }
 let personal = E;
 let claveAntesEjemplo = CLAVE_PERSONAL;
+alinearPropios();
 export function entrarEjemplo() {
   if (!modoEjemplo) { guardar(); personal = E; claveAntesEjemplo = CLAVE; }
   modoEjemplo = true; CLAVE = 'entreno-ejemplo-v1'; E = VACIO();
@@ -137,7 +148,7 @@ export function empezarDeNuevo() {
 /** Respaldo de todo lo anotado en este teléfono. Desde la versión 2 incluye las fotos de progreso: [{id, fecha, angulo, datos}]. */
 export const respaldo = (fotos = []) => ({ app: 'entreno', version: 2, creado: new Date().toISOString(), estado: E, fotos });
 export function restaurar(r) {
-  validarRespaldo(r, new Set(indice.porId.keys()));
+  validarRespaldo(r, new Set([...[...indice.porId.values()].filter(e => !e.propio).map(e => e.id), ...(r.estado?.ejerciciosPropios || []).map(e => e?.id)]));
   const antes = E, bloqueoAnterior = lecturaFallida;
   lecturaFallida = false;
   E = { ...VACIO(), ...structuredClone(r.estado), vista: 'hoy', mensaje: null };

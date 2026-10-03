@@ -43,7 +43,7 @@ export function alternativas(ejercicioId, { indice, equipamiento, bloqueadas = n
   const base = indice.porId.get(ejercicioId);
   if (!base) return [];
   return indice.ejercicios
-    .filter(e => e.patron === base.patron && e.id !== base.id && !excluir.includes(e.id)
+    .filter(e => e.patron === base.patron && e.id !== base.id && !e.propio && !excluir.includes(e.id)
       && tieneEquipo(e, equipamiento) && !cargaZonaBloqueada(e, bloqueadas) && nivelAlcanza(nivel, e.nivel_minimo))
     .sort((a, b) => a.preferencia - b.preferencia
       || b.musculos_primarios.filter(m => base.musculos_primarios.includes(m)).length - a.musculos_primarios.filter(m => base.musculos_primarios.includes(m)).length)

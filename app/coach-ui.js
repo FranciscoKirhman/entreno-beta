@@ -1,6 +1,7 @@
 // Vista Coach: el chat. Las reglas (nucleo/coach.js) responden al instante y sin señal; con cuenta, lo que no
 // entienden lo responde la IA del servidor. Nada cambia el plan sin que la persona lo confirme con un botón: el
 // coach muestra cómo queda la sesión de hoy o la semana y pregunta; después ofrece ir a verlo.
+import { conPropios } from '../nucleo/propios.js';
 import { E, guardar, esc, $, ctxNucleo, cambiarPlan } from './comun.js';
 import { responder, aplicarOpcion } from '../nucleo/coach.js';
 import * as nube from './nube.js';
@@ -82,7 +83,7 @@ async function enviar(texto, ir) {
       // Si la IA propone un cambio, queda pendiente hasta que la persona lo confirme.
       if (ia.propuesta) E.propuestaIA = ia.propuesta;
       E.chat.push({ rol: 'coach', texto: (ia.texto || r.texto) + sinIa, opciones: ia.propuesta ? CONFIRMAR_IA : ia.opciones || null });
-      if (ia.recargar_plan && !ia.propuesta) { const p = await nube.cargarPlan(); if (p) E.plan = p; }
+      if (ia.recargar_plan && !ia.propuesta) { const p = await nube.cargarPlan(); if (p) E.plan = conPropios(p, E.plan); }
     } catch (e) {
       E.chat = E.chat.filter(m => !m.pendiente);
       E.chat.push({ rol: 'coach', texto: `${r.texto} (No pude consultar a la IA: ${e.message})` });
