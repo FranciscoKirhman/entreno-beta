@@ -8,7 +8,8 @@ import { CONFIG } from './config.js';
 import { conexionIAHtml, enlazarConexionIA } from './conexion-ia.js';
 import { iaCopiarHtml, enlazarIACopiar } from './ia-copiar.js';
 import { validarPlan } from '../nucleo/validador.js';
-import { leerPlanTexto, calendarizar } from '../nucleo/importar-plan.js';
+import { leerPlanTexto, calendarizar, planATexto } from '../nucleo/importar-plan.js';
+import { semanaDe } from '../nucleo/ciclos.js';
 import { listarFotosLocales, guardarFotoLocal, restaurarFotosAtomicas } from './fotos-local.js';
 import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
 import * as nube from './nube.js';
@@ -85,7 +86,8 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     <section class="tarjeta">
       <h3>Tu plan</h3>
       <div class="fila-botones"><button type="button" class="boton primario" id="perfil">Completar mi perfil</button><button type="button" class="boton" id="ver-plan">Ver mi plan explicado</button></div>
-      <div class="fila-botones"><button type="button" class="boton" id="rehacer">Rehacer el plan con mis respuestas</button></div>
+      <div class="fila-botones"><button type="button" class="boton" id="rehacer">Rehacer el plan con mis respuestas</button>${E.plan?.dias?.length && !E.plan.bloqueado ? '<button type="button" class="boton" id="compartir-plan">Compartir mi plan</button>' : ''}</div>
+      <div id="plan-compartido"></div>
       <div class="fila-botones"><button type="button" class="boton" id="borrar-local">Borrar todo de este teléfono</button></div>
     </section>
     <p class="pequeno suave">Versión ${esc(CONFIG.version)}</p>
@@ -112,6 +114,14 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
   $('pantalla-encendida').onchange = ev => { E.pantallaEncendida = ev.target.checked; guardar(); actualizarPantalla(); };
   enlazarIACopiar(ir);
   enlazarConexionIA(async () => { await sincronizarAlEntrar({ forzar: true }); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); });
+  // Compartir el plan como texto (como las rutinas de Hevy): la otra persona lo pega en "Importar un plan".
+  $('compartir-plan')?.addEventListener('click', async () => {
+    const texto = planATexto(E.plan, { semana: semanaDe(E.plan, hoy()) || 1 });
+    try { if (navigator.share) { await navigator.share({ title: 'Mi plan de Entreno', text: texto }); return; } } catch { return; }
+    $('plan-compartido').innerHTML = `<pre class="prompt" id="texto-plan">${esc(texto)}</pre><p class="pequeno" id="plan-copiado"></p>`;
+    try { await navigator.clipboard.writeText(texto); $('plan-copiado').textContent = 'Copiado. Mándalo a quien quieras: lo pega en Más, Importar un plan que ya tengo.'; }
+    catch { $('plan-copiado').textContent = 'Selecciona el texto y cópialo.'; }
+  });
   $('importar').onclick = () => {
     const imp = leerPlanTexto($('plan-texto').value, indice);
     const out = $('resultado-importar');

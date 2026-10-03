@@ -66,7 +66,7 @@ const num = s => (s == null ? null : Number(String(s).replace(',', '.')));
 /** Una línea de ejercicio → {nombre, series, reps_min, reps_max, unidad, carga_kg, rir}; null si no es ejercicio. */
 export function leerLinea(linea) {
   const l = linea.replace(/^\s*(?:[-•*·]|\d+[.)])\s*/, '').trim();
-  const m = l.match(/(\d+)\s*(?:series?\s*(?:de)?\s*|[x×]\s*)(\d+)(?:\s*(?:-|–|a)\s*(\d+))?\s*(s|seg|segundos|")?\b/i);
+  const m = l.match(/(\d+)\s*(?:series?\s*(?:de)?\s*|[x×]\s*)(\d+)(?:\s*(?:-|–|a)\s*(\d+))?\s*(s|seg|segundos|"|m|metros)?\b/i);
   if (!m) return null;
   const nombre = l.slice(0, m.index).replace(/[:\-–(,]+\s*$/, '').trim();
   if (!nombre) return null;
@@ -77,7 +77,7 @@ export function leerLinea(linea) {
   return {
     texto: linea.trim(), nombre,
     series: Number(m[1]), reps_min: Number(m[2]), reps_max: Number(m[3] || m[2]),
-    unidad: m[4] ? 'seg' : 'reps',
+    unidad: !m[4] ? 'reps' : /^m/i.test(m[4]) ? 'm' : 'seg',
     carga_kg: num(kg),
     rir: rir != null ? Number(rir) : rpe != null ? Math.max(0, Math.round(10 - num(rpe))) : null,
   };
@@ -107,6 +107,22 @@ export function leerPlanTexto(texto, indice) {
   if (sinDia.ejercicios.length) dias.unshift(sinDia);
   const revisar = dias.flatMap(d => d.ejercicios.filter(e => !e.ejercicio_id).map(e => ({ dia: d.titulo, texto: e.texto, sugerido: e.sugerido })));
   return { dias, revisar };
+}
+
+const NOMBRE_DIA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+/**
+ * Compartir tu plan, como las rutinas de Hevy: una semana del plan en texto que "Importar un plan" sabe leer, sin
+ * datos personales. Una línea por día ("Lunes: Torso A") y una por ejercicio ("Press de banca con barra 4x6 a 10
+ * RIR 2 45 kg").
+ */
+export function planATexto(plan, { semana = 1 } = {}) {
+  const dias = plan.dias.filter(d => d.semana === semana && d.ejercicios?.length);
+  const linea = e => `${e.nombre || e.ejercicio_id} ${e.series}x${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${e.unidad === 'seg' ? 's' : e.unidad === 'm' ? ' m' : ''}${e.unidad === 'm' ? '' : ` RIR ${e.rir}`}${e.carga_kg ? ` ${String(e.carga_kg).replace('.', ',')} kg` : ''}`;
+  return [
+    'Mi plan de gimnasio, hecho con Entreno. Para usarlo: Entreno, Más, Importar un plan que ya tengo, y pega este texto.',
+    '',
+    ...dias.flatMap(d => [`${NOMBRE_DIA[new Date(d.fecha + 'T12:00:00Z').getUTCDay()]}: ${d.foco || 'Entrenamiento'}`, ...d.ejercicios.map(linea), '']),
+  ].join('\n').trimEnd();
 }
 
 /**
