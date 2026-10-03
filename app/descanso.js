@@ -2,6 +2,9 @@
 // al terminar (vibra en Android y suena un pitido corto). Se dibuja sobre el menú, fuera de la vista, así sigue
 // corriendo aunque la vista se vuelva a dibujar o se cambie de pantalla.
 let fin = 0, reloj = null, audio = null, etiqueta = '', siguientes = [], textoFinal = '¡A la siguiente serie!';
+// Series por tiempo (plancha y parecidas): al terminar, o al tocar Listo antes, se avisa cuántos segundos se hicieron.
+let alFin = null, inicio = 0;
+const hechos = () => Math.round((Date.now() - inicio) / 1000);
 const formato = seg => `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')}`;
 
 function caja() {
@@ -62,6 +65,12 @@ function terminar() {
   reloj = null;
   navigator.vibrate?.([200, 100, 200]);
   if (audio) pitido();
+  if (alFin) {
+    // Normalmente anota la serie y parte el descanso; si no hay descanso, se cierra.
+    const f = alFin; alFin = null; f(hechos());
+    if (!reloj) detenerDescanso();
+    return;
+  }
   caja().classList.add('termino');
   setTimeout(() => { if (!reloj) detenerDescanso(); }, 5000);
 }
@@ -71,9 +80,11 @@ export function iniciarDescanso(segundos, texto = 'Descanso') {
   iniciarTramos([{ seg: segundos, texto }], '¡A la siguiente serie!');
 }
 
-/** Cronómetro por tramos [{seg, texto}] (calentamiento, estiramiento, cardio): avisa en cada cambio y al terminar. */
-export function iniciarTramos(tramos, final = '¡Listo!') {
+/** Cronómetro por tramos [{seg, texto}] (calentamiento, estiramiento, cardio): avisa en cada cambio y al terminar.
+ *  alTerminar(segundos): para una serie por tiempo, recibe los segundos hechos al terminar o al tocar Listo antes. */
+export function iniciarTramos(tramos, final = '¡Listo!', { alTerminar = null } = {}) {
   if (!tramos?.length) return;
+  alFin = alTerminar; inicio = Date.now();
   try { audio ||= new (window.AudioContext || window.webkitAudioContext)(); audio.resume?.(); } catch { audio = null; }
   const [primero, ...resto] = tramos;
   fin = Date.now() + primero.seg * 1000;
@@ -87,9 +98,12 @@ export function iniciarTramos(tramos, final = '¡Listo!') {
 }
 
 export function detenerDescanso() {
+  const corriendo = Boolean(reloj), f = alFin;
   clearInterval(reloj);
   reloj = null;
   siguientes = [];
+  alFin = null;
   document.getElementById('descanso')?.classList.remove('visible', 'termino');
   document.body.classList.remove('con-descanso');
+  if (f && corriendo) f(hechos()); // Listo antes de tiempo: cuenta lo hecho hasta ahí
 }

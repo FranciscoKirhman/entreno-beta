@@ -50,6 +50,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
     ${dibujo ? `<img class="ficha-dibujo" src="${dibujo}" alt="Cómo se hace: ${esc(ej.nombre)}" width="960" height="640">` : ''}
     <h1>${esc(ej.nombre)}</h1>
     <p class="ficha-sub suave">${esc([...ej.equipamiento.map(q => EQUIPO[q]).filter(Boolean).slice(0, 2), NIVEL[ej.nivel_minimo]].filter(Boolean).join(' · '))}</p>
+    ${E.notasFijas?.[id] ? `<p class="nota-fija">${icono('lapiz', 'icono icono-chico')}<span>Tu nota fija: ${esc(E.notasFijas[id])}</span></p>` : ''}
 
     <section class="tarjeta ficha-musculos">
       ${imagenesMusculos(ej.musculos_primarios.slice(0, 2))}

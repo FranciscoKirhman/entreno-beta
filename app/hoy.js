@@ -9,6 +9,7 @@ import { textoRecord } from './resumen.js';
 import { esAsistido, conLastre, sinCargaExterna } from '../nucleo/catalogo.js';
 import { evaluarDia, ajustarSesion, TEXTO_RECOMENDACION } from '../nucleo/bienestar.js';
 import { cicloActivo, estadoCiclo, registrarInicio, NOMBRE_FASE, SINTOMAS } from '../nucleo/ciclo-menstrual.js';
+import { discosPorLado, discosDisponibles, BARRAS_KG, BARRAS_LB } from '../nucleo/discos.js';
 import { checklist } from '../nucleo/suplementos.js';
 import { enlaceVideo } from '../nucleo/explicar.js';
 import { sesionDe } from '../nucleo/agenda.js';
@@ -358,13 +359,13 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     if (trabajo && r.kg != null) kgHoy = r.kg;
     const repsGris = seg ? e.reps_min : trabajo ? e.reps_max : null;
     const rir = r.rir ?? (r.rpe != null ? Math.max(0, 10 - r.rpe) : null);
-    const antes = prev ? (seg ? `${prev.reps ?? ''} s` : `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.reps ?? ''}`) : '';
+    const antes = prev ? (seg ? ((prev.duracion_seg ?? prev.reps) != null ? `${prev.duracion_seg ?? prev.reps} s` : '') : `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.reps ?? ''}`) : '';
     return `<div class="serie tipo-${t}${r.hecho ? ' hecha' : ''}${seg ? ' seg' : ''}">
       <button type="button" class="tipo-serie" data-tipo-serie="${id}" data-i="${i}" aria-label="Serie ${etiq[i]}, ${TIPOS_SERIE[t].nombre.toLowerCase()}. Cambiar el tipo">${etiq[i]}</button>
       <span class="antes num">${esc(antes)}</span>
       ${seg ? '' : `<input type="text" inputmode="decimal" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="kg" value="${esc(coma(enUnidad(r.kg)))}" placeholder="${esc(coma(enUnidad(kgGris)))}" aria-label="${u === 'lb' ? 'Libras' : 'Kilos'}${queEs ? ` de ${queEs}` : ''}, serie ${etiq[i]}">`}
       <input type="text" inputmode="numeric" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="reps" value="${esc(r.reps ?? '')}" placeholder="${esc(repsGris ?? '')}" aria-label="${seg ? 'Segundos' : 'Repeticiones'}, serie ${etiq[i]}">
-      ${seg ? '' : trabajo ? cajaRir(id, i, rir, e.rir, etiq[i]) : '<span aria-hidden="true"></span>'}
+      ${seg ? (r.hecho ? '<span aria-hidden="true"></span>' : `<button type="button" class="crono-serie" data-crono="${id}" data-i="${i}" aria-label="Contar los segundos de la serie ${etiq[i]}">${icono('reloj', 'icono')}</button>`) : trabajo ? cajaRir(id, i, rir, e.rir, etiq[i]) : '<span aria-hidden="true"></span>'}
       <button type="button" class="check" data-hecho="${id}" data-i="${i}" aria-pressed="${Boolean(r.hecho)}" aria-label="Serie ${etiq[i]} hecha">${r.hecho ? '✓' : ''}</button>
       ${(r.consejo || r.record?.length) && trabajo ? `<p class="consejo ${r.consejo?.tipo || 'bien'}">${r.record?.length ? '<span class="chip-record">Récord</span> ' : ''}${esc(r.consejo?.texto || '')}</p>` : ''}</div>`;
   }).join('');
@@ -379,12 +380,13 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
       ${ej ? `<button type="button" class="ej-abrir" data-ficha="${e.ejercicio_id}" aria-label="${esc(nombre)}: cómo se hace y por qué">${miniatura(e.ejercicio_id)}</button>` : `<span class="miniatura vacia"></span>`}
       <div class="ej-textos"><span class="nombre">${g ? `<span class="chip-ss">${etiquetaSuperserie(g)}</span>` : ''}${esc(nombre)}</span>
         <span class="ej-sub num">${esc(`${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${seg ? ' s' : ''} · RIR ${e.rir}${e.carga_kg ? ` · ${peso(e.carga_kg)}${queEs ? ` de ${queEs}` : ''}` : ''} · ${descTexto}`)}</span>
-        ${ej ? '' : '<span class="chip">Indicado por tu profesional</span>'}</div>
+        ${ej ? '' : '<span class="chip">Indicado por tu profesional</span>'}
+        ${ej && E.notasFijas?.[e.ejercicio_id] ? `<button type="button" class="nota-fija" data-nota-fija="${id}" aria-label="Nota fija: ${esc(E.notasFijas[e.ejercicio_id])}. Editar">${icono('lapiz', 'icono icono-chico')}<span>${esc(E.notasFijas[e.ejercicio_id])}</span></button>` : ''}</div>
       ${ej ? `<button type="button" class="boton-icono" data-ficha="${e.ejercicio_id}" aria-label="Cómo se hace y por qué">${icono('info')}</button>` : ''}
       <button type="button" class="boton-icono" data-mas="${id}" aria-label="Más opciones de ${esc(nombre)}">${icono('puntos')}</button>
     </div>
     <div class="tabla-series${seg ? ' seg' : ''}">
-      <div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${queEs || u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : 'Reps'}</span>${seg ? '' : '<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el RIR">RIR</button>'}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>
+      <div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${queEs || u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : 'Reps'}</span>${seg ? '<span aria-hidden="true"></span>' : '<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el RIR">RIR</button>'}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>
       ${filasHtml}
     </div>
     <div class="fila-agregar"><button type="button" class="boton agregar-serie" data-agregar="${id}">+ Serie</button>${seg ? '' : `<button type="button" class="boton agregar-serie" data-calentar="${id}">+ Calentamiento</button>`}</div>
@@ -636,6 +638,22 @@ function enlazar(ir, dia) {
   });
   raiz.querySelectorAll('details[data-pasos]').forEach(d => d.addEventListener('toggle', () => { pasosAbiertos[d.dataset.pasos] = d.open; }));
   raiz.querySelectorAll('.reloj-paso').forEach(b => b.onclick = () => iniciarTramos(JSON.parse(b.dataset.tramos), b.dataset.final || '¡Listo!'));
+  // Series por tiempo, como en Hevy: cuenta hacia atrás desde lo escrito o lo del plan y, al terminar (o al tocar
+  // Listo antes), anota los segundos hechos y marca la serie, que parte el descanso.
+  raiz.querySelectorAll('[data-crono]').forEach(b => b.onclick = () => {
+    const id = b.dataset.crono, i = Number(b.dataset.i);
+    const { e, k } = ejercicioDe(id), { lista } = materializar(f, e, k);
+    const meta = Number(lista[i]?.reps) > 0 ? Number(lista[i].reps) : e.reps_min;
+    const estado = E; // si cambia la cuenta o el día mientras corre, no se anota en otro lado
+    iniciarTramos([{ seg: meta, texto: `${e.nombre || indice.porId.get(e.ejercicio_id)?.nombre || 'Serie'}, serie ${i + 1}` }], '¡Listo!', { alTerminar: segundos => {
+      if (segundos < 3) return; // un toque por error no anota nada
+      if (E !== estado || f !== hoy()) return;
+      const { lista: actual } = materializar(f, e, k);
+      actual[i] = { ...actual[i], reps: segundos };
+      guardar();
+      if (!actual[i].hecho) marcarSerie(id, i); else repintar();
+    } });
+  });
 
   // Marcar una serie: si no escribió nada, toma lo de la serie anterior de hoy, lo de la vez anterior o lo del plan.
   // Lo que se guarda al marcar sin escribir (lo que está en gris): el peso escrito antes hoy, el del plan o el de la
@@ -727,6 +745,8 @@ function enlazar(ir, dia) {
         ...(ej ? [{ valor: 'ficha', icono: icono('libro'), nombre: 'Cómo se hace y por qué' }] : []),
         ...(ej ? [{ valor: 'cambiar', icono: icono('cambiar'), nombre: 'Cambiar este ejercicio' }] : []),
         { valor: 'calentar', icono: icono('fuego'), clase: 'tipo-calentamiento', nombre: 'Agregar series de calentamiento' },
+        ...(ej && ej.equipamiento.some(q => q === 'barra_rack' || q === 'smith') ? [{ valor: 'discos', icono: icono('pesa'), nombre: 'Calculadora de discos' }] : []),
+        ...(ej ? [{ valor: 'nota-fija', icono: icono('lapiz'), nombre: E.notasFijas?.[e.ejercicio_id] ? 'Editar la nota fija' : 'Nota fija (aparece siempre)' }] : []),
         { valor: 'descanso', icono: icono('reloj'), nombre: `Descanso: ${mmss(desc)}${g ? ' (al terminar la vuelta)' : ''}` },
         ...(ej ? [{ valor: 'superserie', icono: icono('cadena'), nombre: g ? `Superserie ${g.letra}` : 'Hacer superserie' }] : []),
         ...(ej && e.unidad !== 'seg' ? [{ valor: 'prioriza', icono: icono('objetivo'), nombre: 'Si no me salen las repeticiones' }] : []),
@@ -739,6 +759,8 @@ function enlazar(ir, dia) {
         if (v === 'ficha') ir('ejercicio', { id: e.ejercicio_id, desde: 'hoy' });
         else if (v === 'cambiar') proponer({ tipo: 'elegir_alternativa', fecha: f, ejercicio: e.ejercicio_id }, { titulo: `Cambiar ${nombreDe(e)}`, volver: b, alCambiar: repintar });
         else if (v === 'calentar') agregarFila(id, true);
+        else if (v === 'discos') calculadoraDiscos(e, k, b);
+        else if (v === 'nota-fija') editarNotaFija(e, b);
         else if (v === 'superserie') superserie(id, b);
         else if (v === 'prioriza') abrirHoja({ titulo: 'Si no te salen las repeticiones', nota: prioridadEsfuerzo(e, ej, D(), lesiones).texto, volver: b, opciones: [{ valor: 'ok', icono: icono('visto'), clase: 'confirmar', nombre: 'Entendido' }], alElegir: () => {} });
         else if (v === 'video') window.open(enlaceVideo(ej), '_blank', 'noopener');
@@ -754,6 +776,57 @@ function enlazar(ir, dia) {
       },
     });
   });
+
+  // Nota fija, como Hevy: aparece cada vez que haces ese ejercicio (la altura del asiento, el agarre). Es del
+  // ejercicio, no del día; la nota para el entrenador sigue siendo de cada sesión.
+  function editarNotaFija(e, volver) {
+    const actual = E.notasFijas?.[e.ejercicio_id] || '';
+    let texto = actual;
+    abrirHoja({
+      titulo: `Nota fija: ${nombreDe(e)}`, volver,
+      nota: 'Aparece cada vez que haces este ejercicio. Por ejemplo, la altura del asiento o el agarre.',
+      contenido: `<textarea id="texto-nota-fija" class="campo-nota-fija" rows="3" maxlength="200" aria-label="Nota fija" placeholder="Asiento en 4, agarre ancho">${esc(actual)}</textarea>`,
+      opciones: [{ valor: 'guardar', icono: icono('visto'), clase: 'confirmar', nombre: 'Guardar' },
+        ...(actual ? [{ valor: 'borrar', icono: icono('cerrar'), nombre: 'Borrar la nota', peligro: true }] : [])],
+      alElegir: v => {
+        const t = v === 'borrar' ? '' : texto.trim();
+        E.notasFijas ||= {};
+        if (t) E.notasFijas[e.ejercicio_id] = t; else delete E.notasFijas[e.ejercicio_id];
+        guardar(); repintar();
+      },
+    });
+    const campo = $('texto-nota-fija');
+    campo.oninput = () => { texto = campo.value; };
+    campo.focus();
+  }
+  raiz.querySelectorAll('[data-nota-fija]').forEach(b => b.onclick = () => editarNotaFija(ejercicioDe(b.dataset.notaFija).e, b));
+
+  // Calculadora de discos, como Hevy: para la próxima serie sin marcar (lo escrito o lo que está en gris), cuánto va a
+  // cada lado de la barra. La barra se elige y queda guardada para ese ejercicio.
+  function calculadoraDiscos(e, k, volver) {
+    const id = idDe(e, k), { lista } = materializar(f, e, k);
+    const u = unidadPeso(), lb = u === 'lb';
+    const i = lista.findIndex(x => !x?.hecho);
+    const kg = i < 0 ? null : lista[i].kg ?? (deTrabajo(tipoDe(lista[i])) ? sugerencia(e, lista, i).kg : null);
+    const barras = lb ? BARRAS_LB : BARRAS_KG;
+    const barra = (E.barras || {})[e.ejercicio_id] ?? barras[0];
+    const total = kg == null ? null : enUnidad(kg);
+    const r = total == null ? null : discosPorLado(total, { barra, discos: discosDisponibles(lugar?.incremento_minimo_kg, u) });
+    const n = x => coma(Math.round(x * 100) / 100);
+    const lado = r?.porLado.flatMap(x => Array.from({ length: x.n }, () => x.peso)) || [];
+    const dibujo = r && !r.porLado.length ? '' : `<div class="barra-discos" aria-hidden="true"><span class="manga"></span><span class="tope"></span>${lado.map(p => `<span class="disco d${String(p).replace('.', '_')}" style="--alto:${Math.round(34 + 66 * Math.min(1, p / (lb ? 45 : 25)))}%"></span>`).join('')}</div>`;
+    const texto = !r ? 'Escribe el peso de la serie y vuelve a abrir la calculadora.'
+      : r.falta < 0 ? `Es menos que la barra sola (${n(barra)} ${u}).`
+      : !r.porLado.length ? `Solo la barra de ${n(barra)} ${u}.`
+      : `A cada lado: ${r.porLado.map(x => `${x.n > 1 ? `${x.n} × ` : ''}${n(x.peso)}`).join(' + ')} ${u}, con la barra de ${n(barra)} ${u}.${r.falta > 0 ? ` Con tus discos llegas a ${n(r.lograble)} ${u}: faltan ${n(r.falta)}.` : ''}`;
+    abrirHoja({
+      titulo: r ? `Discos para ${n(total)} ${u}` : 'Calculadora de discos', volver,
+      contenido: `${dibujo}<p class="pequeno texto-discos">${esc(texto)}</p>`,
+      opciones: [...barras.map(x => ({ valor: String(x), icono: x === barra ? icono('visto') : '', clase: 'confirmar', nombre: `Barra de ${n(x)} ${u}` })),
+        { valor: 'listo', icono: icono('flecha'), nombre: 'Listo' }],
+      alElegir: v => { if (v === 'listo') return; (E.barras ||= {})[e.ejercicio_id] = Number(v); guardar(); calculadoraDiscos(e, k, volver); },
+    });
+  }
 
   // No volver a hacer un ejercicio: queda en "prohibidos" (los planes nuevos no lo usan) y se cambia desde hoy en
   // adelante por el que elija la persona. Elegir el reemplazo es la confirmación del cambio.
