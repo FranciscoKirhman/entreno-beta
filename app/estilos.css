@@ -777,3 +777,6 @@ span.ej-semana{cursor:default}
 .cifras-resumen .baja{color:var(--ink-muted)}
 /* Imagen de la sesión para compartir (vista previa). */
 .imagen-sesion{display:block;width:min(270px,70%);height:auto;margin:10px auto;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.2)}
+/* Opcionales de la semana, en orden de prioridad. */
+.lista-opcionales{margin:8px 0 0;padding-left:22px;display:flex;flex-direction:column;gap:8px}
+.lista-opcionales li strong{display:block}

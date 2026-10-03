@@ -1,5 +1,8 @@
 // Vista Semana: el plan por semanas, mover o faltar a un día, y agendar según el calendario de Google (.ics).
-import { E, guardar, R, esc, $, fechaCorta, presc, cambiarPlan, hoy, indice, mostrarMensaje, sesionVista, mostrarSemana } from './comun.js';
+import { E, guardar, R, D, esc, $, fechaCorta, presc, cambiarPlan, hoy, indice, mostrarMensaje, sesionVista, mostrarSemana } from './comun.js';
+import { ordenarOpcionales } from '../nucleo/opcionales.js';
+import { seriesAnotadas } from '../nucleo/semanal.js';
+import { NOMBRE_MUSCULO, lista } from './musculos.js';
 import { moverSesion, intercambiar, marcarFaltada, reagendarConCalendario, sesionDe, nombreDia } from '../nucleo/agenda.js';
 import { leerIcs } from '../nucleo/ics.js';
 import { duracionSesion } from '../nucleo/motor-plan.js';
@@ -16,6 +19,22 @@ import { estadoSesion, resumenSemana } from '../nucleo/estado-sesion.js';
 import { estadoDelPlan } from '../nucleo/registrado.js';
 const estado = f => estadoSesion(f, E.sesiones, E.registro);
 const diaCorto = iso => `${DIAS_CORTOS[new Date(iso + 'T12:00:00Z').getUTCDay()]} ${Number(iso.slice(8))}`;
+
+/** Opcionales de esta semana que quedan por hacer, de la que más conviene a la que menos, con su porqué. */
+function opcionalesHtml(dias, reg, f) {
+  const pendientes = dias.filter(x => !x.firme && x.fecha >= f && !['hecha', 'recuperada', 'adelantada', 'hecha_sin_registro', 'saltada', 'reemplazada'].includes(reg.porDia.get(x.fecha)?.t));
+  const rango = D().series_rango;
+  if (pendientes.length < 2 || !rango) return '';
+  const orden = ordenarOpcionales({ dias: pendientes, series: seriesAnotadas(E.sesiones, E.registro), indice, hoy: f, rango, prioridad: R().musculos_prioridad || [] });
+  const nombres = xs => lista(xs.slice(0, 3).map(m => NOMBRE_MUSCULO[m] || m));
+  const porque = o => (o.bajo.length ? `trabaja ${nombres(o.bajo)}, que ${o.bajo.length === 1 ? 'va' : 'van'} bajo la franja de tu nivel en los últimos 12 días`
+    : o.prioritarios.length ? `trabaja ${nombres(o.prioritarios)}, que pediste priorizar` : 'tus músculos van en la franja: elige la que te acomode');
+  return `<section class="tarjeta opcionales">
+    <h3>Tus opcionales de esta semana</h3>
+    <p class="pequeno suave">Si alcanzas a hacer alguna, conviene en este orden.</p>
+    <ol class="lista-opcionales">${orden.map((o, i) => `<li><strong>${esc(fechaCorta(o.fecha))} · ${esc(o.foco)}</strong>${i === 0 || o.bajo.length || o.prioritarios.length ? `<span class="pequeno suave">${esc(porque(o))}.</span>` : ''}</li>`).join('')}</ol>
+  </section>`;
+}
 
 /** Cómo quedó un día del plan según lo registrado en la app o en Hevy (nucleo/registrado.js). */
 function chipEstado(x, reg) {
@@ -56,6 +75,7 @@ export function vistaSemana(ir) {
     ${tarjetaDescarga()}
     ${avisoCheckin(true)}
     ${tarjetaTemporada()}
+    ${E.semana === semanaDe(p, f) ? opcionalesHtml(dias, reg, f) : ''}
     <div class="semanas" role="group" aria-label="Semana"><span class="pequeno suave">Semana</span>${semanas.map(s => `<button type="button" data-semana="${s}" aria-pressed="${s === E.semana}"${s === p.semana_descarga ? ' aria-label="Semana ' + s + ', de descarga"' : ''}>${s}${s === p.semana_descarga ? ' · descarga' : ''}</button>`).join('')}</div>
     ${eligePeso ? '<p class="pequeno suave">Donde no hay peso indicado, elige uno con el que te sobren las repeticiones de reserva (RIR) en la última serie. Lo anotas en Hoy y la app lo ajusta desde ahí.</p>' : ''}
     ${dias.map(x => `<section class="tarjeta dia${x.fecha === f ? ' es-hoy' : ''}" id="dia-${x.fecha}">
