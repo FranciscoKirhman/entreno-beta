@@ -469,12 +469,40 @@ function enlazarHistorial(ir) {
   $('ver-todo')?.addEventListener('click', () => { verTodo = !verTodo; const y = scrollY; $('lista-historial').innerHTML = listaHistorialHtml(); enlazarHistorial(ir); scrollTo(0, y); });
 }
 
+/** Comparar dos fotos lado a lado (como Hevy): parte con la primera y la última del ángulo con más fotos. */
+let compararAbierto = false;
+function compararFotos(caja, fotos) {
+  document.getElementById('comparar-fotos')?.remove();
+  if (fotos.length < 2) return;
+  const orden = [...fotos].sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const angulos = orden.reduce((m, f) => m.set(f.angulo || '', (m.get(f.angulo || '') || 0) + 1), new Map());
+  const angulo = [...angulos.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  const delAngulo = orden.filter(f => (f.angulo || '') === angulo);
+  let [a, b] = delAngulo.length >= 2 ? [delAngulo[0], delAngulo.at(-1)] : [orden[0], orden.at(-1)];
+  const caja2 = document.createElement('details');
+  caja2.id = 'comparar-fotos'; caja2.className = 'extra comparar-fotos'; caja2.open = compararAbierto;
+  const opciones = sel => orden.map(f => `<option value="${esc(String(f.id))}"${f === sel ? ' selected' : ''}>${esc(fechaCorta(f.fecha).replace(/^\S+ /, ''))}${f.angulo ? `, ${esc(f.angulo)}` : ''}</option>`).join('');
+  const pintar = () => {
+    const dias = Math.round((Date.parse(b.fecha) - Date.parse(a.fecha)) / 864e5);
+    caja2.innerHTML = `<summary>Comparar dos fotos</summary>
+      <div class="dos-col"><label class="pequeno">Antes <select id="foto-antes">${opciones(a)}</select></label><label class="pequeno">Después <select id="foto-despues">${opciones(b)}</select></label></div>
+      <div class="par-fotos"><figure><img src="${esc(a.url)}" alt="Antes: ${esc(fechaCorta(a.fecha))}"><figcaption>${esc(fechaCorta(a.fecha))}</figcaption></figure><figure><img src="${esc(b.url)}" alt="Después: ${esc(fechaCorta(b.fecha))}"><figcaption>${esc(fechaCorta(b.fecha))}</figcaption></figure></div>
+      <p class="pequeno suave">${dias === 0 ? 'Son del mismo día.' : `${Math.abs(dias)} ${Math.abs(dias) === 1 ? 'día' : 'días'} entre ellas.`}${a.angulo && b.angulo && a.angulo !== b.angulo ? ' Son de ángulos distintos: compara mejor con el mismo.' : ''}</p>`;
+    caja2.querySelector('#foto-antes').onchange = ev => { a = orden.find(f => String(f.id) === ev.target.value); pintar(); };
+    caja2.querySelector('#foto-despues').onchange = ev => { b = orden.find(f => String(f.id) === ev.target.value); pintar(); };
+  };
+  pintar();
+  caja2.addEventListener('toggle', () => { compararAbierto = caja2.open; });
+  caja.before(caja2);
+}
+
 async function pintarFotos() {
   const caja = $('fotos');
   try {
     const fotos = nube.conectado() ? await nube.listarFotos() : await listarFotosLocales();
     if (!fotos.length) { caja.innerHTML = '<p class="suave pequeno">Todavía no hay fotos. Una por mes, con la misma luz y el mismo ángulo, sirve para comparar.</p>'; return; }
     caja.innerHTML = fotos.map(f => `<figure><img src="${esc(f.url)}" alt="Foto de progreso, ${esc(f.angulo || '')}, ${esc(fechaCorta(f.fecha))}" loading="lazy"><figcaption>${esc(fechaCorta(f.fecha))} · ${esc(f.angulo || '')} <button type="button" class="enlace" data-borrar-foto="${esc(f.id)}">Borrar</button></figcaption></figure>`).join('');
+    compararFotos(caja, fotos);
     caja.querySelectorAll('[data-borrar-foto]').forEach(b => b.onclick = async () => {
       const f = fotos.find(x => String(x.id) === b.dataset.borrarFoto);
       nube.conectado() ? await nube.borrarFoto(f) : await borrarFotoLocal(f.id);

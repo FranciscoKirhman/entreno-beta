@@ -789,3 +789,9 @@ span.ej-semana{cursor:default}
 .campos-medida label{display:flex;flex-direction:column;gap:4px}
 .campos-medida input{min-height:40px;text-align:center}
 .img-medida{width:32px;height:32px}
+/* Comparar dos fotos de progreso lado a lado. */
+.comparar-fotos{margin-top:10px}
+.par-fotos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.par-fotos figure{margin:0}
+.par-fotos img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:10px;background:var(--surface-2)}
+.par-fotos figcaption{font-size:12px;color:var(--ink-muted);text-align:center;margin-top:4px}
