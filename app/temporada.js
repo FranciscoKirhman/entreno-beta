@@ -106,13 +106,17 @@ export function enlazarTemporada(volver) {
     const nv = progresoNivel({ respuestas: R(), fechas: fechasEntrenadas(), hoy: hoy() });
     if (nv.sube) R().nivel_ganado = nv.alcanzado;
     const ctx = { derivados: D(), respuestas: R(), indice, hoy: hoy() };
-    const base = generarPlan({ ...ctx, historial: historialReciente() });
+    // Si a la persona le gusta variar, el bloque nuevo cambia algunos ejercicios del que termina.
+    const anteriores = new Set((E.plan?.dias || []).flatMap(d => d.ejercicios.map(e => e.ejercicio_id)));
+    const base = generarPlan({ ...ctx, historial: historialReciente(), anteriores });
     if (base.bloqueado) { E.mensaje = base.mensaje; guardar(); return volver(); }
     let plan = sig ? aplicarFase(base, sig, { minutos: ctx.derivados.duracion_min }) : base;
     if (sig && !validarPlan(plan, ctx).ok) plan = { ...base, bloque: sig.n }; // si la fase no cabe en tus reglas, el plan base
     mostrarSemana(1);
     const subio = nv.sube ? ` Subiste a nivel ${nv.alcanzado}: el plan sube un poco el volumen.` : '';
-    await cambiarPlan(plan, (sig ? `Bloque ${sig.n} armado: ${sig.nombre.toLowerCase()}. Parte el ${fechaCorta(plan.inicio)} con los pesos que anotaste.` : `Temporada nueva: parte el ${fechaCorta(plan.inicio)}.`) + subio, nube);
+    const nuevos = new Set(plan.dias.flatMap(d => d.ejercicios.map(e => e.ejercicio_id)).filter(id => !anteriores.has(id))).size;
+    const variedad = nuevos && ['variar', 'algunos'].includes(R().rotacion) ? ` Como te gusta variar, ${nuevos === 1 ? 'cambió 1 ejercicio' : `cambiaron ${nuevos} ejercicios`}.` : '';
+    await cambiarPlan(plan, (sig ? `Bloque ${sig.n} armado: ${sig.nombre.toLowerCase()}. Parte el ${fechaCorta(plan.inicio)} con los pesos que anotaste.` : `Temporada nueva: parte el ${fechaCorta(plan.inicio)}.`) + subio + variedad, nube);
     volver();
   });
 }

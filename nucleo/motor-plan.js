@@ -182,7 +182,8 @@ const CALENTAMIENTO_ZONA = {
  * @param p.hoy        'AAAA-MM-DD'
  * @param p.historial  series efectivas recientes [{ejercicio_id, carga_kg, reps, rir?, rpe?, fecha}]
  */
-export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historial = [] }) {
+/** @param anteriores ids de los ejercicios del bloque que termina: si a la persona le gusta variar, se cambian algunos. */
+export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historial = [], anteriores = null }) {
   if (d.alerta === 'bloqueo') return { bloqueado: true, mensaje: d.mensaje_alerta };
   if (d.errores?.length) return { bloqueado: true, mensaje: d.errores.join(' ') };
 
@@ -213,7 +214,7 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
 
   const usadosSemana = new Map();
   const tecnica = r.tecnica || {};
-  const elegir = (patron, usadosDia) => {
+  const elegir = (patron, usadosDia, prioridad = 3) => {
     const tecnicaFloja = ['no', 'mas_o_menos'].includes(tecnica[TECNICA_DE[patron]]);
     const cand = indice.ejercicios.filter(e => e.patron === patron && tieneEquipo(e, equipo)
       && nivelAlcanza(d.nivel, e.nivel_minimo) && !prohibidos.has(e.id)
@@ -226,6 +227,9 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
       if (tecnicaFloja && e.equipamiento.includes('barra_rack')) p += 15;
       if (r.rotacion !== 'mismos' && usadosSemana.has(e.id) && !favoritos.has(e.id)) p += 8;
       if (r.rotacion === 'variar' && usadosSemana.has(e.id)) p += 10;
+      // Variedad entre bloques: con "variar" cambian los que se puede; con "algunos", solo los complementarios (los
+      // principales se mantienen para comparar el progreso). Pesa más que la costumbre del historial (hasta 20).
+      if (anteriores?.has(e.id) && !favoritos.has(e.id) && (r.rotacion === 'variar' || (r.rotacion === 'algunos' && prioridad > 1))) p += 25;
       return p;
     };
     return cand.sort((a, b) => puntaje(a) - puntaje(b) || a.id.localeCompare(b.id))[0];
@@ -258,7 +262,7 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     const usadosDia = new Set();
     let ejercicios = [];
     for (const [patron, prioridad] of huecos.sort((a, b) => a[1] - b[1])) {
-      const ej = elegir(patron, usadosDia);
+      const ej = elegir(patron, usadosDia, prioridad);
       if (!ej) continue;
       usadosDia.add(ej.id);
       usadosSemana.set(ej.id, (usadosSemana.get(ej.id) || 0) + 1);
