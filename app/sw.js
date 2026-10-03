@@ -1,7 +1,7 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
 // Red primero, con límite de tiempo, y la copia guardada como respaldo (igual que el tablero).
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-03 06:23 · f715c57";
+const VERSION = "2026-10-03 14:12 · 2ee2671";
 const ARCHIVOS = [
  "./",
  "app.js",
@@ -520,6 +520,15 @@ const ARCHIVOS = [
  "img/lugares/casa_sin_equipo.webp",
  "img/lugares/gimnasio_basico.webp",
  "img/lugares/gimnasio_completo.webp",
+ "img/medidas/brazo.webp",
+ "img/medidas/cadera.webp",
+ "img/medidas/cintura.webp",
+ "img/medidas/cuello.webp",
+ "img/medidas/grasa.webp",
+ "img/medidas/muslo.webp",
+ "img/medidas/pantorrilla.webp",
+ "img/medidas/pecho.webp",
+ "img/medidas/peso.webp",
  "img/musculos/aductor_abductor.webp",
  "img/musculos/antebrazo.webp",
  "img/musculos/base.webp",
@@ -552,6 +561,12 @@ const ARCHIVOS = [
  "img/pantallas/sin_fotos_de_progreso.webp",
  "img/pantallas/sin_historial.webp",
  "img/pantallas/sin_senal.webp",
+ "img/resumen/completa.webp",
+ "img/resumen/e1rm.webp",
+ "img/resumen/peso.webp",
+ "img/resumen/repeticiones.webp",
+ "img/resumen/tiempo.webp",
+ "img/resumen/volumen.webp",
  "index.html",
  "manifest.webmanifest",
  "mas.js",
@@ -560,6 +575,7 @@ const ARCHIVOS = [
  "oauth-ui.js",
  "oauth.html",
  "pantalla.js",
+ "perfiles-prueba-ui.js",
  "plan.js",
  "progreso-ejercicio.js",
  "progreso.js",
@@ -567,6 +583,7 @@ const ARCHIVOS = [
  "resumen.js",
  "semana.js",
  "sesion-libre-ui.js",
+ "tablero-original.js",
  "temporada.js",
  "../contenido/checkin.json",
  "../contenido/cuestionario.json",
@@ -609,6 +626,7 @@ const ARCHIVOS = [
  "../nucleo/nivel.js",
  "../nucleo/notas.js",
  "../nucleo/opcionales.js",
+ "../nucleo/perfiles-prueba.js",
  "../nucleo/progresion.js",
  "../nucleo/progreso-ejercicio.js",
  "../nucleo/propios.js",

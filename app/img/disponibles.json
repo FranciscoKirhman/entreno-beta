@@ -479,6 +479,15 @@
  "img/lugares/casa_sin_equipo.webp",
  "img/lugares/gimnasio_basico.webp",
  "img/lugares/gimnasio_completo.webp",
+ "img/medidas/brazo.webp",
+ "img/medidas/cadera.webp",
+ "img/medidas/cintura.webp",
+ "img/medidas/cuello.webp",
+ "img/medidas/grasa.webp",
+ "img/medidas/muslo.webp",
+ "img/medidas/pantorrilla.webp",
+ "img/medidas/pecho.webp",
+ "img/medidas/peso.webp",
  "img/musculos/aductor_abductor.webp",
  "img/musculos/antebrazo.webp",
  "img/musculos/base.webp",
@@ -510,5 +519,11 @@
  "img/pantallas/semana_de_descarga.webp",
  "img/pantallas/sin_fotos_de_progreso.webp",
  "img/pantallas/sin_historial.webp",
- "img/pantallas/sin_senal.webp"
+ "img/pantallas/sin_senal.webp",
+ "img/resumen/completa.webp",
+ "img/resumen/e1rm.webp",
+ "img/resumen/peso.webp",
+ "img/resumen/repeticiones.webp",
+ "img/resumen/tiempo.webp",
+ "img/resumen/volumen.webp"
 ]

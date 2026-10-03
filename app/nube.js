@@ -4,18 +4,22 @@ import { CONFIG } from './config.js';
 import { aIso } from '../nucleo/hevy-csv.js';
 import { sesionDelServidor } from '../nucleo/sincronizacion.js';
 import { planSinPropios, sinIdPropio } from '../nucleo/propios.js';
+import { perfilPruebaActivo, claveSesionPerfilPrueba } from '../nucleo/perfiles-prueba.js';
 
 let supa = null, sesion = null, porEnlace = false;
 
-export async function iniciar() {
+export async function iniciar({ claveSesion = null } = {}) {
   // El correo trae un código y un enlace. Si se entró tocando el enlace, la URL vuelve con ?code=… y
   // supabase-js lo canjea al iniciar (flujo PKCE: solo funciona en el navegador que pidió el correo).
   if (!CONFIG.supabaseUrl) return false; // versión de prueba: todo queda en este teléfono
   const url = new URL(location.href);
   const conCodigo = url.searchParams.has('code');
   try {
+    // La autorización de IA abre una página independiente y usa el mismo botón elegido en Entreno.
+    const perfil = claveSesion === null && CONFIG.modoPrueba ? perfilPruebaActivo(localStorage) : null;
+    const storageKey = claveSesion ?? claveSesionPerfilPrueba(perfil?.id || null);
     const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
-    supa = createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey, { auth: { persistSession: true, storageKey: 'entreno-sesion', flowType: 'pkce' } });
+    supa = createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey, { auth: { persistSession: true, storageKey, flowType: 'pkce' } });
     const { data } = await supa.auth.getSession();
     sesion = data.session;
     supa.auth.onAuthStateChange((_e, s) => { sesion = s; });

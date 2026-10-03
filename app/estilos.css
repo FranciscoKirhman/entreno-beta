@@ -795,3 +795,38 @@ span.ej-semana{cursor:default}
 .par-fotos figure{margin:0}
 .par-fotos img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:10px;background:var(--surface-2)}
 .par-fotos figcaption{font-size:12px;color:var(--ink-muted);text-align:center;margin-top:4px}
+
+/* Selector temporal: sus etiquetas llegan únicamente desde el archivo privado del teléfono. */
+.perfiles-prueba{max-width:560px;margin:0 auto;padding:12px 16px 0;overflow-wrap:anywhere}
+.perfiles-prueba-selector,.perfiles-prueba-importar{background:var(--surface);border-radius:14px;padding:12px 14px}
+.perfiles-prueba-botones{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0}
+.perfiles-prueba-botones .boton{min-width:0;overflow-wrap:anywhere}
+.perfiles-prueba-botones [aria-pressed="true"],.tablero-dias [aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.perfiles-prueba-importar>summary{color:var(--accent);font-weight:600;cursor:pointer;min-height:32px}
+.perfiles-prueba-importar input{display:block;width:100%;margin-top:8px}
+.perfil-prueba-previa{margin-top:12px;padding:12px 0;border-top:1px solid var(--line)}
+.tablero-texto,.tablero-pasos,.tablero-ciclo{overflow-wrap:anywhere}
+.tablero-dias{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
+.tablero-dias .boton{min-width:0;display:flex;flex-direction:column;padding:8px}
+.tablero-calendario select{display:block;width:100%;max-width:100%;margin-top:6px}
+.tablero-calendario h2{margin-top:0}
+.tablero-pasos{background:var(--surface);padding:14px 16px;border-radius:14px;margin:12px 0}
+.tablero-ejercicio h3{overflow-wrap:anywhere}
+.tabla-tablero{max-width:100%;margin-top:12px}
+.tablero-series{width:100%;table-layout:fixed;border-collapse:collapse;font-size:12px;line-height:1.35}
+.tablero-series caption{text-align:left;margin-bottom:8px;color:var(--ink-muted)}
+.tablero-series th,.tablero-series td{padding:8px 3px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.tablero-series th:first-child{width:16%}
+.tablero-series th:nth-child(2){width:25%}
+.tablero-series th:nth-child(3){width:17%}
+.tablero-series th:nth-child(4){width:17%}
+.tablero-series th:nth-child(5){width:25%}
+.tablero-aproximacion{color:var(--ink-muted)}
+.tablero-bloque{margin-top:12px}
+.tablero-revision,.tablero-musculos,.tablero-proyecciones{overflow-wrap:anywhere}
+.tablero-revision>summary,.tablero-musculos>summary,.tablero-proyecciones>summary{font-weight:600;cursor:pointer}
+.tablero-proyeccion{margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
+.tablero-consulta{width:100%;table-layout:fixed;border-collapse:collapse;font-size:13px;line-height:1.4}
+.tablero-consulta caption{text-align:left;color:var(--ink-muted);margin-bottom:8px}
+.tablero-consulta th,.tablero-consulta td{text-align:left;vertical-align:top;padding:8px 4px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.tablero-grafico{display:block;width:100%;height:auto;margin:12px 0}

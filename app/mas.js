@@ -40,6 +40,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     <h1>Más</h1>
     <section class="tarjeta"><h3>Banco de ejercicios</h3><p class="pequeno suave">Busca por nombre, músculo o equipo, revisa la técnica y agrega ejercicios a hoy.</p><button type="button" class="boton" id="abrir-banco">Explorar ejercicios</button></section>
     ${CONFIG.modoPrueba ? pruebaHtml() : ''}
+    ${E.tableroOrigen?.datos ? '<section class="tarjeta"><h3>Tu tablero original</h3><p class="pequeno suave">Consulta el calendario, las series y las indicaciones de tu copia del tablero.</p><button type="button" class="boton" id="ver-tablero-original">Abrir tablero original</button></section>' : ''}
     <section class="tarjeta" id="cuenta">${cuentaHtml()}</section>
     ${instalada() ? '' : `<section class="tarjeta"><h3>Instalarla en el teléfono</h3>
       <p class="pequeno"><strong>iPhone:</strong> en Safari, botón Compartir y "Agregar a pantalla de inicio".<br><strong>Android:</strong> en Chrome, menú ⋮ e "Instalar app".<br>Queda con su ícono y abre sin señal en el gimnasio.</p></section>`}
@@ -93,6 +94,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     <p class="pequeno suave">Versión ${esc(CONFIG.version)}</p>
   </div>`;
   enlazarCuenta(ir, sincronizarAlEntrar);
+  $('ver-tablero-original')?.addEventListener('click', () => ir('tablero-original'));
   $('prueba-de-nuevo')?.addEventListener('click', () => { empezarDeNuevo(); ir('cuestionario'); });
   $('prueba-ejemplo')?.addEventListener('click', () => {
     if (!modoEjemplo) return;

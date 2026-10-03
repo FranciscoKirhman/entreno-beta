@@ -5,7 +5,7 @@
 import { sincronizarDatosTelefono } from './datos-nube.js';
 import { hevyAlAbrir } from './hevy-auto.js';
 import { conPropios, idsPropios } from '../nucleo/propios.js';
-import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo, entrarEjemplo, salirEjemplo, modoEjemplo, errorGuardado, activarCuenta } from './comun.js';
+import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo, entrarEjemplo, salirEjemplo, modoEjemplo, errorGuardado, activarCuenta, perfilDePrueba, claveSesionCuenta } from './comun.js';
 import { prepararSesion, unirSesiones } from '../nucleo/sincronizacion.js';
 import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
 import { derivar } from '../nucleo/derivar.js';
@@ -17,6 +17,8 @@ import { vistaSemana } from './semana.js';
 import { vistaCoach } from './coach-ui.js';
 import { vistaProgreso } from './progreso.js';
 import { vistaMas } from './mas.js';
+import { pintarPerfilesPrueba } from './perfiles-prueba-ui.js';
+import { vistaTableroOriginal } from './tablero-original.js';
 import { vistaBanco } from './banco.js';
 import { vistaCheckin } from './checkin.js';
 import { historialReciente, fechasEntrenadas } from './temporada.js';
@@ -157,7 +159,7 @@ function vistaInicio() {
 
 // ── Navegación ──────────────────────────────────────────────────────────────
 const VISTAS_CON_PLAN = ['hoy', 'semana', 'coach', 'progreso', 'checkin', 'plan', 'resumen'];
-const PESTANA = { banco: 'mas', checkin: 'semana', plan: 'semana', perfil: 'mas', seccion: 'mas', pasado: 'progreso' };
+const PESTANA = { banco: 'mas', checkin: 'semana', plan: 'semana', perfil: 'mas', seccion: 'mas', pasado: 'progreso', 'tablero-original': 'mas' };
 function ir(vista, extra) {
   if (VISTAS_CON_PLAN.includes(vista) && (!E.plan)) vista = 'inicio';
   if (VISTAS_CON_PLAN.includes(vista) && E.plan?.bloqueado) { vistaBloqueada(); return; }
@@ -166,10 +168,11 @@ function ir(vista, extra) {
   const pestana = ['ejercicio', 'resumen'].includes(vista) ? PESTANA[extra?.desde] || extra?.desde || 'hoy' : PESTANA[vista] || vista;
   document.querySelectorAll('#nav [data-ir]').forEach(b => b.setAttribute('aria-current', String(b.dataset.ir === pestana)));
   pintarModo();
+  pintarPerfilesPrueba();
   const vistas = {
     inicio: vistaInicio, cuestionario: () => vistaRapido(ir, armarPlan), perfil: () => vistaPerfil(ir, armarPlan), seccion: () => vistaSeccion(ir),
     plan: () => vistaPlan(ir, { armarPlan, nuevo: extra?.nuevo }), hoy: () => vistaHoy(ir, extra), ejercicio: () => vistaFicha(ir, extra || {}), semana: () => vistaSemana(ir),
-    banco: () => vistaBanco(ir, extra || {}), coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), resumen: () => vistaResumen(ir, extra || {}), progreso: () => vistaProgreso(ir), pasado: () => vistaDiaPasado(ir, extra || {}), mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar }),
+    banco: () => vistaBanco(ir, extra || {}), coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), resumen: () => vistaResumen(ir, extra || {}), progreso: () => vistaProgreso(ir), pasado: () => vistaDiaPasado(ir, extra || {}), mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar }), 'tablero-original': () => vistaTableroOriginal(ir),
   };
   (vistas[vista] || vistaInicio)();
   mostrarMensaje(); // los avisos se muestran una vez, flotando sobre el menú
@@ -183,12 +186,12 @@ $('nav').addEventListener('click', e => { const b = e.target.closest('[data-ir]'
 function pintarModo() {
   const m = $('modo');
   const texto = modoEjemplo ? 'Ejemplo ficticio · Volver a mis datos' : errorGuardado ? 'Hay cambios sin guardar' : !navigator.onLine ? 'Sin señal · se guarda igual' : nube.conectado() ? (R().demo_privada ? 'Demo privada · Perfil ficticio' : nube.correo() || 'Cuenta') : nube.hay() ? 'Sin cuenta' : '';
-  m.textContent = texto;
+  m.textContent = perfilDePrueba && !modoEjemplo ? `${perfilDePrueba.nombre}${texto ? ' · ' + texto : ''}` : texto;
   m.onclick = modoEjemplo ? () => { salirEjemplo(); ir(E.plan ? 'hoy' : 'inicio'); } : null;
   m.setAttribute('role', modoEjemplo ? 'button' : 'status');
   m.tabIndex = modoEjemplo ? 0 : -1;
   m.onkeydown = e => { if (modoEjemplo && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); m.click(); } };
-  m.hidden = !texto;
+  m.hidden = !m.textContent;
   m.classList.toggle('sin-senal', !navigator.onLine);
 }
 addEventListener('online', pintarModo);
@@ -213,13 +216,13 @@ const EJEMPLO = {
 if (CONFIG.sinSenal && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(e => console.warn('Sin modo sin señal', e));
 
 // El perfil personal persiste al abrir. El ejemplo solo empieza por elección explícita.
-await nube.iniciar();
+await nube.iniciar({ claveSesion: claveSesionCuenta() });
 if (nube.conectado()) {
   activarCuenta(nube.usuarioId());
   try { await sincronizarAlEntrar(); }
   catch { E.mensaje = 'No pude sincronizar ahora. Puedes seguir con la copia de esta cuenta en el teléfono y reintentar en Más.'; }
   if (nube.entroPorEnlace()) { E.mensaje = `Entraste como ${nube.correo()}.`; E.vista = E.plan ? 'hoy' : 'inicio'; }
 }
-ir(['cuestionario', 'hoy', 'semana', 'coach', 'progreso', 'mas', 'checkin', 'plan', 'perfil', 'seccion'].includes(E.vista) ? E.vista : (E.plan ? 'hoy' : 'inicio'));
+ir(['cuestionario', 'hoy', 'semana', 'coach', 'progreso', 'mas', 'checkin', 'plan', 'perfil', 'seccion', 'tablero-original'].includes(E.vista) ? E.vista : (E.plan ? 'hoy' : 'inicio'));
 // Con la clave de Hevy Pro, lo nuevo de Hevy entra solo; si llega algo, se redibuja la vista (sin mover la pantalla).
 hevyAlAbrir(() => { if (['hoy', 'semana', 'progreso'].includes(E.vista) && !document.querySelector('#hoja')) { const y = scrollY; ir(E.vista); scrollTo(0, y); } });

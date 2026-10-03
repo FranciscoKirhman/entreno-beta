@@ -5,6 +5,8 @@ import { validarRespaldo } from '../nucleo/respaldo.js';
 import { crearIndice } from '../nucleo/catalogo.js';
 import { derivar } from '../nucleo/derivar.js';
 import { estadoDelPlan } from '../nucleo/registrado.js';
+import { perfilPruebaActivo, clavePerfilPrueba, claveSesionPerfilPrueba } from '../nucleo/perfiles-prueba.js';
+import { CONFIG } from './config.js';
 
 const cargar = u => fetch(u).then(r => { if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.json(); });
 export const [C, catalogo, K, EVIDENCIA, PLANES, TECNICA] = await Promise.all(
@@ -42,12 +44,21 @@ export function seriesTexto(series) {
 export const volumenTexto = kg => `${Math.round(enUnidad(kg) || 0).toLocaleString('es-CL')} ${unidadPeso()}`;
 
 // ── Estado guardado en este navegador ───────────────────────────────────────
-const CLAVE_PERSONAL = 'entreno-v2';
+const CLAVE_ORIGINAL = 'entreno-v2';
+let errorPerfilPrueba = null;
+export const perfilDePrueba = (() => {
+  try { return CONFIG.modoPrueba ? perfilPruebaActivo(localStorage) : null; }
+  catch (e) { errorPerfilPrueba = e.message; return null; }
+})();
+const CLAVE_PERSONAL = perfilDePrueba ? clavePerfilPrueba(perfilDePrueba.id) : CLAVE_ORIGINAL;
+const AMBITO_LOCAL = perfilDePrueba ? `prueba:${perfilDePrueba.id}` : 'local';
+/** La sesión del correo también es independiente para cada botón de prueba. */
+export const claveSesionCuenta = () => claveSesionPerfilPrueba(perfilDePrueba?.id || null);
 let CLAVE = CLAVE_PERSONAL;
-export let ambitoDatos = 'local';
+export let ambitoDatos = AMBITO_LOCAL;
 export let modoEjemplo = false;
-export let errorGuardado = null;
-let lecturaFallida = false;
+export let errorGuardado = errorPerfilPrueba;
+let lecturaFallida = Boolean(errorPerfilPrueba);
 const VACIO = () => ({
   vista: 'inicio', seccion: 0, respuestas: {}, plan: null, semana: 1,
   bienestar: {}, registro: {}, notas: {}, sesiones: [], chat: [], consentimientos: {},
@@ -56,9 +67,12 @@ const VACIO = () => ({
 });
 export let E = VACIO();
 try {
-  const viejo = JSON.parse(localStorage.getItem('entreno-demo-v1') || 'null');
-  E = { ...E, ...(viejo ? { respuestas: viejo.respuestas, plan: viejo.plan } : {}), ...JSON.parse(localStorage.getItem(CLAVE) || '{}') };
-} catch { lecturaFallida = true; errorGuardado = 'No pude leer tus datos guardados. Descarga un respaldo de esta sesión antes de cerrar.'; }
+  if (errorPerfilPrueba) throw new Error(errorPerfilPrueba);
+  const guardado = localStorage.getItem(CLAVE);
+  if (perfilDePrueba && guardado == null) throw new Error('Falta la copia de ese perfil');
+  const viejo = CLAVE_PERSONAL === CLAVE_ORIGINAL ? JSON.parse(localStorage.getItem('entreno-demo-v1') || 'null') : null;
+  E = { ...E, ...(viejo ? { respuestas: viejo.respuestas, plan: viejo.plan } : {}), ...JSON.parse(guardado || '{}') };
+} catch { lecturaFallida = true; errorGuardado = errorPerfilPrueba || 'No pude leer tus datos guardados. Descarga un respaldo de esta sesión antes de cerrar.'; }
 // Los ejercicios que crea la persona (nucleo/propios.js) se suman al catálogo del teléfono: así el banco, Hoy, el
 // validador y el historial los tratan como cualquier otro. Se rehace en cada guardado (cambia con la cuenta o el ejemplo).
 export function alinearPropios() {
@@ -72,7 +86,7 @@ export function guardar() {
   alinearPropios();
   try {
     if (lecturaFallida) throw new Error('Los datos anteriores no se pudieron leer');
-    if (ambitoDatos !== 'local' && !modoEjemplo && E.firmaPreferenciasCuenta) {
+    if (ambitoDatos !== AMBITO_LOCAL && !modoEjemplo && E.firmaPreferenciasCuenta) {
       const p = { unidad: E.respuestas?.unidad || 'kg', asistente: E.asistente || 'entrenadora' };
       if (JSON.stringify(p) !== E.firmaPreferenciasCuenta) E.preferenciasPendientes = p;
     }
@@ -106,13 +120,13 @@ export function salirEjemplo() {
 /** Una copia distinta por cuenta. Lo local solo se transfiere por elección explícita. */
 export function activarCuenta(id = null) {
   if (modoEjemplo) salirEjemplo();
-  const nueva = id ? `entreno-cuenta-${id}` : CLAVE_PERSONAL;
+  const nueva = id ? `entreno-cuenta-${id}${perfilDePrueba ? '-prueba-' + perfilDePrueba.id : ''}` : CLAVE_PERSONAL;
   if (CLAVE === nueva) return;
   if (!guardar()) throw new Error('Respalda los cambios pendientes antes de cambiar de cuenta.');
   let datos;
   try { datos = JSON.parse(localStorage.getItem(nueva) || '{}'); }
   catch { throw new Error('No pude leer la copia de esa cuenta. Tus datos actuales se conservan.'); }
-  E = { ...VACIO(), ...datos }; CLAVE = nueva; ambitoDatos = id || 'local'; personal = E;
+  E = { ...VACIO(), ...datos }; CLAVE = nueva; ambitoDatos = id || AMBITO_LOCAL; personal = E;
   lecturaFallida = false; guardar();
 }
 export function resumenLocal() {
