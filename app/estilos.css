@@ -725,3 +725,11 @@ span.ej-semana{cursor:default}
 .nota-fija{display:flex;align-items:flex-start;gap:5px;margin-top:4px;padding:0;border:0;background:none;color:var(--ink);font:500 13px/1.35 var(--f-texto);text-align:left;cursor:pointer}
 .nota-fija .icono{flex:0 0 auto;width:15px;height:15px;margin-top:1px;color:var(--accent)}
 .campo-nota-fija{width:100%;margin:6px 0 10px;resize:vertical}
+/* Ordenar los ejercicios de hoy. */
+.lista-orden{list-style:none;margin:6px 0 10px;padding:0;display:flex;flex-direction:column}
+.lista-orden li{display:grid;grid-template-columns:22px minmax(0,1fr) 44px 44px;align-items:center;gap:4px;padding:4px 0;border-top:1px solid var(--line)}
+.lista-orden li:first-child{border-top:0}
+.lista-orden .nombre-orden{font-weight:600;line-height:1.25}
+.lista-orden .boton-icono:disabled{opacity:.3}
+.icono.flecha-arriba{transform:rotate(-90deg)}
+.icono.flecha-abajo{transform:rotate(90deg)}

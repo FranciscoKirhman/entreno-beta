@@ -1,4 +1,5 @@
-// Edición manual de hoy: prepara una copia, conserva las otras fechas y valida antes de guardar.
+// Edición manual de hoy: agregar, quitar y ordenar ejercicios, solo hoy o desde hoy en adelante (las sesiones que
+// vienen con la misma plantilla). Prepara una copia, no toca lo demás y valida antes de guardar.
 import { normalizar, tieneEquipo, nivelAlcanza, articulacionesBloqueadas, cargaZonaBloqueada } from './catalogo.js';
 import { prescripcion, comoDescarga, duracionSesion } from './motor-plan.js';
 import { validarCambio } from './validador.js';
@@ -31,12 +32,21 @@ export function motivoNoAgregar(ej, ctx) {
   return null;
 }
 
+// Superseries: si al quitar u ordenar un ejercicio queda solo o separado de su pareja, se hace como serie normal.
+function sinSuperseriesSueltas(dia) {
+  const g = grupos(dia.ejercicios);
+  dia.ejercicios.forEach((e, i) => { e.orden = i; if (!g[i]) delete e.superserie; });
+}
+/** "Desde hoy en adelante": las sesiones que vienen con la misma plantilla que hoy (la sesión libre no tiene). */
+export const siguientes = (plan, dia, accion = { alcance: 'adelante' }) => (accion.alcance === 'adelante' && dia?.plantilla
+  ? plan.dias.filter(x => x.fecha > dia.fecha && x.plantilla === dia.plantilla) : []);
+
 export function editarSesion(accion, ctx) {
   const { plan, hoy, indice, derivados: d } = ctx;
   if (!plan?.dias?.length || plan.bloqueado) return { error: 'Primero arma tu plan.' };
   const nuevo = structuredClone(plan);
   let dia = nuevo.dias.find(x => x.fecha === hoy);
-  let ejercicio, fueraDelPlan = false;
+  let ejercicio, fueraDelPlan = false, afectados = 0;
   if (accion.tipo === 'agregar') {
     const ej = indice.porId.get(accion.ejercicio);
     const motivo = motivoNoAgregar(ej, ctx);
@@ -51,25 +61,39 @@ export function editarSesion(accion, ctx) {
         ejercicios: [], calentamiento: [], estiramiento: [], cardio: null, racional: 'Sesión armada por ti para hoy.' };
       nuevo.dias.push(dia); nuevo.dias.sort((a, b) => a.fecha.localeCompare(b.fecha));
     }
-    const p = prescripcion(ej, 2, d);
-    if (ej.tipo === 'cardio') Object.assign(p, { series: 1, reps_min: 120, reps_max: 180, unidad: 'seg', descanso_seg: 0 });
-    if (ej.tipo === 'movilidad') Object.assign(p, { series: 1, reps_min: 30, reps_max: 45, unidad: 'seg', descanso_seg: 0 });
-    ejercicio = { ejercicio_id: ej.id, nombre: ej.nombre, ...p, prioridad: 2, orden: dia.ejercicios.length, carga_kg: null,
-      nota: p.unidad === 'seg' ? 'Agregado por ti. Registra los segundos de cada serie.' : 'Agregado por ti. Elige un peso con la reserva indicada.' };
-    if (!fueraDelPlan && dia.semana === plan.semana_descarga) ejercicio = comoDescarga(ejercicio);
+    const nuevoEj = (x, descarga) => {
+      const p = prescripcion(ej, 2, d);
+      if (ej.tipo === 'cardio') Object.assign(p, { series: 1, reps_min: 120, reps_max: 180, unidad: 'seg', descanso_seg: 0 });
+      if (ej.tipo === 'movilidad') Object.assign(p, { series: 1, reps_min: 30, reps_max: 45, unidad: 'seg', descanso_seg: 0 });
+      const nuevoE = { ejercicio_id: ej.id, nombre: ej.nombre, ...p, prioridad: 2, orden: x.ejercicios.length, carga_kg: null,
+        nota: p.unidad === 'seg' ? 'Agregado por ti. Registra los segundos de cada serie.' : 'Agregado por ti. Elige un peso con la reserva indicada.' };
+      return descarga ? comoDescarga(nuevoE) : nuevoE;
+    };
+    ejercicio = nuevoEj(dia, !fueraDelPlan && dia.semana === plan.semana_descarga);
     dia.ejercicios.push(ejercicio);
+    for (const x of siguientes(nuevo, dia, accion)) if (!x.ejercicios.some(e => e.ejercicio_id === ej.id)) { x.ejercicios.push(nuevoEj(x, x.semana === plan.semana_descarga)); afectados++; }
   } else if (accion.tipo === 'quitar') {
     const k = dia?.ejercicios.findIndex((e, i) => (e.ejercicio_id || `i${i}`) === accion.ejercicio) ?? -1;
     if (k < 0) return { error: 'Ese ejercicio ya no está en la sesión.' };
     ejercicio = dia.ejercicios[k];
     if (ejercicio.indicacion) return { error: 'Este ejercicio forma parte de una indicación profesional.' };
     dia.ejercicios.splice(k, 1);
-    const g = grupos(dia.ejercicios);
-    dia.ejercicios.forEach((e, i) => { e.orden = i; if (!g[i]) delete e.superserie; });
+    sinSuperseriesSueltas(dia);
+    for (const x of siguientes(nuevo, dia, accion)) {
+      const j = x.ejercicios.findIndex(e => e.ejercicio_id === ejercicio.ejercicio_id && !e.indicacion);
+      if (j >= 0 && ejercicio.ejercicio_id) { x.ejercicios.splice(j, 1); sinSuperseriesSueltas(x); afectados++; }
+    }
+  } else if (accion.tipo === 'ordenar') {
+    // El orden nuevo, por id. Lo que no venga en la lista queda al final, en su orden de antes.
+    if (!dia?.ejercicios.length) return { error: 'Hoy no hay ejercicios para ordenar.' };
+    const pos = id => { const i = (accion.orden || []).indexOf(id); return i < 0 ? Infinity : i; };
+    const ordenar = x => { x.ejercicios = x.ejercicios.map((e, i) => [e, i]).sort(([a, i], [b, j]) => pos(a.ejercicio_id || `i${i}`) - pos(b.ejercicio_id || `i${j}`) || i - j).map(([e]) => e); sinSuperseriesSueltas(x); };
+    ordenar(dia);
+    for (const x of siguientes(nuevo, dia, accion)) { const antes = x.ejercicios.map(e => e.ejercicio_id).join(); ordenar(x); if (x.ejercicios.map(e => e.ejercicio_id).join() !== antes) afectados++; }
   } else return { error: 'No reconozco ese cambio.' };
   // Un error que el plan ya traía no bloquea agregar ni quitar (nucleo/validador.js: validarCambio).
   const v = validarCambio(plan, nuevo, ctx);
   if (!v.ok) return { error: v.errores.map(e => e.mensaje).join(' ') };
-  return { plan: nuevo, ejercicio, minutos: duracionSesion(dia), cantidad: dia.ejercicios.length, advertencias: v.advertencias,
+  return { plan: nuevo, ejercicio, minutos: duracionSesion(dia), cantidad: dia.ejercicios.length, advertencias: v.advertencias, siguientes: afectados,
     ...(accion.tipo === 'quitar' ? { conservar: seriesRetiradas(ejercicio, ctx) } : {}) };
 }

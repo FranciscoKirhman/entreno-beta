@@ -35,7 +35,7 @@ import { aplicarOpcion } from '../nucleo/coach.js';
 import { nombreAsistente } from './cuestionario.js';
 import * as nube from './nube.js';
 import { descansoHtml } from './estados-visuales.js';
-import { proponerEdicion } from './editar-sesion-ui.js';
+import { proponerEdicion, ordenarSesion } from './editar-sesion-ui.js';
 import { serieCompleta } from '../nucleo/serie-completa.js';
 import { ilustracionesCalentamiento } from '../nucleo/imagenes-calentamiento.js';
 import { IMAGENES } from './comun.js';
@@ -751,6 +751,7 @@ function enlazar(ir, dia) {
         ...(ej ? [{ valor: 'superserie', icono: icono('cadena'), nombre: g ? `Superserie ${g.letra}` : 'Hacer superserie' }] : []),
         ...(ej && e.unidad !== 'seg' ? [{ valor: 'prioriza', icono: icono('objetivo'), nombre: 'Si no me salen las repeticiones' }] : []),
         ...(ej ? [{ valor: 'video', icono: icono('video'), nombre: 'Ver videos de técnica' }] : []),
+        ...(dia.ejercicios.length > 1 ? [{ valor: 'ordenar', icono: icono('ajustes'), nombre: 'Ordenar los ejercicios de hoy' }] : []),
         { valor: 'quitar-hoy', icono: icono('cerrar'), nombre: 'Quitar de esta sesión', peligro: true },
         { valor: 'preguntar', icono: icono('chat'), nombre: `Preguntar a ${nombreAsistente()}` },
         ...(ej ? [{ valor: 'nunca', icono: icono('cerrar'), clase: 'quitar', nombre: 'No volver a hacer este ejercicio', peligro: true }] : []),
@@ -765,6 +766,7 @@ function enlazar(ir, dia) {
         else if (v === 'prioriza') abrirHoja({ titulo: 'Si no te salen las repeticiones', nota: prioridadEsfuerzo(e, ej, D(), lesiones).texto, volver: b, opciones: [{ valor: 'ok', icono: icono('visto'), clase: 'confirmar', nombre: 'Entendido' }], alElegir: () => {} });
         else if (v === 'video') window.open(enlaceVideo(ej), '_blank', 'noopener');
         else if (v === 'preguntar') ir('coach', { ejercicio: e.ejercicio_id, nombre: nombreDe(e) });
+        else if (v === 'ordenar') ordenarSesion({ volver: b, alCambiar: repintar });
         else if (v === 'quitar-hoy') proponerEdicion({ tipo: 'quitar', ejercicio: id }, { volver: b, alCambiar: repintar });
         else if (v === 'nunca') noVolver(e, b);
         else if (v === 'descanso') abrirHoja({
