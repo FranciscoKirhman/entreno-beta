@@ -22,6 +22,26 @@ const EQUIPO = Object.fromEntries(C.secciones.flatMap(s => s.preguntas || []).fi
 const NIVEL = { principiante: 'Para todos los niveles', intermedio: 'Desde nivel intermedio', avanzado: 'Para nivel avanzado' };
 const musculos = xs => lista(xs.map(m => NOMBRE_MUSCULO[m] || m));
 
+function fuentesDeVariante(fuentes = []) {
+  return fuentes.filter(f => {
+    try { return new URL(f.url).protocol === 'https:'; } catch { return false; }
+  }).map(f => `<li><a href="${esc(f.url)}" target="_blank" rel="noopener noreferrer">${esc(f.titulo)}</a>${f.alcance ? `<p class="pequeno suave">${esc(f.alcance)}</p>` : ''}</li>`).join('');
+}
+
+function criteriosDeVariante(t) {
+  if (!t.cuando_elegir && !t.ajustes?.length && !t.registro) return '';
+  const fuentes = fuentesDeVariante(t.fuentes);
+  return `<section class="tarjeta">
+    <h2>Cuándo elegir esta variante</h2>
+    ${t.cuando_elegir ? `<p class="pequeno">${esc(t.cuando_elegir)}</p>` : ''}
+    ${t.ajustes?.length ? `<h3>Antes de empezar</h3><ul class="ojo">${t.ajustes.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    ${t.registro ? `<p class="pequeno">${esc(t.registro)}</p>` : ''}
+    <button type="button" class="boton" id="anotar-ajustes">Anotar ajustes</button>
+    ${t.limites ? `<p class="pequeno suave">${esc(t.limites)}</p>` : ''}
+    ${fuentes ? `<details class="extra"><summary>Fuentes de esta comparación</summary><ul class="refs">${fuentes}</ul></details>` : ''}
+  </section>`;
+}
+
 /** El ejercicio en tu plan: el de hoy o, si no, la próxima vez que toca (o la última). */
 function enElPlan(id) {
   const plan = E.plan;
@@ -76,6 +96,8 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
       <a class="boton video" href="${esc(enlaceVideo(ej))}" target="_blank" rel="noopener">${icono('video')} Ver videos de técnica</a>
     </section>
 
+    ${ej.propio ? '' : criteriosDeVariante(t)}
+
     <section class="tarjeta">
       <h2>Tus marcas</h2>
       ${m ? `<div class="marcas">
@@ -105,6 +127,31 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
 
   const atras = () => (antes ? vistaFicha(ir, antes) : ir(desde, desde === 'hoy' ? { ej: id } : undefined));
   $('volver').onclick = atras;
+  $('anotar-ajustes')?.addEventListener('click', ev => {
+    const actual = E.notasFijas?.[id] || '';
+    let texto = actual;
+    abrirHoja({
+      titulo: `Ajustes: ${ej.nombre}`, volver: ev.currentTarget,
+      nota: 'La nota aparece cada vez que haces este ejercicio. Queda en este teléfono, en tu respaldo y, si entraste, en tu cuenta.',
+      contenido: `<label class="pequeno" for="ficha-nota-ajustes">Asiento, respaldo, agarre o inclinación</label><textarea id="ficha-nota-ajustes" class="campo-nota-fija" rows="3" maxlength="200" placeholder="Asiento en 4, respaldo a 30 grados">${esc(actual)}</textarea>`,
+      opciones: [{ valor: 'guardar', icono: icono('visto'), clase: 'confirmar', nombre: 'Guardar ajustes' },
+        ...(actual ? [{ valor: 'borrar', icono: icono('cerrar'), nombre: 'Borrar los ajustes', peligro: true }] : [])],
+      alElegir: v => {
+        const nota = v === 'borrar' ? '' : texto.trim().slice(0, 200);
+        E.notasFijas ||= {};
+        if (nota) E.notasFijas[id] = nota; else delete E.notasFijas[id];
+        datoCambiado('notas_fijas');
+        const altura = window.scrollY;
+        vistaFicha(ir, { id, desde, antes });
+        window.scrollTo(0, altura);
+        $('anotar-ajustes')?.focus({ preventScroll: true });
+        avisar(nota ? 'Ajustes guardados.' : 'Ajustes borrados.');
+      },
+    });
+    const campo = $('ficha-nota-ajustes');
+    campo.oninput = () => { texto = campo.value; };
+    requestAnimationFrame(() => { if (campo.isConnected) campo.focus(); });
+  });
   // Borrar un ejercicio propio: si está en el plan de hoy en adelante, primero hay que sacarlo de ahí.
   $('borrar-propio')?.addEventListener('click', ev => {
     const enPlan = E.plan?.dias?.some(d => d.fecha >= f && d.ejercicios.some(e => e.ejercicio_id === id));

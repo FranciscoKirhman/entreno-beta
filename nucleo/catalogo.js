@@ -11,7 +11,7 @@ export function normalizar(nombre) {
 }
 
 // Hevy agrega estas palabras a algunas variantes ("Chest Fly — Machine, Spa"); no cambian el ejercicio.
-const MODIFICADORES = new Set(['spa', 'unilateral']);
+const MODIFICADORES = new Set(['spa']);
 
 export function crearIndice(catalogo) {
   const ejercicios = catalogo.ejercicios || catalogo;
@@ -44,7 +44,7 @@ export const esAsistido = ej => ej?.asistido === true;
 /** Con lastre, el peso anotado es lo que se agrega al cuerpo (la dirección es la de siempre). */
 export const conLastre = ej => ej?.lastre === true;
 // Equipo que no carga peso: con solo esto, el ejercicio es de peso corporal (o de lastre, si se agrega).
-const SIN_CARGA = new Set(['banco', 'barra_dominadas', 'paralelas', 'bandas', 'escaladora', 'trotadora']);
+const SIN_CARGA = new Set(['banco', 'barra_dominadas', 'paralelas', 'bandas', 'escaladora', 'trotadora', 'rueda_abdominal', 'banco_predicador']);
 /** De peso corporal: sin equipo que cargue peso ni ayuda de máquina. Ahí los kilos son opcionales. */
 export const sinCargaExterna = ej => Boolean(ej) && !esAsistido(ej) && ej.equipamiento.every(q => SIN_CARGA.has(q));
 export const nivelAlcanza = (nivel, minimo) => NIVELES.indexOf(nivel) >= NIVELES.indexOf(minimo);

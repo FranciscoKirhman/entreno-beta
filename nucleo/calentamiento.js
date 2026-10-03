@@ -3,15 +3,27 @@
 
 /** Tramos de un paso que va por tiempo ("5 minutos", "5 a 6 min", "30 s por lado", "3 × 45 s"); [] si va por
  *  repeticiones ("2 × 15", "10 por lado"). Solo se mira el nombre del paso: la explicación puede nombrar otros tiempos. */
-export function tramosDePaso(nombre) {
+export const CAMBIO_DE_LADO_SEG = 5;
+
+/** Un paso por lado: el primer lado, unos segundos para cambiar de postura y el segundo lado. */
+const porLados = (etiqueta, seg) => [
+  { seg, texto: `${etiqueta} · primer lado` },
+  { seg: CAMBIO_DE_LADO_SEG, texto: 'Cambia de lado', cambio: true },
+  { seg, texto: `${etiqueta} · segundo lado` },
+];
+
+/** segEstimados: lo que dura el paso completo. Con repeticiones por lado ("8 por lado") se reparte entre los lados. */
+export function tramosDePaso(nombre, segEstimados = null) {
   const t = String(nombre || '').toLowerCase();
+  const etiqueta = String(nombre).split(',')[0].trim();
   const m = t.match(/(?:(\d+)\s*[x×]\s*)?(\d+(?:[.,]\d+)?)(?:\s*(?:a|-)\s*\d+(?:[.,]\d+)?)?\s*(minutos?|min|segundos?|seg|s)(?![a-zñáéíóú])/);
-  if (!m || /\bpausa\b/.test(t.slice(0, m.index))) return [];
+  if (!m || /\bpausa\b/.test(t.slice(0, m.index))) {
+    return /por lado/.test(t) && segEstimados > 0 ? porLados(etiqueta, Math.max(10, Math.round((segEstimados - CAMBIO_DE_LADO_SEG) / 10) * 5)) : [];
+  }
   const valor = Number(m[2].replace(',', '.'));
   const seg = Math.round(/^m/.test(m[3]) ? valor * 60 : valor);
   if (!seg) return [];
-  const etiqueta = String(nombre).split(',')[0].trim();
-  if (/por lado/.test(t)) return [1, 2].map(i => ({ seg, texto: `${etiqueta} · lado ${i}` }));
+  if (/por lado/.test(t)) return porLados(etiqueta, seg);
   const veces = m[1] ? Number(m[1]) : 1;
   return Array.from({ length: veces }, (_, i) => ({ seg, texto: veces > 1 ? `${etiqueta} · ${i + 1} de ${veces}` : etiqueta }));
 }

@@ -191,7 +191,8 @@ export const ctxNucleo = () => ({
 /** Cambia el plan aquí y, con cuenta, en el servidor. Devuelve el aviso si el servidor no lo aceptó (o null). */
 export async function cambiarPlan(plan, mensaje, nube) {
   E.plan = plan; E.mensaje = mensaje || null; guardar();
-  if (!nube?.conectado()) return null;
+  // El plan libre (entrenar sin plan) queda en el teléfono; las sesiones sí se sincronizan.
+  if (!nube?.conectado() || plan.libre) return null;
   try { const r = await nube.guardarPlan(plan); E.plan.id = r.id; delete E.planPendiente; guardar(); return null; }
   catch (e) {
     const aviso = `Se cambió en este teléfono, pero el servidor no lo aceptó: ${e.datos?.errores?.map(x => x.mensaje).join(' ') || e.message}`;

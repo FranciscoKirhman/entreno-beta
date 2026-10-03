@@ -11,6 +11,7 @@ import { fechasEntrenadas } from './temporada.js';
 import { abrirHoja } from './hoja.js';
 import { icono } from './iconos.js';
 import { miniatura } from './imagenes.js';
+import { cuentaNuevaHtml, enlazarCuentaNueva } from './cuenta-ui.js';
 import { grupos, etiquetaSuperserie } from '../nucleo/superseries.js';
 
 const LETRA = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
@@ -89,6 +90,7 @@ export function vistaPlan(ir, { armarPlan, nuevo = false } = {}) {
       <p class="pequeno">${nv.sube ? `Con lo que has entrenado ya corresponde ${NIVEL_VISTA[nv.alcanzado].nombre.toLowerCase()}: se aplica al armar tu próximo bloque.` : esc(nv.falta || 'Estás en el nivel más alto. El plan sigue ajustando cargas y volumen con lo que anotas.')}</p>
     </section>
 
+    ${nuevo ? cuentaNuevaHtml({ titulo: 'Guarda tu plan en una cuenta', texto: 'Así no lo pierdes si cambias de teléfono, y tus sesiones quedan respaldadas. Puedes hacerlo ahora o después en Más.' }) : ''}
     <div class="pie-plan">
       <button type="button" class="boton primario grande" id="empezar-plan">${nuevo ? 'Empezar' : 'Ir a Hoy'}</button>
       <button type="button" class="boton" id="a-perfil">Completar mi perfil</button>
@@ -96,6 +98,7 @@ export function vistaPlan(ir, { armarPlan, nuevo = false } = {}) {
   </div>`;
 
   $('empezar-plan').onclick = () => ir('hoy');
+  enlazarCuentaNueva(ir);
   $('a-perfil').onclick = () => ir('perfil');
   $('cambiar-objetivo').onclick = ev => abrirHoja({
     titulo: '¿Qué quieres lograr?',

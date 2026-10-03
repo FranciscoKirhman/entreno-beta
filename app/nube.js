@@ -55,6 +55,22 @@ export async function verificarCodigo(email, token) {
 }
 export async function salir() { await supa.auth.signOut(); sesion = null; }
 
+/** Entrar o crear la cuenta con Google o Apple. Sale a su página y vuelve con ?code=…, que iniciar() canjea. */
+export async function entrarCon(proveedor) {
+  const { error } = await supa.auth.signInWithOAuth({ provider: proveedor, options: { redirectTo: location.origin + location.pathname } });
+  if (error) throw error;
+}
+let proveedores = null;
+/** Los proveedores activados en el servidor ({ google, apple }). Un botón solo aparece si su proveedor está listo. */
+export function proveedoresDisponibles() {
+  if (!CONFIG.supabaseUrl) return Promise.resolve({});
+  proveedores ||= fetch(`${CONFIG.supabaseUrl}/auth/v1/settings`, { headers: { apikey: CONFIG.supabaseAnonKey } })
+    .then(r => (r.ok ? r.json() : {}))
+    .then(d => ({ google: d.external?.google === true, apple: d.external?.apple === true }))
+    .catch(() => { proveedores = null; return {}; });
+  return proveedores;
+}
+
 async function funcion(nombre, { metodo = 'POST', cuerpo } = {}) {
   const r = await fetch(`${CONFIG.funcionesUrl}/${nombre}`, {
     method: metodo,

@@ -8,6 +8,7 @@ import { seriesAnotadas } from '../nucleo/semanal.js';
 import { dice } from './cuestionario.js';
 import { esAsistido } from '../nucleo/catalogo.js';
 import { imagenSesion } from './imagen-sesion.js';
+import { cuentaNuevaHtml, enlazarCuentaNueva } from './cuenta-ui.js';
 
 const nombreEj = (id, respaldo) => indice.porId.get(id)?.nombre || respaldo || 'Ejercicio';
 // Insignia de cada récord (hoja RS01 del banco de imágenes). Mientras no esté cortada, se muestra la etiqueta "Récord".
@@ -84,7 +85,7 @@ function historialAntes(sesion) {
   return seriesAnotadas(otras, {});
 }
 
-export function vistaResumen(ir, { id } = {}) {
+export function vistaResumen(ir, { id, desde = null } = {}) {
   const sesion = E.sesiones.find(s => s.id === id) || E.sesiones.filter(s => !s.origen).at(-1);
   if (!sesion) return ir('hoy');
   // El día del plan con que se compara: el de su fecha si se anotó en la app; si vino de Hevy, el que más se le
@@ -130,9 +131,11 @@ export function vistaResumen(ir, { id } = {}) {
     </details>
     <div class="fila-botones"><button type="button" class="boton" id="compartir-resumen">Compartir</button><button type="button" class="boton" id="imagen-resumen">Imagen para compartir</button></div>
     <div id="imagen-compartir"></div>
+    ${desde ? '' : cuentaNuevaHtml({ titulo: 'Guarda tus sesiones en una cuenta', texto: 'Así no las pierdes si cambias de teléfono. Puedes hacerlo ahora o después en Más.' })}
     <div class="fila-botones"><button type="button" class="boton primario" id="volver-hoy">Listo</button></div>
   </div>`;
   $('volver-hoy').onclick = () => ir('hoy');
+  enlazarCuentaNueva(ir);
   // Imagen para historias, como Hevy: sin peso corporal ni fotos. Si el teléfono deja compartir archivos, abre su menú;
   // si no, se muestra para guardarla.
   $('imagen-resumen').onclick = async ev => {

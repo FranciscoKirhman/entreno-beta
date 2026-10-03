@@ -12,3 +12,24 @@
 .historial-vacio{display:flex;flex-direction:column;align-items:center;text-align:center;padding:6px 8px 10px}
 .historial-vacio img{width:144px;height:144px;object-fit:contain;margin-bottom:6px}
 @media(max-width:340px){.estado-personaje{width:104px;height:104px}.estado-texto h3{font-size:19px}.progreso-ilustrado .estado-personaje{width:88px;height:88px}}
+
+/* Estados durante el entrenamiento, sin quitar espacio a los controles. */
+#descanso.visible{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+#descanso .descanso-cab{display:flex;align-items:center;gap:8px;min-width:0}
+#descanso .descanso-asistente{display:flex;flex:0 0 44px;width:44px;height:44px}
+#descanso .descanso-personaje{width:100%;height:100%;object-fit:contain}
+#descanso .descanso-controles{display:flex;align-items:center;gap:6px}
+#descanso .descanso-controles .boton{padding-left:8px;padding-right:8px}
+.opcion-hoja .imagen-opcion[src^="img/articulaciones/"]{width:56px;height:56px;background:var(--surface-2)}
+.sesion-completa{margin:12px 0 4px;padding:10px 12px;border-radius:16px;background:var(--accent-soft)}
+.sesion-completa .estado-personaje,.descarga-ilustrada .estado-personaje{width:104px;height:104px}
+.sesion-completa .estado-texto h3,.descarga-ilustrada .estado-texto h3{font-size:19px}
+.sesion-completa .estado-texto p{line-height:1.45}
+.descarga-ilustrada{margin-bottom:8px}
+.aviso-descarga .estado-personaje{width:64px;height:64px}
+.aviso-descarga .estado-texto p{margin-top:0;line-height:1.4}
+.aviso-descarga .enlace{margin-top:4px}
+.demo.sin-senal{display:flex;align-items:center;gap:8px;max-width:calc(100vw - 32px);white-space:normal;line-height:1.35;border-radius:16px}
+.demo.sin-senal .modo-personaje{flex:0 0 40px;width:40px;height:40px;object-fit:contain}
+.demo.sin-senal span{min-width:0;overflow-wrap:anywhere}
+@media(max-width:340px){#descanso .descanso-asistente{flex-basis:36px;width:36px;height:40px}#descanso .descanso-controles{gap:4px}#descanso [data-menos],#descanso [data-mas]{min-width:40px}.sesion-completa .estado-personaje,.descarga-ilustrada .estado-personaje{width:88px;height:88px}}

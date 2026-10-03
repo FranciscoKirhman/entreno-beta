@@ -8,6 +8,8 @@ import { validarPlan } from '../nucleo/validador.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { sumarDias } from '../nucleo/agenda.js';
 import * as nube from './nube.js';
+import { descargaHtml } from './estados-visuales.js';
+import { imagenAsistente } from './cuestionario.js';
 
 /** Macrociclo del plan vigente; se guarda cuando cambia (plan nuevo, bloque siguiente o bloque más corto). */
 export function macroActual() {
@@ -36,15 +38,17 @@ function propuesta() {
 
 /** Aviso corto para Hoy. */
 export function avisoDescargaCorto() {
-  return propuesta() ? '<div class="aviso ojo fila-resumen"><span>Vienes con poca energía: te propongo adelantar la descarga.</span><button type="button" class="enlace" data-ir-semana>Verlo</button></div>' : '';
+  return propuesta() ? `<div class="aviso ojo estado-ilustrado aviso-descarga">
+    ${imagenAsistente('descanso', 'estado-personaje')}
+    <div class="estado-texto"><p>Vienes con poca energía: te propongo adelantar la descarga.</p><button type="button" class="enlace" data-ir-semana>Verlo</button></div>
+  </div>` : '';
 }
 
 /** Tarjeta para confirmar la descarga adelantada (Semana). */
 export function tarjetaDescarga() {
   const p = propuesta();
   if (!p) return '';
-  return `<section class="tarjeta destacada" id="propuesta-descarga"><h3>¿Adelantamos la descarga?</h3>
-    <p class="pequeno">${esc(p.motivo)}</p>
+  return `<section class="tarjeta destacada" id="propuesta-descarga">${descargaHtml({ titulo: '¿Adelantamos la descarga?', texto: p.motivo })}
     <p class="pequeno">La semana ${p.semana} (desde el ${esc(fechaCorta(p.desde))}) pasa a ser de descarga: mismos ejercicios, la mitad de las series y más reserva. El bloque termina ahí, se quita la semana ${p.quita} y el bloque siguiente parte una semana antes.</p>
     <div class="fila-botones"><button type="button" class="boton" id="descarga-no">Ahora no</button><button type="button" class="boton primario" id="descarga-si">Adelantar la descarga</button></div></section>`;
 }
@@ -69,7 +73,7 @@ export function tarjetaTemporada() {
         : `Vas en la semana ${s} de ${p.semanas}; la descarga es la semana ${p.semana_descarga}, desde el ${fechaCorta(sumarDias(p.inicio, (p.semana_descarga - 1) * 7))}.`;
   const listo = f >= ultimo; // el bloque siguiente se arma desde la última sesión de la descarga
   return `<section class="tarjeta" id="temporada">
-    <h3>Tu temporada</h3>
+    ${s === p.semana_descarga ? descargaHtml({ texto: 'Menos series y más reserva para recuperar energía antes del siguiente bloque.' }) : '<h3>Tu temporada</h3>'}
     <div class="macro" role="img" aria-label="Bloque ${m.actual} de ${m.bloques.length}${s ? `, semana ${s} de ${p.semanas}` : ''}">
       ${m.bloques.map(b => `<div class="bloque${b.n === m.actual ? ' actual' : ''}" style="flex:${b.semanas}"><div class="celdas">${celdas(b)}</div><span>${esc(b.nombre)}</span></div>`).join('')}
     </div>

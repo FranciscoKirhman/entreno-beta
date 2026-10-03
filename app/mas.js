@@ -13,6 +13,7 @@ import { semanaDe } from '../nucleo/ciclos.js';
 import { listarFotosLocales, guardarFotoLocal, restaurarFotosAtomicas } from './fotos-local.js';
 import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
 import * as nube from './nube.js';
+import { pintarProveedores } from './cuenta-ui.js';
 import { encendidaDisponible, actualizarPantalla } from './pantalla.js';
 
 /** Tema elegido en este teléfono: 'auto' (como el teléfono), 'claro' u 'oscuro'. index.html lo aplica al abrir. */
@@ -368,7 +369,8 @@ function cuentaHtml() {
     ${!Object.keys(R()).some(k => k !== 'unidad') && !E.sesiones.length && resumenLocal().perfil ? `<p class="pequeno">Hay un perfil local con ${resumenLocal().sesiones} sesiones. No se ha enviado a esta cuenta.</p><button type="button" class="boton" id="copiar-local">Revisar traslado del perfil local</button>` : ''}
     <div class="fila-botones"><button type="button" class="boton" id="descargar">Descargar mis datos</button><button type="button" class="boton" id="salir">Salir</button></div>
     <div class="fila-botones"><button type="button" class="boton" id="borrar-cuenta">Borrar mi cuenta</button></div><div id="datos-descargados"></div>`;
-  return `<h3>Entrar</h3><p class="pequeno">Con una cuenta, puedes sincronizar tus sesiones guardadas. El coach usa reglas mientras la IA no esté habilitada. Te mandamos un código y un enlace al correo; no hay contraseña.</p>
+  return `<h3>Entrar</h3><p class="pequeno">Con una cuenta, puedes sincronizar tus sesiones guardadas. El coach usa reglas mientras la IA no esté habilitada. Entra con Google o con tu correo: te mandamos un código y un enlace, sin contraseña.</p>
+    <div class="cuenta-proveedores" data-proveedores></div>
     <form id="form-correo" class="fila-chat"><input type="email" id="correo" required placeholder="tu@correo.cl" autocomplete="email" aria-label="Correo"><button type="submit" class="boton primario">Mandar código</button></form>
     <button type="button" class="enlace" id="ya-tengo-codigo">Ya tengo un código</button>
     <form id="form-codigo" class="fila-chat" hidden><input type="text" id="codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Código del correo" aria-label="Código"><button type="submit" class="boton primario">Entrar</button></form>
@@ -376,6 +378,7 @@ function cuentaHtml() {
 }
 
 function enlazarCuenta(ir, sincronizarAlEntrar) {
+  pintarProveedores();
   $('ya-tengo-codigo')?.addEventListener('click', () => {
     if (!$('correo').reportValidity()) return;
     $('form-codigo').hidden = false;

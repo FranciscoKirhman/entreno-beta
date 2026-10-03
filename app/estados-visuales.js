@@ -14,6 +14,23 @@ export function descansoHtml(proxima) {
   </section>`;
 }
 
+export function sesionCompletaHtml({ guardada = false } = {}) {
+  return `<div class="estado-ilustrado sesion-completa" role="status">
+    <div class="estado-texto"><h3>¡Series completas!</h3><p class="pequeno suave">${guardada ? 'Si hiciste ajustes, puedes guardar la sesión de nuevo.' : 'Toca Terminar sesión para guardar tu entrenamiento.'}</p></div>
+    ${imagenAsistente('celebra', 'estado-personaje')}
+  </div>`;
+}
+
+export function descargaHtml({ titulo = 'Semana de descarga', texto = '' } = {}) {
+  return `<div class="estado-ilustrado descarga-ilustrada">
+    <div class="estado-texto"><h3>${esc(titulo)}</h3>${texto ? `<p class="pequeno suave">${esc(texto)}</p>` : ''}</div>
+    ${imagenAsistente('descanso', 'estado-personaje')}
+  </div>`;
+}
+
+/** El aviso de conexión conserva el texto que explica qué se guarda, con la pose del asistente elegido. */
+export const sinSenalHtml = texto => `${imagenAsistente('sin_senal', 'modo-personaje')}<span>${esc(texto)}</span>`;
+
 export function bienvenidaProgreso() {
   return `<section class="tarjeta estado-ilustrado progreso-ilustrado">
     <div class="estado-texto"><h3>Cómo te ha ido hasta ahora</h3><p class="pequeno suave">Tu semana, tus sesiones y lo que vas registrando.</p></div>

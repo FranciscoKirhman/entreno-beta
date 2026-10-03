@@ -1,6 +1,9 @@
 // Cronómetro de descanso entre series: parte solo al marcar una serie, con el descanso que indica el plan, y avisa
 // al terminar (vibra en Android y suena un pitido corto). Se dibuja sobre el menú, fuera de la vista, así sigue
 // corriendo aunque la vista se vuelva a dibujar o se cambie de pantalla.
+import { imagenAsistente, asistenteActual } from './cuestionario.js';
+import { entrarPose } from './movimiento.js';
+
 let fin = 0, reloj = null, audio = null, etiqueta = '', siguientes = [], textoFinal = '¡A la siguiente serie!';
 // Series por tiempo (plancha y parecidas): al terminar, o al tocar Listo antes, se avisa cuántos segundos se hicieron.
 let alFin = null, inicio = 0;
@@ -13,10 +16,10 @@ function caja() {
     el = document.createElement('div');
     el.id = 'descanso';
     el.setAttribute('role', 'timer');
-    el.innerHTML = `<div class="texto"><span class="etiqueta pequeno"></span><strong class="tiempo num"></strong></div>
-      <button type="button" class="boton" data-menos aria-label="Restar 15 segundos">−15</button>
+    el.innerHTML = `<div class="descanso-cab"><span class="descanso-asistente" aria-hidden="true"></span><div class="texto"><span class="etiqueta pequeno"></span><strong class="tiempo num"></strong></div></div>
+      <div class="descanso-controles"><button type="button" class="boton" data-menos aria-label="Restar 15 segundos">−15</button>
       <button type="button" class="boton" data-mas aria-label="Sumar 15 segundos">+15</button>
-      <button type="button" class="boton" data-listo>Listo</button>`;
+      <button type="button" class="boton" data-listo>Listo</button></div>`;
     // Como en Hevy: 15 segundos menos o más. Restar no deja el término antes de ahora.
     el.querySelector('[data-menos]').onclick = () => { if (!reloj) return; fin = Math.max(Date.now(), fin - 15_000); pintar(); };
     el.querySelector('[data-mas]').onclick = () => { fin = Math.max(fin, Date.now()) + 15_000; if (!reloj) correr(); pintar(); };
@@ -39,6 +42,14 @@ function pintar() {
   resta = Math.max(0, resta);
   el.querySelector('.tiempo').textContent = formato(resta);
   el.querySelector('.etiqueta').textContent = resta ? etiqueta : textoFinal;
+  const personaje = el.querySelector('.descanso-asistente');
+  const pose = resta ? 'cronometro' : 'animo', asistente = asistenteActual();
+  // El cronómetro se actualiza cuatro veces por segundo; la imagen solo cambia al cambiar la pose o el asistente.
+  if (personaje.dataset.pose !== pose || personaje.dataset.asistente !== asistente) {
+    personaje.innerHTML = imagenAsistente(pose, 'descanso-personaje', asistente);
+    personaje.dataset.pose = pose; personaje.dataset.asistente = asistente;
+    entrarPose(personaje.firstElementChild); // una entrada corta, solo cuando cambia
+  }
   if (!resta && reloj) terminar();
 }
 

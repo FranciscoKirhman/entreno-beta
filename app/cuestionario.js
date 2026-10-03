@@ -9,6 +9,10 @@ import { C, E, guardar, R, esc, $, hoy, indice, numero, coma, chk, mostrarMensaj
 import { derivar, nivelDeclarado } from '../nucleo/derivar.js';
 import { tieneEquipo, nivelAlcanza } from '../nucleo/catalogo.js';
 import { icono } from './iconos.js';
+import { imagenMusculo } from './musculos.js';
+import { imagenArticulacion, cuidarImagenesPerfil } from './articulaciones.js';
+import { elegirAvatares, avatarValido, restaurarSelectorAvatar } from './avatares.js';
+import { repintarConservando, entrarPaso, enfocarTitulo } from './movimiento.js';
 
 const pregunta = id => C.secciones.flatMap(s => s.preguntas).find(p => p.id === id);
 const PRESETS = () => pregunta('lugares').presets;
@@ -139,7 +143,7 @@ function pasoMusculos(r) {
   const v = r.musculos_prioridad || [];
   return {
     titulo: '¿Qué quieres priorizar?', sub: 'Esas zonas reciben más series que el resto. Elige hasta 3: con más, cada una recibe menos.',
-    html: `<div class="chips-botones grandes">${C.zonas.musculos.map(([m, t]) => `<button type="button" class="chip-opcion" data-toggle="musculos_prioridad" data-v="${m}" aria-pressed="${v.includes(m)}">${esc(t)}</button>`).join('')}</div>
+    html: `<div class="grid-zonas-ilustradas">${C.zonas.musculos.map(([m, t]) => `<button type="button" class="zona-ilustrada" data-toggle="musculos_prioridad" data-v="${m}" aria-pressed="${v.includes(m)}">${dibujoMusculo(m)}<span>${esc(t)}</span></button>`).join('')}</div>
     ${v.length > 3 ? '<p class="aviso ojo pequeno">Marcaste más de 3: igual se puede, pero cada una crece menos.</p>' : ''}`,
   };
 }
@@ -176,6 +180,7 @@ function pasoSobreTi(r) {
     html: `<label class="casilla-grande${r.mayor_18 ? ' marcada' : ''}"><input type="checkbox" data-check="mayor_18"${chk(r.mayor_18 === true)}><span>Tengo 18 años o más</span></label>
     <label class="enunciado" for="apodo">¿Cómo te llamamos? <span class="suave pequeno">(opcional)</span></label>
     <input type="text" id="apodo" data-texto="apodo" value="${esc(r.apodo)}" autocomplete="nickname" placeholder="Tu nombre o apodo">
+    <div class="seguir">${elegirAvatares()}</div>
     <p class="enunciado">${esc(sexo.texto)} <span class="suave pequeno">(opcional)</span></p>
     ${chips('sexo', sexo.opciones, r.sexo)}
     <p class="pequeno suave">${esc(sexo.por_que || '')}</p>`,
@@ -199,7 +204,7 @@ function pasoSalud(r) {
       <div class="lista-opciones">${tam.filas.map(([f, txt]) => `<button type="button" class="fila-opcion casilla-fila" data-tamizaje="${f}" aria-pressed="${t[f] === true}"><span>${esc(txt)}</span></button>`).join('')}</div>
       ${['femenino', 'otro', 'no_dice'].includes(r.sexo) ? `<p class="enunciado">${esc(embarazo.texto)}</p>${chips('embarazo', embarazo.opciones, r.embarazo)}` : ''}
       <p class="enunciado">¿Tienes alguna lesión o molestia ahora?</p>
-      <div class="chips-botones">${zonas.map(([z, n]) => `<button type="button" class="chip-opcion" data-zona="${z}" aria-pressed="${lesiones.some(l => l.region === z)}">${esc(n)}</button>`).join('')}</div>
+      <div class="grid-zonas-ilustradas">${zonas.map(([z, n]) => `<button type="button" class="zona-ilustrada" data-zona="${z}" aria-pressed="${lesiones.some(l => l.region === z)}">${imagenArticulacion(z)}<span>${esc(n)}</span></button>`).join('')}</div>
       ${lesiones.map(l => `<div class="lesion"><strong>${esc(zonas.find(z => z[0] === l.region)?.[1] || l.region)}</strong>
         <div class="segmentos" role="group" aria-label="Tipo">${[['molestia', 'Molestia'], ['lesion', 'Lesión']].map(([v, n]) => `<button type="button" data-lesion-tipo="${v}" data-region="${l.region}" aria-pressed="${(l.tipo || 'molestia') === v}">${n}</button>`).join('')}</div>
         <p class="pequeno suave">¿Cuánto duele hoy? 0 es nada, 10 es el peor dolor.</p>
@@ -220,6 +225,11 @@ const PINTAR = { asistente: pasoAsistente, objetivo: pasoObjetivo, nivel: pasoNi
 
 function chips(id, opciones, v, num = false) {
   return `<div class="chips-botones">${opciones.map(([o, t]) => `<button type="button" class="chip-opcion" data-set="${id}" data-v="${esc(o)}"${num ? ' data-num' : ''} aria-pressed="${String(v) === String(o)}">${esc(t)}</button>`).join('')}</div>`;
+}
+
+function dibujoMusculo(id) {
+  const src = imagenMusculo(id);
+  return src ? `<img class="img-musculo" src="${src}" alt="" width="160" height="160" decoding="async" data-imagen-perfil>` : '';
 }
 
 /** El cuestionario rápido. `armarPlan` se llama al terminar. */
@@ -251,8 +261,19 @@ const POSE_PASO = { objetivo: 'pregunta', nivel: 'pensando', semana: 'calendario
 
 function enlazarRapido(ir, armarPlan) {
   const raiz = $('rapido');
+  cuidarImagenesPerfil(raiz);
   const r = R();
-  const repintar = () => { const y = window.scrollY; vistaRapido(ir, armarPlan); window.scrollTo(0, y); };
+  // Repintar el mismo paso conserva la altura, el foco y la selección (con una transición corta del borde y el fondo).
+  let tocado = null;
+  const repintar = () => repintarConservando(() => vistaRapido(ir, armarPlan), tocado);
+  // Cambiar de paso entra desde el lado hacia donde se va; con teclado, el foco pasa al título del paso nuevo.
+  const irAPaso = direccion => {
+    let conTeclado = false;
+    try { conTeclado = raiz.contains(document.activeElement) && document.activeElement.matches(':focus-visible'); } catch { /* navegador antiguo */ }
+    vistaRapido(ir, armarPlan); window.scrollTo(0, 0);
+    entrarPaso($('rapido'), direccion);
+    if (conTeclado) enfocarTitulo($('rapido'));
+  };
   const avanzar = () => {
     const id = PASOS[pasoActual()];
     if (LISTO[id] && !LISTO[id](R())) return;
@@ -261,15 +282,20 @@ function enlazarRapido(ir, armarPlan) {
       R().tamizaje = Object.fromEntries(pregunta('tamizaje').filas.map(([f]) => [f, R().tamizaje?.[f] === true]));
     }
     if (pasoActual() === PASOS.length - 1) { R().respondido_el ||= hoy(); guardar(); return armarPlan(); }
-    E.paso = pasoActual() + 1; guardar(); vistaRapido(ir, armarPlan); window.scrollTo(0, 0);
+    E.paso = pasoActual() + 1; guardar(); irAPaso(1);
   };
   raiz.addEventListener('click', ev => {
     const b = ev.target.closest('button');
     if (!b) return;
+    tocado = b;
     const d = b.dataset;
-    if (d.atras !== undefined) { E.paso = Math.max(0, pasoActual() - 1); guardar(); vistaRapido(ir, armarPlan); window.scrollTo(0, 0); return; }
+    if (d.atras !== undefined) { E.paso = Math.max(0, pasoActual() - 1); guardar(); irAPaso(-1); return; }
     if (d.saltar !== undefined || d.siguiente !== undefined) return avanzar();
     if (d.asistente) { E.asistente = d.asistente; guardar(); repintar(); setTimeout(avanzar, 260); return; }
+    if (d.avatar !== undefined && avatarValido(d.avatar)) {
+      E.avatar = d.avatar; guardar(); repintar();
+      restaurarSelectorAvatar($('rapido'), d.avatar); return;
+    }
     if (d.set) {
       const v = d.bool !== undefined ? d.v === 'true' : d.num !== undefined ? Number(d.v) : d.v;
       r[d.set] = r[d.set] === v && d.set !== 'objetivo_principal' && d.set !== 'tiempo_entrenando' ? undefined : v;
@@ -319,6 +345,7 @@ function enlazarRapido(ir, armarPlan) {
   raiz.addEventListener('change', ev => {
     const c = ev.target.dataset.check;
     if (!c) return;
+    tocado = ev.target;
     r[c] = ev.target.checked; guardar(); repintar();
   });
   raiz.addEventListener('input', ev => {
@@ -422,7 +449,7 @@ function mapa(p, v) {
   const zonas = C.zonas[p.zonas];
   const conDetalle = Array.isArray(p.por_zona);
   const elegidas = conDetalle ? (v || []).map(x => x.region) : (v || []);
-  let s = `<div class="chips">${zonas.map(([z, t]) => `<label><input type="checkbox" data-p="${p.id}" data-zona value="${z}"${chk(elegidas.includes(z))}>${esc(t)}</label>`).join('')}</div>`;
+  let s = `<div class="grid-zonas-ilustradas">${zonas.map(([z, t]) => `<label class="zona-ilustrada"><input type="checkbox" data-p="${p.id}" data-zona value="${z}"${chk(elegidas.includes(z))}>${p.zonas === 'articulaciones' ? imagenArticulacion(z) : dibujoMusculo(z)}<span>${esc(t)}</span></label>`).join('')}</div>`;
   if (conDetalle) {
     for (const x of v || []) {
       const nombre = zonas.find(z => z[0] === x.region)?.[1] || x.region;
@@ -540,12 +567,14 @@ function validarSeccion(ps) {
 export function vistaSeccion(ir) {
   const s = seccionesVisibles().find(x => x.id === E.seccionPerfil) || seccionesVisibles()[0];
   const ps = preguntasVisibles(s);
-  const repintar = () => { const y = window.scrollY; vistaSeccion(ir); window.scrollTo(0, y); };
+  let tocado = null;
+  const repintar = () => repintarConservando(() => vistaSeccion(ir), tocado);
   $('app').innerHTML = `<div id="vista-seccion">
     <button type="button" class="enlace" id="a-perfil">‹ Tu perfil</button>
     <h1>${esc(s.titulo)}</h1>
     ${s.intro ? `<div class="aviso ${s.sensible ? 'ojo' : ''}">${esc(s.intro)}</div>` : ''}
     <form id="seccion" novalidate>
+      ${s.id === 'sobre_ti' ? `<section class="tarjeta"><h3>Tu foto de perfil</h3>${elegirAvatares()}</section>` : ''}
       ${ps.map(p => `<div class="pregunta" id="q-${p.id}">
         ${p.tipo === 'consentimiento' ? '' : `<div class="enunciado">${esc(p.texto)}</div>`}
         ${p.ayuda ? `<p class="ayuda">${esc(p.ayuda)}</p>` : ''}
@@ -557,9 +586,16 @@ export function vistaSeccion(ir) {
     </form>
   </div>`;
   const f = $('seccion');
+  cuidarImagenesPerfil(f);
   f.addEventListener('input', e => { if (e.target.dataset.buscar) resultadosBusqueda(e.target.dataset.buscar, e.target.value); else if (['text', 'number', 'date', 'textarea'].includes(e.target.type) || e.target.tagName === 'TEXTAREA') alCambiar(e, false, repintar); });
-  f.addEventListener('change', e => { if (!e.target.dataset.buscar) alCambiar(e, true, repintar); });
+  f.addEventListener('change', e => { tocado = e.target; if (!e.target.dataset.buscar) alCambiar(e, true, repintar); });
   f.addEventListener('click', e => {
+    tocado = e.target.closest('button') || tocado;
+    const avatar = e.target.closest('[data-avatar]');
+    if (avatar && avatarValido(avatar.dataset.avatar)) {
+      E.avatar = avatar.dataset.avatar; guardar(); repintar();
+      restaurarSelectorAvatar($('seccion'), avatar.dataset.avatar); return;
+    }
     const b = e.target.closest('[data-otro-lugar]');
     if (!b) return;
     const pid = b.dataset.otroLugar;

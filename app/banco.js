@@ -19,7 +19,7 @@ export function vistaBanco(ir, { desde = ultimoDesde } = {}) {
   $('app').innerHTML = `<div id="vista-banco">
     <button type="button" class="volver" id="banco-volver">${icono('flecha', 'icono flecha-atras')} ${desde === 'hoy' ? 'Hoy' : 'Más'}</button>
     <h1>Banco de ejercicios</h1>
-    <p class="pequeno suave">${indice.ejercicios.filter(e => !e.propio).length} ejercicios con imágenes y técnica${E.ejerciciosPropios?.length ? `, más ${E.ejerciciosPropios.length} ${E.ejerciciosPropios.length === 1 ? 'creado' : 'creados'} por ti` : ''}. Puedes sumar uno a hoy, aunque hoy descanses.</p>
+    <p class="pequeno suave">${indice.ejercicios.filter(e => !e.propio).length} ejercicios con técnica${E.ejerciciosPropios?.length ? `, más ${E.ejerciciosPropios.length} ${E.ejerciciosPropios.length === 1 ? 'creado' : 'creados'} por ti` : ''}. Puedes sumar uno a hoy, aunque hoy descanses. Las variantes sin dibujo muestran su equipo o sus músculos.</p>
     <button type="button" class="boton" id="banco-cardio">Banco de cardio, 9 actividades con imágenes</button>
     <section class="tarjeta banco-busqueda">
       <label for="banco-buscar" class="pequeno">Buscar por nombre, músculo o equipo</label>

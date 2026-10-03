@@ -10,7 +10,7 @@ import { prepararSesion, unirSesiones } from '../nucleo/sincronizacion.js';
 import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
 import { derivar } from '../nucleo/derivar.js';
 import { generarPlan } from '../nucleo/motor-plan.js';
-import { vistaHoy } from './hoy.js';
+import { vistaHoy, irAlEjercicioEnCurso } from './hoy.js';
 import { vistaFicha } from './ficha.js';
 import { vistaDiaPasado } from './dia-pasado.js';
 import { vistaSemana } from './semana.js';
@@ -22,15 +22,19 @@ import { vistaTableroOriginal } from './tablero-original.js';
 import { vistaBanco } from './banco.js';
 import { vistaCheckin } from './checkin.js';
 import { historialReciente, fechasEntrenadas } from './temporada.js';
-import { vistaRapido, vistaPerfil, vistaSeccion, firmaRespuestas, dice, nombreAsistente } from './cuestionario.js';
+import { vistaRapido, vistaPerfil, vistaSeccion, firmaRespuestas } from './cuestionario.js';
 import { vistaPlan } from './plan.js';
 import { vistaResumen } from './resumen.js';
+import { vistaBienvenida, vistaEleccion, eleccionPendiente } from './inicio.js';
 import { progresoNivel } from '../nucleo/nivel.js';
 import { programarAvisos } from './avisos.js';
 import { actualizarPantalla } from './pantalla.js';
 import { dejarPendiente, subirPendientes } from './cola.js';
 import * as nube from './nube.js';
 import { CONFIG } from './config.js';
+import { sinSenalHtml } from './estados-visuales.js';
+import { entrarVista, entrarPose } from './movimiento.js';
+import { instalarAtras, accionAtras, esVuelta } from './atras.js';
 
 // ── Plan y cuenta ───────────────────────────────────────────────────────────
 /** Arma (o rehace) el plan con las respuestas y muestra la pantalla "Tu plan". */
@@ -88,7 +92,7 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
     if (!borrador) E.respuestas = respuestas;
   }
   if (plan) E.plan = conPropios(plan, E.plan);
-  else if (R().objetivo_principal && E.plan?.dias?.length && !E.plan.bloqueado && !E.plan.id) {
+  else if (R().objetivo_principal && E.plan?.dias?.length && !E.plan.bloqueado && !E.plan.id && !E.plan.libre) {
     // Perfil local copiado a una cuenta vacía: se sube su plan tal cual (el servidor lo valida), sin armar otro.
     await consultar(() => nube.guardarCuestionario(R()));
     try { const r = await consultar(() => nube.guardarPlan(E.plan)); E.plan.id = r.id; }
@@ -98,7 +102,7 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
       E.mensaje = `Tu plan quedó en este teléfono, pero el servidor no lo aceptó: ${e.datos?.errores?.map(x => x.mensaje).join(' ') || e.message}`;
     }
   }
-  else if (R().objetivo_principal) await consultar(() => armarPlan());
+  else if (R().objetivo_principal && !E.plan?.libre) await consultar(() => armarPlan()); // quien entrena sin plan lo arma cuando quiera
   let p = await consultar(() => nube.cargarPreferencias());
   if (!p.preferencias_actualizadas) { p = { unidad: R().unidad || 'kg', asistente: E.asistente || 'entrenadora' }; await consultar(() => nube.guardarPreferencias(p)); }
   R().unidad = p.unidad; E.asistente = p.asistente || 'entrenadora';
@@ -135,34 +139,25 @@ function vistaBloqueada() {
 }
 
 function vistaInicio() {
-  $('app').innerHTML = `<div id="vista-inicio">
-    <h1>Tu compañero de entrenamiento</h1>
-    ${dice('saludo', Object.keys(R()).some(k => k !== 'unidad') ? `¡Hola de nuevo! Soy ${nombreAsistente()}. Seguimos donde quedamos.` : `¡Hola! Soy ${nombreAsistente()}. Te ayudo a armar tu plan y te acompaño en cada entrenamiento.`)}
-    <p class="pequeno">${nube.hay() ? 'Puedes entrenar con reglas en este teléfono y sincronizar con tu cuenta. En Más puedes conectar ChatGPT para consultar tu plan y recibir propuestas. El ejemplo es ficticio y está separado de tu perfil.' : 'Puedes entrenar con reglas en este teléfono. Tus respuestas y registros se conservan en este navegador. El ejemplo es ficticio y está separado de tu perfil.'}</p>
-    <p>Arma tu plan, lo agenda en tu semana, lo ajusta cuando faltas, cuando una máquina está ocupada o cuando dormiste mal, y te explica por qué de cada ejercicio, con evidencia.</p>
-    ${nube.hay() && !nube.conectado() ? `<section class="tarjeta"><h3>Entrar con tu correo</h3><p class="pequeno">Puedes recuperar tus sesiones guardadas en otro dispositivo. El coach usa reglas mientras la IA no esté habilitada.</p><button type="button" class="boton primario" id="a-cuenta">Entrar</button></section>` : ''}
-    ${nube.conectado() ? `<p class="pequeno suave">Entraste como ${esc(nube.correo())}.</p>${!E.plan ? `<section class="tarjeta"><h3>Recuperar mi entrenamiento</h3><p>Tu correo está conectado, pero esta cuenta todavía no tiene un plan disponible. Los datos de otro teléfono o del tablero anterior necesitan trasladarse a ella.</p><button type="button" class="boton primario" id="recuperar-datos">Recuperar mis datos</button></section>` : ''}` : ''}
-    <div class="fila-botones">
-      <button type="button" class="boton primario" id="empezar">${Object.keys(R()).some(k => k !== 'unidad') ? 'Seguir con el cuestionario' : 'Empezar el cuestionario'}</button>
-      <button type="button" class="boton" id="ejemplo">Ver un ejemplo</button>
-    </div>
-    <p class="pequeno">¿Cambiaste de teléfono? <button type="button" class="enlace" id="a-respaldo">Restaurar un respaldo</button></p>
-    <p class="suave pequeno" style="margin-top:24px">${esc(C.intro)}</p>
-  </div>`;
-  $('a-respaldo').onclick = () => ir('mas');
-  $('recuperar-datos')?.addEventListener('click', () => ir('mas'));
-  $('a-cuenta')?.addEventListener('click', () => ir('mas'));
-  $('empezar').onclick = () => ir('cuestionario');
-  $('ejemplo').onclick = () => { if (nube.conectado()) { E.mensaje = 'Sal de tu cuenta antes de abrir el ejemplo local.'; mostrarMensaje(); return; } entrarEjemplo(); E.respuestas = structuredClone(EJEMPLO); E.sesiones = historialDeEjemplo(hoy(), indice); armarPlan(); };
+  vistaBienvenida(ir, { abrirEjemplo: () => { if (nube.conectado()) { E.mensaje = 'Sal de tu cuenta antes de abrir el ejemplo local.'; mostrarMensaje(); return; } entrarEjemplo(); E.respuestas = structuredClone(EJEMPLO); E.sesiones = historialDeEjemplo(hoy(), indice); armarPlan(); } });
   mostrarMensaje();
 }
 
 // ── Navegación ──────────────────────────────────────────────────────────────
-const VISTAS_CON_PLAN = ['hoy', 'semana', 'coach', 'progreso', 'checkin', 'plan', 'resumen'];
-const PESTANA = { banco: 'mas', checkin: 'semana', plan: 'semana', perfil: 'mas', seccion: 'mas', pasado: 'progreso', 'tablero-original': 'mas' };
+const VISTAS_CON_PLAN = ['hoy', 'semana', 'coach', 'progreso', 'checkin', 'plan', 'resumen', 'eleccion'];
+const PESTANA = { eleccion: 'hoy', banco: 'mas', checkin: 'semana', plan: 'semana', perfil: 'mas', seccion: 'mas', pasado: 'progreso', 'tablero-original': 'mas' };
+let antesDeFicha = null, finEntrada = null, extraActual = null, primeraVista = true;
 function ir(vista, extra) {
   if (VISTAS_CON_PLAN.includes(vista) && (!E.plan)) vista = 'inicio';
   if (VISTAS_CON_PLAN.includes(vista) && E.plan?.bloqueado) { vistaBloqueada(); return; }
+  if (vista === 'plan' && E.plan?.libre) vista = 'inicio'; // sin plan todavía: armarlo o seguir sin plan
+  if (E.vista === 'eleccion' && vista !== 'eleccion') E.eleccionInicio = hoy(); // ya eligió (o se fue a otra pestaña)
+  const anterior = E.vista;
+  // Al abrir una ficha se recuerda dónde estaba la persona; al volver, queda en el mismo ejercicio y a la misma altura.
+  if (vista === 'ejercicio' && anterior !== 'ejercicio') antesDeFicha = { vista: anterior, y: scrollY, id: extra?.id };
+  const volviendo = anterior === 'ejercicio' && antesDeFicha?.vista === vista ? antesDeFicha : null;
+  if (vista !== 'ejercicio') antesDeFicha = null;
+  extraActual = extra;
   E.vista = vista; guardar();
   $('nav').hidden = !E.plan || E.plan.bloqueado;
   const pestana = ['ejercicio', 'resumen'].includes(vista) ? PESTANA[extra?.desde] || extra?.desde || 'hoy' : PESTANA[vista] || vista;
@@ -171,13 +166,27 @@ function ir(vista, extra) {
   pintarPerfilesPrueba();
   abrirEnlacePerfiles(); // #perfiles=…: el enlace privado reemplaza pasar el archivo a cada teléfono
   const vistas = {
-    inicio: vistaInicio, cuestionario: () => vistaRapido(ir, armarPlan), perfil: () => vistaPerfil(ir, armarPlan), seccion: () => vistaSeccion(ir),
+    inicio: vistaInicio, eleccion: () => vistaEleccion(ir), cuestionario: () => vistaRapido(ir, armarPlan), perfil: () => vistaPerfil(ir, armarPlan), seccion: () => vistaSeccion(ir),
     plan: () => vistaPlan(ir, { armarPlan, nuevo: extra?.nuevo }), hoy: () => vistaHoy(ir, extra), ejercicio: () => vistaFicha(ir, extra || {}), semana: () => vistaSemana(ir),
     banco: () => vistaBanco(ir, extra || {}), coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), resumen: () => vistaResumen(ir, extra || {}), progreso: () => vistaProgreso(ir), pasado: () => vistaDiaPasado(ir, extra || {}), mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar }), 'tablero-original': () => vistaTableroOriginal(ir),
   };
   (vistas[vista] || vistaInicio)();
   mostrarMensaje(); // los avisos se muestran una vez, flotando sobre el menú
   window.scrollTo(0, 0);
+  // Al llegar a Hoy (o al abrir la app ahí) con la sesión empezada, la pantalla queda en el ejercicio que sigue.
+  if (vista === 'hoy' && (vista !== anterior || primeraVista) && !volviendo && !extra?.ej) requestAnimationFrame(irAlEjercicioEnCurso);
+  primeraVista = false;
+  if (volviendo) requestAnimationFrame(() => {
+    scrollTo(0, volviendo.y);
+    const id = CSS.escape(volviendo.id || '');
+    document.querySelector(`[data-ficha="${id}"], [data-banco-ver="${id}"], [data-recom-ver="${id}"]`)?.focus({ preventScroll: true });
+  });
+  // Solo al cambiar de pantalla: repintar la misma (por ejemplo, al anotar una serie) no se anima.
+  if (vista !== anterior) {
+    entrarVista($('app'), esVuelta(anterior, vista));
+    $('app').classList.add('entrando'); // las poses de la pantalla nueva entran una vez (estilos.css)
+    clearTimeout(finEntrada); finEntrada = setTimeout(() => $('app').classList.remove('entrando'), 500);
+  }
   programarAvisos(); // recordatorios de hoy con lo último (sesión hecha, suplemento tomado)
   actualizarPantalla(); // con una sesión en curso, la pantalla no se apaga sola
 }
@@ -189,16 +198,18 @@ addEventListener('hashchange', () => abrirEnlacePerfiles());
 function pintarModo() {
   const m = $('modo');
   const texto = modoEjemplo ? 'Ejemplo ficticio · Volver a mis datos' : errorGuardado ? 'Hay cambios sin guardar' : !navigator.onLine ? 'Sin señal · se guarda igual' : nube.conectado() ? (R().demo_privada ? 'Demo privada · Perfil ficticio' : nube.correo() || 'Cuenta') : nube.hay() ? 'Sin cuenta' : '';
-  m.textContent = perfilDePrueba && !modoEjemplo ? `${perfilDePrueba.nombre}${texto ? ' · ' + texto : ''}` : texto;
+  const aviso = perfilDePrueba && !modoEjemplo ? `${perfilDePrueba.nombre}${texto ? ' · ' + texto : ''}` : texto;
+  const html = !navigator.onLine ? sinSenalHtml(aviso) : esc(aviso);
+  if (m.dataset.html !== html) { m.innerHTML = html; m.dataset.html = html; } // sin parpadeo al cambiar de pantalla
   m.onclick = modoEjemplo ? () => { salirEjemplo(); ir(E.plan ? 'hoy' : 'inicio'); } : null;
   m.setAttribute('role', modoEjemplo ? 'button' : 'status');
   m.tabIndex = modoEjemplo ? 0 : -1;
   m.onkeydown = e => { if (modoEjemplo && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); m.click(); } };
-  m.hidden = !m.textContent;
+  m.hidden = !aviso;
   m.classList.toggle('sin-senal', !navigator.onLine);
 }
 addEventListener('online', pintarModo);
-addEventListener('offline', pintarModo);
+addEventListener('offline', () => { pintarModo(); entrarPose($('modo').querySelector('.modo-personaje')); });
 
 // Respuestas de ejemplo: una persona inventada, intermedia, con molestia de codo y prioridad en glúteo.
 const EJEMPLO = {
@@ -226,6 +237,10 @@ if (nube.conectado()) {
   catch { E.mensaje = 'No pude sincronizar ahora. Puedes seguir con la copia de esta cuenta en el teléfono y reintentar en Más.'; }
   if (nube.entroPorEnlace()) { E.mensaje = `Entraste como ${nube.correo()}.`; E.vista = E.plan ? 'hoy' : 'inicio'; }
 }
-ir(['cuestionario', 'hoy', 'semana', 'coach', 'progreso', 'mas', 'checkin', 'plan', 'perfil', 'seccion', 'tablero-original'].includes(E.vista) ? E.vista : (E.plan ? 'hoy' : 'inicio'));
+// Con plan, la primera vez del día se elige entre la sesión planificada y una vacía (salvo a mitad del cuestionario).
+ir(!['cuestionario', 'perfil', 'seccion'].includes(E.vista) && eleccionPendiente() ? 'eleccion'
+  : ['cuestionario', 'hoy', 'semana', 'coach', 'progreso', 'mas', 'checkin', 'plan', 'perfil', 'seccion', 'tablero-original'].includes(E.vista) ? E.vista : (E.plan ? 'hoy' : 'inicio'));
+// Atrás: deslizar desde el borde izquierdo o el botón atrás del teléfono (app/atras.js).
+instalarAtras(() => accionAtras({ vista: E.vista, extra: extraActual, ir, conPlan: Boolean(E.plan) }));
 // Con la clave de Hevy Pro, lo nuevo de Hevy entra solo; si llega algo, se redibuja la vista (sin mover la pantalla).
 hevyAlAbrir(() => { if (['hoy', 'semana', 'progreso'].includes(E.vista) && !document.querySelector('#hoja')) { const y = scrollY; ir(E.vista); scrollTo(0, y); } });

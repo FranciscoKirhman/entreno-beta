@@ -1,10 +1,13 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
 // Red primero, con límite de tiempo, y la copia guardada como respaldo (igual que el tablero).
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-03 15:43 · b5e101b";
+const VERSION = "2026-10-03 20:09 · 0307787";
 const ARCHIVOS = [
  "./",
  "app.js",
+ "articulaciones.js",
+ "atras.js",
+ "avatares.js",
  "avisos.js",
  "banco.css",
  "banco.js",
@@ -16,6 +19,7 @@ const ARCHIVOS = [
  "comun.js",
  "conexion-ia.js",
  "config.js",
+ "cuenta-ui.js",
  "cuestionario.js",
  "datos-nube.js",
  "descanso.js",
@@ -38,6 +42,7 @@ const ARCHIVOS = [
  "iconos/icono.svg",
  "iconos.js",
  "imagen-sesion.js",
+ "imagenes-perfil.css",
  "imagenes.js",
  "img/articulaciones/cadera.webp",
  "img/articulaciones/codo.webp",
@@ -568,8 +573,10 @@ const ARCHIVOS = [
  "img/resumen/tiempo.webp",
  "img/resumen/volumen.webp",
  "index.html",
+ "inicio.js",
  "manifest.webmanifest",
  "mas.js",
+ "movimiento.js",
  "musculos.js",
  "nube.js",
  "oauth-ui.js",
@@ -629,6 +636,7 @@ const ARCHIVOS = [
  "../nucleo/opcionales.js",
  "../nucleo/perfiles-enlace.js",
  "../nucleo/perfiles-prueba.js",
+ "../nucleo/plan-libre.js",
  "../nucleo/progresion.js",
  "../nucleo/progreso-ejercicio.js",
  "../nucleo/propios.js",

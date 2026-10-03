@@ -36,7 +36,9 @@ import { preguntar, proponer, seguir } from './cambios-ui.js';
 import { aplicarOpcion } from '../nucleo/coach.js';
 import { nombreAsistente } from './cuestionario.js';
 import * as nube from './nube.js';
-import { descansoHtml } from './estados-visuales.js';
+import { descansoHtml, sesionCompletaHtml } from './estados-visuales.js';
+import { srcArticulacion } from './articulaciones.js';
+import { repintarConservando, celebrar, sinMovimiento } from './movimiento.js';
 import { proponerEdicion, ordenarSesion } from './editar-sesion-ui.js';
 import { serieCompleta } from '../nucleo/serie-completa.js';
 import { proponerSesionVacia } from './sesion-libre-ui.js';
@@ -81,6 +83,36 @@ export function vistaHoy(ir, extra) {
   mostrarMensaje();
   // Al volver de la ficha de un ejercicio, la pantalla queda en ese ejercicio.
   if (extra?.ej) requestAnimationFrame(() => document.getElementById(`ej-${extra.ej}`)?.scrollIntoView({ block: 'center' }));
+  celebrarSiSeCompleto(f);
+}
+
+/** Con la sesión empezada, al llegar a Hoy la pantalla queda en el ejercicio que se está haciendo: el de la serie que
+ *  sigue a la última marcada. Sin series marcadas, Hoy parte arriba. */
+export function irAlEjercicioEnCurso() {
+  const checks = [...document.querySelectorAll('#vista-hoy .ej [data-hecho]')];
+  const ultima = checks.findLastIndex(c => c.getAttribute('aria-pressed') === 'true');
+  if (ultima < 0) return;
+  const sigue = checks.slice(ultima + 1).find(c => c.getAttribute('aria-pressed') !== 'true') || checks.find(c => c.getAttribute('aria-pressed') !== 'true');
+  sigue?.closest('.ej')?.scrollIntoView({ block: 'start' });
+}
+
+// La sesión completa se celebra una sola vez: al pasar de series pendientes a todas hechas en esta misma pantalla.
+// Abrir la app con la sesión ya completa, repintar, volver de una ficha o guardar de nuevo no la repiten.
+let completaAntes = null;
+const celebradas = new Set();
+function celebrarSiSeCompleto(f) {
+  const tarjeta = document.querySelector('#vista-hoy .sesion-completa');
+  const ahora = { fecha: f, completa: Boolean(tarjeta) };
+  const recien = ahora.completa && completaAntes?.fecha === f && !completaAntes.completa && !celebradas.has(f);
+  completaAntes = ahora;
+  if (!recien) return;
+  celebradas.add(f);
+  celebrar(tarjeta, tarjeta.querySelector('.estado-personaje'));
+  // La tarjeta aparece sobre "Terminar sesión": si el botón queda fuera de la pantalla, se acerca hasta verlo.
+  requestAnimationFrame(() => {
+    const b = document.getElementById('terminar')?.getBoundingClientRect();
+    if (b && b.bottom > innerHeight - 90) document.getElementById('terminar').scrollIntoView({ block: 'center', behavior: sinMovimiento() ? 'auto' : 'smooth' });
+  });
 }
 
 /** Sesiones del plan de los últimos 7 días que quedaron sin registro: la app pregunta qué pasó (como el tablero). */
@@ -246,7 +278,7 @@ function pasosHtml(pasos, tipo, f, titulo, dia) {
   return `<details class="extra pasos" data-pasos="${tipo}"${abierto ? ' open' : ''}><summary>${esc(titulo)} <span class="pequeno suave">${completo ? 'hecho ✓' : n ? `${n} de ${pasos.length}` : `${pasos.length} pasos`}</span></summary>
     <ol class="lista-pasos">${pasos.map((p, i) => {
       const parte = partePaso(p.name);
-      const tramos = tramosDePaso(p.name);
+      const tramos = tramosDePaso(p.name, p.seg_estimados); // por lado: primer lado, cambio de postura y segundo lado
       const zona = ['codo', 'hombro', 'rodilla', 'cadera', 'tobillo', 'lumbar', 'muneca', 'cuello'].find(z => p.name.toLowerCase().includes(z));
       const imagen = p.imagen || (zona ? `img/articulaciones/${zona}.webp` : /cardio|bicicleta|caminata/i.test(p.name) ? 'img/ejercicios/mini/caminata.webp' : null);
       const ilustraciones = tipo === 'cal' ? ilustracionesCalentamiento(p, IMAGENES) : [];
@@ -306,6 +338,7 @@ const avanceHtml = ({ hechas, total, cifras: c }) => `<div class="avance" id="av
 function sesionHoy(dia) {
   const f = dia.fecha;
   const notas = E.notas[f] || {};
+  const progreso = avance(dia), guardada = E.sesiones.some(s => s.fecha === f && !s.origen);
   const todas = seriesAnotadas(E.sesiones, E.registro);
   const ejs = dia.ejercicios.map(e => indice.porId.get(e.ejercicio_id)).filter(Boolean);
   const prim = [...new Set(ejs.flatMap(ej => ej.musculos_primarios))];
@@ -317,7 +350,7 @@ function sesionHoy(dia) {
   const calentamiento = calentamientoDeSesion({ dia, porId: indice.porId, equipo: lugar?.equipamiento || [], bloqueadas: articulacionesBloqueadas(R().lesiones, f), cargas, opcionesCarga });
   return `<section class="sesion-cab compacta" aria-label="Sesión de hoy">
     <div class="sesion-controles">
-      ${dia.ejercicios.length ? avanceHtml(avance(dia)) : '<p class="pequeno suave">Sesión vacía. Abre Ejercicios para elegir desde el banco o ver recomendaciones para ti.</p>'}
+      ${dia.ejercicios.length ? avanceHtml(progreso) : '<p class="pequeno suave">Sesión vacía. Abre Ejercicios para elegir desde el banco o ver recomendaciones para ti.</p>'}
       <button type="button" class="boton chico" id="ajustar-hoy">${icono('ajustes')} Ajustar hoy</button>
       <button type="button" class="boton-icono" id="ver-detalles-sesion" aria-label="Detalles de la sesión">${icono('info')}</button>
     </div>
@@ -331,7 +364,8 @@ function sesionHoy(dia) {
   ${calentamiento.length ? `<section class="tarjeta calentamiento-directo" id="calentamiento-hoy"${calentamientoVisible ? '' : ' hidden'}><div class="calentamiento-intro"><p class="sobretitulo">Preparación para ${esc(dia.foco)}</p><h2>Calienta para esta sesión</h2><p class="suave pequeno">~${minutosCalentamiento(calentamiento)} min estimados · movilidad, activación y cargas progresivas. Termina preparado, con energía para las series de trabajo.</p></div>${pasosHtml(calentamiento, 'cal', f, 'Tus pasos', dia)}</section>` : ''}
   <ol class="ejercicios-hoy">${dia.ejercicios.map((e, k) => ejercicioHoy(e, k, f, e.ejercicio_id ? anterior(todas, e.ejercicio_id, f) : null, notas[idDe(e, k)] || {}, dia)).join('')}</ol>
   ${cardioHtml(dia.cardio)}
-  <div class="fila-botones"><button type="button" class="boton primario grande" id="terminar">${E.sesiones.some(s => s.fecha === f && !s.origen) ? 'Guardar de nuevo' : 'Terminar sesión'}</button></div>
+  ${progreso.total && progreso.hechas === progreso.total ? sesionCompletaHtml({ guardada }) : ''}
+  <div class="fila-botones"><button type="button" class="boton primario grande" id="terminar">${guardada ? 'Guardar de nuevo' : 'Terminar sesión'}</button></div>
   <details class="tarjeta detalles-sesion" id="detalles-sesion">
     <summary>Detalles de la sesión</summary>
     <p class="suave pequeno">${dia.hora ? `${esc(dia.hora)} · ` : ''}~${duracionSesion({ ...dia, calentamiento })} min · ${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? '' : 's'}</p>
@@ -900,7 +934,7 @@ function enlazar(ir, dia) {
         else if (v === 'chat') ir('coach');
         else if (v === 'dolor') abrirHoja({
           titulo: '¿Dónde te duele?', volver: b, nota: `Te llevo con ${nombreAsistente()} para ver qué hacer hoy.`,
-          opciones: C.zonas.articulaciones.map(([z, t]) => ({ valor: z, icono: icono('curita'), clase: 'tipo-fallo', nombre: t })),
+          opciones: C.zonas.articulaciones.map(([z, t]) => ({ valor: z, imagen: srcArticulacion(z), icono: icono('curita'), clase: 'tipo-fallo', nombre: t })),
           alElegir: z => ir('coach', `me duele ${z === 'lumbar' ? 'la zona lumbar' : `${['muneca', 'cadera', 'rodilla'].includes(z) ? 'la' : 'el'} ${C.zonas.articulaciones.find(x => x[0] === z)[1].toLowerCase()}`}`),
         });
       },
@@ -954,9 +988,7 @@ function enlazar(ir, dia) {
   };
 }
 
-/** Vuelve a dibujar Hoy sin mover la pantalla. */
+/** Vuelve a dibujar Hoy sin mover la pantalla ni perder el campo o el botón donde estaba el foco. */
 function vistaHoyMantener(ir) {
-  const y = window.scrollY;
-  vistaHoy(ir);
-  window.scrollTo(0, y);
+  repintarConservando(() => vistaHoy(ir));
 }

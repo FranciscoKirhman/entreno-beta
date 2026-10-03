@@ -1,13 +1,23 @@
 // Hoja que sube desde abajo con opciones, como el "tipo de serie" de Hevy. Cada opción puede traer un botón "?" que
 // despliega su explicación sin elegirla. Se cierra tocando afuera, con Escape o al elegir.
 import { esc } from './comun.js';
+import { sinMovimiento } from './movimiento.js';
 
 let alCerrar = null;
 
+/** Cierra la hoja abierta. Baja antes de retirarse; mientras baja ya no es "la hoja" (sin id) y no recibe toques,
+ *  así una opción no se confirma dos veces y lo elegido se aplica de inmediato, sin esperar la animación. */
 export function cerrarHoja() {
-  document.getElementById('hoja')?.remove();
+  const fondo = document.getElementById('hoja');
   document.removeEventListener('keydown', teclaEscape);
   const f = alCerrar; alCerrar = null;
+  if (fondo) {
+    fondo.removeAttribute('id');
+    fondo.inert = true;
+    fondo.classList.add('cerrando');
+    fondo.classList.remove('abierta');
+    if (sinMovimiento()) fondo.remove(); else setTimeout(() => fondo.remove(), 240);
+  }
   f?.();
 }
 const teclaEscape = ev => { if (ev.key === 'Escape') cerrarHoja(); };
@@ -42,6 +52,7 @@ export function abrirHoja({ titulo, nota = '', notaOculta = false, contenido = '
   document.body.append(fondo);
   alCerrar = volver ? () => volver.focus?.() : null;
   fondo.addEventListener('click', ev => {
+    if (fondo.classList.contains('cerrando')) return; // ya se eligió: un segundo toque no confirma de nuevo
     if (ev.target === fondo) return cerrarHoja();
     const ayudaTitulo = ev.target.closest('[data-ayuda-titulo]');
     if (ayudaTitulo) {
