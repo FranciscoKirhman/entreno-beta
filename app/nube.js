@@ -116,7 +116,8 @@ export async function cargarPlan() {
 
 // ── Día a día ───────────────────────────────────────────────────────────────
 export async function guardarBienestar(fecha, b) {
-  ok(await supa.from('bienestar_diario').upsert({ user_id: uid(), fecha, ...b }));
+  // Solo las columnas de la tabla: los síntomas del ciclo quedan en el teléfono.
+  ok(await supa.from('bienestar_diario').upsert({ user_id: uid(), fecha, ...Object.fromEntries(CAMPOS_BIENESTAR.filter(k => b[k] !== undefined).map(k => [k, b[k]])) }));
 }
 /**
  * Sube una sesión con el id que le dio el teléfono. Si ya estaba (un reintento, o "Guardar de nuevo"), se

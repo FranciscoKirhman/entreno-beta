@@ -8,6 +8,7 @@ import { recordsDeSerie } from '../nucleo/records.js';
 import { textoRecord } from './resumen.js';
 import { esAsistido, conLastre, sinCargaExterna } from '../nucleo/catalogo.js';
 import { evaluarDia, ajustarSesion, TEXTO_RECOMENDACION } from '../nucleo/bienestar.js';
+import { cicloActivo, estadoCiclo, registrarInicio, NOMBRE_FASE, SINTOMAS } from '../nucleo/ciclo-menstrual.js';
 import { checklist } from '../nucleo/suplementos.js';
 import { enlaceVideo } from '../nucleo/explicar.js';
 import { sesionDe } from '../nucleo/agenda.js';
@@ -140,7 +141,8 @@ const PREGUNTAS_B = [
 ];
 const ENFERMO = [['no', 'No'], ['resfrio', 'Resfrío leve'], ['fiebre_o_cuerpo', 'Fiebre o cuerpo cortado']];
 const PRINCIPALES = PREGUNTAS_B.map(p => p.campo);
-const respondioAlgo = b => Boolean(b) && (PRINCIPALES.some(k => b[k] != null) || (b.enfermo && b.enfermo !== 'no'));
+const respondioAlgo = b => Boolean(b) && (PRINCIPALES.some(k => b[k] != null) || (b.enfermo && b.enfermo !== 'no') || Boolean(b.sintomas_ciclo?.length));
+let cicloPreguntado = null; // en un día difícil del ciclo, "¿Cómo estás hoy?" se abre sola una vez
 let bienestarAbierto = false; // sigue abierto mientras se responde, aunque la vista se vuelva a dibujar
 let planHechoAbierto = false; // la sesión del plan ya hecha en Hevy, abierta para anotar algo: no se pliega en cada toque
 
@@ -151,11 +153,30 @@ function resumenBienestar(b) {
     b.animo != null && `ánimo ${palabra('animo', b.animo).toLowerCase()}`,
     b.cansancio != null && `energía ${palabra('cansancio', b.cansancio).toLowerCase()}`,
     b.enfermo && b.enfermo !== 'no' && ENFERMO.find(([v]) => v === b.enfermo)[1].toLowerCase(),
+    b.sintomas_ciclo?.length && SINTOMAS.filter(([v]) => b.sintomas_ciclo.includes(v)).map(([, t]) => t.toLowerCase()).join(', '),
   ].filter(Boolean).join(' · ');
+}
+
+/** El ciclo dentro de "¿Cómo estás hoy?": en qué día va, "Me llegó" y los síntomas. Solo si se activó. */
+function cicloHtml(f, b, dia) {
+  const r = R();
+  if (!cicloActivo(r)) return '';
+  const c = estadoCiclo(r, f);
+  const texto = !c ? 'Marca cuándo empezó tu última regla y te digo en qué día vas.'
+    : c.hormonal ? 'Con anticonceptivo hormonal no hay fases: si tienes síntomas, márcalos abajo.'
+    : `Día ${c.dia}${c.predice ? ` de unos ${c.largo}` : ''}${c.fase ? `, ${NOMBRE_FASE[c.fase]}` : ''}.${c.proxima ? (c.atraso ? ` La regla venía hace ${c.atraso} ${c.atraso === 1 ? 'día' : 'días'}, según lo estimado: si llegó, márcalo.` : ` Próxima regla cerca del ${fechaCorta(c.proxima)}.`) : ''}${c.dificil ? ` Marcaste estos días como difíciles${dia ? ': si hoy te cuesta, márcalo arriba o en los síntomas y te ofrezco la sesión liviana' : ''}.` : ''}`;
+  return `<div class="pregunta-b ciclo-b"><span class="pequeno suave">Ciclo</span>
+      <p class="pequeno">${esc(texto)}</p>
+      <div class="fila-ciclo"><button type="button" class="boton" id="ciclo-hoy">Me llegó hoy</button><label class="pequeno">Otro día <input type="date" id="ciclo-otro" max="${f}" aria-label="Día en que empezó la regla"></label></div>
+    </div>
+    <div class="pregunta-b"><span class="pequeno suave">Síntomas del ciclo</span><div class="escala-b dos" role="group" aria-label="Síntomas del ciclo">${SINTOMAS.map(([v, t]) =>
+      `<button type="button" data-b-sintoma="${v}" aria-pressed="${Boolean(b?.sintomas_ciclo?.includes(v))}">${t}</button>`).join('')}</div></div>
+    <p class="pequeno suave">La evidencia no muestra que el ciclo cambie la fuerza en promedio: guíate por cómo te sientes. Lo que marcas aquí queda solo en este teléfono.</p>`;
 }
 
 function bienestarHtml(f, b, dia) {
   const hay = respondioAlgo(b);
+  if (dia && !hay && cicloPreguntado !== f && estadoCiclo(R(), f)?.dificil) { bienestarAbierto = true; cicloPreguntado = f; }
   const fila = p => `<div class="pregunta-b"><span class="pequeno suave">${p.texto}</span><div class="escala-b" role="group" aria-label="${p.texto}">${p.opciones.map(([v, t]) =>
     `<button type="button" data-b-campo="${p.campo}" data-b-valor="${v}" aria-pressed="${b?.[p.campo] === v}">${t}</button>`).join('')}</div></div>`;
   const aviso = hay && dia && b.recomendacion && b.recomendacion !== 'normal' && !b.aviso_visto
@@ -167,6 +188,7 @@ function bienestarHtml(f, b, dia) {
       ${PREGUNTAS_B.map(fila).join('')}
       <div class="pregunta-b"><span class="pequeno suave">¿Enfermo?</span><div class="escala-b tres" role="group" aria-label="¿Enfermo?">${ENFERMO.map(([v, t]) =>
         `<button type="button" data-b-campo="enfermo" data-b-valor="${v}" aria-pressed="${(b?.enfermo || 'no') === v && hay}">${t}</button>`).join('')}</div></div>
+      ${cicloHtml(f, b, dia)}
       <p class="pequeno suave">Se guarda al tocar. Ajusta la sesión de hoy si hace falta y, con el tiempo, cuándo toca descargar.</p>
     </div>
   </details>${aviso}`;
@@ -389,19 +411,40 @@ function enlazar(ir, dia) {
     const valor = campo === 'enfermo' ? boton.dataset.bValor : Number(boton.dataset.bValor);
     const antes = E.bienestar[f] || {};
     const datos = { sueno_horas: null, sueno_calidad: null, cansancio: null, animo: null, enfermo: 'no', ...antes, [campo]: antes[campo] === valor && campo !== 'enfermo' ? null : valor };
-    const r = evaluarDia(datos);
+    guardarBienestarDia(datos);
+  });
+  // Síntomas del ciclo: se marcan y desmarcan; cuentan para ofrecer la sesión liviana.
+  document.querySelectorAll('[data-b-sintoma]').forEach(boton => boton.onclick = () => {
+    const antes = E.bienestar[f] || {}, v = boton.dataset.bSintoma;
+    const sintomas = (antes.sintomas_ciclo || []).includes(v) ? antes.sintomas_ciclo.filter(x => x !== v) : [...(antes.sintomas_ciclo || []), v];
+    guardarBienestarDia({ sueno_horas: null, sueno_calidad: null, cansancio: null, animo: null, enfermo: 'no', ...antes, sintomas_ciclo: sintomas }, { mantenerAbierto: true });
+  });
+  const marcarRegla = fecha => {
+    const r = registrarInicio(R(), fecha, f);
+    if (r.error) return avisar(r.error);
+    Object.assign(R(), r.respuestas);
+    bienestarAbierto = true;
+    E.mensaje = fecha === f ? 'Anotado: te llegó hoy. Recalculé tu ciclo.' : `Anotado: te llegó el ${fechaCorta(fecha)}. Recalculé tu ciclo.`;
+    guardar();
+    vistaHoyMantener(ir);
+  };
+  $('ciclo-hoy')?.addEventListener('click', () => marcarRegla(f));
+  $('ciclo-otro')?.addEventListener('change', ev => ev.target.value && marcarRegla(ev.target.value));
+  function guardarBienestarDia(datos, { mantenerAbierto = false } = {}) {
+    const r = evaluarDia({ ...datos, dia_dificil_ciclo: Boolean(estadoCiclo(R(), f)?.dificil) });
     const { aviso_visto, motivos, puntaje, recomendacion, enCuenta, ...limpio } = datos;
     E.bienestar[f] = { ...limpio, puntaje: r.puntaje, recomendacion: r.recomendacion, motivos: r.motivos };
+    if (!datos.sintomas_ciclo?.length) delete E.bienestar[f]?.sintomas_ciclo;
     if (!respondioAlgo(E.bienestar[f])) delete E.bienestar[f];
     // Con sueño, ánimo y energía respondidos, la tarjeta se pliega sola.
-    bienestarAbierto = !PRINCIPALES.every(k => E.bienestar[f]?.[k] != null);
+    bienestarAbierto = mantenerAbierto || !PRINCIPALES.every(k => E.bienestar[f]?.[k] != null);
     guardar();
     vistaHoyMantener(ir);
     if (nube.conectado() && E.bienestar[f]) {
       const { motivos: m, ...subir } = E.bienestar[f];
       subirACuenta('bienestar', f, subir).catch(() => {});
     }
-  });
+  }
   $('aplicar-bienestar')?.addEventListener('click', async () => {
     const b = E.bienestar[f];
     b.aviso_visto = true;

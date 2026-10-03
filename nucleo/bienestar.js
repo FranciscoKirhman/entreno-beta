@@ -3,7 +3,8 @@
 
 /**
  * @param b { sueno_horas, sueno_calidad (1-5), cansancio (1-5, 5 = agotado), animo (1-5), estres (1-5),
- *            dolor (0-10), enfermo: 'no' | 'resfrio' | 'fiebre_o_cuerpo' }
+ *            dolor (0-10), enfermo: 'no' | 'resfrio' | 'fiebre_o_cuerpo', sintomas_ciclo: string[],
+ *            dia_dificil_ciclo: boolean }
  * @returns {{puntaje: number, recomendacion: 'normal'|'liviana'|'corta'|'descanso_activo', motivos: string[]}}
  */
 export function evaluarDia(b) {
@@ -20,6 +21,10 @@ export function evaluarDia(b) {
   if (b.dolor >= 4) { p -= 15; motivos.push(`dolor de ${b.dolor}/10`); }
   p = Math.max(0, Math.min(100, Math.round(p)));
   let recomendacion = p >= 70 ? 'normal' : p >= 50 ? 'liviana' : p >= 35 ? 'corta' : 'descanso_activo';
+  // Ciclo menstrual (solo si se activó): síntomas del ciclo, o poca energía o ánimo en un día que la persona marcó
+  // como difícil, ofrecen la versión liviana. Si se siente bien, sigue normal (contenido/evidencia/05-ciclo-menstrual.md).
+  if (recomendacion === 'normal' && b.sintomas_ciclo?.length) { recomendacion = 'liviana'; motivos.push('síntomas del ciclo'); }
+  else if (recomendacion === 'normal' && b.dia_dificil_ciclo && (b.cansancio >= 4 || (b.animo && b.animo <= 2))) { recomendacion = 'liviana'; motivos.push('un día del ciclo que marcaste como difícil'); }
   if (b.enfermo === 'fiebre_o_cuerpo') { recomendacion = 'descanso_activo'; motivos.push('síntomas bajo el cuello o fiebre: hoy no se entrena'); }
   else if (b.enfermo === 'resfrio' && recomendacion === 'normal') { recomendacion = 'liviana'; motivos.push('resfrío leve'); }
   return { puntaje: p, recomendacion, motivos };
