@@ -772,3 +772,6 @@ span.ej-semana{cursor:default}
 .tabla-semanas .cab{font-size:11px;color:var(--ink-muted);text-align:right;white-space:nowrap}
 .tabla-semanas .num{text-align:right}
 .tabla-semanas .nombre-musculo{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Resumen del mes o del año. */
+.cifras-resumen .sube{color:var(--good)}
+.cifras-resumen .baja{color:var(--ink-muted)}

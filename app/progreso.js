@@ -13,6 +13,7 @@ import { guardarFotoLocal, listarFotosLocales, borrarFotoLocal, guardarArchivoLo
 import { subirACuenta, subirPendientes, estadoCola } from './cola.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { semanaPorMusculo, musculosContraFranja } from '../nucleo/volumen-semana.js';
+import { resumenPeriodo, periodo } from '../nucleo/resumen-periodo.js';
 import { NOMBRE_MUSCULO, mayuscula, imagenMusculo } from './musculos.js';
 import * as nube from './nube.js';
 import { esAsistido } from '../nucleo/catalogo.js';
@@ -31,6 +32,7 @@ const nombreEj = id => indice.porId.get(id)?.nombre || id;
 let verTodo = false;
 let buscar = '';
 let todosEjercicios = false;
+let periodoElegido = 'mes'; // 'mes', 'pasado' o 'año'
 
 /** Sesiones para el historial: las guardadas (de la app o importadas de Hevy) y los días con series marcadas sin terminar. */
 function historial() {
@@ -94,6 +96,39 @@ function franjaHtml() {
       ${filas.map(f => `<span class="nombre-musculo">${esc(nombre(f.musculo))}</span>${r.semanas.map(w => { const v = Math.round((w.porMusculo[f.musculo] || 0) * 10) / 10; return `<span class="num ${v >= lo ? 'estado-bien' : v >= lo / 2 ? 'estado-cerca' : 'estado-bajo'}">${n(v)}</span>`; }).join('')}`).join('')}</div>
       <p class="pequeno suave">Cada columna es una semana, desde el lunes que dice (día/mes). Lo que ayuda cuenta media serie.</p>
     </details>
+  </section>`;
+}
+
+/** Resumen del mes o del año, como Hevy, comparado con el período anterior. */
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+function resumenPeriodoHtml() {
+  if (!E.sesiones.length) return '';
+  const tipo = periodoElegido === 'año' ? 'año' : 'mes';
+  const fecha = periodoElegido === 'pasado' ? periodo('mes', hoy()).antes.desde : hoy();
+  const r = resumenPeriodo(E.sesiones, { tipo, fecha, indice, asistidos: new Set(indice.ejercicios.filter(esAsistido).map(e => e.id)) });
+  const nombreP = d => (tipo === 'año' ? d.slice(0, 4) : `${MESES[Number(d.slice(5, 7)) - 1]} de ${d.slice(0, 4)}`);
+  const a = r.actual, b = r.anterior;
+  const n = x => String(Math.round(x * 10) / 10).replace('.', ',');
+  const comparado = (x, y, u = '') => (Math.abs(x - y) < 0.05 ? 'igual que antes' : `${x > y ? '+' : '−'}${n(Math.abs(x - y))}${u} que ${tipo === 'año' ? 'el año anterior' : 'el mes anterior'}`);
+  const cifra = (valor, texto, x, y, u = '') => `<div class="cifra"><strong class="num">${valor}</strong><span class="pequeno suave">${texto}</span>${x != null ? `<span class="pequeno ${x >= y ? 'sube' : 'baja'}">${esc(comparado(x, y, u))}</span>` : ''}</div>`;
+  const horas = m => (m >= 60 ? `${n(m / 60)} h` : `${m} min`);
+  return `<section class="tarjeta">
+    <h3>Resumen</h3>
+    <div class="segmentos periodo" role="group" aria-label="Período">${[['mes', 'Este mes'], ['pasado', 'Mes pasado'], ['año', 'Este año']].map(([v, t]) => `<button type="button" data-periodo-resumen="${v}" aria-pressed="${v === periodoElegido}">${t}</button>`).join('')}</div>
+    <p class="pequeno suave">${esc(`${nombreP(r.periodo.desde)}, comparado con ${nombreP(r.periodo.antes.desde)}`)}</p>
+    ${a.sesiones ? `<div class="cifras-resumen">
+      ${cifra(a.sesiones, a.sesiones === 1 ? 'sesión' : 'sesiones', a.sesiones, b.sesiones)}
+      ${cifra(a.dias, 'días entrenados', a.dias, b.dias)}
+      ${cifra(a.minutos ? horas(a.minutos) : 'sin dato', 'entrenando', a.minutos ? a.minutos / 60 : null, b.minutos / 60, ' h')}
+      ${cifra(a.series, 'series de trabajo', a.series, b.series)}
+      ${cifra(esc(volumenTexto(a.volumen)), 'levantados', null, null)}
+      ${cifra(a.records, a.records === 1 ? 'récord' : 'récords', a.records, b.records)}
+    </div>
+    <details class="extra"><summary>Músculos y ejercicios más hechos</summary>
+      <ul class="pequeno lista-simple">${r.musculos.filter(m => m.series || m.antes).slice(0, 10).map(m => `<li><span>${esc(mayuscula(NOMBRE_MUSCULO[m.musculo] || m.musculo))}</span><span><strong class="num">${n(m.series)}</strong> series <span class="suave">(${esc(comparado(m.series, m.antes))})</span></span></li>`).join('')}</ul>
+      <p class="sobretitulo">Ejercicios más hechos</p>
+      <ol class="pequeno">${a.ejercicios.map(e => `<li>${esc(e.nombre)}: ${e.sesiones} ${e.sesiones === 1 ? 'sesión' : 'sesiones'}</li>`).join('')}</ol>
+    </details>` : `<p class="pequeno">Sin sesiones en ${esc(nombreP(r.periodo.desde))} todavía.</p>`}
   </section>`;
 }
 
@@ -235,6 +270,7 @@ export async function vistaProgreso(ir) {
     ${semanaHtml()}
     ${franjaHtml()}
     ${constanciaHtml()}
+    ${resumenPeriodoHtml()}
     ${ejerciciosHtml()}
     ${suenoAnimoHtml()}
     <section class="tarjeta">
@@ -298,6 +334,7 @@ export async function vistaProgreso(ir) {
   // El buscador repinta solo la lista, para no perder el teclado.
   $('buscar-historial')?.addEventListener('input', ev => { buscar = ev.target.value; verTodo = false; $('lista-historial').innerHTML = listaHistorialHtml(); enlazarHistorial(ir); });
   document.querySelectorAll('[data-ficha]').forEach(b => b.onclick = () => { ir('ejercicio', { id: b.dataset.ficha, desde: 'progreso' }); scrollTo(0, 0); });
+  document.querySelectorAll('[data-periodo-resumen]').forEach(b => b.onclick = () => { periodoElegido = b.dataset.periodoResumen; const y = scrollY; vistaProgreso(ir); scrollTo(0, y); });
   $('todos-ejercicios')?.addEventListener('click', () => { todosEjercicios = !todosEjercicios; const y = scrollY; vistaProgreso(ir); scrollTo(0, y); });
   $('consentir-fotos')?.addEventListener('change', ev => {
     if (!ev.target.checked) return;
