@@ -58,6 +58,24 @@ function textoSeries(xs) {
   return seg ? tiempo(seg) : `${xs.length} ${xs.length === 1 ? 'serie' : 'series'}`;
 }
 
+/** La sesión en texto para pegarla en ChatGPT, Claude o Gemini. Sin nombre, correo, peso corporal ni datos de salud. */
+function textoParaIA({ sesion, r, dia, foco }) {
+  const presc = e => `${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${e.unidad === 'seg' ? ' s' : e.unidad === 'm' ? ' m' : ''}${e.unidad === 'm' ? '' : `, ${e.rir} en reserva`}${e.carga_kg ? `, ${peso(e.carga_kg)}` : ''}`;
+  return [
+    'Te paso una sesión de gimnasio que registré en la app Entreno. Dime en simple qué salió bien, qué ajustarías para la próxima y por qué. Responde en español.',
+    '',
+    `Sesión: ${foco}, ${fechaCorta(sesion.fecha)}${r.minutos ? `, ${r.minutos} minutos` : ''}.`,
+    ...r.porEjercicio.map(g => {
+      const e = dia?.ejercicios.find(x => x.ejercicio_id === g.ejercicio_id);
+      return `- ${nombreEj(g.ejercicio_id, g.nombre)}: ${textoSeries(g.series)}${e ? ` (el plan pedía ${presc(e)})` : ''}${g.anterior.length ? `; la vez anterior: ${textoSeries(g.anterior)}` : ''}`;
+    }),
+    ...(r.records.length ? ['', 'Récords:', ...r.records.map(x => `- ${nombreEj(x.ejercicio_id)}: ${textoRecord(x)}`)] : []),
+    ...(r.mal.length ? ['', 'Lo que no salió como el plan:', ...r.mal.map(m => `- ${textoMal(m)}`)] : []),
+    '',
+    'Las cargas van en la unidad que uso; "en reserva" son las repeticiones que me quedaban (RIR).',
+  ].join('\n');
+}
+
 /** Las series de trabajo anteriores a la sesión: las de días anteriores y las de otra sesión más temprano ese día
  *  (por ejemplo, una de Hevy en la mañana y otra en la app en la tarde). */
 function historialAntes(sesion) {
@@ -103,9 +121,24 @@ export function vistaResumen(ir, { id } = {}) {
       ? `<ul class="lista-resumen mal">${r.mal.map(m => `<li>${esc(textoMal(m))}</li>`).join('')}</ul>`
       : `<p class="pequeno suave">${dia ? 'Nada que corregir: hiciste lo que pedía el plan.' : 'Nada que corregir comparado con la vez anterior. Esta sesión no corresponde a un día de tu plan.'}</p>`}</section>
     <section class="tarjeta"><h3>Cada ejercicio</h3><ul class="pequeno detalle-h">${r.porEjercicio.map(g => `<li><strong>${esc(nombreEj(g.ejercicio_id, g.nombre))}</strong>: ${esc(textoSeries(g.series))}${g.anterior.length ? `<br><span class="suave">La vez anterior: ${esc(textoSeries(g.anterior))}</span>` : ''}</li>`).join('')}</ul></section>
+    <details class="extra" id="resumen-ia"><summary>Preguntarle a tu IA por esta sesión</summary>
+      <p class="pequeno">Copia la sesión (ejercicios, series, lo que pedía el plan y los récords; sin tu nombre ni datos de salud) y pégala en ChatGPT, Claude o Gemini para que te diga qué ajustar.</p>
+      <div class="fila-botones"><button type="button" class="boton" id="copiar-ia">Copiar para mi IA</button></div>
+      <p class="pequeno" id="copiado-ia" role="status"></p>
+      <div class="fila-botones enlaces-ia"><a class="boton" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer">Abrir ChatGPT</a><a class="boton" href="https://claude.ai/new" target="_blank" rel="noopener noreferrer">Abrir Claude</a><a class="boton" href="https://gemini.google.com/" target="_blank" rel="noopener noreferrer">Abrir Gemini</a></div>
+    </details>
     <div class="fila-botones"><button type="button" class="boton" id="compartir-resumen">Compartir</button><button type="button" class="boton primario" id="volver-hoy">Listo</button></div>
   </div>`;
   $('volver-hoy').onclick = () => ir('hoy');
+  // Como el botón de Hevy para ChatGPT y Claude: el texto se copia y la persona lo pega en su IA (la app no lo envía).
+  $('copiar-ia').onclick = async () => {
+    const texto = textoParaIA({ sesion, r, dia, foco });
+    try { await navigator.clipboard.writeText(texto); $('copiado-ia').textContent = 'Copiado. Abre tu IA y pégalo.'; }
+    catch {
+      try { if (navigator.share) { await navigator.share({ title: foco, text: texto }); return; } } catch { return; }
+      $('copiado-ia').textContent = 'No pude copiar: usa Compartir.';
+    }
+  };
   $('compartir-resumen').onclick = async () => {
     // Sin peso corporal ni fotos: solo lo de la sesión.
     const texto = [`${foco}, ${fechaCorta(sesion.fecha)}.`, `${r.minutos ? `${r.minutos} minutos, ` : ''}${volumenTexto(r.volumen)} levantados, ${r.seriesTrabajo} series de trabajo.`,
