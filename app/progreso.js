@@ -2,7 +2,7 @@
 // (que abre su ficha con gráficos e historial), sueño y ánimo, el historial con buscador,
 // fotos de progreso privadas, suplementos, indicaciones de tu médico o kinesiólogo, y lo que anotaste para el
 // entrenador.
-import { E, D, guardar, C, esc, $, fechaCorta, hoy, indice, cambiarPlan, opcionesRadio, chk, mostrarMensaje, seriesTexto, volumenTexto, peso } from './comun.js';
+import { E, D, guardar, C, esc, $, fechaCorta, hoy, indice, cambiarPlan, opcionesRadio, chk, mostrarMensaje, seriesTexto, volumenTexto, peso, unidadPeso, enUnidad, aKilos, numero, IMAGENES, avisar } from './comun.js';
 import { tipoParaGuardar } from '../nucleo/registro.js';
 import { sesionDe, sumarDias, diaSemana } from '../nucleo/agenda.js';
 import { constancia } from '../nucleo/suplementos.js';
@@ -14,6 +14,7 @@ import { subirACuenta, subirPendientes, estadoCola } from './cola.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { semanaPorMusculo, musculosContraFranja } from '../nucleo/volumen-semana.js';
 import { resumenPeriodo, periodo } from '../nucleo/resumen-periodo.js';
+import { CAMPOS_MEDIDA, nuevaMedida, agregarMedida, camposConDatos, cambioMedida } from '../nucleo/medidas.js';
 import { NOMBRE_MUSCULO, mayuscula, imagenMusculo } from './musculos.js';
 import * as nube from './nube.js';
 import { esAsistido } from '../nucleo/catalogo.js';
@@ -33,6 +34,7 @@ let verTodo = false;
 let buscar = '';
 let todosEjercicios = false;
 let periodoElegido = 'mes'; // 'mes', 'pasado' o 'año'
+let medidaElegida = null, medidasAbierto = false;
 
 /** Sesiones para el historial: las guardadas (de la app o importadas de Hevy) y los días con series marcadas sin terminar. */
 function historial() {
@@ -130,6 +132,47 @@ function resumenPeriodoHtml() {
       <ol class="pequeno">${a.ejercicios.map(e => `<li>${esc(e.nombre)}: ${e.sesiones} ${e.sesiones === 1 ? 'sesión' : 'sesiones'}</li>`).join('')}</ol>
     </details>` : `<p class="pequeno">Sin sesiones en ${esc(nombreP(r.periodo.desde))} todavía.</p>`}
   </section>`;
+}
+
+/** Medidas del cuerpo, como Hevy: peso, grasa y perímetros con su gráfico. Datos de salud: solo con permiso, en el
+ *  teléfono, plegado y nunca en lo que se comparte. */
+function medidasHtml() {
+  const u = unidadPeso();
+  const lista = E.medidas || [];
+  const campo = c => CAMPOS_MEDIDA.find(x => x[0] === c);
+  const unidad = c => (c === 'peso_kg' ? u : campo(c)[2]);
+  const valor = (c, v) => (c === 'peso_kg' ? enUnidad(v) : v);
+  const n = x => String(Math.round(x * 10) / 10).replace('.', ',');
+  let cuerpo;
+  if (!E.consentimientos.medidas_cuerpo) {
+    cuerpo = `<p class="pequeno suave">Peso, porcentaje de grasa y perímetros (cintura, cadera, brazo, muslo y otros), con su gráfico. Son datos de salud: quedan solo en este teléfono y en tu respaldo, nunca en tablas ni en lo que compartes.</p>
+      <label class="pequeno casilla"><input type="checkbox" id="consentir-medidas"> Acepto guardar mis medidas como datos de salud, solo para ver mi progreso.</label>`;
+  } else {
+    const campos = camposConDatos(lista);
+    const c = campos.includes(medidaElegida) ? medidaElegida : campos[0];
+    let grafico = '';
+    if (c) {
+      const puntos = lista.filter(m => m[c] != null).map(m => ({ fecha: m.fecha, valor: valor(c, m[c]), texto: `${n(valor(c, m[c]))} ${unidad(c)}` }));
+      const vs = puntos.map(p => p.valor), lo = Math.min(...vs), hi = Math.max(...vs), margen = Math.max(1, (hi - lo) * 0.2);
+      const desde = puntos[0].fecha < sumar(hoy(), -6) ? puntos[0].fecha : sumar(hoy(), -6);
+      const cambio = cambioMedida(lista, c, hoy());
+      const diferencia = cambio ? valor(c, cambio.hasta) - valor(c, cambio.desde) : 0;
+      grafico = `${campos.length > 1 ? `<div class="chips-botones chips-medida" role="group" aria-label="Qué medida">${campos.map(x => `<button type="button" class="chip-opcion" data-medida-cuerpo="${x}" aria-pressed="${x === c}">${esc(campo(x)[1])}</button>`).join('')}</div>` : ''}
+        <div class="cifra-grafico"><span>${esc(campo(c)[1])}</span><strong class="num">${esc(`${n(puntos.at(-1).valor)} ${unidad(c)}`)}${cambio ? ` <span class="pequeno suave">(${diferencia > 0 ? '+' : diferencia < 0 ? '−' : ''}${n(Math.abs(diferencia))} en el último mes)</span>` : ''}</strong></div>
+        ${lineaSimple({ puntos, desde, hasta: hoy(), min: Math.max(0, lo - margen), max: hi + margen, marcas: [{ valor: lo, texto: n(lo) }, { valor: hi, texto: n(hi) }], titulo: `${campo(c)[1]}, ${puntos.length} ${puntos.length === 1 ? 'medición' : 'mediciones'}`, unir: 400, izquierda: 44 })}`;
+    }
+    const imagen = x => { const src = `img/medidas/${x.replace(/_(kg|pct|cm)$/, '')}.webp`; return IMAGENES.has(src) ? `<img class="img-medida" src="${src}" alt="" width="40" height="40" decoding="async">` : ''; };
+    cuerpo = `${grafico}
+      <details class="extra"${lista.length ? '' : ' open'}><summary>Anotar medidas</summary><form id="form-medidas" class="form-medidas">
+        <label class="pequeno">Fecha <input type="date" id="medida-fecha" value="${hoy()}" max="${hoy()}"></label>
+        <div class="campos-medida">${CAMPOS_MEDIDA.map(([x, nom]) => `<label class="pequeno">${imagen(x)}<span>${esc(nom)} (${esc(unidad(x))})</span><input type="text" inputmode="decimal" data-medida="${x}" autocomplete="off"></label>`).join('')}</div>
+        <button type="submit" class="boton">Guardar medidas</button>
+        <p class="pequeno suave">Escribe solo las que mediste. Conviene medir en la mañana, en ayunas y en el mismo lugar del cuerpo cada vez.</p>
+      </form></details>
+      ${lista.length ? `<details class="extra"><summary>Tus mediciones (${lista.length})</summary><ul class="pequeno lista-simple">${[...lista].reverse().map(m => `<li><span>${esc(fechaCorta(m.fecha))}: ${esc(CAMPOS_MEDIDA.filter(([x]) => m[x] != null).map(([x, nom]) => `${nom.toLowerCase()} ${n(valor(x, m[x]))} ${unidad(x)}`).join(', '))}</span><button type="button" class="enlace" data-borrar-medida="${m.fecha}">Borrar</button></li>`).join('')}</ul></details>` : ''}
+      <button type="button" class="enlace pequeno" id="quitar-medidas">Quitar mi permiso y borrar mis medidas</button>`;
+  }
+  return `<details class="tarjeta medidas-cuerpo" id="medidas-cuerpo"${medidasAbierto ? ' open' : ''}><summary><h3>Medidas del cuerpo</h3><span class="pequeno suave">Opcional</span></summary>${cuerpo}</details>`;
 }
 
 /** Constancia, como Hevy y el tablero: racha de semanas, días desde el último entrenamiento, el promedio y un
@@ -280,6 +323,8 @@ export async function vistaProgreso(ir) {
         <div class="fila-botones"><button type="button" class="boton" id="reintentar">Reintentar ahora</button></div></div>` : ''}
     </section>
 
+    ${medidasHtml()}
+
     <section class="tarjeta">
       <h3>Fotos de progreso</h3>
       <p class="pequeno suave">${nube.conectado() ? 'Se guardan en tu cuenta, en un espacio privado: solo tú las ves.' : 'Sin cuenta, quedan solo en este teléfono.'} Nunca se comparten ni aparecen en tablas de amigos.</p>
@@ -336,6 +381,26 @@ export async function vistaProgreso(ir) {
   document.querySelectorAll('[data-ficha]').forEach(b => b.onclick = () => { ir('ejercicio', { id: b.dataset.ficha, desde: 'progreso' }); scrollTo(0, 0); });
   document.querySelectorAll('[data-periodo-resumen]').forEach(b => b.onclick = () => { periodoElegido = b.dataset.periodoResumen; const y = scrollY; vistaProgreso(ir); scrollTo(0, y); });
   $('todos-ejercicios')?.addEventListener('click', () => { todosEjercicios = !todosEjercicios; const y = scrollY; vistaProgreso(ir); scrollTo(0, y); });
+  // Medidas del cuerpo
+  const repintarMedidas = () => { const y = scrollY; vistaProgreso(ir); scrollTo(0, y); };
+  $('medidas-cuerpo')?.addEventListener('toggle', ev => { medidasAbierto = ev.target.open; });
+  $('consentir-medidas')?.addEventListener('change', ev => { if (!ev.target.checked) return; E.consentimientos.medidas_cuerpo = true; guardar(); medidasAbierto = true; repintarMedidas(); });
+  document.querySelectorAll('[data-medida-cuerpo]').forEach(b => b.onclick = () => { medidaElegida = b.dataset.medidaCuerpo; repintarMedidas(); });
+  $('form-medidas')?.addEventListener('submit', ev => {
+    ev.preventDefault();
+    const datos = { fecha: $('medida-fecha').value };
+    document.querySelectorAll('[data-medida]').forEach(i => { const v = numero(i.value); datos[i.dataset.medida] = v == null ? null : i.dataset.medida === 'peso_kg' ? aKilos(v) : v; });
+    const r = nuevaMedida(datos, hoy());
+    if (r.error) return avisar(r.error);
+    E.medidas = agregarMedida(E.medidas || [], r.medida);
+    guardar(); repintarMedidas(); avisar('Medidas guardadas.');
+  });
+  document.querySelectorAll('[data-borrar-medida]').forEach(b => b.onclick = () => { E.medidas = (E.medidas || []).filter(m => m.fecha !== b.dataset.borrarMedida); guardar(); repintarMedidas(); });
+  $('quitar-medidas')?.addEventListener('click', ev => {
+    const b = ev.currentTarget;
+    if (!b.dataset.confirmar) { b.dataset.confirmar = '1'; b.textContent = 'Toca de nuevo: se borran todas tus medidas'; return; }
+    delete E.medidas; E.consentimientos.medidas_cuerpo = false; guardar(); repintarMedidas(); avisar('Quité el permiso y borré tus medidas.');
+  });
   $('consentir-fotos')?.addEventListener('change', ev => {
     if (!ev.target.checked) return;
     E.consentimientos.fotos_progreso = true; guardar();

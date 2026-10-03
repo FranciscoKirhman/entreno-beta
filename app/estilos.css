@@ -780,3 +780,12 @@ span.ej-semana{cursor:default}
 /* Opcionales de la semana, en orden de prioridad. */
 .lista-opcionales{margin:8px 0 0;padding-left:22px;display:flex;flex-direction:column;gap:8px}
 .lista-opcionales li strong{display:block}
+/* Medidas del cuerpo (plegado y opcional). */
+.medidas-cuerpo > summary{display:flex;align-items:baseline;justify-content:space-between;gap:8px;cursor:pointer;list-style:none}
+.medidas-cuerpo > summary::-webkit-details-marker{display:none}
+.medidas-cuerpo > summary h3{margin:0}
+.form-medidas{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.campos-medida{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.campos-medida label{display:flex;flex-direction:column;gap:4px}
+.campos-medida input{min-height:40px;text-align:center}
+.img-medida{width:32px;height:32px}
