@@ -7,6 +7,7 @@ import {
   clavePerfilPrueba, leerPerfilesPrueba, perfilPruebaActivo, validarPaquetePerfilesPrueba,
   instalarPerfilesPrueba, seleccionarPerfilPrueba,
 } from '../nucleo/perfiles-prueba.js';
+import { leerEnlacePerfiles, descifrarPaquete } from '../nucleo/perfiles-enlace.js';
 
 let paqueteRevisado = null;
 let lectura = 0;
@@ -77,17 +78,40 @@ function vistaPrevia(paquete) {
 }
 
 async function revisarArchivo(ev) {
+  const archivo = ev.target.files?.[0];
+  if (!archivo) return;
+  if (archivo.size > 30 * 1024 * 1024) return avisar('El archivo es demasiado grande. Usa el paquete de dos perfiles sin fotos.', true);
+  return revisarPaquete(() => archivo.text());
+}
+
+/** Enlace privado (#perfiles=…): trae el paquete cifrado de la versión de prueba, lo abre con la clave del enlace y
+ *  muestra la misma revisión que el archivo. El enlace se borra de la barra apenas se lee. */
+export async function abrirEnlacePerfiles() {
+  let enlace;
+  try { enlace = leerEnlacePerfiles(location.hash); } catch (e) { avisar(e.message, true); return; }
+  if (!enlace) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  if (!CONFIG.modoPrueba) return;
+  if (leerPerfilesPrueba(localStorage).perfiles.length) { pintarPerfilesPrueba(); return avisar('Los dos perfiles ya están en este teléfono: elige el tuyo.'); }
+  const caja = document.querySelector('.perfiles-prueba-importar');
+  if (caja) caja.open = true;
+  document.getElementById('perfiles-prueba')?.scrollIntoView({ block: 'start' });
+  return revisarPaquete(async () => {
+    const r = await fetch(`perfiles/${enlace.archivo}.bin?v=${Date.now()}`, { cache: 'no-store' });
+    if (!r.ok) throw new Error('No encontré los perfiles en la versión de prueba. Revisa la señal o pide el enlace nuevo.');
+    return descifrarPaquete(await r.arrayBuffer(), enlace.clave);
+  });
+}
+
+async function revisarPaquete(leerTexto) {
   const turno = ++lectura;
   paqueteRevisado = null;
   const panel = document.getElementById('previa-perfiles-prueba');
   if (panel) { panel.hidden = true; panel.innerHTML = ''; }
-  const archivo = ev.target.files?.[0];
-  if (!archivo) return;
   avisar('Estoy revisando los dos perfiles completos.');
   try {
     if (leerPerfilesPrueba(localStorage).perfiles.length) throw new Error('Ya hay dos perfiles guardados. Respáldalos antes de preparar otro teléfono; aquí no los reemplazo.');
-    if (archivo.size > 30 * 1024 * 1024) throw new Error('El archivo es demasiado grande. Usa el paquete de dos perfiles sin fotos.');
-    const paquete = JSON.parse(await archivo.text());
+    const paquete = JSON.parse(await leerTexto());
     if (turno !== lectura || document.getElementById('previa-perfiles-prueba') !== panel) return;
     validarPaquetePerfilesPrueba(paquete, idsCatalogo());
     for (const p of paquete.perfiles) {

@@ -17,7 +17,7 @@ import { vistaSemana } from './semana.js';
 import { vistaCoach } from './coach-ui.js';
 import { vistaProgreso } from './progreso.js';
 import { vistaMas } from './mas.js';
-import { pintarPerfilesPrueba } from './perfiles-prueba-ui.js';
+import { pintarPerfilesPrueba, abrirEnlacePerfiles } from './perfiles-prueba-ui.js';
 import { vistaTableroOriginal } from './tablero-original.js';
 import { vistaBanco } from './banco.js';
 import { vistaCheckin } from './checkin.js';
@@ -169,6 +169,7 @@ function ir(vista, extra) {
   document.querySelectorAll('#nav [data-ir]').forEach(b => b.setAttribute('aria-current', String(b.dataset.ir === pestana)));
   pintarModo();
   pintarPerfilesPrueba();
+  abrirEnlacePerfiles(); // #perfiles=…: el enlace privado reemplaza pasar el archivo a cada teléfono
   const vistas = {
     inicio: vistaInicio, cuestionario: () => vistaRapido(ir, armarPlan), perfil: () => vistaPerfil(ir, armarPlan), seccion: () => vistaSeccion(ir),
     plan: () => vistaPlan(ir, { armarPlan, nuevo: extra?.nuevo }), hoy: () => vistaHoy(ir, extra), ejercicio: () => vistaFicha(ir, extra || {}), semana: () => vistaSemana(ir),
@@ -181,6 +182,8 @@ function ir(vista, extra) {
   actualizarPantalla(); // con una sesión en curso, la pantalla no se apaga sola
 }
 $('nav').addEventListener('click', e => { const b = e.target.closest('[data-ir]'); if (b) ir(b.dataset.ir); });
+// El enlace de los perfiles también sirve si la app ya estaba abierta (solo cambia lo que va después del #).
+addEventListener('hashchange', () => abrirEnlacePerfiles());
 
 /** Encabezado: sin señal (lo anotado se guarda igual) o, con cuenta, el correo. En la versión de prueba, nada. */
 function pintarModo() {
