@@ -186,7 +186,7 @@ export const chat = (mensaje, historial) => funcion('coach', { cuerpo: { mensaje
 export async function guardarSuplemento(s) {
   return ok(await supa.from('suplementos').upsert({ id: s.id, user_id: uid(), nombre: s.nombre, dosis: s.dosis || null, horas: s.horas || [], dias: s.dias || [], activo: s.activo !== false }).select('id').single()).id;
 }
-const CAMPOS_BIENESTAR = ['sueno_horas', 'sueno_calidad', 'cansancio', 'animo', 'estres', 'dolor', 'dolor_zona', 'enfermo', 'puntaje', 'recomendacion'];
+export const CAMPOS_BIENESTAR = ['sueno_horas', 'sueno_calidad', 'cansancio', 'animo', 'estres', 'dolor', 'dolor_zona', 'enfermo', 'puntaje', 'recomendacion', 'sintomas_ciclo'];
 
 /**
  * Al entrar: sube lo anotado en este teléfono antes de tener cuenta (bienestar, suplementos y tomas) y
@@ -239,6 +239,22 @@ export async function borrarFoto(f) {
 
 // ── Cuenta ──────────────────────────────────────────────────────────────────
 export const descargarDatos = () => funcion('cuenta', { metodo: 'GET' });
+
+// ── Lo que antes quedaba solo en el teléfono (migración 20261013000000) ─────
+// Ejercicios propios, medidas del cuerpo y notas fijas: un documento por tipo. Fechas de la regla: ciclo_registros.
+export const cargarDatosTelefono = async () => ok(await supa.from('datos_telefono').select('clave, valor, actualizado'));
+export async function guardarDatoTelefono(clave, valor) {
+  ok(await supa.from('datos_telefono').upsert({ user_id: uid(), clave, valor, actualizado: new Date().toISOString() }));
+}
+export async function borrarDatoTelefono(clave) { ok(await supa.from('datos_telefono').delete().eq('clave', clave)); }
+export const cargarIniciosRegla = async () => ok(await supa.from('ciclo_registros').select('inicio_regla')).map(x => x.inicio_regla);
+/** Deja en la cuenta exactamente estas fechas de inicio de la regla. */
+export async function guardarIniciosRegla(fechas) {
+  const actuales = await cargarIniciosRegla();
+  const sobran = actuales.filter(f => !fechas.includes(f)), faltan = fechas.filter(f => !actuales.includes(f));
+  if (sobran.length) ok(await supa.from('ciclo_registros').delete().in('inicio_regla', sobran));
+  if (faltan.length) ok(await supa.from('ciclo_registros').insert(faltan.map(f => ({ user_id: uid(), inicio_regla: f }))));
+}
 export async function borrarCuenta() { await funcion('cuenta', { metodo: 'DELETE' }); await supa.auth.signOut(); sesion = null; }
 
 // Conexión directa: el proveedor de identidad conserva claves y tokens OAuth.

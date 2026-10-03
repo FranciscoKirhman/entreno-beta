@@ -57,3 +57,11 @@ export function registrarInicio(r, fecha, hoy) {
   const xs = [...inicios(r).filter(f => Math.abs(dias(f, fecha)) >= 10), fecha].sort();
   return { respuestas: { ...r, ultima_regla: xs.at(-1), inicios_regla: xs.slice(-12) } };
 }
+
+/** Junta fechas de inicio de dos lugares (el teléfono y la cuenta): sin repetir, en orden, y dos a menos de 10 días
+ *  son la misma regla (queda la primera). */
+export function unirInicios(fechas) {
+  const out = [];
+  for (const f of [...new Set(fechas.filter(esFecha))].sort()) if (!out.length || dias(out.at(-1), f) >= 10) out.push(f);
+  return out;
+}

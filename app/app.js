@@ -2,6 +2,7 @@
 // que el servidor: nucleo/*.js.
 //
 //   node herramientas/servir.mjs  →  http://127.0.0.1:5173/app/
+import { sincronizarDatosTelefono } from './datos-nube.js';
 import { hevyAlAbrir } from './hevy-auto.js';
 import { conPropios, idsPropios } from '../nucleo/propios.js';
 import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo, entrarEjemplo, salirEjemplo, modoEjemplo, errorGuardado, activarCuenta } from './comun.js';
@@ -110,13 +111,15 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
   }
   for (const i of E.indicaciones.filter(x => !x.enCuenta)) { i.id ||= crypto.randomUUID(); if (!(E.pendientes || []).some(x => x.tipo === 'indicacion' && x.clave === i.id)) dejarPendiente('indicacion', i.id, i); }
   for (const [fecha, b] of Object.entries(E.bienestar)) if (!b.enCuenta) {
-    const datos = Object.fromEntries(['sueno_horas', 'sueno_calidad', 'cansancio', 'animo', 'estres', 'dolor', 'dolor_zona', 'enfermo', 'puntaje', 'recomendacion'].filter(k => b[k] !== undefined).map(k => [k, b[k]]));
+    const datos = Object.fromEntries(nube.CAMPOS_BIENESTAR.filter(k => b[k] !== undefined).map(k => [k, b[k]]));
     if (!(E.pendientes || []).some(x => x.tipo === 'bienestar' && x.clave === fecha)) dejarPendiente('bienestar', fecha, datos);
   }
   try { for (const i of await consultar(() => nube.cargarIndicaciones())) if (!E.indicaciones.some(x => x.id === i.id)) E.indicaciones.push(i); }
   catch (e) { console.warn('No se pudieron traer las indicaciones de la cuenta', e); }
   guardar();
   await consultar(() => subirPendientes({ forzar }));
+  // Ejercicios propios, medidas, notas fijas y fechas del ciclo (antes solo en el teléfono).
+  try { await consultar(() => sincronizarDatosTelefono()); } catch (e) { console.warn('No se pudieron sincronizar los datos del teléfono', e); }
   E.sesiones = unirSesiones(E.sesiones, idsPropios(await consultar(() => nube.cargarSesiones()), E.ejerciciosPropios || []), E.pendientes || []);
   E.bienestar = { ...await consultar(() => nube.cargarBienestar()), ...Object.fromEntries(Object.entries(E.bienestar).filter(([, b]) => !b.enCuenta)) };
   guardar();

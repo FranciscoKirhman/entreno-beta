@@ -2,6 +2,7 @@
 // sus imágenes), "Ajustar hoy" (poco tiempo, cansancio, no puedo, otra opción, dolor: siempre pregunta antes de cambiar) y
 // cada ejercicio con su miniatura, su ficha (cómo se hace y por qué), el menú ⋯ y la tabla de series: tipo
 // (calentamiento, normal, al fallo, drop set), lo de la vez anterior, cronómetro de descanso y superseries.
+import { datoCambiado, cicloCambiado } from './datos-nube.js';
 import { E, guardar, R, D, C, K, indice, hoy, ahora, esc, $, fechaCorta, ctxNucleo, escala, opcionesRadio, chk, cambiarPlan, numero, coma, mostrarMensaje, avisar, unidadPeso, enUnidad, aKilos, peso, volumenTexto, seriesTexto } from './comun.js';
 import { estadoDelPlan } from '../nucleo/registrado.js';
 import { recordsDeSerie } from '../nucleo/records.js';
@@ -173,7 +174,7 @@ function cicloHtml(f, b, dia) {
     </div>
     <div class="pregunta-b"><span class="pequeno suave">Síntomas del ciclo</span><div class="escala-b dos" role="group" aria-label="Síntomas del ciclo">${SINTOMAS.map(([v, t]) =>
       `<button type="button" data-b-sintoma="${v}" aria-pressed="${Boolean(b?.sintomas_ciclo?.includes(v))}">${t}</button>`).join('')}</div></div>
-    <p class="pequeno suave">La evidencia no muestra que el ciclo cambie la fuerza en promedio: guíate por cómo te sientes. Lo que marcas aquí queda solo en este teléfono.</p>`;
+    <p class="pequeno suave">La evidencia no muestra que el ciclo cambie la fuerza en promedio: guíate por cómo te sientes. Lo que marcas aquí queda en este teléfono y, si entraste, en tu cuenta (privado).</p>`;
 }
 
 function bienestarHtml(f, b, dia) {
@@ -435,6 +436,7 @@ function enlazar(ir, dia) {
     guardar();
     vistaHoyMantener(ir);
   };
+    cicloCambiado();
   $('ciclo-hoy')?.addEventListener('click', () => marcarRegla(f));
   $('ciclo-otro')?.addEventListener('change', ev => ev.target.value && marcarRegla(ev.target.value));
   function guardarBienestarDia(datos, { mantenerAbierto = false } = {}) {
@@ -801,7 +803,7 @@ function enlazar(ir, dia) {
         const t = v === 'borrar' ? '' : texto.trim();
         E.notasFijas ||= {};
         if (t) E.notasFijas[e.ejercicio_id] = t; else delete E.notasFijas[e.ejercicio_id];
-        guardar(); repintar();
+        datoCambiado('notas_fijas'); repintar();
       },
     });
     const campo = $('texto-nota-fija');

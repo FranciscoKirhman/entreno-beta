@@ -1,3 +1,4 @@
+import { datoCambiado } from './datos-nube.js';
 import { C, E, indice, esc, $, ctxNucleo, guardar, avisar } from './comun.js';
 import { crearPropio, TIPOS_PROPIO } from '../nucleo/propios.js';
 import { buscarEjercicios, motivoNoAgregar } from '../nucleo/editar-sesion.js';
@@ -33,7 +34,7 @@ export function vistaBanco(ir, { desde = ultimoDesde } = {}) {
         <fieldset><legend class="pequeno">Músculos que trabaja (hasta 3)</legend><div class="chips">${musculos.map(m => `<label><input type="checkbox" class="propio-musculo" value="${esc(m)}">${esc(mayuscula(NOMBRE_MUSCULO[m] || m.replaceAll('_', ' ')))}</label>`).join('')}</div></fieldset>
         <fieldset><legend class="pequeno">Equipo (si no marcas nada, es sin equipo)</legend><div class="chips">${equipos.map(q => `<label><input type="checkbox" class="propio-equipo" value="${esc(q)}">${esc(EQUIPO[q] || q.replaceAll('_', ' '))}</label>`).join('')}</div></fieldset>
         <button type="submit" class="boton primario">Crear ejercicio</button>
-        <p class="pequeno suave">Queda en este teléfono y en tu respaldo. Sin imagen ni técnica: es tuyo. Se puede agregar a una sesión como cualquier otro.</p>
+        <p class="pequeno suave">Queda en este teléfono, en tu respaldo y, si entraste, en tu cuenta. Sin imagen ni técnica: es tuyo. Se puede agregar a una sesión como cualquier otro.</p>
       </form>
     </details>
     <p id="banco-cantidad" class="pequeno suave" role="status" aria-live="polite"></p>
@@ -63,7 +64,7 @@ export function vistaBanco(ir, { desde = ultimoDesde } = {}) {
     if (r.error) return avisar(r.error);
     (E.ejerciciosPropios ||= []).push(r.ejercicio);
     texto = r.ejercicio.nombre; musculo = ''; equipo = ''; creando = false;
-    guardar();
+    datoCambiado('ejercicios_propios');
     vistaBanco(ir, { desde });
     avisar(`Creaste "${r.ejercicio.nombre}". Agrégalo a hoy desde la lista.`);
   };

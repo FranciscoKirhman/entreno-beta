@@ -2,6 +2,7 @@
 // imagen), cómo se hace y los errores comunes, tus marcas, por qué está en tu plan (con los papers que lo respaldan)
 // tu progreso (gráficos, ritmo e historial, en app/progreso-ejercicio.js) y con qué se puede cambiar. Se abre desde la
 // ⓘ de cada ejercicio y desde Progreso.
+import { datoCambiado } from './datos-nube.js';
 import { E, R, D, C, TECNICA, EVIDENCIA, indice, hoy, esc, $, fechaCorta, coma, enUnidad, unidadPeso, peso, guardar, avisar } from './comun.js';
 import { explicarEjercicio, enlaceVideo } from '../nucleo/explicar.js';
 import { alternativas } from '../nucleo/checkin.js';
@@ -66,7 +67,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
 
     ${p?.esHoy ? `<section class="tarjeta fila-resumen"><span><strong>Hoy:</strong> <span class="num">${esc(`${p.e.series} × ${p.e.reps_min}${p.e.reps_max !== p.e.reps_min ? ` a ${p.e.reps_max}` : ''}${sufijo(p.e)}${p.e.unidad === 'm' ? '' : ` · RIR ${p.e.rir}`}${p.e.carga_kg ? ` · ${peso(p.e.carga_kg)}` : ''}`)}</span></span><button type="button" class="enlace" id="cambiar-hoy">Cambiar</button></section>` : ''}
 
-    ${ej.propio ? `<section class="tarjeta"><h2>Tu ejercicio</h2><p class="pequeno">Lo creaste tú: no tiene imagen ni técnica escrita. Queda en este teléfono y en tu respaldo; en tu cuenta, sus series se guardan con su nombre.</p>
+    ${ej.propio ? `<section class="tarjeta"><h2>Tu ejercicio</h2><p class="pequeno">Lo creaste tú: no tiene imagen ni técnica escrita. Queda en este teléfono, en tu respaldo y, si entraste, en tu cuenta.</p>
       <div class="fila-botones"><a class="boton video" href="${esc(enlaceVideo(ej))}" target="_blank" rel="noopener">${icono('video')} Ver videos de técnica</a><button type="button" class="boton" id="borrar-propio">Borrar este ejercicio</button></div></section>` : ''}
     <section class="tarjeta"${ej.propio ? ' hidden' : ''}>
       <h2>Cómo se hace</h2>
@@ -111,7 +112,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
     abrirHoja({ titulo: `Borrar ${ej.nombre}`, volver: ev.currentTarget,
       nota: 'Lo que ya anotaste se conserva en tu historial, con su nombre.',
       opciones: [{ valor: 'si', icono: icono('cerrar'), nombre: 'Sí, borrarlo', peligro: true }, { valor: 'no', icono: icono('flecha'), nombre: 'No, dejarlo' }],
-      alElegir: v => { if (v !== 'si') return; E.ejerciciosPropios = (E.ejerciciosPropios || []).filter(e => e.id !== id); E.mensaje = `Borraste "${ej.nombre}".`; guardar(); ir(desde === 'ejercicio' ? 'hoy' : desde); } });
+      alElegir: v => { if (v !== 'si') return; E.ejerciciosPropios = (E.ejerciciosPropios || []).filter(e => e.id !== id); E.mensaje = `Borraste "${ej.nombre}".`; datoCambiado('ejercicios_propios'); ir(desde === 'ejercicio' ? 'hoy' : desde); } });
   });
   enlazarProgresoEjercicio(id, { asistido: esAsistido(ej) });
   document.querySelectorAll('[data-ver]').forEach(b => b.onclick = () => { vistaFicha(ir, { id: b.dataset.ver, desde, antes: { id, desde, antes } }); window.scrollTo(0, 0); });

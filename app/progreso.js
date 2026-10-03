@@ -2,6 +2,7 @@
 // (que abre su ficha con gráficos e historial), sueño y ánimo, el historial con buscador,
 // fotos de progreso privadas, suplementos, indicaciones de tu médico o kinesiólogo, y lo que anotaste para el
 // entrenador.
+import { datoCambiado, sincronizarDatosTelefono } from './datos-nube.js';
 import { E, D, guardar, C, esc, $, fechaCorta, hoy, indice, cambiarPlan, opcionesRadio, chk, mostrarMensaje, seriesTexto, volumenTexto, peso, unidadPeso, enUnidad, aKilos, numero, IMAGENES, avisar } from './comun.js';
 import { tipoParaGuardar } from '../nucleo/registro.js';
 import { sesionDe, sumarDias, diaSemana } from '../nucleo/agenda.js';
@@ -145,7 +146,7 @@ function medidasHtml() {
   const n = x => String(Math.round(x * 10) / 10).replace('.', ',');
   let cuerpo;
   if (!E.consentimientos.medidas_cuerpo) {
-    cuerpo = `<p class="pequeno suave">Peso, porcentaje de grasa y perímetros (cintura, cadera, brazo, muslo y otros), con su gráfico. Son datos de salud: quedan solo en este teléfono y en tu respaldo, nunca en tablas ni en lo que compartes.</p>
+    cuerpo = `<p class="pequeno suave">Peso, porcentaje de grasa y perímetros (cintura, cadera, brazo, muslo y otros), con su gráfico. Son datos de salud: quedan en este teléfono, en tu respaldo y, si entraste, en tu cuenta (privado); nunca en tablas ni en lo que compartes.</p>
       <label class="pequeno casilla"><input type="checkbox" id="consentir-medidas"> Acepto guardar mis medidas como datos de salud, solo para ver mi progreso.</label>`;
   } else {
     const campos = camposConDatos(lista);
@@ -384,7 +385,16 @@ export async function vistaProgreso(ir) {
   // Medidas del cuerpo
   const repintarMedidas = () => { const y = scrollY; vistaProgreso(ir); scrollTo(0, y); };
   $('medidas-cuerpo')?.addEventListener('toggle', ev => { medidasAbierto = ev.target.open; });
-  $('consentir-medidas')?.addEventListener('change', ev => { if (!ev.target.checked) return; E.consentimientos.medidas_cuerpo = true; guardar(); medidasAbierto = true; repintarMedidas(); });
+  $('consentir-medidas')?.addEventListener('change', ev => {
+    if (!ev.target.checked) return;
+    E.consentimientos.medidas_cuerpo = true; guardar(); medidasAbierto = true;
+    if (nube.conectado()) {
+      nube.consentir('medidas_cuerpo').catch(() => {});
+      // En otro teléfono: con el permiso, se bajan las medidas que ya estaban en la cuenta.
+      sincronizarDatosTelefono().then(repintarMedidas).catch(() => {});
+    }
+    repintarMedidas();
+  });
   document.querySelectorAll('[data-medida-cuerpo]').forEach(b => b.onclick = () => { medidaElegida = b.dataset.medidaCuerpo; repintarMedidas(); });
   $('form-medidas')?.addEventListener('submit', ev => {
     ev.preventDefault();
@@ -393,13 +403,15 @@ export async function vistaProgreso(ir) {
     const r = nuevaMedida(datos, hoy());
     if (r.error) return avisar(r.error);
     E.medidas = agregarMedida(E.medidas || [], r.medida);
-    guardar(); repintarMedidas(); avisar('Medidas guardadas.');
+    datoCambiado('medidas_cuerpo'); repintarMedidas(); avisar('Medidas guardadas.');
   });
-  document.querySelectorAll('[data-borrar-medida]').forEach(b => b.onclick = () => { E.medidas = (E.medidas || []).filter(m => m.fecha !== b.dataset.borrarMedida); guardar(); repintarMedidas(); });
+  document.querySelectorAll('[data-borrar-medida]').forEach(b => b.onclick = () => { E.medidas = (E.medidas || []).filter(m => m.fecha !== b.dataset.borrarMedida); datoCambiado('medidas_cuerpo'); repintarMedidas(); });
   $('quitar-medidas')?.addEventListener('click', ev => {
     const b = ev.currentTarget;
     if (!b.dataset.confirmar) { b.dataset.confirmar = '1'; b.textContent = 'Toca de nuevo: se borran todas tus medidas'; return; }
-    delete E.medidas; E.consentimientos.medidas_cuerpo = false; guardar(); repintarMedidas(); avisar('Quité el permiso y borré tus medidas.');
+    delete E.medidas; E.consentimientos.medidas_cuerpo = false; delete E.nubeDatos?.medidas_cuerpo; guardar();
+    if (nube.conectado()) { nube.borrarDatoTelefono('medidas_cuerpo').catch(() => {}); nube.consentir('medidas_cuerpo', false).catch(() => {}); }
+    repintarMedidas(); avisar('Quité el permiso y borré tus medidas.');
   });
   $('consentir-fotos')?.addEventListener('change', ev => {
     if (!ev.target.checked) return;
