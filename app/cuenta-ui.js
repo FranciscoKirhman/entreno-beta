@@ -43,6 +43,7 @@ export function enlazarCuentaNueva(ir) {
   const correo = document.getElementById('cuenta-correo');
   if (correo) correo.onclick = () => {
     ir('mas');
+    document.getElementById('vista-mas')?.dispatchEvent(new CustomEvent('abrir-ajuste-mas', { detail: 'cuenta' }));
     document.getElementById('cuenta')?.scrollIntoView({ block: 'start' });
     document.getElementById('correo')?.focus({ preventScroll: true });
   };

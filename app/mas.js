@@ -15,6 +15,8 @@ import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
 import * as nube from './nube.js';
 import { pintarProveedores } from './cuenta-ui.js';
 import { encendidaDisponible, actualizarPantalla } from './pantalla.js';
+import { estadoVistaMas, organizarMas } from './mas-paneles.js';
+import { conexionFuturaHtml, enlazarConexionesFuturas } from './conexiones-futuras.js';
 
 /** Tema elegido en este teléfono: 'auto' (como el teléfono), 'claro' u 'oscuro'. index.html lo aplica al abrir. */
 function temaElegido() {
@@ -28,7 +30,7 @@ function elegirTema(t) {
 /** Versión de prueba: volver a hacer el cuestionario y el historial de ejemplo. */
 function pruebaHtml() {
   const hay = E.sesiones.some(x => x.origen === 'ejemplo');
-  return `<section class="tarjeta destacada">
+  return `<section class="tarjeta destacada" data-mas-panel="prueba">
     <h3>Versión de prueba</h3>
     <p class="pequeno suave">Tus respuestas y registros se conservan al abrir. Puedes revisar el cuestionario sin borrar tu historial.${hay ? ' El historial de Progreso es de ejemplo: inventado, para probar.' : ''}</p>
     <div class="fila-botones"><button type="button" class="boton primario" id="prueba-de-nuevo">Hacer el cuestionario de nuevo</button>
@@ -37,18 +39,19 @@ function pruebaHtml() {
 }
 
 export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
+  const estadoMas = estadoVistaMas();
   $('app').innerHTML = `<div id="vista-mas">
     <h1>Más</h1>
-    <section class="tarjeta"><h3>Banco de ejercicios</h3><p class="pequeno suave">Busca por nombre, músculo o equipo, revisa la técnica y agrega ejercicios a hoy.</p><button type="button" class="boton" id="abrir-banco">Explorar ejercicios</button></section>
+    <section class="tarjeta" data-mas-panel="banco"><h3>Banco de ejercicios</h3><p class="pequeno suave">Busca por nombre, músculo o equipo, revisa la técnica y agrega ejercicios a hoy.</p><button type="button" class="boton" id="abrir-banco">Explorar ejercicios</button></section>
     ${CONFIG.modoPrueba ? pruebaHtml() : ''}
     ${E.tableroOrigen?.datos ? '<section class="tarjeta"><h3>Tu tablero original</h3><p class="pequeno suave">Consulta el calendario, las series y las indicaciones de tu copia del tablero.</p><button type="button" class="boton" id="ver-tablero-original">Abrir tablero original</button></section>' : ''}
     <section class="tarjeta" id="cuenta">${cuentaHtml()}</section>
-    ${instalada() ? '' : `<section class="tarjeta"><h3>Instalarla en el teléfono</h3>
+    ${instalada() ? '' : `<section class="tarjeta" data-mas-panel="instalar"><h3>Instalarla en el teléfono</h3>
       <p class="pequeno"><strong>iPhone:</strong> en Safari, botón Compartir y "Agregar a pantalla de inicio".<br><strong>Android:</strong> en Chrome, menú ⋮ e "Instalar app".<br>Queda con su ícono y abre sin señal en el gimnasio.</p></section>`}
 
     <section class="tarjeta" id="recordatorios">${recordatoriosHtml()}</section>
 
-    <section class="tarjeta">
+    <section class="tarjeta" data-mas-panel="pantalla">
       <h3>Unidades</h3>
       <div class="fila-unidad"><span>Peso</span><div class="segmentos" role="group" aria-label="Unidad de peso">${['kg', 'lb'].map(u => `<button type="button" data-unidad="${u}" aria-pressed="${unidadPeso() === u}">${u}</button>`).join('')}</div></div>
       <p class="pequeno suave">Todo se guarda en kilos; en libras se muestra redondeado a media libra. Distancia y medidas del cuerpo se suman cuando la app las registre.</p>
@@ -63,7 +66,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
 
     <section class="tarjeta" id="conexiones">${conexionesHtml()}</section>
 
-    <section class="tarjeta">
+    <section class="tarjeta" data-mas-panel="respaldo">
       <h3>Respaldo</h3>
       <p class="pequeno">Descarga un respaldo para conservar una copia de lo anotado en este teléfono. Las series todavía en curso y las fotos locales pueden no estar en la cuenta.</p>
       ${E.consentimientos.fotos_progreso ? '<label class="pequeno casilla"><input type="checkbox" id="respaldo-fotos" checked> Incluir mis fotos de progreso (el archivo pesa más)</label>' : ''}
@@ -76,16 +79,16 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
 
     <section class="tarjeta" id="conectar-ia">${conexionIAHtml()}</section>
 
-    <section class="tarjeta">
+    <section class="tarjeta" data-mas-panel="importar">
       <h3>Importar un plan que ya tengo</h3>
       <p class="pequeno">Pega el plan que te dio tu entrenador o que tienes anotado. Una línea por ejercicio, con series × repeticiones. Los días se marcan con "Lunes", "Día 1", etc.</p>
-      <textarea id="plan-texto" rows="8" placeholder="Lunes: Pierna&#10;Sentadilla 4x8 80kg&#10;Hip thrust 3x10 a 12 RIR 2&#10;&#10;Miércoles: Torso&#10;Press banca 4x6 a 8&#10;Jalón al pecho 3x10"></textarea>
+      <textarea id="plan-texto" aria-label="Plan para importar" rows="8" placeholder="Lunes: Pierna&#10;Sentadilla 4x8 80kg&#10;Hip thrust 3x10 a 12 RIR 2&#10;&#10;Miércoles: Torso&#10;Press banca 4x6 a 8&#10;Jalón al pecho 3x10"></textarea>
       <label class="pequeno">Semanas a agendar <input type="number" id="plan-semanas" min="1" max="12" value="4"></label>
       <div class="fila-botones"><button type="button" class="boton" id="importar">Revisar</button></div>
       <div id="resultado-importar"></div>
     </section>
 
-    <section class="tarjeta">
+    <section class="tarjeta" data-mas-panel="plan">
       <h3>Tu plan</h3>
       <div class="fila-botones"><button type="button" class="boton primario" id="perfil">Completar mi perfil</button><button type="button" class="boton" id="ver-plan">Ver mi plan explicado</button></div>
       <div class="fila-botones"><button type="button" class="boton" id="rehacer">Rehacer el plan con mis respuestas</button>${E.plan?.dias?.length && !E.plan.bloqueado ? '<button type="button" class="boton" id="compartir-plan">Compartir mi plan</button>' : ''}</div>
@@ -202,6 +205,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     if (!b.dataset.confirmar) { b.dataset.confirmar = '1'; b.textContent = 'Toca de nuevo para borrar todo de este teléfono'; return; }
     reiniciar(); ir('inicio');
   };
+  organizarMas({ estado: estadoMas });
   mostrarMensaje();
 }
 
@@ -297,18 +301,14 @@ function conexionesHtml() {
         <div class="cab-conexion">${icono('ia')}<strong>ChatGPT y Claude</strong><a class="accion-conexion" href="#tu-ia">Usar ahora</a></div>
         <p class="pequeno suave">Tu IA arma o ajusta el plan y la app lo revisa con sus reglas antes de guardarlo. Copiando y pegando funciona sin cuenta; la conexión directa con ChatGPT requiere una cuenta.</p>
       </li>
-      <li>
-        <div class="cab-conexion">${icono('strava')}<strong>Strava</strong><span class="chip">Con el servidor</span></div>
-        <p class="pequeno suave">Publicar tus sesiones en Strava. Necesita un servidor que guarde la conexión (etapa 2).</p>
-      </li>
-      <li>
-        <div class="cab-conexion">${icono('salud')}<strong>Salud de Apple y Health Connect</strong><span class="chip">Con la app nativa</span></div>
-        <p class="pequeno suave">Guardar tus sesiones en Salud y leer peso o pulso. Solo se puede desde la app para iPhone y Android (etapa 3); una app web no tiene acceso.</p>
-      </li>
+      ${conexionFuturaHtml('strava', icono('strava'))}
+      ${conexionFuturaHtml('salud-apple', icono('salud'))}
+      ${conexionFuturaHtml('health-connect', icono('salud'))}
     </ul>`;
 }
 
 function enlazarConexiones(repintar) {
+  enlazarConexionesFuturas($('conexiones'));
   $('archivo-hevy').onchange = async ev => {
     const archivo = ev.target.files[0];
     if (!archivo) return;
