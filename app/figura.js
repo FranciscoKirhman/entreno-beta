@@ -5,7 +5,7 @@
 // Los colores salen de variables CSS (--fig-piel, --fig-polera...) con un valor por defecto.
 
 const NS = 'http://www.w3.org/2000/svg';
-const COLOR = {
+export const COLOR = {
   piel: 'var(--fig-piel, #E8A37C)', pielLejos: 'var(--fig-piel-lejos, #C7845F)', pielSombra: 'var(--fig-piel-sombra, #D48D66)',
   polera: 'var(--fig-polera, #E2622B)', poleraLejos: 'var(--fig-polera-lejos, #B44C1F)',
   short: 'var(--fig-short, #3B3E47)', shortLejos: 'var(--fig-short-lejos, #2A2C33)',
@@ -84,7 +84,7 @@ export function contornoPrenda(a, b, largo, frente, atras, signo = 1) {
 }
 
 // Equipo (metros): se dibuja en tres capas: detrás del cuerpo, entre el tronco y el brazo de este lado, y delante.
-const COLOR_EQUIPO = {
+export const COLOR_EQUIPO = {
   metal: 'var(--fig-metal, #9AA0AC)', oscuro: 'var(--fig-equipo, #3A3E47)', borde: 'var(--fig-equipo-borde, #555A65)',
   tapiz: 'var(--fig-tapiz, #4B505B)', estructura: 'var(--fig-estructura, #B9BEC8)', banda: 'var(--fig-banda, #3FA34D)',
   pared: 'var(--fig-pared, #D9DCE2)', cajon: 'var(--fig-cajon, #C98B52)', cinta: 'var(--fig-cinta, #2F3238)',
@@ -127,6 +127,14 @@ export function equipoSvg(items, px, k) {
       case 'rieles': return linea({ x: e.x - 0.04, y: 0 }, { x: e.x - 0.04, y: 2.15 }, 0.02, COLOR_EQUIPO.estructura) + linea({ x: e.x + 0.04, y: 0 }, { x: e.x + 0.04, y: 2.15 }, 0.02, COLOR_EQUIPO.estructura);
       case 'plataforma': return linea(e.a, e.b, 0.05, COLOR_EQUIPO.oscuro);
       case 'cinta': return linea({ x: e.x1, y: e.y1 }, { x: e.x2, y: e.y2 }, 0.07, COLOR_EQUIPO.cinta) + linea({ x: e.x2, y: e.y2 }, { x: e.x2 + 0.05, y: e.y2 + 1.1 }, 0.05, COLOR_EQUIPO.estructura);
+      // Para la vista de frente: un polígono (asientos, colchonetas), una barra redondeada y una mancuerna vista de arriba.
+      case 'poligono': return `<path d="M${e.puntos.map(q => `${n(P(q).x)} ${n(P(q).y)}`).join(' L')}Z" fill="${COLOR_EQUIPO[e.color] || e.color || COLOR_EQUIPO.tapiz}" stroke-linejoin="round" stroke="${COLOR_EQUIPO[e.color] || e.color || COLOR_EQUIPO.tapiz}" stroke-width="${n(0.012 * k)}"${e.opacidad ? ` opacity="${e.opacidad}"` : ''}/>`;
+      case 'capsula': return linea(e.a, e.b, e.ancho || 0.05, COLOR_EQUIPO[e.color] || e.color || COLOR_EQUIPO.estructura);
+      case 'mancuernaBarra': {
+        const d = { x: e.b.x - e.a.x, y: e.b.y - e.a.y }, L = Math.hypot(d.x, d.y) || 1, u = { x: d.x / L, y: d.y / L };
+        const disco = (c, s) => linea({ x: c.x - u.x * 0.025 * s, y: c.y - u.y * 0.025 * s }, { x: c.x + u.x * 0.025 * s, y: c.y + u.y * 0.025 * s }, 0.13, COLOR_EQUIPO.oscuro);
+        return linea(e.a, e.b, 0.025, COLOR_EQUIPO.metal) + disco({ x: e.a.x + u.x * 0.04, y: e.a.y + u.y * 0.04 }, 1) + disco({ x: e.b.x - u.x * 0.04, y: e.b.y - u.y * 0.04 }, 1);
+      }
       case 'escalones': return e.puntos.map((q, i) => rect(q.x, q.y - 0.18, q.x + 0.3, q.y, i % 2 ? COLOR_EQUIPO.oscuro : COLOR_EQUIPO.tapiz, 0.01)).join('');
       default: return '';
     }

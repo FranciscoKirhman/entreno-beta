@@ -6,8 +6,10 @@
 // Convenciones: metros; x hacia adelante, y hacia arriba; suelo en y = 0. Ángulos en grados desde la vertical hacia
 // arriba, positivos hacia adelante (180 es hacia abajo). De pie, la figura mira hacia +x; acostada boca arriba, la
 // cabeza va hacia −x (así la cara mira al techo); boca abajo, la cabeza va hacia +x.
-// s va de 0 a 1 dentro de cada repetición; las fases dicen el ritmo.
+// s va de 0 a 1 dentro de cada repetición; las fases dicen el ritmo. Los que van hacia el costado o giran se ven de
+// frente: están en nucleo/animaciones-frente.js (vista: 'frente').
 import { desde, dosSegmentos, raiz } from './animacion-ejercicios.js';
+import { FRENTE, PASOS_FRENTE, proyectarPose } from './animaciones-frente.js';
 
 const R = g => (g * Math.PI) / 180;
 const D = (o, largo, g) => desde(o, largo, R(g));
@@ -1023,7 +1025,17 @@ export const CALENTAMIENTOS = {
     return armar(m, { ...p, rodilla, cadera, hombro, ...brazoFK(m, hombro, 176, 170), lejos: { ...soloPierna(atras), rodilla: piernaIK(m, cadera, atras.tobillo, { x: 1, y: 0 }) }, equipo: [{ tipo: 'banda', puntos: [mas(rodilla, -0.06, 0), ancla], capa: 'frente' }, { tipo: 'poste', x: ancla.x + 0.03, y2: 0.9, capa: 'fondo' }] }, 0);
   } }),
   /** Movilidad de cuello: la cabeza baja y sube despacio, sin forzar. */
-  cuello: () => ({ fases: RITMOS.extiende, pose(s, m) { const c = dePie(m, { pierna: 1 }); return armar(m, { ...c, ...brazosColgando(m, c.hombro) }, mix(-22, 34, s)); } }),
+  cuello: () => PASOS_FRENTE.cuello(), // gira la cabeza a cada lado: se ve de frente
+  /** Muñecas en cuatro apoyos: las palmas quietas bajo los hombros y el peso va unos centímetros adelante y vuelve. */
+  muneca: () => ({
+    fases: RITMOS.extiende,
+    pose(s, m) {
+      const rodilla = { x: 0, y: 0.05 }, tobillo = mas(rodilla, -m.pierna * 0.98, 0.04), largo = largoBrazo(m);
+      const cadera0 = D(rodilla, m.muslo, 0), mano = { x: cadera0.x + Math.sqrt(m.tronco ** 2 - (0.035 + largo - cadera0.y) ** 2), y: 0.035 };
+      const cadera = D(rodilla, m.muslo, mix(0, 11, s)), hombro = dosSegmentos(cadera, mano, m.tronco, largo - 1e-4, 1);
+      return armar(m, { ...pie(m, tobillo, 175), rodilla, cadera, hombro, ...brazoIK(m, hombro, mano, { x: -1, y: 0 }), equipo: [{ tipo: 'colchoneta', x1: -0.7, x2: 0.9, capa: 'fondo' }] }, 100);
+    },
+  }),
   marcha: () => marcha(), // marcha suave en el lugar
   puente: () => hipThrust({ suelo: true, carga: 'ninguna' }),
   remoLiviano: () => remoInclinado({ carga: 'mancuernas' }),
@@ -1145,14 +1157,11 @@ const MAPA = {
   marcha: () => marcha({ rodillas: true }), puente_marcha: () => hipThrust({ suelo: true, carga: 'ninguna', marcha: true }), pallof: () => pallof(),
   escaladora: () => marcha({ escalera: true }), trotadora: () => marcha({ cinta: true }), caminata: () => marcha(), caminata_inclinada: () => marcha({ cinta: true, inclinacion: 8 }), trote: () => marcha({ correr: true }),
   respiracion_90_90: () => respiracion9090(),
+  ...FRENTE,
 };
 
-/** Los que necesitan una vista de frente o de arriba: vistos de lado no se entiende el movimiento. Quedan con su ilustración. */
-export const PENDIENTES = Object.fromEntries([
-  'elevaciones_laterales', 'elevaciones_laterales_sentado', 'elevaciones_laterales_polea', 'elevacion_lateral_un_brazo', 'aperturas_maquina', 'aperturas_mancuernas',
-  'posterior_maquina', 'posterior_polea', 'separacion_banda', 'abductora', 'aductora', 'abductor_de_pie', 'caminata_lateral_banda', 'plancha_lateral',
-  'plancha_lateral_elevacion', 'toques_talon', 'giro_polea', 'lenador', 'giro_ruso', 'vuelta_al_mundo', 'saltos_tijera', 'patinador',
-].map(id => [id, 'El movimiento ocurre hacia el costado o girando: necesita la vista de frente.']));
+/** Ejercicios del catálogo que todavía no tienen animación (quedan con su ilustración). Hoy, ninguno. */
+export const PENDIENTES = {};
 
 const cache = new Map();
 /** La animación de un ejercicio del catálogo, o null si todavía no tiene (PENDIENTES). */
@@ -1174,16 +1183,17 @@ const PASOS = [
   [/pectoral/i, () => ESTIRAMIENTOS.pectoral()], [/flexor de cadera/i, () => ESTIRAMIENTOS.flexorCadera()], [/gl[uú]teo.*figura|figura.?4/i, () => ESTIRAMIENTOS.gluteo()],
   [/isquiotibiales/i, () => ESTIRAMIENTOS.isquiotibiales()], [/aductor|mariposa/i, () => ESTIRAMIENTOS.aductor()], [/cu[aá]driceps/i, () => ESTIRAMIENTOS.cuadriceps()],
   [/pantorrilla/i, () => ESTIRAMIENTOS.pantorrilla()], [/b[ií]ceps y antebrazo/i, () => ESTIRAMIENTOS.biceps()], [/tr[ií]ceps sobre la cabeza/i, () => ESTIRAMIENTOS.triceps()],
+  // Vistos de frente: giran o van hacia el costado.
+  [/tor[aá]cica/i, () => PASOS_FRENTE.toracica()], [/90\s*\/\s*90 de cadera/i, () => PASOS_FRENTE.cadera9090()], [/rotaci[oó]n externa/i, () => PASOS_FRENTE.rotacionExterna()],
+  [/cuello y trapecio/i, () => PASOS_FRENTE.cuelloTrapecio()], [/mu[ñn]eca/i, () => CALENTAMIENTOS.muneca()],
 ];
-/** Pasos que todavía no se animan (giran o van al costado): movilidad torácica, 90/90, rotación externa, muñeca, cuello y trapecio. */
-const PASOS_PENDIENTES = /tor[aá]cica|90\s*\/\s*90|rotaci[oó]n externa|mu[ñn]eca|cuello y trapecio/i;
 const cachePasos = new Map();
 /** La animación de un paso de calentamiento o estiramiento, por su nombre; null si no tiene. Los ensayos y las aproximaciones usan la del ejercicio. */
 export function animacionDePaso(paso) {
   const nombre = typeof paso === 'string' ? paso : paso?.name || '';
   const ej = typeof paso === 'object' && (paso.agregar_id || String(paso.clave || '').replace(/^(ensayo|aprox):/, ''));
   if (ej && MAPA[ej]) return animacionDe(ej);
-  if (!nombre || PASOS_PENDIENTES.test(nombre)) return null;
+  if (!nombre) return null;
   const [, crear] = PASOS.find(([re]) => re.test(nombre)) || [];
   if (!crear) return null;
   const clave = PASOS.findIndex(([re]) => re.test(nombre));
@@ -1195,6 +1205,17 @@ export function animacionDePaso(paso) {
 export function encuadre(anim, m) {
   let x1 = Infinity, x2 = -Infinity, y1 = Infinity, y2 = -Infinity;
   const ver = (q, r = 0) => { if (!q || !Number.isFinite(q.x)) return; x1 = Math.min(x1, q.x - r); x2 = Math.max(x2, q.x + r); y1 = Math.min(y1, q.y - r); y2 = Math.max(y2, q.y + r); };
+  if (anim.vista === 'frente') {
+    for (let k = 0; k <= 8; k++) {
+      const p = proyectarPose(anim.pose(k / 8, m, anim.fases[0], 0), anim.camara);
+      [...p.hombros, ...p.caderas, ...p.brazos.flatMap(b => [b.codo, b.mano]), ...p.piernas.flatMap(pi => [pi.rodilla, pi.tobillo, pi.talon, pi.punta])].forEach(q => ver(q, 0.08));
+      ver(p.cabeza, m.cabeza + 0.05);
+      for (const e of p.equipo || []) if (e.encuadra !== false) [e.centro, e.a, e.b, ...(e.puntos || [])].forEach(q => ver(q, e.centro ? e.r || 0.08 : 0.02));
+    }
+    if (anim.suelo !== false) y1 = Math.min(y1, 0);
+    const lado = Math.max(x2 - x1, y2 - y1) + 0.3, cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+    return anim.suelo !== false ? { x: cx - lado / 2, y: y1 - 0.08, lado } : { x: cx - lado / 2, y: cy - lado / 2, lado };
+  }
   for (const s of [0, 0.25, 0.5, 0.75, 1]) {
     const p = anim.pose(s, m, anim.fases[0], 0);
     for (const k of ['talon', 'punta', 'tobillo', 'rodilla', 'cadera', 'hombro', 'codo', 'mano']) { ver(p[k], 0.08); ver(p.lejos?.[k], 0.08); }

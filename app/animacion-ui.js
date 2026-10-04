@@ -3,6 +3,8 @@
 // vista (un solo reloj para todas). Si el teléfono pide reducir movimiento, queda quieta y se puede ver con un toque.
 import { R, esc } from './comun.js';
 import { crearFigura, varianteDe, VARIANTES } from './figura.js';
+import { crearFiguraFrente } from './figura-frente.js';
+import { proyectarPose } from '../nucleo/animaciones-frente.js';
 import { medidas, enElTiempo } from '../nucleo/animacion-ejercicios.js';
 import { encuadre } from '../nucleo/animaciones.js';
 import { sinMovimiento } from './movimiento.js';
@@ -15,7 +17,8 @@ const mirar = typeof IntersectionObserver === 'function'
 
 function pintar(a, segundos) {
   const { s, fase, enFase } = a.corre ? enElTiempo(a.anim, segundos + a.t0) : { s: 1, fase: a.anim.fases[0], enFase: 0 };
-  a.figura.dibujar({ ...a.anim.pose(s, a.m, fase, enFase), radioCabeza: a.m.cabeza });
+  const p = a.anim.pose(s, a.m, fase, enFase);
+  a.figura.dibujar({ ...(a.anim.vista === 'frente' ? proyectarPose(p, a.anim.camara) : p), radioCabeza: a.m.cabeza });
 }
 function seguir() {
   activas = activas.filter(a => a.caja.isConnected);
@@ -36,8 +39,9 @@ export function montarAnimacion(caja, anim, { nombre = '' } = {}) {
   const variante = varianteDe(R()), m = medidas(VARIANTES[variante].estatura), e = encuadre(anim, m);
   const x = e.x * K, y = -(e.y + e.lado) * K, lado = e.lado * K;
   caja.innerHTML = `<svg viewBox="${x.toFixed(1)} ${y.toFixed(1)} ${lado.toFixed(1)} ${lado.toFixed(1)}" role="img" aria-label="${esc(`Cómo se mueve: ${nombre}`)}">
-    <line x1="${(x - 10).toFixed(1)}" y1="0" x2="${(x + lado + 10).toFixed(1)}" y2="0" stroke="var(--line)" stroke-width="1.5"/><g></g></svg>`;
-  const a = { caja, anim, m, figura: crearFigura(caja.querySelector('g'), { escala: K, variante }), visible: !mirar, corre: !sinMovimiento(), t0: Math.random() * 2 };
+    ${anim.suelo === false ? '' : `<line x1="${(x - 10).toFixed(1)}" y1="0" x2="${(x + lado + 10).toFixed(1)}" y2="0" stroke="var(--line)" stroke-width="1.5"/>`}<g></g></svg>`;
+  const crear = anim.vista === 'frente' ? crearFiguraFrente : crearFigura; // de frente: los que giran o van hacia el costado
+  const a = { caja, anim, m, figura: crear(caja.querySelector('g'), { escala: K, variante }), visible: !mirar, corre: !sinMovimiento(), t0: Math.random() * 2 };
   if (!a.corre) {
     // Con reducir movimiento queda quieta; un toque la pone en movimiento.
     const b = document.createElement('button');
