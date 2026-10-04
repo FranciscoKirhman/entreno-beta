@@ -263,11 +263,11 @@ const DESCANSOS = [0, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300];
 const abiertos = new Set();
 
 // Calentamiento y estiramiento como en el tablero: cada paso se marca y, si va por tiempo, trae su cronómetro.
-// El calentamiento empieza abierto y se pliega al completarlo; el estiramiento se abre al terminar las series.
-let calentamientoVisible = false;
+// El calentamiento está siempre, como el cardio, en una tarjeta que se pliega: empieza abierto y se pliega al
+// completarlo o al empezar las series; el estiramiento se abre al terminar las series.
 const pasosAbiertos = { cal: null, est: null }; // null: automático; true o false: lo eligió la persona
 const reloj = seg => `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')}`;
-function pasosHtml(pasos, tipo, f, titulo, dia) {
+function pasosHtml(pasos, tipo, f, titulo, dia, intro = '') {
   if (!pasos?.length) return '';
   const anteriores = E.pasos?.[f]?.[tipo] || [];
   const claves = E.pasosClaves?.[f]?.[tipo] || {};
@@ -277,7 +277,8 @@ function pasosHtml(pasos, tipo, f, titulo, dia) {
   const a = avance(dia);
   const automatico = tipo === 'cal' ? !completo && !a.hechas : !completo && a.total > 0 && a.hechas === a.total;
   const abierto = pasosAbiertos[tipo] ?? automatico;
-  return `<details class="extra pasos" data-pasos="${tipo}"${abierto ? ' open' : ''}><summary>${esc(titulo)} <span class="pequeno suave">${completo ? 'hecho ✓' : n ? `${n} de ${pasos.length}` : `${pasos.length} pasos`}</span></summary>
+  const minutos = tipo === 'cal' ? ` · ~${minutosCalentamiento(pasos)} min` : '';
+  return `<details class="extra pasos" data-pasos="${tipo}"${abierto ? ' open' : ''}><summary>${esc(titulo)} <span class="pequeno suave">${completo ? 'hecho ✓' : n ? `${n} de ${pasos.length}` : `${pasos.length} pasos${minutos}`}</span></summary>${intro}
     <ol class="lista-pasos">${pasos.map((p, i) => {
       const parte = partePaso(p.name);
       const tramos = tramosDePaso(p.name, p.seg_estimados); // por lado: primer lado, cambio de postura y segundo lado
@@ -299,6 +300,16 @@ function pasosHtml(pasos, tipo, f, titulo, dia) {
       </li>`;
     }).join('')}</ol>
   </details>`;
+}
+
+/** Calentamiento: siempre presente y plegable, armado con los ejercicios de hoy (nucleo/calentamiento-sesion.js). */
+function calentamientoHtml(pasos, f, dia) {
+  if (!pasos.length) {
+    const texto = dia.ejercicios.length ? 'Hoy es solo cardio: parte los primeros 5 minutos suave, a un ritmo que te deje hablar.' : 'Agrega ejercicios y el calentamiento se arma solo con lo que vas a entrenar.';
+    return `<section class="tarjeta calentamiento-directo calentamiento-vacio" id="calentamiento-hoy"><h3>Calentamiento</h3><p class="pequeno suave">${texto}</p></section>`;
+  }
+  const intro = `<p class="calentamiento-nota pequeno suave">Para ${esc(dia.foco)}: subir temperatura, movilidad y activación de lo que vas a entrenar, y aproximaciones con carga liviana. Termina con energía para las series de trabajo.</p>`;
+  return `<section class="tarjeta calentamiento-directo" id="calentamiento-hoy">${pasosHtml(pasos, 'cal', f, 'Calentamiento', dia, intro)}</section>`;
 }
 
 /** Cardio: el texto del plan, su cronómetro y, si va por tramos de intensidad, una barra con cada tramo. */
@@ -360,12 +371,11 @@ function sesionHoy(dia) {
     </div>
   </section>
   <div class="accesos-entreno">
-    ${calentamiento.length ? `<button type="button" class="boton chico" id="abrir-calentamiento" aria-expanded="${calentamientoVisible}" aria-controls="calentamiento-hoy">Calentar</button>` : ''}
     <button type="button" class="boton chico" id="banco-hoy-arriba">${icono('mas')} Ejercicios</button>
     <button type="button" class="boton chico" data-elegir-cardio>Cardio</button>
     ${dia.ejercicios.length ? '<button type="button" class="boton chico" id="sesion-vacia-arriba">Empezar vacía</button>' : ''}
   </div>
-  ${calentamiento.length ? `<section class="tarjeta calentamiento-directo" id="calentamiento-hoy"${calentamientoVisible ? '' : ' hidden'}><div class="calentamiento-intro"><p class="sobretitulo">Preparación para ${esc(dia.foco)}</p><h2>Calienta para esta sesión</h2><p class="suave pequeno">~${minutosCalentamiento(calentamiento)} min estimados · movilidad, activación y cargas progresivas. Termina preparado, con energía para las series de trabajo.</p></div>${pasosHtml(calentamiento, 'cal', f, 'Tus pasos', dia)}</section>` : ''}
+  ${calentamientoHtml(calentamiento, f, dia)}
   <ol class="ejercicios-hoy">${dia.ejercicios.map((e, k) => ejercicioHoy(e, k, f, e.ejercicio_id ? anterior(todas, e.ejercicio_id, f) : null, notas[idDe(e, k)] || {}, dia)).join('')}</ol>
   ${cardioHtml(dia.cardio)}
   ${progreso.total && progreso.hechas === progreso.total ? sesionCompletaHtml({ guardada }) : ''}
@@ -512,18 +522,13 @@ function enlazar(ir, dia) {
   document.querySelectorAll('[data-ir-checkin]').forEach(b => b.onclick = () => ir('checkin', b.dataset.irCheckin));
   document.querySelectorAll('[data-ir-semana]').forEach(b => b.onclick = () => ir('semana'));
   $('entrenar-igual')?.addEventListener('click', () => ir('coach', 'Hoy no tenía sesión pero quiero entrenar, ¿qué otra opción tienes?'));
-  const empezarVacia = volver => proponerSesionVacia({ volver, alCambiar: () => { calentamientoVisible = false; ir('hoy'); } });
+  const empezarVacia = volver => proponerSesionVacia({ volver, alCambiar: () => { pasosAbiertos.cal = null; ir('hoy'); } });
   $('sesion-vacia-hoy')?.addEventListener('click', ev => empezarVacia(ev.currentTarget));
   $('sesion-vacia-arriba')?.addEventListener('click', ev => empezarVacia(ev.currentTarget));
   $('agregar-ejercicio-hoy')?.addEventListener('click', () => ir('banco', { desde: 'hoy' }));
   document.querySelectorAll('[data-elegir-cardio]').forEach(b => b.onclick = () => elegirCardio({ volver: b, alCambiar: () => vistaHoy(ir) }));
   if (!dia) return;
   $('banco-hoy-arriba').onclick = () => ir('banco', { desde: 'hoy' });
-  $('abrir-calentamiento')?.addEventListener('click', ev => {
-    const caja = $('calentamiento-hoy'); caja.hidden = !caja.hidden; calentamientoVisible = !caja.hidden;
-    ev.currentTarget.setAttribute('aria-expanded', String(!caja.hidden));
-    if (!caja.hidden) caja.querySelector('details').open = true;
-  });
   document.querySelectorAll('[data-quitar-ej]').forEach(b => b.onclick = () => proponerEdicion({ tipo: 'quitar', ejercicio: b.dataset.quitarEj }, { volver: b, alCambiar: () => vistaHoyMantener(ir) }));
 
   $('ver-detalles-sesion')?.addEventListener('click', () => {
@@ -674,7 +679,6 @@ function enlazar(ir, dia) {
   raiz.querySelectorAll('[data-preparar]').forEach(b => b.onclick = () => {
     const id = b.dataset.preparar;
     const { e, k } = ejercicioDe(id);
-    calentamientoVisible = false;
     if (!filasDe(f, e, k).some(x => tipoDe(x) === 'calentamiento')) agregarFila(id, true);
     else repintar();
     raiz.querySelector(`[data-ej="${id}"][data-c="kg"]`)?.focus();

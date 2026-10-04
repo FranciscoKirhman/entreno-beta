@@ -38,3 +38,8 @@
 .paso-ilustracion.referencia img{height:130px;aspect-ratio:auto}
 .paso-ilustracion figcaption{color:#555;font-size:12px;text-align:center;padding:0 8px 10px}
 .paso-instruccion{flex:1 0 100%;line-height:1.55;margin:4px 0}
+/* El calentamiento siempre está, como el cardio: su resumen hace de título de la tarjeta y se pliega. */
+.calentamiento-directo>details.pasos{margin:0}
+.calentamiento-directo>details.pasos>summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;min-height:44px;padding:4px 0;font-size:18px;cursor:pointer}
+.calentamiento-directo .calentamiento-nota{margin:2px 0 6px;line-height:1.45}
+.calentamiento-vacio h3{margin:0 0 4px}

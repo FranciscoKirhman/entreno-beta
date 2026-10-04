@@ -21,10 +21,70 @@ const PIERNA = new Set(['sentadilla', 'bisagra', 'extension_cadera', 'unilateral
 const generico = p => /^5 minutos de cardio suave$|^Series de aproximación del primer ejercicio$/i.test(p.name);
 const clave = name => `propio:${name}`;
 
+/**
+ * Zonas que la sesión trabaja de verdad: una zona cuenta si tiene un ejercicio compuesto, dos o más ejercicios, o si es
+ * la única. Así una abductora en un día de torso no arma un calentamiento de piernas.
+ */
+export function zonasDeSesion(ejercicios) {
+  const cuenta = { torso: [], pierna: [] };
+  for (const x of ejercicios) {
+    if (TORSO.has(x.ej.patron)) cuenta.torso.push(x.ej);
+    else if (PIERNA.has(x.ej.patron)) cuenta.pierna.push(x.ej);
+  }
+  const activa = xs => xs.length && (xs.some(ej => ej.tipo === 'compuesto') || xs.length >= 2 || xs.length === ejercicios.length);
+  return { torso: Boolean(activa(cuenta.torso)), pierna: Boolean(activa(cuenta.pierna)), tiron: cuenta.torso.some(ej => ej.patron.startsWith('tiron')) };
+}
+// Zona de un paso escrito a mano (del tablero o de un plan importado), para usarlo solo los días que la trabajan.
+const ZONA_PASO = [
+  [/bici|caminadora|caminata|marcha|cardio|trote|el[ií]ptica/i, 'temperatura'],
+  [/aproximaci/i, 'aproximacion'],
+  [/cadera|bisagra|puente|tobillo|90\s*\/\s*90|abducci|aducci|sentadilla|gl[uú]teo|zancada|rodilla|femoral|cu[aá]driceps|pierna/i, 'pierna'],
+  [/dorsal|colgar|jal[oó]n|dominada/i, 'tiron'],
+  [/hombro|tor[aá]cica|face pull|dislocaci|rotaci[oó]n externa|pared|serrato|om[oó]plato|pecho|mu[ñn]eca|codo|jal[oó]n|remo|press/i, 'torso'],
+  [/dead bug|bird dog|plancha|core|abdomen/i, 'core'],
+];
+export const zonaDePaso = nombre => ZONA_PASO.find(([re]) => re.test(nombre))?.[1] || 'otra';
+/** Si un paso escrito a mano sirve hoy: lo general siempre; lo de torso o piernas, solo si la sesión trabaja esa zona. */
+const sirveHoy = (zona, zonas) => (zona === 'torso' ? zonas.torso : zona === 'tiron' ? zonas.torso && zonas.tiron : zona === 'pierna' ? zonas.pierna : zona === 'core' ? zonas.pierna : true);
+const deTorso = zona => zona === 'torso' || zona === 'tiron';
+// Pasos escritos a mano que equivalen a uno que arma la app, para no repetirlos al completar.
+const EQUIVALE = [[/c[ií]rculos de hombro/i, 'hombros'], [/tor[aá]cica/i, 'toracica'], [/deslizamiento en pared|wall slide/i, 'pared'], [/serrato|om[oó]platos/i, 'serrato'],
+  [/face pull/i, 'face-banda'], [/tobillo/i, 'tobillo'], [/c[ií]rculos de cadera/i, 'cadera'], [/90\s*\/\s*90/i, '90-90'], [/bisagra/i, 'bisagra'], [/puente de gl[uú]teo/i, 'puente']];
+const equivalente = nombre => EQUIVALE.find(([re]) => re.test(nombre))?.[1] || null;
+
 export function calentamientoDeSesion({ dia, porId, equipo = [], bloqueadas = new Set(), cargas = {}, opcionesCarga = {} }) {
   const actuales = (dia.calentamiento || []).map(p => typeof p === 'string' ? { name: p, how: '' } : p);
   const personalizado = actuales.length && !actuales.some(p => p.origen === 'sesion-v1') && !(actuales.length >= 2 && actuales.slice(0, 2).every(generico));
-  if (personalizado) return actuales.map((p, i) => {
+  const ejerciciosHoy = (dia.ejercicios || []).map(e => ({ e, ej: porId.get(e.ejercicio_id) })).filter(x => x.ej && x.ej.tipo !== 'cardio');
+  const zonas = zonasDeSesion(ejerciciosHoy);
+  if (personalizado) {
+    // Los pasos escritos a mano se conservan tal cual, pero solo los que sirven para los ejercicios de hoy: un plan
+    // movido o editado no puede dejar un calentamiento de piernas en un día de torso. Si una zona de hoy queda sin
+    // pasos, se completa con los que arma la app para esa zona.
+    const conZona = actuales.map((p, i) => ({ p, i, zona: zonaDePaso(p.name) }));
+    const escritosConZona = conZona.some(x => deTorso(x.zona) || x.zona === 'pierna');
+    const usados = escritosConZona ? conZona.filter(x => sirveHoy(x.zona, zonas)) : conZona;
+    const pasosPropios = usados.map(({ p, i }) => propio(p, i));
+    if (!escritosConZona || !ejerciciosHoy.length) return pasosPropios;
+    // Se completa la zona de hoy que quedó sin pasos o a la que se le quitaron pasos que no correspondían.
+    const quitado = conZona.length > usados.length;
+    const completar = {
+      torso: zonas.torso && (quitado || !usados.some(x => deTorso(x.zona))),
+      pierna: zonas.pierna && (quitado || !usados.some(x => x.zona === 'pierna')),
+    };
+    if (!completar.torso && !completar.pierna) return pasosPropios;
+    const yaEstan = new Set(usados.map(x => equivalente(x.p.name)).filter(Boolean));
+    const generados = calentamientoDeSesion({ dia: { ...dia, calentamiento: [] }, porId, equipo, bloqueadas, cargas, opcionesCarga })
+      .filter(x => x.fase !== '1 · Subir temperatura' && !String(x.clave).startsWith('aprox:') && !yaEstan.has(x.clave)
+        && (completar.torso && zonaDeClave(x.clave) === 'torso' || completar.pierna && zonaDeClave(x.clave) === 'pierna'));
+    const antesDeAprox = pasosPropios.findIndex(x => zonaDePaso(x.name) === 'aproximacion');
+    if (antesDeAprox < 0) return [...pasosPropios, ...generados];
+    return [...pasosPropios.slice(0, antesDeAprox), ...generados, ...pasosPropios.slice(antesDeAprox)];
+  }
+  return generado(actuales, ejerciciosHoy, zonas);
+
+  /** Un paso escrito a mano, con su imagen y, si es el de aproximación, las cargas indicadas. */
+  function propio(p, i) {
     const n = p.name.toLowerCase();
     const zona = ['hombro', 'codo', 'cadera', 'rodilla', 'tobillo', 'muneca', 'lumbar', 'cuello'].find(z => n.includes(z));
     const id = /puente/.test(n) ? 'puente_gluteo' : /dead bug/.test(n) ? 'dead_bug' : /bird dog/.test(n) ? 'bird_dog' : null;
@@ -34,8 +94,10 @@ export function calentamientoDeSesion({ dia, porId, equipo = [], bloqueadas = ne
     const aproximacion = /series de aproximaci/i.test(n) && indicadas.length;
     return { ...p, clave: p.clave || clave(p.name), indiceAnterior: i, imagen: p.imagen || imagen,
       ...(aproximacion ? { imagen: `img/ejercicios/mini/${primero.ejercicio_id}.webp`, series: indicadas.map(s => ({ ...s })), agregar_id: primero.ejercicio_id } : {}) };
-  });
-  const ejercicios = (dia.ejercicios || []).map(e => ({ e, ej: porId.get(e.ejercicio_id) })).filter(x => x.ej && x.ej.tipo !== 'cardio');
+  }
+
+  /** El calentamiento que arma la app para los ejercicios de hoy. */
+  function generado(actuales, ejercicios, zonas) {
   if (!ejercicios.length) return [];
   const patrones = new Set(ejercicios.map(x => x.ej.patron));
   const pasos = [];
@@ -47,7 +109,7 @@ export function calentamientoDeSesion({ dia, porId, equipo = [], bloqueadas = ne
   if (pasos.length && equipo.includes('bicicleta')) {
     Object.assign(pasos[0], { name: 'Bicicleta o caminata suave, 5 minutos', imagen: 'img/equipos/bicicleta.webp' });
   }
-  if ([...patrones].some(p => TORSO.has(p))) {
+  if (zonas.torso) {
     agregar('hombros', 'Círculos de hombro, 10 adelante y 10 atrás', 'De pie, brazos sueltos. Dibuja círculos grandes y lentos sin encoger los hombros hacia las orejas.', 'Prepara el movimiento de hombros para los ejercicios de torso.', '2 · Movilidad', ['hombro'], 'img/articulaciones/hombro.webp', 45);
     agregar('toracica', 'Movilidad torácica sentado, 8 por lado', 'Sentado, manos en la nuca. Gira el pecho sin mover la cadera. Se mueve la espalda alta, sin forzar la zona baja.', 'Ensaya el control del tronco que usarás en presses y remos.', '2 · Movilidad', ['lumbar', 'cuello', 'hombro'], 'img/musculos/espalda.webp', 60);
     if ([...patrones].some(p => p.startsWith('empuje'))) {
@@ -61,7 +123,7 @@ export function calentamientoDeSesion({ dia, porId, equipo = [], bloqueadas = ne
       agregar(`ensayo:${tiron.ej.id}`, `${tiron.ej.nombre}, 12 repeticiones livianas`, 'Usa una carga fácil y haz el recorrido lento, sin balancear el tronco. Mantén los hombros lejos de las orejas. Esta serie prepara el movimiento, sin buscar el fallo.', 'Ensaya el tirón que aparece en tu sesión, usando su mismo equipo.', '3 · Activación', tiron.ej.carga_articular || [], `img/ejercicios/mini/${tiron.ej.id}.webp`, 60);
     }
   }
-  if ([...patrones].some(p => PIERNA.has(p))) {
+  if (zonas.pierna) {
     if (patrones.has('sentadilla') || patrones.has('unilateral_pierna')) {
       agregar('tobillo', 'Movilidad de tobillo contra pared, 10 por lado', 'Frente a la pared, lleva la rodilla hacia ella sin despegar el talón. Acerca el pie si no llegas y mueve la rodilla con control.', 'Prepara el apoyo del pie y el recorrido de rodilla antes de la sentadilla.', '2 · Movilidad', ['tobillo', 'rodilla'], 'img/articulaciones/tobillo.webp', 60);
     }
@@ -83,4 +145,7 @@ export function calentamientoDeSesion({ dia, porId, equipo = [], bloqueadas = ne
   const anterior = actuales.findIndex(p => /^5 minutos de cardio suave$/.test(p.name));
   if (anterior >= 0 && pasos[0]?.clave === 'temperatura') pasos[0].indiceAnterior = anterior;
   return pasos;
+  }
 }
+/** Zona de un paso que arma la app (por su clave). */
+const zonaDeClave = c => (['hombros', 'toracica', 'pared', 'serrato', 'face-banda'].includes(c) || String(c).startsWith('ensayo:') ? 'torso' : ['tobillo', 'cadera', '90-90', 'bisagra', 'puente'].includes(c) ? 'pierna' : 'otra');
