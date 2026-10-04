@@ -5,6 +5,7 @@
 import { datoCambiado, cicloCambiado } from './datos-nube.js';
 import { E, guardar, R, D, C, K, indice, hoy, ahora, esc, $, fechaCorta, ctxNucleo, escala, opcionesRadio, chk, cambiarPlan, numero, coma, mostrarMensaje, avisar, unidadPeso, enUnidad, aKilos, peso, volumenTexto, seriesTexto } from './comun.js';
 import { estadoDelPlan } from '../nucleo/registrado.js';
+import { sesionesPorRevisar } from '../nucleo/sin-registro.js';
 import { recordsDeSerie } from '../nucleo/records.js';
 import { esAsistido, conLastre, sinCargaExterna } from '../nucleo/catalogo.js';
 import { sufijo, porReps, camposGuardados } from '../nucleo/unidades.js';
@@ -75,13 +76,13 @@ export function vistaHoy(ir, extra) {
       ${D().mensaje_alerta ? `<div class="aviso ojo">${esc(D().mensaje_alerta)}</div>` : ''}
       ${avisoCheckin()}
       ${avisoDescargaCorto()}
-      ${pendientesHtml(reg)}
+      ${avisoSinRegistro(f)}
       ${sups.length ? `<section class="tarjeta"><h3>Suplementos</h3><ul class="lista-check">${sups.map(s => `<li class="${s.estado}"><button type="button" class="check" data-toma="${s.suplemento_id}" ${s.estado === 'tomada' ? 'disabled aria-pressed="true"' : 'aria-pressed="false"'} aria-label="Marcar ${esc(s.nombre)} como tomado">${s.estado === 'tomada' ? '✓' : ''}</button><span>${esc(s.nombre)}${s.dosis ? ` · ${esc(s.dosis)}` : ''}</span><span class="suave pequeno">${s.hora || ''}${s.estado === 'atrasada' ? ' · atrasado' : ''}</span></li>`).join('')}</ul></section>` : ''}
     </div>
   </div>`;
   enlazar(ir, dia);
   montarAnimaciones(app(), caja => animacionDePaso({ name: caja.dataset.pasoNombre, clave: caja.dataset.pasoClave, agregar_id: caja.dataset.pasoEj }));
-  enlazarPendientes(ir);
+  document.getElementById('abrir-revision')?.addEventListener('click', () => ir('coach', { revisar: true }));
   actualizarPantalla(); // al marcar la primera serie se pide la pantalla encendida; al guardar la sesión, se suelta
   mostrarMensaje();
   // Al volver de la ficha de un ejercicio, la pantalla queda en ese ejercicio.
@@ -128,14 +129,11 @@ function celebrarSiSeCompleto(f) {
   });
 }
 
-/** Sesiones del plan de los últimos 7 días que quedaron sin registro: la app pregunta qué pasó (como el tablero). */
-function pendientesHtml(reg) {
-  return reg.pendientes.slice(-2).reverse().map(d => `<section class="tarjeta pendiente-plan">
-    <p class="sobretitulo">Quedó sin registro · ${esc(fechaCorta(d.fecha))}</p>
-    <h3>${esc(d.foco)}</h3>
-    <p class="pequeno suave">No hay una sesión registrada que se le parezca. ¿Qué pasó? Si la corres, te muestro cómo queda la semana antes de cambiar nada.</p>
-    <div class="fila-botones"><button type="button" class="boton primario" data-pend-correr="${d.fecha}">Correrla</button><button type="button" class="boton" data-pend-hecha="${d.fecha}">La hice</button><button type="button" class="boton" data-pend-saltar="${d.fecha}">La salto</button></div>
-  </section>`).join('');
+/** Sesiones de los últimos 7 días sin registro: un aviso corto que abre la revisión en el Coach (ahí se responde). */
+function avisoSinRegistro(f) {
+  const n = sesionesPorRevisar(E.plan, E.sesiones, { hoy: f, marcas: E.marcasPlan || {}, despues: E.revisarDespues || {} }).length;
+  if (!n) return '';
+  return `<button type="button" class="aviso-revision" id="abrir-revision">${icono('calendario')}<span><strong>${n === 1 ? 'Una sesión sin registro' : `${n} sesiones sin registro`}</strong><small>¿La${n === 1 ? '' : 's'} hiciste? Revisar en el Coach</small></span>${icono('flecha', 'icono aviso-revision-flecha')}</button>`;
 }
 
 /** Lo registrado hoy en Hevy (importado): qué sesión del plan fue, sus cifras y lo que viene. */
@@ -170,15 +168,6 @@ function registradoHoyHtml(reg, dia, f, proxima) {
       return `<li><strong>${esc(g.nombre)}</strong>: ${esc(texto(g.series))}${cal ? ` <span class="suave">(+${cal} de calentamiento)</span>` : ''}</li>`;
     }).join('')}</ul></details>
   </section>`;
-}
-
-/** Respuestas a una sesión sin registro: la hice (sin anotarla), la salto, o correrla con vista previa. */
-function enlazarPendientes(ir) {
-  const marcar = (fecha, valor, aviso) => { (E.marcasPlan ||= {})[fecha] = valor; guardar(); vistaHoyMantener(ir); avisar(aviso); };
-  document.querySelectorAll('[data-pend-hecha]').forEach(b => b.onclick = () => marcar(b.dataset.pendHecha, 'hecha', 'Anotado: la hiciste sin registrarla.'));
-  document.querySelectorAll('[data-pend-saltar]').forEach(b => b.onclick = () => marcar(b.dataset.pendSaltar, 'saltada', 'Anotado: esa sesión se salta.'));
-  document.querySelectorAll('[data-pend-correr]').forEach(b => b.onclick = () => proponer({ tipo: 'falte', fecha: b.dataset.pendCorrer },
-    { titulo: 'Correr la sesión', volver: b, alCambiar: r => (r.ir === 'semana' ? ir('semana') : vistaHoyMantener(ir)) }));
 }
 
 // "¿Cómo estás hoy?": opcional y plegado desde el inicio. Cada botón guarda al tocarlo (sin "Listo"); con sueño, ánimo

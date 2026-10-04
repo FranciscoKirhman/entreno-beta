@@ -39,7 +39,7 @@ export function vistaBanco(ir, { desde = ultimoDesde } = {}) {
       <form id="form-propio" class="campos-propio">
         <label class="pequeno">Nombre <input type="text" id="propio-nombre" maxlength="60" placeholder="Remo en máquina Hammer" required></label>
         <label class="pequeno">Tipo <select id="propio-clase">${Object.entries(TIPOS_PROPIO).map(([k, t]) => `<option value="${k}">${esc(t.nombre)}</option>`).join('')}</select></label>
-        <fieldset><legend class="pequeno">Músculos que trabaja (hasta 3)</legend><div class="chips">${musculos.map(m => `<label><input type="checkbox" class="propio-musculo" value="${esc(m)}">${esc(mayuscula(NOMBRE_MUSCULO[m] || m.replaceAll('_', ' ')))}</label>`).join('')}</div></fieldset>
+        <fieldset id="propio-musculos" aria-describedby="propio-musculos-nota"><legend class="pequeno">Músculos que trabaja <strong>(obligatorio, elige 1 a 3)</strong></legend><p class="pequeno suave" id="propio-musculos-nota">Así cuenta en tu semana por músculo y en Progreso.</p><div class="chips">${musculos.map(m => `<label><input type="checkbox" class="propio-musculo" value="${esc(m)}">${esc(mayuscula(NOMBRE_MUSCULO[m] || m.replaceAll('_', ' ')))}</label>`).join('')}</div></fieldset>
         <fieldset><legend class="pequeno">Equipo (si no marcas nada, es sin equipo)</legend><div class="chips">${equipos.map(q => `<label><input type="checkbox" class="propio-equipo" value="${esc(q)}">${esc(EQUIPO[q] || q.replaceAll('_', ' '))}</label>`).join('')}</div></fieldset>
         <button type="submit" class="boton primario">Crear ejercicio</button>
         <p class="pequeno suave">Queda en este teléfono, en tu respaldo y, si entraste, en tu cuenta. Sin imagen ni técnica: es tuyo. Se puede agregar a una sesión como cualquier otro.</p>
@@ -78,6 +78,12 @@ export function vistaBanco(ir, { desde = ultimoDesde } = {}) {
   });
   $('form-propio').onsubmit = ev => {
     ev.preventDefault();
+    // Sin músculos no se puede crear: el ejercicio tiene que contar en la semana y en Progreso.
+    if (!document.querySelector('.propio-musculo:checked')) {
+      avisar('Elige al menos un músculo que trabaje el ejercicio.');
+      document.querySelector('.propio-musculo')?.focus();
+      return;
+    }
     const r = crearPropio({ nombre: $('propio-nombre').value, clase: $('propio-clase').value,
       musculos: [...document.querySelectorAll('.propio-musculo:checked')].map(c => c.value),
       equipamiento: [...document.querySelectorAll('.propio-equipo:checked')].map(c => c.value) }, indice);

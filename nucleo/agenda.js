@@ -34,7 +34,7 @@ export function conflictos(plan, fecha, plantilla, ignorar = null) {
   return [-1, 1].map(d => sumarDias(fecha, d))
     .map(v => plan.dias.find(x => x.fecha === v && x !== ignorar))
     .filter(x => x && chocan(familia(x.plantilla), f))
-    .map(x => `Queda pegado a ${x.foco} del ${nombreDia(x.fecha)} ${x.fecha.slice(8)}.`);
+    .map(x => `Queda pegado a ${x.foco} del ${nombreDia(x.fecha)} ${Number(x.fecha.slice(8))}.`);
 }
 
 /** Mueve una sesión a otra fecha. Si la fecha ya tiene sesión, no la mueve (usar intercambiar). */

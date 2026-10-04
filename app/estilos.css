@@ -900,3 +900,36 @@ html.deslizando-atras body{overflow-x:clip}
 .tablero-consulta caption{text-align:left;color:var(--ink-muted);margin-bottom:8px}
 .tablero-consulta th,.tablero-consulta td{text-align:left;vertical-align:top;padding:8px 4px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
 .tablero-grafico{display:block;width:100%;height:auto;margin:12px 0}
+/* Sesiones pasadas sin registro (nucleo/sin-registro.js): aviso corto en Hoy y revisión al abrir el Coach. */
+.aviso-revision{display:flex;align-items:center;gap:12px;width:100%;min-height:56px;margin:0 0 12px;padding:10px 14px;border:0;border-radius:16px;background:var(--warning-soft);color:var(--ink);text-align:left;cursor:pointer}
+.aviso-revision>.icono:first-child{flex:0 0 22px;width:22px;height:22px;color:var(--warning)}
+.aviso-revision>span{display:flex;flex:1;flex-direction:column;min-width:0;gap:1px}
+.aviso-revision strong{font-size:16px;font-weight:600}
+.aviso-revision small{font-size:13px;color:var(--ink-muted)}
+.aviso-revision-flecha{flex:0 0 14px;width:14px;height:14px;color:var(--ink-muted)}
+.aviso-revision:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.revision-registro{margin:4px 0 16px;padding:16px;border-radius:18px;background:var(--surface)}
+.revision-registro h2{margin:0 0 4px;font-size:19px;line-height:1.3}
+.revision-registro h2:focus{outline:none}
+.revision-registro>p{margin:0 0 6px}
+.revision-lista{list-style:none;margin:0;padding:0}
+.revision-lista>li{padding:12px 0}
+.revision-lista>li+li{border-top:1px solid var(--line)}
+.revision-sesion{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.revision-sesion>.icono{flex:0 0 20px;width:20px;height:20px;color:var(--ink-muted)}
+.revision-sesion>span{display:flex;flex-direction:column;min-width:0}
+.revision-sesion strong{font-size:17px;font-weight:600;overflow-wrap:anywhere}
+.revision-sesion small{font-size:13px;color:var(--ink-muted);text-transform:capitalize}
+.revision-botones{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.revision-botones .boton{flex:1 1 120px;min-height:44px}
+.revision-botones .enlace{min-height:44px;padding:0 6px}
+.semana-chat{list-style:none;margin:10px 0 2px;padding:0;white-space:normal;border-radius:12px;background:var(--fill);overflow:hidden}
+.semana-chat li{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;padding:7px 10px;font-size:15px}
+.semana-chat li+li{border-top:1px solid var(--line)}
+.semana-chat .num{flex:0 0 82px;color:var(--ink-muted);font-size:13px;text-transform:capitalize}
+.semana-chat strong{font-weight:500}
+.semana-chat small{flex-basis:100%;margin-left:92px;font-size:12px;color:var(--accent)}
+.semana-chat li.cambia strong{color:var(--accent)}
+.opciones-chat .nota-opcion{margin:-2px 2px 6px;line-height:1.4}
+@media (max-width:360px){.semana-chat .num{flex-basis:70px}.semana-chat small{margin-left:80px}}
+.semana-chat li.libre strong{color:var(--ink-muted);font-weight:400}

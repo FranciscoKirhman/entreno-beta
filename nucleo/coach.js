@@ -14,6 +14,7 @@ import { planDeCuidado } from './cuidado.js';
 import { reconocer } from './importar-plan.js';
 import { articulacionesBloqueadas } from './catalogo.js';
 import { duracionEstimada } from './motor-plan.js';
+import { alternativasNoHecha, alternativaEnFecha, fechasLibres, fechaEscrita, semanaDe, firma, diaCorto } from './sin-registro.js';
 
 const DIAS = { domingo: 0, lunes: 1, martes: 2, miercoles: 3, jueves: 4, viernes: 5, sabado: 6 };
 const ZONAS = { hombro: 'hombro', hombros: 'hombro', codo: 'codo', codos: 'codo', rodilla: 'rodilla', rodillas: 'rodilla', espalda: 'lumbar', lumbar: 'lumbar', cintura: 'lumbar', muneca: 'muneca', munecas: 'muneca', cuello: 'cuello', tobillo: 'tobillo', cadera: 'cadera' };
@@ -58,8 +59,9 @@ export function entender(texto, { hoy, indice, plan }) {
     const intensidad = escala ? Number(escala[1].replace(',', '.')) : NaN;
     return { intencion: 'dolor', zona, intensidad: Number.isFinite(intensidad) && intensidad >= 0 && intensidad <= 10 ? intensidad : null };
   }
-  if (/\b(falte|no fui|no pude ir|me salte|me perdi|no alcance a ir)\b/.test(n)) {
-    return { intencion: 'falte', fecha: fechaMencionada(n, hoy, { pasado: true }) || hoy };
+  // "No entrené ayer", "no pude entrenar el lunes", "falté el 2 de octubre": la sesión de ese día no se hizo.
+  if (/\b(falte|no fui|no pude ir|me salte|me perdi|no alcance a ir|no entrene|no pude entrenar|no alcance a entrenar|no hice (la sesion|el entreno|el entrenamiento|nada)|no fui a entrenar)\b/.test(n)) {
+    return { intencion: 'falte', fecha: fechaEscrita(texto, hoy) || fechaMencionada(n, hoy, { pasado: true }) || hoy };
   }
   if (/\b(no quiero|no tengo ganas de|prefiero no|otra opcion|otra cosa|cambiar el dia)\b/.test(n) && !/\b(maquina|ocupad)\b/.test(n)) {
     const evitar = FAMILIAS.find(([re]) => re.test(n))?.[1] || (dia ? familia(dia.plantilla) : null);
@@ -98,7 +100,7 @@ export function responder(texto, ctx) {
     case 'que_toca':
       if (dia) return { texto: `Hoy toca ${resumenDia(dia)}` };
       return { texto: `Hoy no tienes sesión.${(() => { const p = plan?.dias.find(d => d.fecha > hoy); return p ? ` La próxima es ${resumenDia(p)}` : ''; })()}` };
-    case 'falte': return vistaPrevia({ tipo: 'falte', fecha: q.fecha }, ctx);
+    case 'falte': return opcionesNoHecha(q.fecha, ctx);
     case 'mover': return vistaPrevia(sesionDe(plan, q.a) ? { tipo: 'intercambiar', fechas: [q.de, q.a] } : { tipo: 'mover', de: q.de, a: q.a }, ctx);
     case 'otra_opcion': {
       const o = opcionesParaHoy(plan, hoy, { evitar: q.evitar });
@@ -266,9 +268,96 @@ export function aplicarOpcion(accion, ctx) {
   }
   if (CAMBIAN_PLAN.has(accion.tipo)) return vistaPrevia(accion, ctx);
   switch (accion.tipo) {
+    case 'no_hecha': return opcionesNoHecha(accion.fecha, ctx);
+    case 'elegir_fecha': return elegirFecha(accion.fecha, ctx);
+    case 'ver_alternativa': return verAlternativa(accion, ctx);
+    case 'aceptar_alternativa': return aceptarAlternativa(accion, ctx);
+    case 'la_hice': {
+      const d = sesionDe(ctx.plan, accion.fecha);
+      return {
+        texto: `Anotado: ${d?.foco || 'la sesión'} del ${diaCorto(accion.fecha)} quedó como hecha, sin anotar. Si quieres, registra lo que hiciste; si no, queda así.`,
+        marca: { fecha: accion.fecha, valor: 'hecha' },
+        opciones: [{ etiqueta: 'Anotar lo que hice', accion: { tipo: 'anotar_pasado', fecha: accion.fecha } }, { etiqueta: 'Dejarla así', accion: { tipo: 'nada_anotar' } }],
+      };
+    }
+    case 'nada_anotar': return { texto: 'Bien, queda como hecha sin detalles.' };
+    case 'nada_anotar_sin': return { texto: 'Perfecto, no cambié nada.' };
     case 'elegir_alternativa': return opcionesAlternativa(ctx, accion.fecha, accion.ejercicio);
     case 'consentir_cuidado': return { texto: 'Gracias. Vuelve a contarme la molestia para darte los ejercicios.', consentimiento: 'cuidado_lesiones' };
     case 'nada': return { texto: 'Bien, no cambié nada.' };
     default: return { texto: 'Perfecto.' };
   }
 }
+
+// ── Sesiones que no se hicieron: alternativas, vista de la semana y aceptación ──────────────
+const avisoOjo = o => (o.avisos?.length ? ` Ojo: ${o.avisos.join(' ')}` : '');
+
+/** "No la hice": las alternativas para esa sesión, cada una con qué se mueve, a qué fecha y qué pasa con las demás. */
+export function opcionesNoHecha(fecha, ctx) {
+  const r = alternativasNoHecha(ctx.plan, fecha, ctx);
+  if (r.error && !sesionDe(ctx.plan, fecha)) {
+    // Ese día no había sesión: quizás se refiere a la última que tocaba y no está hecha (de la última semana).
+    const antes = ctx.plan.dias.filter(d => d.fecha <= fecha && d.fecha >= sumarDias(fecha, -6) && d.fecha <= ctx.hoy && d.firme !== false && !(ctx.hechas || []).includes(d.fecha)).at(-1);
+    if (antes) return { texto: `${r.error} ¿Te refieres a ${antes.foco} del ${diaCorto(antes.fecha)}?`, opciones: [{ etiqueta: `No hice ${antes.foco} del ${diaCorto(antes.fecha)}`, accion: { tipo: 'no_hecha', fecha: antes.fecha } }, { etiqueta: 'No, está todo bien', accion: { tipo: 'nada_anotar_sin' } }] };
+  }
+  if (r.error) return { texto: r.error };
+  const base = firma(ctx.plan);
+  const mover = r.opciones.filter(o => !o.saltar);
+  const todasChocan = mover.length && mover.every(o => o.avisos.length);
+  const texto = !mover.length
+    ? `${r.sesion.foco} del ${diaCorto(fecha)} quedó sin hacer. No encontré un día compatible: puedes saltarla o elegir otra fecha.`
+    : todasChocan
+      ? `${r.sesion.foco} del ${diaCorto(fecha)} quedó sin hacer. Ninguna opción evita dejarla pegada a una sesión del mismo grupo; cada una dice con cuál. También puedes saltarla o elegir otra fecha.`
+      : `${r.sesion.foco} del ${diaCorto(fecha)} quedó sin hacer. Elige una opción y te muestro cómo queda la semana antes de cambiar nada.`;
+  return {
+    texto,
+    opciones: [
+      ...r.opciones.map(o => ({ etiqueta: o.titulo, nota: `${o.detalle} ${o.diferencia}${avisoOjo(o)}`, accion: { tipo: 'ver_alternativa', fecha, opcion: o.id, base } })),
+      ...(r.fechasLibres.length ? [{ etiqueta: 'Elegir otra fecha', accion: { tipo: 'elegir_fecha', fecha } }] : []),
+    ],
+  };
+}
+
+/** Los días libres para poner la sesión (la persona elige). */
+function elegirFecha(fecha, ctx) {
+  const libres = fechasLibres(ctx.plan, { hoy: ctx.hoy, noPuedo: ctx.respuestas?.dias_no_puedo || [], hechas: ctx.hechas || [], hasta: sumarDias(ctx.hoy, 13) });
+  if (!libres.length) return { texto: 'No quedan días libres en las próximas dos semanas. Puedes saltarla.', opciones: [{ etiqueta: 'Volver a las opciones', accion: { tipo: 'no_hecha', fecha } }] };
+  const base = firma(ctx.plan);
+  return {
+    texto: `¿Qué día quieres hacer ${sesionDe(ctx.plan, fecha)?.foco || 'esa sesión'}? Estos días no tienen sesión:`,
+    opciones: [...libres.slice(0, 8).map(f => ({ etiqueta: diaCorto(f), accion: { tipo: 'ver_alternativa', fecha, opcion: 'fecha', destino: f, base } })),
+      { etiqueta: 'Volver a las opciones', accion: { tipo: 'no_hecha', fecha } }],
+  };
+}
+
+/** Busca la alternativa elegida, recalculada con el plan de ahora. */
+function buscarAlternativa(accion, ctx) {
+  if (accion.opcion === 'fecha') return alternativaEnFecha(ctx.plan, accion.fecha, accion.destino, ctx);
+  const r = alternativasNoHecha(ctx.plan, accion.fecha, ctx);
+  if (r.error) return r;
+  return r.opciones.find(o => o.id === accion.opcion) || { error: 'Esa opción ya no está disponible.' };
+}
+
+/** Cómo quedaría la semana con la alternativa elegida; aceptar es lo único que cambia el plan. */
+function verAlternativa(accion, ctx) {
+  if (accion.base && accion.base !== firma(ctx.plan)) return { ...opcionesNoHecha(accion.fecha, ctx), texto: 'Tu semana cambió desde que viste esas opciones. Estas son las de ahora:' };
+  const o = buscarAlternativa(accion, ctx);
+  if (o.error) return { texto: o.error, opciones: [{ etiqueta: 'Volver a las opciones', accion: { tipo: 'no_hecha', fecha: accion.fecha } }] };
+  const semana = semanaDe(o.plan, { hoy: ctx.hoy, cambios: o.cambios, saltada: o.saltar ? accion.fecha : null });
+  return {
+    texto: `${o.titulo}. ${o.detalle}${avisoOjo(o)} Así quedaría tu semana:`,
+    semana,
+    opciones: [{ etiqueta: 'Aceptar esta opción', accion: { ...accion, tipo: 'aceptar_alternativa', base: firma(ctx.plan) } }, { etiqueta: 'Volver a las opciones', accion: { tipo: 'no_hecha', fecha: accion.fecha } }],
+  };
+}
+
+/** Aplica la alternativa. Si el plan cambió desde la vista previa (o ya se aceptó), no hace nada dos veces. */
+function aceptarAlternativa(accion, ctx) {
+  if (accion.base !== firma(ctx.plan)) return { ...opcionesNoHecha(accion.fecha, ctx), texto: 'Tu semana ya cambió desde esa vista previa, así que no apliqué nada. Estas son las opciones de ahora:' };
+  const o = buscarAlternativa(accion, ctx);
+  if (o.error) return { texto: o.error };
+  if (o.saltar) return { texto: `Listo: ${sesionDe(ctx.plan, accion.fecha)?.foco || 'esa sesión'} del ${diaCorto(accion.fecha)} quedó saltada y el resto de la semana sigue igual.`, marca: { fecha: accion.fecha, valor: 'saltada' }, ir: 'semana' };
+  const movida = o.cambios.find(c => c.de === accion.fecha);
+  return { texto: `Listo: ${movida.foco} quedó para el ${diaCorto(movida.a)}. ${o.detalle}`, plan: o.plan, ir: movida.a === ctx.hoy ? 'hoy' : 'semana' };
+}
+
