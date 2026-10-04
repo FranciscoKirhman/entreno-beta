@@ -949,11 +949,7 @@ export const ESTIRAMIENTOS = {
     return conCabeza(m, { ...p, ...t, rodilla, ...brazoIK(m, t.hombro, mano, { x: -0.5, y: 1 }), lejos: { rodilla: rodL, ...pieDeLaPierna(m, rodL, tobL, -20) }, equipo: [{ tipo: 'banda', puntos: [mano, p.punta], capa: 'frente' }, { tipo: 'colchoneta', x1: -1, x2: 1.1, capa: 'fondo' }] });
   }),
   /** Aductores en mariposa: sentado, las plantas juntas y el tronco se inclina adelante. */
-  aductor: () => sostener((s, m, f, e) => {
-    const cadera = { x: 0, y: 0.12 }, hombro = D(cadera, m.tronco, mix(0, 24, s) + respira(f, e) * 2), tobillo = mas(cadera, 0.3, 0.06);
-    const rodilla = ik(cadera, tobillo, m.muslo * 0.62, m.pierna * 0.62, { x: 0.2, y: 1 }); // las rodillas van hacia los costados: de lado se ven cortas
-    return armar(m, { ...pieDeLaPierna(m, rodilla, tobillo, 60), rodilla, cadera, hombro, ...brazoIK(m, hombro, mas(tobillo, 0.02, 0.04), { x: 0, y: -1 }), equipo: [{ tipo: 'colchoneta', x1: -0.5, x2: 0.7, capa: 'fondo' }] }, 20);
-  }),
+  aductor: () => PASOS_FRENTE.mariposa(), // plantas juntas y rodillas a los lados: se entiende de frente
   /** Cuádriceps de pie: una pierna sostiene y la mano lleva el talón de la otra hacia el glúteo. */
   cuadriceps: () => sostener((s, m, f, e) => {
     const cuerpo = dePie(m, { pierna: 1 }), { cadera, hombro } = cuerpo;

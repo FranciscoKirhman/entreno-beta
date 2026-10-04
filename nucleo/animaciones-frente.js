@@ -317,25 +317,45 @@ export function rotacionExterna() {
 }
 
 // ── Cadera ────────────────────────────────────────────────────────────────────────────────────────────────────────
-/** Abductora (las rodillas se abren contra las almohadillas) o aductora (se juntan), sentado en la máquina. */
+/** Una pierna por direcciones (muslo, pierna y pie), a sus largos exactos; el pie apoya hacia "abajo". */
+function piernaDir(m, cadera, dirMuslo, dirPierna, dirPie, abajo = v3(0, -1, 0)) {
+  const rodilla = sum(cadera, por(unit(dirMuslo), m.muslo)), tobillo = sum(rodilla, por(unit(dirPierna), m.pierna));
+  const pie = unit(dirPie), base = sum(tobillo, por(unit(abajo), m.tobillo * 0.92));
+  return { cadera, rodilla, tobillo, talon: sum(base, por(pie, -0.05)), punta: sum(base, por(pie, m.pie * 0.72)) };
+}
+
+/**
+ * Abductora (los muslos se abren contra las almohadillas, que van por fuera de las rodillas) o aductora (se juntan
+ * contra las almohadillas de adentro), sentado en la máquina. Como en la máquina real: cada muslo gira hacia afuera
+ * desde la cadera, la pierna cuelga vertical y el pie va en su apoyo, que se mueve con la pierna.
+ */
 export function abductora({ aductora = false } = {}) {
   return {
     vista: 'frente', camara: { inclinacion: 28, z0: 0.42 }, fases: aductora ? RITMOS.tira : RITMOS.abre,
     pose(s, m) {
-      const sep = aductora ? mix(0.3, 0.05, s) : mix(0.05, 0.3, s);
-      const c = sentado(m, { alto: 0.5, separa: sep, opciones: { arriba: v3(0, 1, -0.16) } });
+      const ang = aductora ? mix(40, 6, s) : mix(6, 40, s); // cada muslo hacia afuera, desde el frente
+      const c = sentado(m, { alto: 0.5, separa: 0.05, opciones: { arriba: v3(0, 1, -0.16) } });
+      const piernas = [0, 1].map(i => {
+        const l = i ? 1 : -1, abre = v3(l * Math.sin(R(ang)), -0.06, Math.cos(R(ang)));
+        return piernaDir(m, c.caderas[i], abre, v3(0, -1, 0.06), v3(l * 0.5 * Math.sin(R(ang)), 0, 1));
+      });
       const brazos = [0, 1].map(i => {
         const l = i ? 1 : -1, h = c.hombros[i];
-        return brazo(m, h, v3(h.x + l * 0.1, 0.5 + 0.02, 0.05), v3(l, -0.3, -0.2)); // manos en las manillas del asiento
+        return brazo(m, h, v3(h.x + l * 0.1, 0.52, 0.05), v3(l, -0.3, -0.2)); // manos en las manillas del asiento
       });
       const equipo = [...asientoMaquina(c, 0.5)];
       for (const i of [0, 1]) {
-        const r = c.piernas[i].rodilla, l = i ? 1 : -1;
-        equipo.push({ tipo: 'capsula', a: sum(r, v3(l * (aductora ? -0.075 : 0.075), 0.06, -0.12)), b: sum(r, v3(l * (aductora ? -0.075 : 0.075), -0.02, 0.02)), ancho: 0.05, color: 'oscuro', profundidad: r.z + 0.05 });
-        equipo.push({ tipo: 'capsula', a: v3(c.piernas[i].tobillo.x, 0.1, c.piernas[i].tobillo.z), b: v3(c.piernas[i].tobillo.x + l * 0.08, 0.1, c.piernas[i].tobillo.z), ancho: 0.03, color: 'estructura', profundidad: -0.2 });
+        const l = i ? 1 : -1, pi = piernas[i];
+        // La almohadilla toca la rodilla por fuera (abductora) o por dentro (aductora), y baja con su brazo al apoyo del pie.
+        const fuera = v3(l * Math.cos(R(ang)), 0, -Math.sin(R(ang))), lado = aductora ? -1 : 1;
+        const centro = sum(pi.rodilla, por(unit(dif(pi.cadera, pi.rodilla)), 0.06), por(fuera, lado * 0.085));
+        equipo.push({ tipo: 'capsula', a: sum(centro, v3(0, 0.09, 0)), b: sum(centro, v3(0, -0.07, 0)), ancho: 0.065, color: 'oscuro', profundidad: centro.z + 0.03 });
+        const apoyo = sum(pi.tobillo, v3(0, -m.tobillo - 0.01, 0.02));
+        equipo.push({ tipo: 'capsula', a: sum(centro, v3(0, -0.07, 0)), b: sum(apoyo, por(fuera, lado * 0.07)), ancho: 0.025, color: 'estructura', profundidad: centro.z - 0.05 });
+        equipo.push({ tipo: 'capsula', a: sum(apoyo, por(fuera, -0.05)), b: sum(apoyo, por(fuera, 0.07), v3(0, 0, 0.1)), ancho: 0.03, color: 'estructura', profundidad: pi.tobillo.z - 0.02 });
         equipo.push({ tipo: 'mango', centro: brazos[i].mano, profundidad: brazos[i].mano.z + 0.04 });
       }
-      return pose(c, brazos, { equipo });
+      return pose({ ...c, piernas }, brazos, { equipo });
     },
   };
 }
@@ -597,6 +617,22 @@ export const PASOS_FRENTE = {
   }),
   /** Rotación externa con banda: codo pegado al cuerpo a 90°, el antebrazo gira hacia afuera. */
   rotacionExterna: () => rotacionExterna(),
+  /** Aductores en mariposa: sentado en el suelo, plantas juntas, las rodillas bajan hacia los lados y las manos toman los pies. */
+  mariposa: () => ({
+    vista: 'frente', camara: { inclinacion: 30, z0: 0.25 }, suelo: false, fases: RITMOS.mantiene,
+    pose(s, m, fase, enFase = 0) {
+      const resp = fase?.respira ? Math.sin(enFase * Math.PI * 2) * 0.015 : 0;
+      const baja = mix(0, 1, s) + resp; // 0: rodillas arriba; 1: abiertas hacia el suelo
+      const pelvis = v3(0, 0.11, 0);
+      const t = tronco(m, pelvis, { arriba: v3(0, 1, mix(0.05, 0.28, s)), cabezaAdelante: mix(0, 8, s) });
+      const piernas = [0, 1].map(i => {
+        const l = i ? 1 : -1, tobillo = v3(l * 0.07, m.tobillo * 0.8, 0.36);
+        return pierna(m, t.caderas[i], tobillo, { rodilla: v3(l, mix(0.9, 0.15, baja), 0.1), pie: v3(-l, 0, 0.3), abajo: v3(l * 0.6, -1, 0) });
+      });
+      const brazos = [0, 1].map(i => brazo(m, t.hombros[i], sum(piernas[i].tobillo, v3(0, 0.05, 0.06)), v3(i ? 1 : -1, -0.2, -0.2)));
+      return pose({ ...t, piernas }, brazos, { equipo: [cuadro([v3(-0.75, 0, -0.4), v3(0.75, 0, -0.4), v3(0.75, 0, 0.75), v3(-0.75, 0, 0.75)], 'banda', { profundidad: -2, encuadra: false, opacidad: 0.35 })] });
+    },
+  }),
   /** Cuello y trapecio: sentado, la cabeza se inclina hacia un hombro con la mano encima, y luego al otro lado. */
   cuelloTrapecio: () => ({
     vista: 'frente', camara: { inclinacion: 24, z0: 0.42 }, fases: RITMOS.lados,
