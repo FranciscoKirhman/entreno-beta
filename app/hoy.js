@@ -42,6 +42,7 @@ import { repintarConservando, celebrar, sinMovimiento } from './movimiento.js';
 import { mostrarMedalla } from './medalla.js';
 import { montarAnimaciones } from './animacion-ui.js';
 import { animacionDePaso } from '../nucleo/animaciones.js';
+import { modoEsfuerzo, escalaDe, aRpe, deRpe, rpeDeSerie, textoEsfuerzo, significado } from '../nucleo/esfuerzo.js';
 import { proponerEdicion, ordenarSesion } from './editar-sesion-ui.js';
 import { serieCompleta } from '../nucleo/serie-completa.js';
 import { proponerSesionVacia } from './sesion-libre-ui.js';
@@ -380,18 +381,13 @@ function cardioHtml(texto) {
   </section>`;
 }
 
-/** RIR de una serie: un menú desplegable del teléfono, con cada opción dicha en simple. Encima se ve el número elegido
- *  o, en gris, la reserva que pide el plan (el menú queda transparente sobre la caja). */
-// En pasos de medio: 1,5 es "salían 1 o 2 más" (se guarda también como RPE 8,5).
-const OPCIONES_RIR = [[0, '0: al fallo, no salía otra'], [0.5, '0,5: quizás salía 1 más'], [1, '1: salía 1 más'], [1.5, '1,5: salían 1 o 2 más'], [2, '2: salían 2 más'],
-  [2.5, '2,5: salían 2 o 3 más'], [3, '3: salían 3 más'], [3.5, '3,5: salían 3 o 4 más'], [4, '4: salían 4 más'], [4.5, '4,5: salían 4 o 5 más'], [5, '5: salían 5 o más']];
-function cajaRir(id, i, rir, delPlan, etiqueta) {
-  const ver = v => (v == null ? '' : String(v).replace('.', ','));
-  return `<label class="caja-rir"><span class="rir-valor${rir == null ? ' gris' : ''}" aria-hidden="true">${esc(ver(rir ?? delPlan))}</span>
-    <select data-ej="${id}" data-i="${i}" data-c="rir" aria-label="RIR, serie ${etiqueta}: cuántas repeticiones te quedaban">
-      <option value=""${rir == null ? ' selected' : ''}>Sin anotar${delPlan != null ? ` (el plan pide ${delPlan})` : ''}</option>
-      ${OPCIONES_RIR.map(([v, t]) => `<option value="${v}"${rir === v ? ' selected' : ''}>${t}</option>`).join('')}
-    </select></label>`;
+/** Esfuerzo de una serie (RPE por defecto, o RIR): la caja muestra el valor anotado o, en gris, el que pide el plan.
+ *  Al tocarla se abre la hoja para elegirlo, como en Hevy (abrirEsfuerzo). */
+function cajaEsfuerzo(id, i, r, e, etiqueta) {
+  const modo = modoEsfuerzo(R()), rpe = rpeDeSerie(r);
+  const valor = deRpe(rpe, modo), delPlan = e.rir != null ? deRpe(10 - e.rir, modo) : null;
+  const sigla = modo === 'rir' ? 'RIR' : 'RPE';
+  return `<button type="button" class="caja-rir caja-esfuerzo" data-esfuerzo="${id}" data-i="${i}" aria-haspopup="dialog" aria-label="${esc(`${sigla} de la serie ${etiqueta}: ${valor != null ? textoEsfuerzo(valor, modo) : `sin anotar${delPlan != null ? `, el plan pide ${textoEsfuerzo(delPlan, modo)}` : ''}`}. Cambiar`)}"><span class="rir-valor${valor == null ? ' gris' : ''}" aria-hidden="true">${esc(textoEsfuerzo(valor ?? delPlan, modo))}</span></button>`;
 }
 
 /** Series hechas y totales de la sesión, y sus cifras. */
@@ -472,7 +468,6 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     const kgGris = trabajo ? (kgHoy ?? e.carga_kg ?? prev?.carga_kg ?? null) : sug?.kg ?? null;
     if (trabajo && r.kg != null) kgHoy = r.kg;
     const repsGris = seg ? e.reps_min : trabajo || dist ? e.reps_max : sug?.reps ?? null;
-    const rir = r.rir ?? (r.rpe != null ? Math.max(0, 10 - r.rpe) : null);
     const antes = prev ? (seg ? ((prev.duracion_seg ?? prev.reps) != null ? `${prev.duracion_seg ?? prev.reps} s` : '')
       : dist ? `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.distancia_m != null ? `${prev.distancia_m} m` : ''}`
       : `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.reps ?? ''}`) : '';
@@ -481,7 +476,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
       <span class="antes num">${esc(antes)}</span>
       ${seg ? '' : `<input type="text" inputmode="decimal" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="kg" value="${esc(coma(enUnidad(r.kg)))}" placeholder="${esc(coma(enUnidad(kgGris)))}" aria-label="${u === 'lb' ? 'Libras' : 'Kilos'}${queEs ? ` de ${queEs}` : ''}, serie ${etiq[i]}">`}
       <input type="text" inputmode="numeric" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="reps" value="${esc(r.reps ?? '')}" placeholder="${esc(repsGris ?? '')}" aria-label="${seg ? 'Segundos' : dist ? 'Metros' : 'Repeticiones'}, serie ${etiq[i]}">
-      ${seg ? (r.hecho ? '<span aria-hidden="true"></span>' : `<button type="button" class="crono-serie" data-crono="${id}" data-i="${i}" aria-label="Contar los segundos de la serie ${etiq[i]}">${icono('reloj', 'icono')}</button>`) : dist ? '' : trabajo ? cajaRir(id, i, rir, e.rir, etiq[i]) : '<span aria-hidden="true"></span>'}
+      ${seg ? (r.hecho ? '<span aria-hidden="true"></span>' : `<button type="button" class="crono-serie" data-crono="${id}" data-i="${i}" aria-label="Contar los segundos de la serie ${etiq[i]}">${icono('reloj', 'icono')}</button>`) : dist ? '' : trabajo ? cajaEsfuerzo(id, i, r, e, etiq[i]) : '<span aria-hidden="true"></span>'}
       <button type="button" class="check" data-hecho="${id}" data-i="${i}" aria-pressed="${Boolean(r.hecho)}" aria-label="Serie ${etiq[i]} hecha">${r.hecho ? icono('visto', 'visto-serie') : ''}</button>
       ${(r.consejo || r.record?.length) && trabajo ? `<p class="consejo ${r.consejo?.tipo || 'bien'}">${r.record?.length ? '<span class="chip-record">Récord</span> ' : ''}${esc(r.consejo?.texto || '')}</p>` : ''}</div>`;
   }).join('');
@@ -502,7 +497,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
       <button type="button" class="boton-icono" data-mas="${id}" aria-label="Más opciones de ${esc(nombre)}">${icono('puntos')}</button>
     </div>
     <div class="tabla-series${seg ? ' seg' : dist ? ' dist' : ''}">
-      <div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${queEs || u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : dist ? 'Metros' : 'Reps'}</span>${seg ? '<span aria-hidden="true"></span>' : dist ? '' : '<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el RIR">RIR</button>'}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>
+      <div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${queEs || u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : dist ? 'Metros' : 'Reps'}</span>${seg ? '<span aria-hidden="true"></span>' : dist ? '' : `<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el ${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}">${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}</button>`}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>
       ${filasHtml}
     </div>
     <div class="fila-agregar"><button type="button" class="boton agregar-serie" data-agregar="${id}">+ Serie</button>${seg ? '' : `<button type="button" class="boton agregar-serie" data-calentar="${id}">+ Calentamiento</button>`}</div>
@@ -655,10 +650,69 @@ function enlazar(ir, dia) {
   raiz.addEventListener('focusout', completarAlSalir);
   raiz.querySelectorAll('textarea.nota-ej').forEach(t => { if (t.value) { t.style.height = 'auto'; t.style.height = `${t.scrollHeight}px`; } });
   $('vista-hoy').querySelectorAll('[data-ayuda-rir]').forEach(b => b.onclick = () => abrirHoja({
-    titulo: 'RIR: repeticiones en reserva', volver: b,
-    nota: 'Cuántas repeticiones más te salían con buena técnica. 0 es al fallo, 2 es que te quedaban 2. En gris está la reserva que pide el plan; escribe la real.',
+    titulo: modoEsfuerzo(R()) === 'rir' ? 'RIR: repeticiones en reserva' : 'RPE: esfuerzo de la serie', volver: b,
+    nota: modoEsfuerzo(R()) === 'rir'
+      ? 'Cuántas repeticiones más te salían con buena técnica. 0 es al fallo, 2 es que te quedaban 2. En gris está la reserva que pide el plan; anota la real. Puedes cambiar a RPE en Más, Unidades.'
+      : 'Qué tan duro fue, de 6 a 10. 10 es al fallo; 9 es que salía 1 más; 8,5 es que quizás salían 2 más. En gris está lo que pide el plan; anota lo real. Puedes cambiar a RIR en Más, Unidades.',
     opciones: [{ valor: 'ok', icono: icono('visto'), clase: 'confirmar', nombre: 'Entendido' }], alElegir: () => {},
   }));
+
+  // El esfuerzo de una serie, como en Hevy: número grande, qué significa y la escala; cada toque se guarda al tiro.
+  raiz.querySelectorAll('[data-esfuerzo]').forEach(b => b.onclick = () => abrirEsfuerzo(b.dataset.esfuerzo, Number(b.dataset.i), b));
+  function abrirEsfuerzo(id, i, volver) {
+    const { e, k } = ejercicioDe(id), modo = modoEsfuerzo(R());
+    const { lista } = materializar(f, e, k), r = lista[i] || {};
+    const sigla = modo === 'rir' ? 'RIR' : 'RPE', etiq = etiquetas(filasDe(f, e, k))[i];
+    const kgVer = r.kg ?? sugerencia(e, lista, i).kg, repsVer = r.reps ?? e.reps_max;
+    let elegido = deRpe(rpeDeSerie(r), modo);
+    const delPlan = e.rir != null ? deRpe(10 - e.rir, modo) : null;
+    const grande = v => { const sig = significado(aRpe(v ?? delPlan, modo)); return `<strong class="esfuerzo-numero${v == null ? ' gris' : ''}" id="esfuerzo-numero">${esc(textoEsfuerzo(v ?? delPlan, modo) || '·')}</strong>
+      <span class="esfuerzo-titulo">${esc(v == null ? (delPlan != null ? 'Lo que pide el plan' : 'Elige un valor') : sig?.titulo || '')}</span>
+      <span class="esfuerzo-detalle">${esc(sig?.detalle || '')}</span>`; };
+    abrirHoja({
+      titulo: `Esfuerzo de la serie (${sigla})`, volver,
+      contenido: `<div class="esfuerzo-hoja">
+        <p class="esfuerzo-sub">${esc(`Serie ${etiq}: ${kgVer != null ? `${coma(enUnidad(kgVer))} ${unidadPeso()}` : 'sin peso'}${repsVer != null ? ` × ${repsVer} reps` : ''}`)}</p>
+        <div class="esfuerzo-grande" id="esfuerzo-grande" aria-live="polite">${grande(elegido)}</div>
+        <div class="esfuerzo-escala" role="radiogroup" aria-label="${sigla}">${escalaDe(modo).map(v => `<button type="button" role="radio" data-valor="${v}" aria-checked="${v === elegido}" tabindex="${v === elegido || (elegido == null && v === (delPlan ?? escalaDe(modo)[4])) ? 0 : -1}">${esc(textoEsfuerzo(v, modo))}</button>`).join('')}</div>
+        <button type="button" class="boton primario grande esfuerzo-listo" data-elegir="listo">Listo ${icono('visto', 'icono')}</button>
+        ${elegido != null ? '<button type="button" class="enlace esfuerzo-quitar" data-elegir="quitar">Quitar el esfuerzo de esta serie</button>' : ''}
+      </div>`,
+      opciones: [],
+      alElegir: v => {
+        if (v === 'quitar') guardarEsfuerzo(id, i, null);
+        // Al cerrar, si la serie quedó completa (peso, repeticiones y esfuerzo), se marca como hecha.
+        const { e: e2, k: k2 } = ejercicioDe(id), fila = materializar(f, e2, k2).lista[i];
+        const sinCarga = sinCargaExterna(indice.porId.get(e2.ejercicio_id)) && sugerencia(e2, materializar(f, e2, k2).lista, i).kg == null;
+        if (v === 'listo' && fila && !fila.hecho && serieCompleta(fila, e2, { sinCarga })) marcarSerie(id, i);
+        else repintar();
+      },
+    });
+    const hoja = document.querySelector('#hoja .esfuerzo-hoja');
+    if (!hoja) return;
+    const elegir = boton => {
+      elegido = Number(boton.dataset.valor);
+      guardarEsfuerzo(id, i, aRpe(elegido, modo));
+      hoja.querySelectorAll('[role="radio"]').forEach(x => { const si = x === boton; x.setAttribute('aria-checked', String(si)); x.tabIndex = si ? 0 : -1; });
+      $('esfuerzo-grande').innerHTML = grande(elegido);
+    };
+    hoja.addEventListener('click', ev => { const x = ev.target.closest('[role="radio"]'); if (x) elegir(x); });
+    hoja.addEventListener('keydown', ev => {
+      const x = ev.target.closest('[role="radio"]');
+      if (!x || !['ArrowLeft', 'ArrowRight'].includes(ev.key)) return;
+      const todos = [...hoja.querySelectorAll('[role="radio"]')], j = todos.indexOf(x) + (ev.key === 'ArrowRight' ? 1 : -1);
+      if (todos[j]) { ev.preventDefault(); todos[j].focus(); elegir(todos[j]); }
+    });
+    requestAnimationFrame(() => hoja.querySelector('[role="radio"][tabindex="0"]')?.focus());
+  }
+  /** Guarda el esfuerzo de una serie en RPE y en RIR (rir = 10 − rpe), y su consejo si ya está hecha. */
+  function guardarEsfuerzo(id, i, rpe) {
+    const { e, k } = ejercicioDe(id), { lista } = materializar(f, e, k);
+    const r = { ...lista[i], rpe, rir: rpe == null ? null : Math.round((10 - rpe) * 2) / 2 };
+    if (r.hecho) r.consejo = consejo(e, r);
+    lista[i] = r;
+    guardar();
+  }
 
   // Tocar el número de la serie: elegir el tipo (como en Hevy), con una explicación detrás de cada "?".
   raiz.querySelectorAll('[data-tipo-serie]').forEach(b => b.onclick = () => {

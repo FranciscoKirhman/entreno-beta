@@ -1,7 +1,8 @@
 // Anotar un día pasado o corregir una sesión ya guardada, como en Hevy. Se entra desde Progreso → Historial. El
 // borrador queda guardado mientras se escribe (E.borradorPasado), así no se pierde si se cambia de pantalla. Para
 // hoy se usa Hoy: aquí solo se anotan días anteriores.
-import { E, D, guardar, esc, $, indice, hoy, fechaCorta, coma, enUnidad, aKilos, unidadPeso, avisar, numero } from './comun.js';
+import { E, D, R, guardar, esc, $, indice, hoy, fechaCorta, coma, enUnidad, aKilos, unidadPeso, avisar, numero } from './comun.js';
+import { modoEsfuerzo, escalaDe, textoEsfuerzo } from '../nucleo/esfuerzo.js';
 import { prescripcion } from '../nucleo/motor-plan.js';
 import { sesionDe, sumarDias } from '../nucleo/agenda.js';
 import { buscarEjercicios } from '../nucleo/editar-sesion.js';
@@ -11,7 +12,6 @@ import { miniatura } from './imagenes.js';
 import { icono } from './iconos.js';
 import * as nube from './nube.js';
 
-const RIR = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]; // en pasos de medio, como en Hoy
 const TIPO = { efectiva: '', calentamiento: 'C', fallo: 'F', drop: 'D' };
 const SIGUIENTE_TIPO = { efectiva: 'calentamiento', calentamiento: 'fallo', fallo: 'efectiva', drop: 'efectiva' };
 let buscar = '';
@@ -32,6 +32,7 @@ export function vistaDiaPasado(ir, { id = null } = {}) {
   const planDia = E.plan && sesionDe(E.plan, b.fecha);
   const n = x => coma(enUnidad(x));
 
+  const modo = modoEsfuerzo(R()); // RPE por defecto o RIR, como en Hoy (se guarda como RIR)
   const tarjeta = (e, k) => {
     const seg = e.unidad === 'seg', dist = e.unidad === 'm';
     const p = e.plan;
@@ -40,11 +41,11 @@ export function vistaDiaPasado(ir, { id = null } = {}) {
       <div class="cab-pasado">${e.ejercicio_id ? miniatura(e.ejercicio_id) : '<span class="miniatura vacia"></span>'}<div><strong>${esc(e.nombre)}</strong>${pista ? `<span class="pequeno suave">${esc(pista)}</span>` : ''}</div>
         <button type="button" class="boton-icono" data-quitar-ej="${k}" aria-label="Quitar ${esc(e.nombre)}">${icono('cerrar')}</button></div>
       <div class="filas-pasado${seg ? ' seg' : dist ? ' dist' : ''}">
-        <span class="cab">Serie</span>${seg ? '' : `<span class="cab">${u}</span>`}<span class="cab">${seg ? 'Seg' : dist ? 'Metros' : 'Reps'}</span>${seg || dist ? '' : '<span class="cab">RIR</span>'}<span></span>
+        <span class="cab">Serie</span>${seg ? '' : `<span class="cab">${u}</span>`}<span class="cab">${seg ? 'Seg' : dist ? 'Metros' : 'Reps'}</span>${seg || dist ? '' : `<span class="cab">${modo === 'rir' ? 'RIR' : 'RPE'}</span>`}<span></span>
         ${e.series.map((s, i) => `<button type="button" class="tipo-serie tipo-${s.tipo === 'efectiva' ? 'normal' : s.tipo}" data-tipo="${k}.${i}" aria-label="Serie ${i + 1}, tocar para cambiar el tipo">${TIPO[s.tipo] || i + 1}</button>
           ${seg ? '' : `<input type="text" inputmode="decimal" autocomplete="off" data-c="kg" data-k="${k}" data-i="${i}" value="${esc(n(s.kg))}" placeholder="${esc(n(p?.carga_kg))}" aria-label="${u === 'lb' ? 'Libras' : 'Kilos'}, serie ${i + 1}">`}
           <input type="text" inputmode="numeric" autocomplete="off" data-c="reps" data-k="${k}" data-i="${i}" value="${esc(s.reps ?? '')}" placeholder="${esc(seg ? p?.reps_min ?? '' : p?.reps_max ?? '')}" aria-label="${seg ? 'Segundos' : dist ? 'Metros' : 'Repeticiones'}, serie ${i + 1}">
-          ${seg || dist ? '' : `<select data-c="rir" data-k="${k}" data-i="${i}" aria-label="RIR, serie ${i + 1}"><option value="">·</option>${RIR.map(r => `<option value="${r}"${s.rir === r ? ' selected' : ''}>${String(r).replace('.', ',')}</option>`).join('')}</select>`}
+          ${seg || dist ? '' : `<select data-c="rir" data-k="${k}" data-i="${i}" aria-label="${modo === 'rir' ? 'RIR' : 'RPE'}, serie ${i + 1}"><option value="">·</option>${escalaDe(modo).map(v => { const rir = modo === 'rir' ? v : 10 - v; return `<option value="${rir}"${s.rir === rir ? ' selected' : ''}>${textoEsfuerzo(v, modo)}</option>`; }).join('')}</select>`}
           <button type="button" class="boton-icono" data-quitar-serie="${k}.${i}" aria-label="Quitar la serie ${i + 1}">${icono('cerrar', 'icono icono-chico')}</button>`).join('')}
       </div>
       <button type="button" class="boton agregar-serie" data-mas-serie="${k}">+ Serie</button>

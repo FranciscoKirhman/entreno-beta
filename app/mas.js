@@ -55,6 +55,8 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
       <h3>Unidades</h3>
       <div class="fila-unidad"><span>Peso</span><div class="segmentos" role="group" aria-label="Unidad de peso">${['kg', 'lb'].map(u => `<button type="button" data-unidad="${u}" aria-pressed="${unidadPeso() === u}">${u}</button>`).join('')}</div></div>
       <p class="pequeno suave">Todo se guarda en kilos; en libras se muestra redondeado a media libra. Distancia y medidas del cuerpo se suman cuando la app las registre.</p>
+      <div class="fila-unidad"><span>Esfuerzo</span><div class="segmentos" role="group" aria-label="Cómo anotar el esfuerzo de cada serie">${[['rpe', 'RPE'], ['rir', 'RIR']].map(([v, t]) => `<button type="button" data-escala-esfuerzo="${v}" aria-pressed="${(R().escala_esfuerzo === 'rir' ? 'rir' : 'rpe') === v}">${t}</button>`).join('')}</div></div>
+      <p class="pequeno suave">RPE va de 6 a 10, con medios: 8,5 es que quizás salían 2 más. RIR cuenta las repeticiones que quedaban: 2 es que salían 2 más. Se guardan los dos, así puedes cambiar cuando quieras.</p>
     </section>
 
     <section class="tarjeta" id="pantalla">
@@ -110,6 +112,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     vistaMas(ir, { armarPlan, sincronizarAlEntrar });
   });
   enlazarRecordatorios();
+  document.querySelectorAll('[data-escala-esfuerzo]').forEach(b => b.onclick = () => { R().escala_esfuerzo = b.dataset.escalaEsfuerzo; E.mensaje = `Esfuerzo en ${b.dataset.escalaEsfuerzo === 'rir' ? 'RIR (repeticiones en reserva)' : 'RPE (de 6 a 10)'}.`; guardar(); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); });
   document.querySelectorAll('[data-unidad]').forEach(b => b.onclick = () => { R().unidad = b.dataset.unidad; E.mensaje = `Peso en ${b.dataset.unidad === 'lb' ? 'libras' : 'kilos'}.`; guardar(); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); });
   enlazarConexiones(() => vistaMas(ir, { armarPlan, sincronizarAlEntrar }));
   // data-elegir-tema y no data-tema: <html data-tema> es el que pinta el tema.
