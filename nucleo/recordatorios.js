@@ -49,7 +49,7 @@ export function eventosCalendario({ plan, suplementos = [], desde, config = CONF
   if (config.entrenar) {
     for (const d of (plan?.dias || []).filter(x => x.fecha >= desde && x.ejercicios?.length)) {
       const min = duracionEstimada(d.ejercicios);
-      const ejercicios = d.ejercicios.map(e => `- ${e.nombre || e.ejercicio_id}: ${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? `-${e.reps_max}` : ''}${sufijo(e)}${e.carga_kg ? `, ${String(e.carga_kg).replace('.', ',')} kg` : ''}`).join('\n');
+      const ejercicios = d.ejercicios.map(e => `${e.nombre || e.ejercicio_id}: ${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${sufijo(e)}${e.carga_kg ? `, ${String(e.carga_kg).replace('.', ',')} kg` : ''}`).join('\n');
       out.push({
         uid: `sesion-${d.fecha}`, titulo: `Entreno: ${d.foco}`, descripcion: `Unos ${min} minutos.\n${ejercicios}\n\nSi la app movió la sesión, vuelve a agregar el calendario desde Más.`,
         ...(d.hora ? { inicio: `${d.fecha}T${d.hora}`, minutos: min, alarmaMin: -config.minutosAntes } : { inicio: d.fecha, alarmaMin: aMin(config.horaEntreno) }),

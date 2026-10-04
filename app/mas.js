@@ -79,7 +79,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     <section class="tarjeta">
       <h3>Importar un plan que ya tengo</h3>
       <p class="pequeno">Pega el plan que te dio tu entrenador o que tienes anotado. Una línea por ejercicio, con series × repeticiones. Los días se marcan con "Lunes", "Día 1", etc.</p>
-      <textarea id="plan-texto" rows="8" placeholder="Lunes - Pierna&#10;Sentadilla 4x8 80kg&#10;Hip thrust 3x10-12 RIR 2&#10;&#10;Miércoles - Torso&#10;Press banca 4x6-8&#10;Jalón al pecho 3x10"></textarea>
+      <textarea id="plan-texto" rows="8" placeholder="Lunes: Pierna&#10;Sentadilla 4x8 80kg&#10;Hip thrust 3x10 a 12 RIR 2&#10;&#10;Miércoles: Torso&#10;Press banca 4x6 a 8&#10;Jalón al pecho 3x10"></textarea>
       <label class="pequeno">Semanas a agendar <input type="number" id="plan-semanas" min="1" max="12" value="4"></label>
       <div class="fila-botones"><button type="button" class="boton" id="importar">Revisar</button></div>
       <div id="resultado-importar"></div>
