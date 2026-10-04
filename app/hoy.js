@@ -24,7 +24,7 @@ import { avisoDescargaCorto } from './temporada.js';
 import { subirACuenta } from './cola.js';
 import { iniciarDescanso, detenerDescanso, iniciarTramos } from './descanso.js';
 import { tramosDePaso, tramosDeCardio, seriesDeCalentamiento } from '../nucleo/calentamiento.js';
-import { calentamientoDeSesion, minutosCalentamiento, partePaso, aproximacionesDelPlan } from '../nucleo/calentamiento-sesion.js';
+import { calentamientoDeSesion, minutosCalentamiento, partePaso, aproximacionesDelPlan, conAproximaciones } from '../nucleo/calentamiento-sesion.js';
 import { articulacionesBloqueadas } from '../nucleo/catalogo.js';
 import { actualizarPantalla } from './pantalla.js';
 import { abrirHoja } from './hoja.js';
@@ -59,6 +59,7 @@ export function vistaHoy(ir, extra) {
   const plan = E.plan;
   if (!plan || plan.bloqueado) return ir('inicio');
   const dia = sesionDe(plan, f);
+  if (dia) ponerAproximaciones(dia, f);
   const b = E.bienestar[f];
   const sups = checklist(E.suplementos, E.tomas, f, ahora());
   const proxima = plan.dias.find(d => d.fecha > f);
@@ -252,6 +253,54 @@ function materializar(f, e, k) {
   return { lista, n };
 }
 const fijarFilas = (f, id, n) => { ((E.filas ||= {})[f] ||= {})[id] = n; };
+const lugarDe = dia => (R().lugares || []).find(x => x.nombre === dia?.lugar) || (R().lugares || []).find(x => x.principal) || (R().lugares || [])[0];
+const deTrabajoFila = x => ['normal', 'fallo'].includes(tipoDe(x));
+/**
+ * Las series de calentamiento de un ejercicio, como en el tablero: las que indica el plan o, si no, las que calcula la
+ * app desde el peso de trabajo (lo escrito hoy, el plan o la vez anterior). Se calculan cada vez, así siguen al peso.
+ */
+function aproximacionesHoy(dia, e, lista, f) {
+  const plan = aproximacionesDelPlan(dia, e);
+  if (plan.length) return plan;
+  const ej = indice.porId.get(e.ejercicio_id);
+  const prev = e.ejercicio_id ? anterior(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f)?.series[0] : null;
+  const kgTrabajo = (lista || []).find(x => deTrabajoFila(x) && x.kg != null)?.kg ?? e.carga_kg ?? prev?.carga_kg ?? null;
+  return seriesDeCalentamiento(kgTrabajo, { incremento: (ej && incrementoPara(ej, lugarDe(dia))) || 2.5, barra: ej?.equipamiento.includes('barra_rack') ? 20 : 0 });
+}
+/**
+ * Pone las series de calentamiento al comienzo de los ejercicios que las llevan (una vez por día y ejercicio: si la
+ * persona las quita, no vuelven). Son filas C con su peso y repeticiones en gris; mientras nadie las toque, su cantidad
+ * sigue a las que calcula la app (por ejemplo, al escribir el peso de trabajo).
+ */
+function ponerAproximaciones(dia, f) {
+  const ids = conAproximaciones({ dia, porId: indice.porId, bloqueadas: articulacionesBloqueadas(R().lesiones, f) });
+  let cambio = false;
+  dia.ejercicios.forEach((e, k) => {
+    if (!ids.has(e.ejercicio_id)) return;
+    const id = idDe(e, k), puestas = ((E.aproxPuestas ||= {})[f] ||= {});
+    const lista = E.registro[f]?.[id];
+    if (!puestas[id]) {
+      if ((lista || []).some(x => tipoDe(x) === 'calentamiento')) { puestas[id] = true; cambio = true; return; }
+      const { lista: l, n } = materializar(f, e, k);
+      const aprox = aproximacionesHoy(dia, e, l, f);
+      l.splice(0, 0, ...aprox.map((_, j) => ({ tipo: 'calentamiento', aprox: j })));
+      fijarFilas(f, id, n + aprox.length);
+      puestas[id] = true; cambio = true;
+      return;
+    }
+    // Sin tocar todavía: la cantidad sigue a la que calcula la app.
+    const auto = (lista || []).filter(x => x?.aprox != null);
+    if (!auto.length || auto.some(x => x.hecho || x.kg != null || x.reps != null)) return;
+    const aprox = aproximacionesHoy(dia, e, lista, f);
+    if (aprox.length === auto.length) return;
+    const { lista: l, n } = materializar(f, e, k);
+    const desde = l.findIndex(x => x?.aprox != null);
+    l.splice(desde, auto.length, ...aprox.map((_, j) => ({ tipo: 'calentamiento', aprox: j })));
+    fijarFilas(f, id, n - auto.length + aprox.length);
+    cambio = true;
+  });
+  if (cambio) guardar();
+}
 const descansoDe = (e, k) => E.descansos?.[idDe(e, k)] ?? e.descanso_seg ?? 90;
 /** Descanso de la vuelta de una superserie: el que eligió en el último ejercicio o, si no, el más largo del plan. */
 const descansoVuelta = (ejs, g) => { const u = ejs[g.miembros.at(-1)]; return E.descansos?.[idDe(u, g.miembros.at(-1))] ?? Math.max(...g.miembros.map(m => ejs[m].descanso_seg ?? 90)); };
@@ -303,12 +352,15 @@ function pasosHtml(pasos, tipo, f, titulo, dia, intro = '') {
 }
 
 /** Calentamiento: siempre presente y plegable, armado con los ejercicios de hoy (nucleo/calentamiento-sesion.js). */
-function calentamientoHtml(pasos, f, dia) {
+function calentamientoHtml(todos, f, dia) {
+  // Las series de aproximación van en la tabla de cada ejercicio (filas C), como en el tablero: aquí no se repiten.
+  const pasos = todos.filter(p => !p.agregar_id && !/aproximaci/i.test(p.name));
+  const enEjercicios = todos.length !== pasos.length || dia.ejercicios.some((e, k) => filasDe(f, e, k).some(x => x?.aprox != null));
   if (!pasos.length) {
     const texto = dia.ejercicios.length ? 'Hoy es solo cardio: parte los primeros 5 minutos suave, a un ritmo que te deje hablar.' : 'Agrega ejercicios y el calentamiento se arma solo con lo que vas a entrenar.';
     return `<section class="tarjeta calentamiento-directo calentamiento-vacio" id="calentamiento-hoy"><h3>Calentamiento</h3><p class="pequeno suave">${texto}</p></section>`;
   }
-  const intro = `<p class="calentamiento-nota pequeno suave">Para ${esc(dia.foco)}: subir temperatura, movilidad y activación de lo que vas a entrenar, y aproximaciones con carga liviana. Termina con energía para las series de trabajo.</p>`;
+  const intro = `<p class="calentamiento-nota pequeno suave">Para ${esc(dia.foco)}: subir temperatura, movilidad y activación de lo que vas a entrenar.${enEjercicios ? ' Las series de calentamiento con peso están en cada ejercicio, en las filas C.' : ''} Termina con energía para las series de trabajo.</p>`;
   return `<section class="tarjeta calentamiento-directo" id="calentamiento-hoy">${pasosHtml(pasos, 'cal', f, 'Calentamiento', dia, intro)}</section>`;
 }
 
@@ -346,7 +398,9 @@ function cajaRir(id, i, rir, delPlan, etiqueta) {
 function avance(dia) {
   // La ayuda de la máquina (asistidos) no es peso levantado: cuenta la serie, pero no suma al volumen.
   const filas = dia.ejercicios.flatMap((e, k) => filasDe(dia.fecha, e, k).map(x => (esAsistido(indice.porId.get(e.ejercicio_id)) ? { ...x, kg: null } : x)));
-  return { hechas: filas.filter(x => x.hecho).length, total: filas.length, cifras: cifras(filas) };
+  // Las de calentamiento cuentan solo si se hicieron: saltarlas no deja la sesión incompleta.
+  const cuentan = filas.filter(x => x.hecho || tipoDe(x) !== 'calentamiento');
+  return { hechas: cuentan.filter(x => x.hecho).length, total: cuentan.length, cifras: cifras(filas) };
 }
 const avanceHtml = ({ hechas, total, cifras: c }) => `<div class="avance" id="avance" aria-live="polite">
   <div class="fila-avance"><span class="pequeno"><strong class="num">${hechas}</strong> de ${total} series${hechas && hechas === total ? ' · ¡completa!' : ''}</span><div class="medidor" aria-hidden="true"><i style="width:${total ? Math.round((hechas / total) * 100) : 0}%"></i></div></div>
@@ -395,6 +449,7 @@ function sesionHoy(dia) {
 
 function ejercicioHoy(e, k, f, previas, nota, dia) {
   const id = idDe(e, k);
+  const aprox = filasDe(f, e, k).some(x => x?.aprox != null) ? aproximacionesHoy(dia, e, E.registro[f]?.[id], f) : [];
   const g = grupos(dia.ejercicios)[k];
   const ej = indice.porId.get(e.ejercicio_id);
   const filas = filasDe(f, e, k);
@@ -412,9 +467,11 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     const trabajo = deTrabajo(t);
     const prev = trabajo ? previas?.series[iTrabajo++] : null;
     // En gris va lo que se guarda si marcas sin escribir: lo que ya levantaste hoy, el plan o la vez anterior.
-    const kgGris = trabajo ? (kgHoy ?? e.carga_kg ?? prev?.carga_kg ?? null) : null;
+    // Las de calentamiento puestas por la app traen su peso y repeticiones en gris (aproximacionesHoy).
+    const sug = r.aprox != null ? aprox[r.aprox] : null;
+    const kgGris = trabajo ? (kgHoy ?? e.carga_kg ?? prev?.carga_kg ?? null) : sug?.kg ?? null;
     if (trabajo && r.kg != null) kgHoy = r.kg;
-    const repsGris = seg ? e.reps_min : trabajo || dist ? e.reps_max : null;
+    const repsGris = seg ? e.reps_min : trabajo || dist ? e.reps_max : sug?.reps ?? null;
     const rir = r.rir ?? (r.rpe != null ? Math.max(0, 10 - r.rpe) : null);
     const antes = prev ? (seg ? ((prev.duracion_seg ?? prev.reps) != null ? `${prev.duracion_seg ?? prev.reps} s` : '')
       : dist ? `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.distancia_m != null ? `${prev.distancia_m} m` : ''}`
@@ -665,17 +722,16 @@ function enlazar(ir, dia) {
     const { lista, n } = materializar(f, e, k);
     let nuevas = [{}];
     if (calentar) {
-      // Como la calculadora de Hevy: series livianas con su peso, según el de la primera serie de trabajo.
-      const ej = indice.porId.get(e.ejercicio_id);
-      const prev = e.ejercicio_id ? anterior(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f)?.series[0] : null;
-      const kgTrabajo = lista.find(x => deTrabajo(tipoDe(x)) && x.kg != null)?.kg ?? e.carga_kg ?? prev?.carga_kg ?? null;
-      nuevas = aproximacionesDelPlan(dia, e).length ? aproximacionesDelPlan(dia, e).map(x => ({ ...x })) : seriesDeCalentamiento(kgTrabajo, { incremento: (ej && incrementoPara(ej, lugar)) || 2.5, barra: ej?.equipamiento.includes('barra_rack') ? 20 : 0 });
+      // Como la calculadora de Hevy: series livianas según el peso de trabajo, con su peso y repeticiones en gris
+      // (se toman al marcar), igual que las que pone la app.
+      const calculadas = aproximacionesHoy(dia, e, lista, f);
+      nuevas = calculadas.map((x, j) => ({ tipo: 'calentamiento', aprox: j, _s: x }));
       const yaHay = lista.filter(x => tipoDe(x) === 'calentamiento').length;
-      lista.splice(yaHay, 0, ...nuevas);
+      lista.splice(yaHay, 0, ...nuevas.map(({ _s, ...x }) => x));
     } else lista.push({});
     fijarFilas(f, idDe(e, k), n + nuevas.length);
     guardar(); repintar();
-    if (calentar) avisar(nuevas.length > 1 || nuevas[0].kg ? `${nuevas.length} ${nuevas.length === 1 ? 'serie' : 'series'} de calentamiento agregadas: ${nuevas.map(x => `${coma(enUnidad(x.kg))} × ${x.reps}`).join(', ')}.` : 'Serie de calentamiento agregada: escribe el peso.');
+    if (calentar) avisar(nuevas.length > 1 || nuevas[0]._s?.kg ? `${nuevas.length} ${nuevas.length === 1 ? 'serie' : 'series'} de calentamiento agregadas: ${nuevas.map(x => `${coma(enUnidad(x._s?.kg))} × ${x._s?.reps}`).join(', ')}.` : 'Serie de calentamiento agregada: escribe el peso.');
   };
   raiz.querySelectorAll('[data-agregar]').forEach(b => b.onclick = () => agregarFila(b.dataset.agregar, false));
   raiz.querySelectorAll('[data-calentar]').forEach(b => b.onclick = () => agregarFila(b.dataset.calentar, true));
@@ -733,6 +789,11 @@ function enlazar(ir, dia) {
       const { kg, prev } = sugerencia(e, lista, i);
       if (r.kg == null && e.unidad !== 'seg') r.kg = kg;
       if (r.reps == null) r.reps = (e.unidad === 'seg' ? e.reps_min : e.reps_max) ?? prev?.reps ?? null;
+    } else if (!r.hecho && r.aprox != null) {
+      // Una serie de calentamiento sin escribir se marca con el peso y las repeticiones que estaban en gris.
+      const s = aproximacionesHoy(dia, e, lista, f)[r.aprox];
+      if (r.kg == null && s?.kg != null) r.kg = s.kg;
+      if (r.reps == null && s?.reps != null) r.reps = s.reps;
     }
     if (!r.hecho) r.t ||= Date.now();
     r.hecho = !r.hecho;

@@ -11,6 +11,19 @@ export function partePaso(nombre) {
   return m ? { nombre: m[1], dosis: m[2] } : { nombre: nombre || '', dosis: '' };
 }
 
+/**
+ * Ejercicios de la sesión que llevan series de calentamiento en su propia tabla (filas C), como en el tablero: los que
+ * traen aproximaciones indicadas en el plan y los dos primeros compuestos (o el primero, si no hay compuestos), salvo
+ * los que cargan una zona bloqueada.
+ */
+export function conAproximaciones({ dia, porId, bloqueadas = new Set() }) {
+  const ejercicios = (dia.ejercicios || []).map(e => ({ e, ej: porId.get(e.ejercicio_id) })).filter(x => x.ej && x.ej.tipo !== 'cardio' && !(x.ej.carga_articular || []).some(z => bloqueadas.has(z)));
+  const indicadas = ejercicios.filter(x => aproximacionesDelPlan(dia, x.e).length);
+  const principales = ejercicios.filter(x => x.ej.tipo === 'compuesto' && x.e.unidad !== 'seg').slice(0, 2);
+  const elegidos = indicadas.length ? indicadas : principales.length ? principales : ejercicios.filter(x => x.e.unidad !== 'seg').slice(0, 1);
+  return new Set(elegidos.map(x => x.e.ejercicio_id));
+}
+
 export function minutosCalentamiento(pasos) {
   if (!pasos?.length) return 0;
   return Math.ceil(pasos.reduce((s, p) => s + (p.seg_estimados ?? (tramosDePaso(p.name).reduce((a, t) => a + t.seg, 0) || (/aproximaci/i.test(p.name) ? 180 : 60))), 0) / 60);
