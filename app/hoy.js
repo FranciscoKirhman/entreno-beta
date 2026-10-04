@@ -330,9 +330,12 @@ function cardioHtml(texto) {
 
 /** RIR de una serie: un menú desplegable del teléfono, con cada opción dicha en simple. Encima se ve el número elegido
  *  o, en gris, la reserva que pide el plan (el menú queda transparente sobre la caja). */
-const OPCIONES_RIR = [[0, '0: al fallo, no salía otra'], [1, '1: salía 1 más'], [2, '2: salían 2 más'], [3, '3: salían 3 más'], [4, '4: salían 4 más'], [5, '5: salían 5 o más']];
+// En pasos de medio: 1,5 es "salían 1 o 2 más" (se guarda también como RPE 8,5).
+const OPCIONES_RIR = [[0, '0: al fallo, no salía otra'], [0.5, '0,5: quizás salía 1 más'], [1, '1: salía 1 más'], [1.5, '1,5: salían 1 o 2 más'], [2, '2: salían 2 más'],
+  [2.5, '2,5: salían 2 o 3 más'], [3, '3: salían 3 más'], [3.5, '3,5: salían 3 o 4 más'], [4, '4: salían 4 más'], [4.5, '4,5: salían 4 o 5 más'], [5, '5: salían 5 o más']];
 function cajaRir(id, i, rir, delPlan, etiqueta) {
-  return `<label class="caja-rir"><span class="rir-valor${rir == null ? ' gris' : ''}" aria-hidden="true">${esc(rir ?? delPlan ?? '')}</span>
+  const ver = v => (v == null ? '' : String(v).replace('.', ','));
+  return `<label class="caja-rir"><span class="rir-valor${rir == null ? ' gris' : ''}" aria-hidden="true">${esc(ver(rir ?? delPlan))}</span>
     <select data-ej="${id}" data-i="${i}" data-c="rir" aria-label="RIR, serie ${etiqueta}: cuántas repeticiones te quedaban">
       <option value=""${rir == null ? ' selected' : ''}>Sin anotar${delPlan != null ? ` (el plan pide ${delPlan})` : ''}</option>
       ${OPCIONES_RIR.map(([v, t]) => `<option value="${v}"${rir === v ? ' selected' : ''}>${t}</option>`).join('')}
@@ -564,7 +567,7 @@ function enlazar(ir, dia) {
       const r = { ...lista[t.dataset.i] };
       if (t.dataset.c === 'rir') {
         // La reserva se escribe como RIR (0 a 5) y se guarda también como RPE, que usa el resto de la app.
-        const rir = v == null ? null : Math.max(0, Math.min(5, Math.round(v)));
+        const rir = v == null ? null : Math.max(0, Math.min(5, Math.round(v * 2) / 2)); // pasos de medio
         r.rir = rir; r.rpe = rir == null ? null : 10 - rir;
         if (r.hecho) r.consejo = consejo(e, r);
       } else r[t.dataset.c] = t.dataset.c === 'kg' ? aKilos(v) : v;

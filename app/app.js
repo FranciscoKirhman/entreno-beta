@@ -5,7 +5,7 @@
 import { sincronizarDatosTelefono } from './datos-nube.js';
 import { hevyAlAbrir } from './hevy-auto.js';
 import { conPropios, idsPropios } from '../nucleo/propios.js';
-import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo, entrarEjemplo, salirEjemplo, modoEjemplo, errorGuardado, activarCuenta, perfilDePrueba, claveSesionCuenta } from './comun.js';
+import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo, entrarEjemplo, salirEjemplo, modoEjemplo, errorGuardado, activarCuenta, perfilDePrueba, recuperarCopia, claveSesionCuenta } from './comun.js';
 import { prepararSesion, unirSesiones } from '../nucleo/sincronizacion.js';
 import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
 import { derivar } from '../nucleo/derivar.js';
@@ -236,12 +236,15 @@ if (CONFIG.sinSenal && 'serviceWorker' in navigator) navigator.serviceWorker.reg
 
 // El perfil personal persiste al abrir. El ejemplo solo empieza por elección explícita.
 await nube.iniciar({ claveSesion: claveSesionCuenta() });
+// Si el almacenamiento principal quedó atrás de la segunda copia del teléfono, se vuelve a lo último que se escribió.
+const avisarRecuperado = async () => { if (await recuperarCopia()) E.mensaje = 'Recuperé lo último que anotaste desde la copia de seguridad de este teléfono.'; };
 if (nube.conectado()) {
   activarCuenta(nube.usuarioId());
+  await avisarRecuperado(); // antes de sincronizar: lo del teléfono se une con la cuenta
   try { await sincronizarAlEntrar(); }
   catch { E.mensaje = 'No pude sincronizar ahora. Puedes seguir con la copia de esta cuenta en el teléfono y reintentar en Más.'; }
   if (nube.entroPorEnlace()) { E.mensaje = `Entraste como ${nube.correo()}.`; E.vista = E.plan ? 'hoy' : 'inicio'; }
-}
+} else await avisarRecuperado();
 // Con plan, la primera vez del día se elige entre la sesión planificada y una vacía (salvo a mitad del cuestionario).
 ir(!['cuestionario', 'perfil', 'seccion'].includes(E.vista) && eleccionPendiente() ? 'eleccion'
   : ['cuestionario', 'hoy', 'semana', 'coach', 'progreso', 'mas', 'checkin', 'plan', 'perfil', 'seccion', 'tablero-original'].includes(E.vista) ? E.vista : (E.plan ? 'hoy' : 'inicio'));

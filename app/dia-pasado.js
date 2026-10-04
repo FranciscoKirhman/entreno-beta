@@ -11,7 +11,7 @@ import { miniatura } from './imagenes.js';
 import { icono } from './iconos.js';
 import * as nube from './nube.js';
 
-const RIR = [0, 1, 2, 3, 4, 5];
+const RIR = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]; // en pasos de medio, como en Hoy
 const TIPO = { efectiva: '', calentamiento: 'C', fallo: 'F', drop: 'D' };
 const SIGUIENTE_TIPO = { efectiva: 'calentamiento', calentamiento: 'fallo', fallo: 'efectiva', drop: 'efectiva' };
 let buscar = '';
@@ -44,7 +44,7 @@ export function vistaDiaPasado(ir, { id = null } = {}) {
         ${e.series.map((s, i) => `<button type="button" class="tipo-serie tipo-${s.tipo === 'efectiva' ? 'normal' : s.tipo}" data-tipo="${k}.${i}" aria-label="Serie ${i + 1}, tocar para cambiar el tipo">${TIPO[s.tipo] || i + 1}</button>
           ${seg ? '' : `<input type="text" inputmode="decimal" autocomplete="off" data-c="kg" data-k="${k}" data-i="${i}" value="${esc(n(s.kg))}" placeholder="${esc(n(p?.carga_kg))}" aria-label="${u === 'lb' ? 'Libras' : 'Kilos'}, serie ${i + 1}">`}
           <input type="text" inputmode="numeric" autocomplete="off" data-c="reps" data-k="${k}" data-i="${i}" value="${esc(s.reps ?? '')}" placeholder="${esc(seg ? p?.reps_min ?? '' : p?.reps_max ?? '')}" aria-label="${seg ? 'Segundos' : dist ? 'Metros' : 'Repeticiones'}, serie ${i + 1}">
-          ${seg || dist ? '' : `<select data-c="rir" data-k="${k}" data-i="${i}" aria-label="RIR, serie ${i + 1}"><option value="">·</option>${RIR.map(r => `<option value="${r}"${s.rir === r ? ' selected' : ''}>${r}</option>`).join('')}</select>`}
+          ${seg || dist ? '' : `<select data-c="rir" data-k="${k}" data-i="${i}" aria-label="RIR, serie ${i + 1}"><option value="">·</option>${RIR.map(r => `<option value="${r}"${s.rir === r ? ' selected' : ''}>${String(r).replace('.', ',')}</option>`).join('')}</select>`}
           <button type="button" class="boton-icono" data-quitar-serie="${k}.${i}" aria-label="Quitar la serie ${i + 1}">${icono('cerrar', 'icono icono-chico')}</button>`).join('')}
       </div>
       <button type="button" class="boton agregar-serie" data-mas-serie="${k}">+ Serie</button>

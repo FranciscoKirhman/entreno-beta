@@ -10,5 +10,6 @@ export function serieCompleta(serie, ejercicio, { sinCarga = false } = {}) {
   if (ejercicio.unidad === 'm') return sinCarga && serie.kg == null ? true : typeof serie.kg === 'number' && Number.isFinite(serie.kg) && serie.kg >= 0 && serie.kg < 500;
   if (!(sinCarga && serie.kg == null) && (typeof serie.kg !== 'number' || !Number.isFinite(serie.kg) || serie.kg < 0 || serie.kg >= 500)) return false;
   if (tipoDe(serie) === 'calentamiento') return true;
-  return typeof serie.rir === 'number' && Number.isInteger(serie.rir) && serie.rir >= 0 && serie.rir <= 5;
+  // El RIR va de 0 a 5, en pasos de medio (1,5 es "salían 1 o 2 más").
+  return typeof serie.rir === 'number' && Number.isInteger(serie.rir * 2) && serie.rir >= 0 && serie.rir <= 5;
 }

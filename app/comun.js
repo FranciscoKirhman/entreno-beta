@@ -7,6 +7,8 @@ import { derivar } from '../nucleo/derivar.js';
 import { estadoDelPlan } from '../nucleo/registrado.js';
 import { perfilPruebaActivo, clavePerfilPrueba, claveSesionPerfilPrueba } from '../nucleo/perfiles-prueba.js';
 import { CONFIG } from './config.js';
+import { leerCopia, escribirCopia } from './copia-entreno.js';
+import { estadoDeCopia } from '../nucleo/copia-segura.js';
 
 const cargar = u => fetch(u).then(r => { if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.json(); });
 export const [C, catalogo, K, EVIDENCIA, PLANES, TECNICA] = await Promise.all(
@@ -73,6 +75,11 @@ try {
   const viejo = CLAVE_PERSONAL === CLAVE_ORIGINAL ? JSON.parse(localStorage.getItem('entreno-demo-v1') || 'null') : null;
   E = { ...E, ...(viejo ? { respuestas: viejo.respuestas, plan: viejo.plan } : {}), ...JSON.parse(guardado || '{}') };
 } catch { lecturaFallida = true; errorGuardado = errorPerfilPrueba || 'No pude leer tus datos guardados. Descarga un respaldo de esta sesión antes de cerrar.'; }
+// La segunda copia (IndexedDB) se lee al cargar cada ámbito (al abrir y al entrar a una cuenta), antes de escribirla de
+// nuevo: si el almacenamiento principal quedó atrás, recuperarCopia() la usa. alCargar guarda la hora del estado
+// principal tal como estaba al cargarlo.
+let alCargar = { clave: CLAVE, guardadoEn: lecturaFallida ? 0 : Number(E.guardadoEn) || 0 };
+leerCopia(CLAVE);
 // Los ejercicios que crea la persona (nucleo/propios.js) se suman al catálogo del teléfono: así el banco, Hoy, el
 // validador y el historial los tratan como cualquier otro. Se rehace en cada guardado (cambia con la cuenta o el ejemplo).
 export function alinearPropios() {
@@ -90,7 +97,10 @@ export function guardar() {
       const p = { unidad: E.respuestas?.unidad || 'kg', asistente: E.asistente || 'entrenadora' };
       if (JSON.stringify(p) !== E.firmaPreferenciasCuenta) E.preferenciasPendientes = p;
     }
+    E.guardadoEn = Date.now();
     const texto = JSON.stringify(E);
+    // La segunda copia se programa antes de escribir el principal: si este falla (sin espacio), la copia queda igual.
+    escribirCopia(CLAVE, texto, E.guardadoEn);
     localStorage.setItem(CLAVE, texto);
     if (localStorage.getItem(CLAVE) !== texto) throw new Error('La copia guardada no coincide');
     errorGuardado = null;
@@ -127,6 +137,8 @@ export function activarCuenta(id = null) {
   try { datos = JSON.parse(localStorage.getItem(nueva) || '{}'); }
   catch { throw new Error('No pude leer la copia de esa cuenta. Tus datos actuales se conservan.'); }
   E = { ...VACIO(), ...datos }; CLAVE = nueva; ambitoDatos = id || AMBITO_LOCAL; personal = E;
+  alCargar = { clave: nueva, guardadoEn: Number(datos.guardadoEn) || 0 };
+  leerCopia(nueva); // antes de guardar: la copia anterior de esta cuenta queda leída
   lecturaFallida = false; guardar();
 }
 export function resumenLocal() {
@@ -151,6 +163,22 @@ if (E.sesiones.some(s => s.origen === 'ejemplo')) {
 }
 
 export const reiniciar = () => { lecturaFallida = false; E = VACIO(); guardar(); };
+/**
+ * Al abrir: si la segunda copia es más reciente que el almacenamiento principal (el teléfono lo borró o una escritura
+ * falló), vuelve a lo último que se escribió. Devuelve true si recuperó algo.
+ */
+export async function recuperarCopia() {
+  const { clave, guardadoEn } = alCargar;
+  const copia = await leerCopia(clave);
+  const estado = CLAVE === clave && !modoEjemplo ? estadoDeCopia(guardadoEn, copia) : null;
+  if (!estado) return false;
+  E = { ...VACIO(), ...estado };
+  lecturaFallida = false; errorGuardado = null;
+  guardar();
+  return true;
+}
+// Al pasar al fondo o cerrar, se guarda lo que esté en memoria (la copia se escribe de inmediato en copia-entreno.js).
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && !lecturaFallida) guardar(); });
 /** Versión de prueba: borra el cuestionario y el plan para volver a probarlos, y deja lo anotado (historial,
  *  series, notas, suplementos e indicaciones). */
 export function empezarDeNuevo() {
