@@ -17,7 +17,7 @@ export function vistaBanco(ir, { desde = ultimoDesde } = {}) {
   const musculos = [...new Set(indice.ejercicios.flatMap(e => [...e.musculos_primarios, ...e.musculos_secundarios]))].sort();
   const equipos = [...new Set(indice.ejercicios.flatMap(e => e.equipamiento))].sort();
   $('app').innerHTML = `<div id="vista-banco">
-    <button type="button" class="volver" id="banco-volver">${icono('flecha', 'icono flecha-atras')} ${desde === 'hoy' ? 'Hoy' : 'Más'}</button>
+    <button type="button" class="volver" id="banco-volver" data-vuelve-a="${esc(desde)}">${icono('flecha', 'icono flecha-atras')} ${desde === 'hoy' ? 'Hoy' : 'Más'}</button>
     <h1>Banco de ejercicios</h1>
     <p class="pequeno suave">${indice.ejercicios.filter(e => !e.propio).length} ejercicios con técnica${E.ejerciciosPropios?.length ? `, más ${E.ejerciciosPropios.length} ${E.ejerciciosPropios.length === 1 ? 'creado' : 'creados'} por ti` : ''}. Puedes sumar uno a hoy, aunque hoy descanses. Las variantes sin dibujo muestran su equipo o sus músculos.</p>
     <button type="button" class="boton" id="banco-cardio">Banco de cardio, 9 actividades con imágenes</button>

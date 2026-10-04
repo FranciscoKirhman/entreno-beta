@@ -71,7 +71,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
   const seg = p?.e?.unidad === 'seg';
 
   $('app').innerHTML = `<div id="vista-ficha">
-    <button type="button" class="volver" id="volver">${icono('flecha', 'icono flecha-atras')} ${esc(VOLVER[desde] || 'Atrás')}</button>
+    <button type="button" class="volver" id="volver"${antes ? '' : ` data-vuelve-a="${esc(desde)}"`}>${icono('flecha', 'icono flecha-atras')} ${esc(VOLVER[desde] || 'Atrás')}</button>
     ${anim ? '<div class="ficha-animacion" id="ficha-animacion"></div>' : dibujo ? `<img class="ficha-dibujo" src="${dibujo}" alt="Cómo se hace: ${esc(ej.nombre)}" width="960" height="640">` : ''}
     ${anim && dibujo ? `<details class="extra ficha-ilustracion"><summary>Ver la ilustración de las dos posiciones</summary><img class="ficha-dibujo" src="${dibujo}" alt="Cómo se hace: ${esc(ej.nombre)}" width="960" height="640" loading="lazy"></details>` : ''}
     <h1>${esc(ej.nombre)}</h1>

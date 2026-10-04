@@ -1,5 +1,5 @@
 // Hoja que sube desde abajo con opciones, como el "tipo de serie" de Hevy. Cada opción puede traer un botón "?" que
-// despliega su explicación sin elegirla. Se cierra tocando afuera, con Escape o al elegir.
+// despliega su explicación sin elegirla. Se cierra tocando afuera, con Escape, al elegir o arrastrándola hacia abajo.
 import { esc } from './comun.js';
 import { sinMovimiento } from './movimiento.js';
 
@@ -21,6 +21,50 @@ export function cerrarHoja() {
   f?.();
 }
 const teclaEscape = ev => { if (ev.key === 'Escape') cerrarHoja(); };
+
+/**
+ * Arrastrar la hoja hacia abajo la cierra, como en el teléfono: desde el asa o el título, o desde cualquier parte si
+ * su contenido ya está arriba del todo. La hoja sigue al dedo; pasado un tercio de su alto, o con un tirón rápido,
+ * se va; si no, vuelve a su lugar. Al soltar, la propia transición de la hoja termina el recorrido.
+ */
+function arrastrarParaCerrar(fondo) {
+  const hoja = fondo.querySelector('.hoja');
+  let toque = null;
+  const soltar = () => {
+    const t = toque; toque = null;
+    if (!t?.activo) return;
+    hoja.style.transition = ''; hoja.style.transform = '';
+    fondo.style.transition = ''; fondo.style.background = '';
+    const rapido = t.velocidad > 0.5 && t.dy > 24;
+    if (t.dy > hoja.offsetHeight / 3 || rapido) cerrarHoja();
+  };
+  hoja.addEventListener('touchstart', ev => {
+    if (ev.touches.length !== 1 || fondo.classList.contains('cerrando')) { toque = null; return; }
+    const p = ev.touches[0];
+    const agarre = ev.target.closest('.asa, h3') && !ev.target.closest('button');
+    toque = { x: p.clientX, y: p.clientY, puede: Boolean(agarre) || hoja.scrollTop <= 0, activo: false, dy: 0, velocidad: 0, ultimo: { y: p.clientY, t: performance.now() } };
+  }, { passive: true });
+  hoja.addEventListener('touchmove', ev => {
+    if (!toque) return;
+    const p = ev.touches[0], dy = p.clientY - toque.y, dx = p.clientX - toque.x;
+    if (!toque.activo) {
+      if (!toque.puede || dy < -4 || Math.abs(dx) > Math.abs(dy) + 4) { toque = null; return; } // es desplazar la lista
+      if (dy < 6) return;
+      toque.activo = true;
+      toque.y = p.clientY; // sin salto: la hoja empieza a moverse desde aquí
+      hoja.style.transition = 'none'; fondo.style.transition = 'none';
+    }
+    ev.preventDefault();
+    const ahora = performance.now();
+    toque.velocidad = (p.clientY - toque.ultimo.y) / Math.max(1, ahora - toque.ultimo.t);
+    toque.ultimo = { y: p.clientY, t: ahora };
+    toque.dy = Math.max(0, p.clientY - toque.y);
+    hoja.style.transform = `translateY(${toque.dy}px)`;
+    fondo.style.background = `rgba(0,0,0,${(0.42 * (1 - Math.min(1, toque.dy / hoja.offsetHeight))).toFixed(3)})`;
+  }, { passive: false });
+  hoja.addEventListener('touchend', soltar);
+  hoja.addEventListener('touchcancel', () => { if (toque) { toque.dy = 0; toque.velocidad = 0; } soltar(); });
+}
 
 /**
  * @param titulo   texto de arriba
@@ -72,5 +116,6 @@ export function abrirHoja({ titulo, nota = '', notaOculta = false, contenido = '
     if (elegir) { const v = elegir.dataset.elegir; alCerrar = null; cerrarHoja(); alElegir(v); }
   });
   document.addEventListener('keydown', teclaEscape);
+  arrastrarParaCerrar(fondo);
   requestAnimationFrame(() => { fondo.classList.add('abierta'); fondo.querySelector('.elegir')?.focus(); });
 }

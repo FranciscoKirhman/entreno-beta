@@ -33,8 +33,8 @@ import { dejarPendiente, subirPendientes } from './cola.js';
 import * as nube from './nube.js';
 import { CONFIG } from './config.js';
 import { sinSenalHtml } from './estados-visuales.js';
-import { entrarVista, entrarPose } from './movimiento.js';
-import { instalarAtras, accionAtras, esVuelta } from './atras.js';
+import { entrarVista, entrarPose, dibujarGraficos } from './movimiento.js';
+import { instalarAtras, accionAtras, esVuelta, recordarPantalla, alturaDe, volviendoConGesto } from './atras.js';
 
 // ── Plan y cuenta ───────────────────────────────────────────────────────────
 /** Arma (o rehace) el plan con las respuestas y muestra la pantalla "Tu plan". */
@@ -170,9 +170,12 @@ function ir(vista, extra) {
     plan: () => vistaPlan(ir, { armarPlan, nuevo: extra?.nuevo }), hoy: () => vistaHoy(ir, extra), ejercicio: () => vistaFicha(ir, extra || {}), semana: () => vistaSemana(ir),
     banco: () => vistaBanco(ir, extra || {}), coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), resumen: () => vistaResumen(ir, extra || {}), progreso: () => vistaProgreso(ir), pasado: () => vistaDiaPasado(ir, extra || {}), mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar }), 'tablero-original': () => vistaTableroOriginal(ir),
   };
+  // Al volver atrás, la pantalla queda a la altura donde se dejó (la misma que se vio debajo al deslizar).
+  const vuelta = vista !== anterior && (esVuelta(anterior, vista) || volviendoConGesto());
+  if (vista !== anterior) recordarPantalla(anterior, $('app'));
   (vistas[vista] || vistaInicio)();
   mostrarMensaje(); // los avisos se muestran una vez, flotando sobre el menú
-  window.scrollTo(0, 0);
+  window.scrollTo(0, vuelta ? alturaDe(vista) || 0 : 0);
   // Al llegar a Hoy (o al abrir la app ahí) con la sesión empezada, la pantalla queda en el ejercicio que sigue.
   if (vista === 'hoy' && (vista !== anterior || primeraVista) && !volviendo && !extra?.ej) requestAnimationFrame(irAlEjercicioEnCurso);
   primeraVista = false;
@@ -182,11 +185,13 @@ function ir(vista, extra) {
     document.querySelector(`[data-ficha="${id}"], [data-banco-ver="${id}"], [data-recom-ver="${id}"]`)?.focus({ preventScroll: true });
   });
   // Solo al cambiar de pantalla: repintar la misma (por ejemplo, al anotar una serie) no se anima.
-  if (vista !== anterior) {
+  // Si se volvió con el gesto, la pantalla ya se vio entrar mientras se deslizaba.
+  if (vista !== anterior && !volviendoConGesto()) {
     entrarVista($('app'), esVuelta(anterior, vista));
     $('app').classList.add('entrando'); // las poses de la pantalla nueva entran una vez (estilos.css)
     clearTimeout(finEntrada); finEntrada = setTimeout(() => $('app').classList.remove('entrando'), 500);
   }
+  if (vista !== anterior) dibujarGraficos(vuelta ? null : $('app')); // al volver, los gráficos ya están dibujados
   programarAvisos(); // recordatorios de hoy con lo último (sesión hecha, suplemento tomado)
   actualizarPantalla(); // con una sesión en curso, la pantalla no se apaga sola
 }

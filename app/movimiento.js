@@ -72,3 +72,53 @@ export function repintarConservando(pintar, tocado = null) {
   }
   return nuevo;
 }
+
+/**
+ * Gráficos que se dibujan al llegar a una pantalla: las líneas se trazan de izquierda a derecha en 600 ms (sus puntos
+ * aparecen cuando la línea pasa) y las barras crecen desde la izquierda. Cada gráfico se dibuja la primera vez que
+ * queda a la vista; las barras se recortan, no se estiran, así sus bordes redondeados no se deforman.
+ */
+let observador = null, enEspera = [];
+export function dibujarGraficos(raiz) {
+  observador?.disconnect();
+  observador = null;
+  enEspera.forEach(a => a.finish()); // los que nunca llegaron a la vista quedan dibujados (por si se vuelve a verlos)
+  enEspera = [];
+  if (!raiz || sinMovimiento() || !raiz.animate || typeof IntersectionObserver !== 'function') return;
+  const grupos = [...raiz.querySelectorAll('.grafico, .barras-semana, .franja-musculos')];
+  if (!grupos.length) return;
+  const LINEA = 600;
+  const dibujar = g => {
+    const anims = [];
+    const svg = g.querySelector('svg');
+    const ancho = svg?.viewBox?.baseVal?.width || 1;
+    g.querySelectorAll('.g-linea').forEach(l => {
+      const largo = l.getTotalLength?.() || 0;
+      const xs = (l.getAttribute('points') || '').trim().split(/\s+/).map(par => parseFloat(par)).filter(Number.isFinite);
+      if (!largo || !xs.length) return;
+      const x0 = Math.min(...xs) / ancho, x1 = Math.max(...xs) / ancho;
+      anims.push(l.animate([{ strokeDasharray: `${largo} ${largo}`, strokeDashoffset: largo }, { strokeDasharray: `${largo} ${largo}`, strokeDashoffset: 0 }],
+        { duration: Math.max(120, (x1 - x0) * LINEA), delay: x0 * LINEA, easing: 'linear', fill: 'backwards' }));
+    });
+    g.querySelectorAll('.g-punto').forEach(p => anims.push(animar(p, [{ opacity: 0 }, { opacity: 1 }],
+      { duration: 160, delay: (p.cx.baseVal.value / ancho) * LINEA, fill: 'backwards' })));
+    g.querySelectorAll('.pista i, .pista-franja i').forEach((b, i) => anims.push(animar(b, [{ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0 0 0)' }],
+      { duration: 420, delay: Math.min(i, 8) * 40, fill: 'backwards' })));
+    return anims.filter(Boolean);
+  };
+  // Los que ya se ven se dibujan de inmediato; los de más abajo esperan, sin dibujar, hasta asomarse.
+  const esperando = new Map();
+  observador = new IntersectionObserver(es => es.forEach(e => {
+    if (!e.isIntersecting) return;
+    observador?.unobserve(e.target);
+    (esperando.get(e.target) || []).forEach(a => { a.play(); enEspera = enEspera.filter(x => x !== a); });
+  }), { threshold: 0.35 });
+  for (const g of grupos) {
+    const r = g.getBoundingClientRect(), anims = dibujar(g);
+    if (r.top < innerHeight * 0.9 && r.bottom > 0) continue;
+    anims.forEach(a => a.pause());
+    esperando.set(g, anims);
+    enEspera.push(...anims);
+    observador.observe(g);
+  }
+}

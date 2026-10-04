@@ -570,7 +570,7 @@ export function vistaSeccion(ir) {
   let tocado = null;
   const repintar = () => repintarConservando(() => vistaSeccion(ir), tocado);
   $('app').innerHTML = `<div id="vista-seccion">
-    <button type="button" class="enlace" id="a-perfil">‹ Tu perfil</button>
+    <button type="button" class="enlace" id="a-perfil" data-vuelve-a="perfil">‹ Tu perfil</button>
     <h1>${esc(s.titulo)}</h1>
     ${s.intro ? `<div class="aviso ${s.sensible ? 'ojo' : ''}">${esc(s.intro)}</div>` : ''}
     <form id="seccion" novalidate>

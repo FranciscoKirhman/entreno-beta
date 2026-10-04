@@ -52,7 +52,7 @@ export function vistaDiaPasado(ir, { id = null } = {}) {
   };
 
   $('app').innerHTML = `<div id="vista-pasado">
-    <button type="button" class="volver" id="volver">${icono('flecha', 'icono flecha-atras')} Progreso</button>
+    <button type="button" class="volver" id="volver" data-vuelve-a="progreso">${icono('flecha', 'icono flecha-atras')} Progreso</button>
     <h1>${corrigiendo ? 'Corregir la sesión' : 'Anotar un día pasado'}</h1>
     <p class="pequeno suave">${corrigiendo ? 'Cambia lo que haga falta y guarda: reemplaza la sesión anterior, también en tu cuenta.' : 'Para la sesión que no alcanzaste a anotar. Para hoy, usa Hoy.'}</p>
     <section class="tarjeta campos-pasado">

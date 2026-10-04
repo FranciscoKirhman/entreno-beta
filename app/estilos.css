@@ -864,6 +864,14 @@ body.con-descanso .medalla-record{bottom:calc(env(safe-area-inset-bottom,0px) + 
 .atras-gesto{position:fixed;left:0;top:0;z-index:30;display:grid;place-items:center;width:44px;height:44px;margin-top:-22px;border-radius:50%;background:var(--surface);color:var(--accent);box-shadow:0 4px 16px rgba(0,0,0,.2);pointer-events:none;opacity:0;will-change:transform,opacity;transition:background-color .12s,color .12s}
 .atras-gesto.listo{background:var(--accent);color:var(--accent-ink)}
 .atras-gesto .icono{width:22px;height:22px}
+/* Al deslizar para volver, la pantalla actual sigue al dedo y debajo se ve aquella a la que se vuelve (atras.js). */
+.pantalla-anterior{position:fixed;inset:0;z-index:1;overflow:hidden;background:var(--bg);pointer-events:none}
+.pantalla-anterior-contenido{position:absolute;top:0;left:0;right:0}
+.pantalla-anterior-sombra{position:absolute;inset:0;background:rgba(0,0,0,.14)}
+body.volviendo-atras #app,body.volviendo-atras #perfiles-prueba{position:relative;z-index:2;background:var(--bg);box-shadow:-12px 0 28px rgba(0,0,0,.18);clip-path:inset(0 0 0 -48px)}
+body.volviendo-atras #app{min-height:100dvh}
+html.deslizando-atras{overflow-x:hidden}
+html.deslizando-atras body{overflow-x:clip}
 /* Tarjetas de zonas y fotos del perfil: al elegir cambian solo el borde y el fondo, sin cambiar de tamaño. */
 .zona-ilustrada,.tarjeta-avatar,.avatar-sin-foto{transition:background-color .14s ease-out,box-shadow .14s ease-out,border-color .14s ease-out}
 .perfil-prueba-previa{margin-top:12px;padding:12px 0;border-top:1px solid var(--line)}
