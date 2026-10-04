@@ -1,4 +1,4 @@
-// Pantalla encendida mientras entrenas, como en Hevy: con una sesión en curso (alguna serie marcada hoy y la sesión
+// Pantalla encendida mientras entrenas, como en Hevy: con una sesión en curso (empezada o con alguna serie marcada hoy, y
 // todavía sin guardar), el teléfono no se apaga solo. Usa la API Wake Lock del navegador; si el teléfono no la
 // tiene, no pasa nada. El navegador la suelta al salir de la app, por eso se vuelve a pedir al volver.
 import { E, hoy } from './comun.js';
@@ -8,11 +8,11 @@ let querer = false;
 
 export const encendidaDisponible = () => 'wakeLock' in navigator;
 
-/** Hay una sesión en curso hoy: alguna serie marcada y todavía no se guardó la sesión. */
+/** Hay una sesión en curso hoy: se tocó "Empezar entrenamiento" o hay alguna serie marcada, y todavía no se guardó. */
 export function sesionEnCurso() {
   const f = hoy();
   const marcada = Object.values(E.registro[f] || {}).some(filas => (filas || []).some(x => x?.hecho));
-  return marcada && !E.sesiones.some(s => s.fecha === f && !s.origen);
+  return (marcada || Boolean(E.inicioSesion?.[f])) && !E.sesiones.some(s => s.fecha === f && !s.origen);
 }
 
 async function pedir() {
