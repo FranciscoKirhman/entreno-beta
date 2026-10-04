@@ -1,7 +1,7 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
 // Red primero, con límite de tiempo, y la copia guardada como respaldo (igual que el tablero).
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-04 13:32 · 24dc124";
+const VERSION = "2026-10-04 13:43 · 40e5c90";
 const ARCHIVOS = [
  "./",
  "animacion-ui.js",
@@ -34,6 +34,7 @@ const ARCHIVOS = [
  "figura-frente.js",
  "figura.js",
  "fotos-local.js",
+ "funciones-futuras.js",
  "grafico.js",
  "hevy-auto.js",
  "hoja.js",
@@ -632,6 +633,7 @@ const ARCHIVOS = [
  "../nucleo/explicar.js",
  "../nucleo/ficha.js",
  "../nucleo/firma-perfil.js",
+ "../nucleo/funciones-futuras.js",
  "../nucleo/hevy-api.js",
  "../nucleo/hevy-csv.js",
  "../nucleo/historial-ejemplo.js",

@@ -18,6 +18,7 @@ import { sufijo } from '../nucleo/unidades.js';
 import { progresoEjercicioHtml, enlazarProgresoEjercicio } from './progreso-ejercicio.js';
 import { montarAnimacion } from './animacion-ui.js';
 import { animacionDe } from '../nucleo/animaciones.js';
+import { botonFuturo, avisoFuturo, enlazarFuturos } from './funciones-futuras.js';
 
 const VOLVER = { hoy: 'Hoy', semana: 'Semana', plan: 'Tu plan', progreso: 'Progreso', banco: 'Banco de ejercicios', ejercicio: 'Atrás' };
 const EQUIPO = Object.fromEntries(C.secciones.flatMap(s => s.preguntas || []).find(p => p.equipamiento)?.equipamiento || []);
@@ -97,6 +98,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
       <ol class="pasos">${t.pasos.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
       ${t.ojo.length ? `<p class="sobretitulo ojo-titulo">Ojo con</p><ul class="ojo">${t.ojo.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
       <a class="boton video" href="${esc(enlaceVideo(ej))}" target="_blank" rel="noopener">${icono('video')} Ver videos de técnica</a>
+      <div class="futura-en-ficha">${botonFuturo('revisionTecnica', { simbolo: 'camara' })}${avisoFuturo('revisionTecnica')}</div>
     </section>
 
     ${ej.propio ? '' : criteriosDeVariante(t)}
@@ -129,6 +131,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
   </div>`;
 
   if (anim) montarAnimacion($('ficha-animacion'), anim, { nombre: ej.nombre });
+  enlazarFuturos($('vista-ficha'));
   const atras = () => (antes ? vistaFicha(ir, antes) : ir(desde, desde === 'hoy' ? { ej: id } : undefined));
   $('volver').onclick = atras;
   $('anotar-ajustes')?.addEventListener('click', ev => {
