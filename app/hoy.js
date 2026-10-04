@@ -39,6 +39,8 @@ import { descansoHtml, sesionCompletaHtml } from './estados-visuales.js';
 import { srcArticulacion } from './articulaciones.js';
 import { repintarConservando, celebrar, sinMovimiento } from './movimiento.js';
 import { mostrarMedalla } from './medalla.js';
+import { montarAnimaciones } from './animacion-ui.js';
+import { animacionDePaso } from '../nucleo/animaciones.js';
 import { proponerEdicion, ordenarSesion } from './editar-sesion-ui.js';
 import { serieCompleta } from '../nucleo/serie-completa.js';
 import { proponerSesionVacia } from './sesion-libre-ui.js';
@@ -78,6 +80,7 @@ export function vistaHoy(ir, extra) {
     </div>
   </div>`;
   enlazar(ir, dia);
+  montarAnimaciones(app(), caja => animacionDePaso({ name: caja.dataset.pasoNombre, clave: caja.dataset.pasoClave, agregar_id: caja.dataset.pasoEj }));
   enlazarPendientes(ir);
   actualizarPantalla(); // al marcar la primera serie se pide la pantalla encendida; al guardar la sesión, se suelta
   mostrarMensaje();
@@ -291,11 +294,13 @@ function pasosHtml(pasos, tipo, f, titulo, dia) {
       const tramos = tramosDePaso(p.name, p.seg_estimados); // por lado: primer lado, cambio de postura y segundo lado
       const zona = ['codo', 'hombro', 'rodilla', 'cadera', 'tobillo', 'lumbar', 'muneca', 'cuello'].find(z => p.name.toLowerCase().includes(z));
       const imagen = p.imagen || (zona ? `img/articulaciones/${zona}.webp` : /cardio|bicicleta|caminata/i.test(p.name) ? 'img/ejercicios/mini/caminata.webp' : null);
-      const ilustraciones = tipo === 'cal' ? ilustracionesCalentamiento(p, IMAGENES) : [];
+      const animado = Boolean(animacionDePaso(p)); // con animación, la animación reemplaza las ilustraciones quietas
+      const ilustraciones = tipo === 'cal' && !animado ? ilustracionesCalentamiento(p, IMAGENES) : [];
       const total = tramos.reduce((x, t) => x + t.seg, 0);
       return `<li class="paso${hechos[i] ? ' hecho' : ''}">
         <button type="button" class="check" data-paso="${tipo}" data-i="${i}"${p.clave ? ` data-clave="${esc(p.clave)}"` : ''} aria-pressed="${Boolean(hechos[i])}" aria-label="${esc(p.name)}: hecho">${hechos[i] ? '✓' : ''}</button>
-        ${tipo !== 'cal' && imagen && hayImagen(imagen) ? `<img class="paso-imagen" src="${imagen}" alt="" width="56" height="56">` : ''}<div class="paso-texto">${p.fase ? `<span class="paso-fase">${esc(p.fase)}</span>` : ''}<strong>${esc(parte.nombre)}</strong>${parte.dosis ? `<span class="paso-dosis">${esc(parte.dosis)}</span>` : ''}</div>
+        ${tipo !== 'cal' && !animado && imagen && hayImagen(imagen) ? `<img class="paso-imagen" src="${imagen}" alt="" width="56" height="56">` : ''}<div class="paso-texto">${p.fase ? `<span class="paso-fase">${esc(p.fase)}</span>` : ''}<strong>${esc(parte.nombre)}</strong>${parte.dosis ? `<span class="paso-dosis">${esc(parte.dosis)}</span>` : ''}</div>
+        ${animado ? `<div class="paso-animacion" data-animar="${esc(parte.nombre)}" data-paso-nombre="${esc(p.name)}" data-paso-clave="${esc(p.clave || '')}" data-paso-ej="${esc(p.agregar_id || '')}"></div>` : ''}
         ${ilustraciones.map(x => `<figure class="paso-ilustracion${x.tipo === 'referencia' ? ' referencia' : ''}"><img src="${esc(x.src)}" alt="${esc(x.alt)}" width="768" height="512" loading="lazy" decoding="async">${x.tipo === 'referencia' ? '<figcaption>Equipo o zona de referencia</figcaption>' : ''}</figure>`).join('')}
         ${p.how ? `<p class="paso-instruccion pequeno suave">${esc(p.how)}</p>` : ''}
         ${p.por_que ? `<p class="paso-motivo pequeno">${esc(p.por_que)}</p>` : ''}

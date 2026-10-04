@@ -83,9 +83,61 @@ export function contornoPrenda(a, b, largo, frente, atras, signo = 1) {
     w(largo, -atras * 0.97), w(largo * 0.45, -(atras + 0.004)), w(0, -atras)];
 }
 
+// Equipo (metros): se dibuja en tres capas: detrás del cuerpo, entre el tronco y el brazo de este lado, y delante.
+const COLOR_EQUIPO = {
+  metal: 'var(--fig-metal, #9AA0AC)', oscuro: 'var(--fig-equipo, #3A3E47)', borde: 'var(--fig-equipo-borde, #555A65)',
+  tapiz: 'var(--fig-tapiz, #4B505B)', estructura: 'var(--fig-estructura, #B9BEC8)', banda: 'var(--fig-banda, #3FA34D)',
+  pared: 'var(--fig-pared, #D9DCE2)', cajon: 'var(--fig-cajon, #C98B52)', cinta: 'var(--fig-cinta, #2F3238)',
+};
+/** El dibujo SVG (texto) de una lista de equipos, ya en píxeles. */
+export function equipoSvg(items, px, k) {
+  const P = q => px(q), n = v => v.toFixed(1);
+  const linea = (a, b, ancho, color, extra = '') => `<line x1="${n(P(a).x)}" y1="${n(P(a).y)}" x2="${n(P(b).x)}" y2="${n(P(b).y)}" stroke="${color}" stroke-width="${n(ancho * k)}" stroke-linecap="round"${extra}/>`;
+  const circ = (c, r, fill, extra = '') => `<circle cx="${n(P(c).x)}" cy="${n(P(c).y)}" r="${n(r * k)}" fill="${fill}"${extra}/>`;
+  const rect = (x1, y1, x2, y2, fill, radio = 0.01) => { const a = P({ x: x1, y: y2 }), b = P({ x: x2, y: y1 }); return `<rect x="${n(a.x)}" y="${n(a.y)}" width="${n(b.x - a.x)}" height="${n(b.y - a.y)}" rx="${n(radio * k)}" fill="${fill}"/>`; };
+  return items.map(e => {
+    switch (e.tipo) {
+      case 'disco': return circ(e.centro, e.r || 0.225, COLOR_EQUIPO.oscuro, ` stroke="${COLOR_EQUIPO.borde}" stroke-width="${n(0.025 * k)}"`) + circ(e.centro, (e.r || 0.225) * 0.2, COLOR_EQUIPO.borde);
+      case 'barra': return circ(e.centro, e.r || 0.03, COLOR_EQUIPO.metal, ` stroke="var(--fig-borde, #FFFFFF)" stroke-width="2" paint-order="stroke"`);
+      case 'mancuerna': return circ(e.centro, 0.075, COLOR_EQUIPO.oscuro, ` stroke="${COLOR_EQUIPO.borde}" stroke-width="${n(0.015 * k)}"`) + circ(e.centro, 0.02, COLOR_EQUIPO.metal);
+      case 'kettlebell': {
+        const c = e.centro, asa = { x: c.x, y: c.y + 0.11 };
+        return `<path d="M${n(P({ x: c.x - 0.05, y: c.y + 0.05 }).x)} ${n(P({ x: c.x - 0.05, y: c.y + 0.05 }).y)} Q${n(P(asa).x)} ${n(P({ x: c.x, y: c.y + 0.2 }).y)} ${n(P({ x: c.x + 0.05, y: c.y + 0.05 }).x)} ${n(P({ x: c.x + 0.05, y: c.y + 0.05 }).y)}" fill="none" stroke="${COLOR_EQUIPO.oscuro}" stroke-width="${n(0.025 * k)}"/>` + circ(c, 0.095, COLOR_EQUIPO.oscuro);
+      }
+      case 'banco': { // tapiz de a a b (su cara superior) con patas al suelo
+        const g = e.grosor || 0.07, a = e.a, b = e.b;
+        const pata = q => linea({ x: q.x, y: q.y - g / 2 }, { x: q.x, y: 0.02 }, 0.04, COLOR_EQUIPO.estructura);
+        const patas = e.patas === false ? '' : pata({ x: a.x + (b.x - a.x) * 0.15, y: a.y + (b.y - a.y) * 0.15 - g / 2 }) + pata({ x: a.x + (b.x - a.x) * 0.85, y: a.y + (b.y - a.y) * 0.85 - g / 2 });
+        const d = { x: b.x - a.x, y: b.y - a.y }, L = Math.hypot(d.x, d.y) || 1, abajo = { x: d.y / L * g / 2, y: -d.x / L * g / 2 };
+        const m1 = { x: a.x + abajo.x, y: a.y + abajo.y }, m2 = { x: b.x + abajo.x, y: b.y + abajo.y };
+        return patas + linea(m1, m2, g, COLOR_EQUIPO.tapiz);
+      }
+      case 'rodillo': return circ(e.centro, e.r || 0.055, COLOR_EQUIPO.tapiz);
+      case 'poste': return linea({ x: e.x, y: e.y1 ?? 0 }, { x: e.x, y: e.y2 }, e.ancho || 0.06, COLOR_EQUIPO.estructura);
+      case 'cable': return linea(e.desde, e.hasta, 0.008, COLOR_EQUIPO.metal) + circ(e.desde, 0.035, COLOR_EQUIPO.estructura) + circ(e.desde, 0.012, COLOR_EQUIPO.oscuro);
+      case 'mango': return circ(e.centro, e.r || 0.028, COLOR_EQUIPO.oscuro);
+      case 'barraFija': return linea({ x: e.centro.x + 0.32, y: 0 }, { x: e.centro.x + 0.32, y: e.centro.y + 0.08 }, 0.05, COLOR_EQUIPO.estructura)
+        + linea({ x: e.centro.x, y: e.centro.y }, { x: e.centro.x + 0.32, y: e.centro.y + 0.08 }, 0.035, COLOR_EQUIPO.estructura) + circ(e.centro, 0.022, COLOR_EQUIPO.metal);
+      case 'paralela': return linea({ x: e.centro.x - 0.05, y: 0 }, { x: e.centro.x - 0.05, y: e.centro.y }, 0.045, COLOR_EQUIPO.estructura) + circ(e.centro, 0.025, COLOR_EQUIPO.metal);
+      case 'cajon': return rect(e.x1, 0, e.x2, e.alto, COLOR_EQUIPO.cajon, 0.015);
+      case 'colchoneta': return rect(e.x1, 0, e.x2, 0.02, COLOR_EQUIPO.banda, 0.01);
+      case 'pared': return rect(e.x, 0, e.x + 0.08, 2.3, COLOR_EQUIPO.pared, 0);
+      case 'marco': return rect(e.x, 0, e.x + 0.06, 2.1, COLOR_EQUIPO.estructura, 0);
+      case 'banda': return `<polyline points="${e.puntos.map(q => `${n(P(q).x)},${n(P(q).y)}`).join(' ')}" fill="none" stroke="${COLOR_EQUIPO.banda}" stroke-width="${n(0.016 * k)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+      case 'rieles': return linea({ x: e.x - 0.04, y: 0 }, { x: e.x - 0.04, y: 2.15 }, 0.02, COLOR_EQUIPO.estructura) + linea({ x: e.x + 0.04, y: 0 }, { x: e.x + 0.04, y: 2.15 }, 0.02, COLOR_EQUIPO.estructura);
+      case 'plataforma': return linea(e.a, e.b, 0.05, COLOR_EQUIPO.oscuro);
+      case 'cinta': return linea({ x: e.x1, y: e.y1 }, { x: e.x2, y: e.y2 }, 0.07, COLOR_EQUIPO.cinta) + linea({ x: e.x2, y: e.y2 }, { x: e.x2 + 0.05, y: e.y2 + 1.1 }, 0.05, COLOR_EQUIPO.estructura);
+      case 'escalones': return e.puntos.map((q, i) => rect(q.x, q.y - 0.18, q.x + 0.3, q.y, i % 2 ? COLOR_EQUIPO.oscuro : COLOR_EQUIPO.tapiz, 0.01)).join('');
+      default: return '';
+    }
+  }).join('');
+}
+
 /**
  * Crea la figura dentro de un grupo SVG. escala: píxeles por metro (el suelo queda en y = 0 del grupo).
- * dibujar(pose) la pone en la pose; pose.lejos puede traer las articulaciones del otro lado (si no, se corren un poco).
+ * dibujar(pose) la pone en la pose. pose.lejos trae las articulaciones del otro lado cuando no son las mismas (una
+ * estocada); si no, se corren un poco para que se vea la profundidad. pose.equipo: lista de equipos (equipoSvg) con su capa
+ * ('fondo', 'medio' o 'frente'). pose.puno: dónde va el puño si no es la muñeca (curl de muñeca).
  */
 export function crearFigura(grupo, { escala = 200, lejos = { x: 0.014, y: 0 }, variante = 'hombre' } = {}) {
   const V = VARIANTES[variante] || VARIANTES.hombre;
@@ -98,13 +150,11 @@ export function crearFigura(grupo, { escala = 200, lejos = { x: 0.014, y: 0 }, v
     grupo.append(el);
     return el;
   };
+  const grupoEquipo = () => { const g = document.createElementNS(NS, 'g'); grupo.append(g); return g; };
   const circulo = (fill, r) => { const el = document.createElementNS(NS, 'circle'); el.setAttribute('fill', fill); el.setAttribute('r', r); grupo.append(el); return el; };
   const forma = (el, puntos) => el.setAttribute('d', curva(puntos.map(px)));
 
-  // Equipo detrás del cuerpo: el disco (de lado se vería encima del cuerpo; detrás se lee la técnica completa).
-  const disco = circulo(COLOR.disco, 0);
-  disco.setAttribute('stroke', COLOR.discoBorde); disco.setAttribute('stroke-width', '5');
-  const centroDisco = circulo(COLOR.discoBorde, 0);
+  const equipoFondo = grupoEquipo();
   // El otro lado, más oscuro.
   const L = {
     brazo: capa(COLOR.pielLejos), manga: capa(COLOR.poleraLejos), antebrazo: capa(COLOR.pielLejos), mano: capa(COLOR.pielLejos),
@@ -116,20 +166,21 @@ export function crearFigura(grupo, { escala = 200, lejos = { x: 0.014, y: 0 }, v
   const C = { muslo: capa(COLOR.piel, true) };
   const shortPelvis = capa(COLOR.short);
   Object.assign(C, { short: capa(COLOR.short), pierna: capa(COLOR.piel, true), zapatilla: capa(COLOR.zapatilla, true), suela: capa(COLOR.suela) });
-  // Cabeza, la barra sobre los hombros y el brazo de este lado.
+  // Cabeza, el equipo del medio (la barra sobre los hombros) y el brazo de este lado.
   const cola = V.cola ? capa(COLOR.pelo) : null; // la cola de caballo va detrás de la cabeza
   const cabeza = capa(COLOR.piel, true), oreja = capa(COLOR.pielSombra), pelo = capa(COLOR.pelo), ojo = circulo(COLOR.ojo, 2.2), ceja = capa(COLOR.pelo);
-  const barra = circulo(COLOR.barra, 6.5);
-  barra.setAttribute('stroke', COLOR.borde); barra.setAttribute('stroke-width', '2'); barra.setAttribute('paint-order', 'stroke');
+  const equipoMedio = grupoEquipo();
   Object.assign(C, { brazo: capa(COLOR.piel, true), manga: capa(COLOR.polera, true), antebrazo: capa(COLOR.piel, true), mano: capa(COLOR.piel, true) });
+  const equipoFrente = grupoEquipo();
 
-  /** Una zapatilla sobre el suelo, del talón a la punta (metros). */
-  const zapatilla = (p, d) => {
-    const h = p.talon.x + d.x, t = p.punta.x + d.x, k = p.tobillo.x + d.x, y = d.y;
+  /** Una zapatilla en el sistema del pie: del talón a la punta, con la suela hacia el lado de apoyo. */
+  const zapatilla = (talon, punta, tobillo) => {
+    const dx = punta.x - talon.x, dy = punta.y - talon.y, Lp = Math.hypot(dx, dy) || 1e-9, ex = { x: dx / Lp, y: dy / Lp }, ey = { x: -ex.y, y: ex.x };
+    const k = (tobillo.x - talon.x) * ex.x + (tobillo.y - talon.y) * ex.y;
+    const w = ([a, u]) => ({ x: talon.x + ex.x * a + ey.x * u, y: talon.y + ex.y * a + ey.y * u });
     return {
-      capellada: [{ x: h + 0.004, y: y + 0.02 }, { x: h - 0.006, y: y + 0.058 }, { x: h + 0.018, y: y + 0.098 }, { x: k + 0.038, y: y + 0.092 },
-        { x: k + 0.085, y: y + 0.066 }, { x: t - 0.035, y: y + 0.045 }, { x: t + 0.006, y: y + 0.03 }, { x: t, y: y + 0.018 }],
-      suela: [{ x: h - 0.008, y: y + 0.024 }, { x: h - 0.01, y: y + 0.004 }, { x: t + 0.008, y: y + 0.002 }, { x: t + 0.014, y: y + 0.016 }, { x: t + 0.002, y: y + 0.026 }],
+      capellada: [[0.004, 0.02], [-0.006, 0.058], [0.018, 0.098], [k + 0.038, 0.092], [k + 0.085, 0.066], [Lp - 0.035, 0.045], [Lp + 0.006, 0.03], [Lp, 0.018]].map(w),
+      suela: [[-0.008, 0.024], [-0.01, 0.004], [Lp + 0.008, 0.002], [Lp + 0.014, 0.016], [Lp + 0.002, 0.026]].map(w),
     };
   };
   const mano = q => Array.from({ length: 8 }, (_, i) => ({ x: q.x + 0.042 * Math.cos(i * Math.PI / 4), y: q.y + 0.038 * Math.sin(i * Math.PI / 4) }));
@@ -139,30 +190,29 @@ export function crearFigura(grupo, { escala = 200, lejos = { x: 0.014, y: 0 }, v
     forma(capas.muslo, contornoMiembro(s(p.cadera), s(p.rodilla), PERFILES.muslo));
     forma(capas.short, contornoPrenda(s(p.cadera), s(p.rodilla), V.largoShort, 0.09, 0.09));
     forma(capas.pierna, contornoMiembro(s(p.rodilla), s(p.tobillo), PERFILES.pierna));
-    const z = zapatilla(p, d);
+    const z = zapatilla(s(p.talon), s(p.punta), s(p.tobillo));
     forma(capas.zapatilla, z.capellada); forma(capas.suela, z.suela);
     forma(capas.brazo, contornoMiembro(s(p.hombro), s(p.codo), perfilBrazo));
     forma(capas.manga, contornoPrenda(s(p.hombro), s(p.codo), 0.38, 0.062 * V.brazos, 0.058 * V.brazos));
     forma(capas.antebrazo, contornoMiembro(s(p.codo), s(p.mano), perfilAntebrazo));
-    forma(capas.mano, mano(s(p.mano)));
+    forma(capas.mano, mano(s(p.puno || p.mano)));
   }
 
   function dibujar(p) {
-    if (p.barra) {
-      const b = px(p.barra), r = (p.radioDisco || 0.225) * escala;
-      for (const el of [disco, centroDisco]) { el.setAttribute('cx', f(b.x - 3)); el.setAttribute('cy', f(b.y - 2)); }
-      disco.setAttribute('r', f(r)); centroDisco.setAttribute('r', f(r * 0.22));
-      barra.setAttribute('cx', f(b.x)); barra.setAttribute('cy', f(b.y));
-    }
-    for (const el of [disco, centroDisco, barra]) el.style.display = p.barra ? '' : 'none';
-    lado(L, p.lejos ? { ...p, ...p.lejos } : p, p.lejos ? { x: 0, y: 0 } : lejos);
+    const equipo = [...(p.equipo || [])];
+    // La barra con discos de antes (pose.barra) sigue funcionando: disco detrás y la barra sobre los hombros.
+    if (p.barra) equipo.push({ tipo: 'disco', centro: { x: p.barra.x - 0.015, y: p.barra.y + 0.01 }, r: p.radioDisco || 0.225, capa: 'fondo' }, { tipo: 'barra', centro: p.barra, capa: 'medio' });
+    equipoFondo.innerHTML = equipoSvg(equipo.filter(e => (e.capa || 'fondo') === 'fondo'), px, escala);
+    equipoMedio.innerHTML = equipoSvg(equipo.filter(e => e.capa === 'medio'), px, escala);
+    equipoFrente.innerHTML = equipoSvg(equipo.filter(e => e.capa === 'frente'), px, escala);
+    lado(L, p.lejos ? { ...p, puno: null, ...p.lejos } : p, p.lejos ? { x: 0, y: 0 } : lejos);
     // Tronco: sistema con v hacia adelante (signo -1 respecto del lado anterior de los miembros).
     const wt = marco(p.cadera, p.hombro, -1), Lt = Math.hypot(p.hombro.x - p.cadera.x, p.hombro.y - p.cadera.y);
     const enTronco = ([u, v]) => wt(u / Lt, v);
     forma(tronco, V.tronco.map(enTronco));
     forma(shortPelvis, V.short.map(enTronco));
     forma(cuello, contornoMiembro(enTronco([0.46, -0.01]), p.cabeza, PERFILES.cuello, -1)); // la cabeza tapa su extremo
-    // Cabeza: su eje va de la base del cuello al centro de la cabeza.
+    // Cabeza: su eje va de la base del cuello al centro de la cabeza; la cara mira hacia el lado anterior.
     const R = p.radioCabeza || 0.108, ux0 = p.cabeza.x - p.base.x, uy0 = p.cabeza.y - p.base.y, lu = Math.hypot(ux0, uy0) || 1;
     const u = { x: ux0 / lu, y: uy0 / lu }, v = { x: u.y, y: -u.x };
     const enCabeza = ([a, b]) => ({ x: p.cabeza.x + (u.x * a + v.x * b) * R, y: p.cabeza.y + (u.y * a + v.y * b) * R });

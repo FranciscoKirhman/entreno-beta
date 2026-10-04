@@ -16,6 +16,8 @@ import { abrirHoja } from './hoja.js';
 import { proponer } from './cambios-ui.js';
 import { sufijo } from '../nucleo/unidades.js';
 import { progresoEjercicioHtml, enlazarProgresoEjercicio } from './progreso-ejercicio.js';
+import { montarAnimacion } from './animacion-ui.js';
+import { animacionDe } from '../nucleo/animaciones.js';
 
 const VOLVER = { hoy: 'Hoy', semana: 'Semana', plan: 'Tu plan', progreso: 'Progreso', banco: 'Banco de ejercicios', ejercicio: 'Atrás' };
 const EQUIPO = Object.fromEntries(C.secciones.flatMap(s => s.preguntas || []).find(p => p.equipamiento)?.equipamiento || []);
@@ -62,7 +64,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
   const ex = p ? explicarEjercicio({ e: p.e, dia: p.dia, plan: E.plan, respuestas: R(), derivados: D(), indice, evidencia: EVIDENCIA }) : null;
   const lugar = (R().lugares || []).find(l => l.principal) || (R().lugares || [])[0] || { equipamiento: [] };
   const alts = alternativas(id, { indice, equipamiento: lugar.equipamiento || [], bloqueadas: articulacionesBloqueadas(R().lesiones || [], f), nivel: D().nivel });
-  const dibujo = dibujoEjercicio(id);
+  const dibujo = dibujoEjercicio(id), anim = animacionDe(id);
   const maq = maquinaDe(ej);
   const u = unidadPeso();
   const kg = x => `${coma(enUnidad(x))} ${u}`;
@@ -70,7 +72,8 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
 
   $('app').innerHTML = `<div id="vista-ficha">
     <button type="button" class="volver" id="volver">${icono('flecha', 'icono flecha-atras')} ${esc(VOLVER[desde] || 'Atrás')}</button>
-    ${dibujo ? `<img class="ficha-dibujo" src="${dibujo}" alt="Cómo se hace: ${esc(ej.nombre)}" width="960" height="640">` : ''}
+    ${anim ? '<div class="ficha-animacion" id="ficha-animacion"></div>' : dibujo ? `<img class="ficha-dibujo" src="${dibujo}" alt="Cómo se hace: ${esc(ej.nombre)}" width="960" height="640">` : ''}
+    ${anim && dibujo ? `<details class="extra ficha-ilustracion"><summary>Ver la ilustración de las dos posiciones</summary><img class="ficha-dibujo" src="${dibujo}" alt="Cómo se hace: ${esc(ej.nombre)}" width="960" height="640" loading="lazy"></details>` : ''}
     <h1>${esc(ej.nombre)}</h1>
     <p class="ficha-sub suave">${esc(ej.propio ? ['Creado por ti', ...ej.equipamiento.map(q => EQUIPO[q]).filter(Boolean).slice(0, 2)].join(' · ') : [...ej.equipamiento.map(q => EQUIPO[q]).filter(Boolean).slice(0, 2), NIVEL[ej.nivel_minimo]].filter(Boolean).join(' · '))}</p>
     ${E.notasFijas?.[id] ? `<p class="nota-fija">${icono('lapiz', 'icono icono-chico')}<span>Tu nota fija: ${esc(E.notasFijas[id])}</span></p>` : ''}
@@ -125,6 +128,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
     </section>` : ''}
   </div>`;
 
+  if (anim) montarAnimacion($('ficha-animacion'), anim, { nombre: ej.nombre });
   const atras = () => (antes ? vistaFicha(ir, antes) : ir(desde, desde === 'hoy' ? { ej: id } : undefined));
   $('volver').onclick = atras;
   $('anotar-ajustes')?.addEventListener('click', ev => {
