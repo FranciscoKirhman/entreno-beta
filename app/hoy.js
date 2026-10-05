@@ -45,6 +45,7 @@ import { montarAnimaciones } from './animacion-ui.js';
 import { animacionDePaso } from '../nucleo/animaciones.js';
 import { modoEsfuerzo, escalaDe, aRpe, deRpe, rpeDeSerie, textoEsfuerzo, significado } from '../nucleo/esfuerzo.js';
 import { proponerEdicion, ordenarSesion } from './editar-sesion-ui.js';
+import { aplicarTamanoTexto } from './tamano-texto.js';
 import { enlazarDeslizarSeries } from './deslizar-serie.js';
 import { protegerDialogo } from './modal.js';
 import { siguienteSerie } from '../nucleo/siguiente-serie.js';
@@ -91,6 +92,7 @@ export function vistaHoy(ir, extra) {
     </div>
     ${dia && !hechaEnHevy ? accesorioHtml(dia, f) : ''}
   </div>`;
+  aplicarTamanoTexto();
   enlazar(ir, dia);
   liberarDialogo = protegerDialogo($('pantalla-pasos'));
   montarAnimaciones(app(), caja => animacionDePaso({ name: caja.dataset.pasoNombre, clave: caja.dataset.pasoClave, agregar_id: caja.dataset.pasoEj }));
@@ -514,8 +516,8 @@ function solapaHtml(dia) {
   if (!enCurso(f)) return '';
   return `<div class="solapa-sesion" id="solapa">
     <span class="solapa-foco">${esc(dia.foco)}<small>${avance(dia).hechas} de ${avance(dia).total} series</small></span>
-    <span class="solapa-dato num" role="timer" aria-label="Tiempo de la sesión" id="solapa-tiempo" data-fecha="${f}">${transcurrido(f)}</span>
-    <span class="solapa-dato num" aria-label="Volumen levantado">${esc(volumenTexto(avance(dia).cifras.volumen))}</span>
+    <span class="solapa-cifras"><span class="solapa-dato num" role="timer" aria-label="Tiempo de la sesión" id="solapa-tiempo" data-fecha="${f}">${transcurrido(f)}</span>
+    <span class="solapa-dato num" aria-label="Volumen levantado">${esc(volumenTexto(avance(dia).cifras.volumen))}</span></span>
     <button type="button" class="solapa-terminar" data-terminar>Terminar</button>
   </div>`;
 }
@@ -596,7 +598,7 @@ function sesionHoy(dia) {
   const todas = seriesAnotadas(E.sesiones, E.registro);
   return `<section class="sesion-cab compacta" aria-label="Sesión de hoy">
     <div class="sesion-controles">
-      ${dia.ejercicios.length ? (enCurso(f) ? '' : avanceHtml(progreso)) : '<p class="pequeno suave">Sesión vacía. Abre Ejercicios para elegir desde el banco o ver recomendaciones para ti.</p>'}
+      ${dia.ejercicios.length ? (enCurso(f) ? '' : avanceHtml(progreso)) : '<p class="pequeno suave">Sesión vacía. Agrega tu primer ejercicio desde el banco, al final de la lista.</p>'}
       <button type="button" class="boton chico" id="ajustar-hoy">${icono('ajustes')} Ajustar hoy</button>
       <button type="button" class="boton-icono" id="ver-detalles-sesion" aria-label="Detalles de la sesión">${icono('info')}</button>
     </div>
@@ -832,20 +834,11 @@ function enlazar(ir, dia) {
     const kgVer = r.kg ?? sugerencia(e, lista, i).kg, repsVer = r.reps ?? e.reps_max;
     let elegido = deRpe(rpeDeSerie(r), modo);
     const delPlan = e.rir != null ? deRpe(10 - e.rir, modo) : null;
-    // La caja de debajo se vuelve a dibujar al guardar. El cierre debe enfocar la caja nueva, no el nodo retirado.
-    const volverALaCaja = { focus: () => document.querySelector(`#vista-hoy [data-esfuerzo="${CSS.escape(id)}"][data-i="${i}"]`)?.focus({ preventScroll: true }) };
-    const completarEsfuerzo = () => {
-      const { e: actual, k: pos } = ejercicioDe(id), filas = materializar(f, actual, pos).lista, fila = filas[i];
-      const sinCarga = sinCargaExterna(indice.porId.get(actual.ejercicio_id)) && sugerencia(actual, filas, i).kg == null;
-      if (!fila || fila.hecho || !serieCompleta(fila, actual, { sinCarga })) return false;
-      marcarSerie(id, i);
-      return true;
-    };
     const grande = v => { const sig = significado(aRpe(v ?? delPlan, modo)); return `<strong class="esfuerzo-numero${v == null ? ' gris' : ''}" id="esfuerzo-numero">${esc(textoEsfuerzo(v ?? delPlan, modo) || '·')}</strong>
       <span class="esfuerzo-titulo">${esc(v == null ? (delPlan != null ? 'Lo que pide el plan' : 'Elige un valor') : sig?.titulo || '')}</span>
       <span class="esfuerzo-detalle">${esc(sig?.detalle || '')}</span>`; };
     abrirHoja({
-      titulo: `Esfuerzo de la serie (${sigla})`, volver: volverALaCaja,
+      titulo: `Esfuerzo de la serie (${sigla})`, volver,
       contenido: `<div class="esfuerzo-hoja">
         <p class="esfuerzo-sub">${esc(`Serie ${etiq}: ${kgVer != null ? `${coma(enUnidad(kgVer))} ${unidadPeso()}` : 'sin peso'}${repsVer != null ? ` × ${repsVer} reps` : ''}`)}</p>
         <div class="esfuerzo-grande" id="esfuerzo-grande" aria-live="polite">${grande(elegido)}</div>
@@ -856,8 +849,11 @@ function enlazar(ir, dia) {
       opciones: [],
       alElegir: v => {
         if (v === 'quitar') guardarEsfuerzo(id, i, null);
-        if (v !== 'listo' || !completarEsfuerzo()) repintar();
-        volverALaCaja.focus();
+        // Al cerrar, si la serie quedó completa (peso, repeticiones y esfuerzo), se marca como hecha.
+        const { e: e2, k: k2 } = ejercicioDe(id), fila = materializar(f, e2, k2).lista[i];
+        const sinCarga = sinCargaExterna(indice.porId.get(e2.ejercicio_id)) && sugerencia(e2, materializar(f, e2, k2).lista, i).kg == null;
+        if (v === 'listo' && fila && !fila.hecho && serieCompleta(fila, e2, { sinCarga })) marcarSerie(id, i);
+        else repintar();
       },
     });
     const hoja = document.querySelector('#hoja .esfuerzo-hoja');
@@ -867,9 +863,6 @@ function enlazar(ir, dia) {
       guardarEsfuerzo(id, i, aRpe(elegido, modo));
       hoja.querySelectorAll('[role="radio"]').forEach(x => { const si = x === boton; x.setAttribute('aria-checked', String(si)); x.tabIndex = si ? 0 : -1; });
       $('esfuerzo-grande').innerHTML = grande(elegido);
-      // El valor ya está guardado aunque se cierre con Escape, afuera o arrastrando. Actualiza también su caja y,
-      // con cifras reales completas, marca la serie sin cerrar la hoja ni mover su foco.
-      if (!completarEsfuerzo()) repintar();
     };
     hoja.addEventListener('click', ev => { const x = ev.target.closest('[role="radio"]'); if (x) elegir(x); });
     hoja.addEventListener('keydown', ev => {

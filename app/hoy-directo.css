@@ -160,3 +160,44 @@ body:has(#pantalla-pasos) .acciones-sesion{visibility:hidden}
 
 .acc-siguiente .acc-abrir{width:100%}
 .acc-siguiente .acc-textos{flex:1}
+
+/* Seis tamaños de lectura, todos crecen con la preferencia del iPhone. */
+:is(#vista-hoy,.hoja-de-hoy){--hoy-base:17px;--hoy34:calc(var(--hoy-base)*2);--hoy22:calc(var(--hoy-base)*1.2941176471);--hoy17:var(--hoy-base);--hoy15:calc(var(--hoy-base)*.8823529412);--hoy13:calc(var(--hoy-base)*.7647058824);--hoy12:calc(var(--hoy-base)*.7058823529);font-size:var(--hoy17)}
+#vista-hoy h1{font-size:var(--hoy34);overflow-wrap:anywhere}
+#vista-hoy h2,#vista-hoy .pasos-nombre,#vista-hoy .estado-texto h3{font-size:var(--hoy22)}
+#vista-hoy :is(h3,input,textarea,select,.boton.grande,.ej-textos .nombre,.fila-pasos-texto strong,.pasos-dosis,.pasos-cab h2,.pasos-cab-boton,.pasos-cuerpo .paso-instruccion,.pasos-pie .boton,.serie .tipo-serie,.serie .check,.serie .caja-esfuerzo,.serie .crono-serie){font-size:var(--hoy17)}
+#vista-hoy :is(.solapa-foco,.solapa-dato,.solapa-terminar,.acc-textos strong,.acc-boton,.serie .consejo,.pasos-reloj,.quitar-serie,.nota-fija){font-size:var(--hoy15)}
+#vista-hoy :is(.pequeno,.sobretitulo,.ej-sub,.serie .antes,.fila-pasos-texto small,.boton.chico,.escala-b button){font-size:var(--hoy13)}
+#vista-hoy :is(.cab-series,.cab-rir,.chip-ss,.chip-record,.paso-fase,.paso-ilustracion figcaption,.acc-textos small,.solapa-foco small){font-size:var(--hoy12)}
+#vista-hoy :is(button,summary,input,textarea,select){min-height:44px;min-width:44px}
+#vista-hoy .escala-b button{min-width:0}
+#vista-hoy .solapa-sesion{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;border-radius:20px;padding:8px 8px 8px 14px}
+.solapa-foco{grid-column:1;grid-row:1}
+.solapa-cifras{grid-column:1;grid-row:2;display:flex;flex-wrap:wrap;gap:4px 10px;min-width:0}
+#vista-hoy .solapa-terminar{grid-column:2;grid-row:1 / span 2}
+#vista-hoy .pasos-cab{grid-template-columns:44px minmax(0,1fr) auto}
+#vista-hoy .pasos-cab h2{white-space:normal;overflow-wrap:anywhere}
+#vista-hoy .pasos-segmentos{display:grid;grid-template-columns:repeat(auto-fit,minmax(44px,1fr));gap:0 4px}
+#vista-hoy .segmento{width:100%;min-width:44px}
+#vista-hoy .ej-textos .nombre,#vista-hoy .pasos-nombre{overflow-wrap:anywhere}
+#vista-hoy .fila-pasos.sugerida{flex-wrap:wrap}
+#vista-hoy .fila-pasos.sugerida .fila-pasos-texto{flex-basis:120px}
+#vista-hoy .bienestar-caja>summary{align-items:center;flex-wrap:wrap}
+#vista-hoy .bienestar-titulo{white-space:normal}
+#vista-hoy button:active:not(:disabled){filter:brightness(.86)}
+@media(prefers-reduced-motion:no-preference){#vista-hoy button,#vista-hoy input,#vista-hoy textarea{transition:background-color .15s,color .15s,filter .12s,box-shadow .15s}}
+@media(prefers-reduced-motion:reduce){#vista-hoy *{transition:none;animation:none}}
+
+#vista-hoy .cab-series span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+
+.hoja-de-hoy :is(button,input,textarea,select,label){min-height:44px;min-width:44px}
+.hoja-de-hoy :is(.elegir,.esfuerzo-titulo,.esfuerzo-listo,.esfuerzo-escala button){font-size:var(--hoy17)}
+.hoja-de-hoy :is(.esfuerzo-sub,.esfuerzo-detalle){font-size:var(--hoy15)}
+.hoja-de-hoy :is(.pequeno,.ayuda){font-size:var(--hoy13)}
+.hoja-de-hoy .esfuerzo-numero{font-size:var(--hoy34)}
+.hoja-de-hoy .esfuerzo-escala{display:grid;grid-template-columns:repeat(4,minmax(44px,1fr));height:auto;gap:4px;border-radius:16px;padding:4px}
+.hoja-de-hoy .esfuerzo-escala button{min-height:44px;border-radius:12px}
+.hoja-de-hoy .escala label{flex-basis:44px}
+.hoja-de-hoy .extremos{font-size:var(--hoy12)}
+.hoja-de-hoy button:active:not(:disabled){filter:brightness(.86)}
+@media(prefers-reduced-motion:no-preference){.hoja-de-hoy button{transition:background-color .15s,color .15s,filter .12s}}

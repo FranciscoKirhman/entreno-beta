@@ -49,14 +49,7 @@ function cargarIndice() {
   if (!CONFIG.modoPrueba) return Promise.resolve(null);
   pedidoIndice ||= fetch(`perfiles/indice.json?v=${Date.now()}`, { cache: 'no-store' })
     .then(r => (r.ok ? r.json() : null))
-    .then(datos => {
-      publicados = datos ? leerIndicePerfiles(datos) : [];
-      const y = typeof scrollY === 'number' ? scrollY : 0;
-      pintarPerfilesPrueba();
-      // Al llegar los botones, el navegador no debe sumar la altura del selector a la posición restaurada.
-      if (typeof scrollTo === 'function') scrollTo(0, y);
-      return publicados;
-    })
+    .then(datos => { publicados = datos ? leerIndicePerfiles(datos) : []; pintarPerfilesPrueba(); return publicados; })
     .catch(() => { pedidoIndice = null; return null; }); // sin señal: quedan los perfiles de este teléfono
   return pedidoIndice;
 }

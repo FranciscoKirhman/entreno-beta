@@ -1,7 +1,7 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
-// Los archivos de cada publicación se leen desde su copia; una versión nueva instala otra copia completa.
+// Red primero, con límite de tiempo, y la copia guardada como respaldo (igual que el tablero).
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-04 21:32 · 3443116";
+const VERSION = "2026-10-04 21:33 · 83d3927";
 const ARCHIVOS = [
  "./",
  "animacion-ui.js",
@@ -59,9 +59,6 @@ const ARCHIVOS = [
  "img/articulaciones/muneca.webp",
  "img/articulaciones/rodilla.webp",
  "img/articulaciones/tobillo.webp",
- "img/asistentes/coach/animacion/brazo.json",
- "img/asistentes/coach/animacion/brazo.webp",
- "img/asistentes/coach/animacion/cuerpo.webp",
  "img/asistentes/coach/animo.webp",
  "img/asistentes/coach/calendario.webp",
  "img/asistentes/coach/celebra.webp",
@@ -75,9 +72,6 @@ const ARCHIVOS = [
  "img/asistentes/coach/saludo.webp",
  "img/asistentes/coach/sin_senal.webp",
  "img/asistentes/coach.webp",
- "img/asistentes/entrenador/animacion/brazo.json",
- "img/asistentes/entrenador/animacion/brazo.webp",
- "img/asistentes/entrenador/animacion/cuerpo.webp",
  "img/asistentes/entrenador/animo.webp",
  "img/asistentes/entrenador/calendario.webp",
  "img/asistentes/entrenador/celebra.webp",
@@ -91,9 +85,6 @@ const ARCHIVOS = [
  "img/asistentes/entrenador/saludo.webp",
  "img/asistentes/entrenador/sin_senal.webp",
  "img/asistentes/entrenador.webp",
- "img/asistentes/entrenadora/animacion/brazo.json",
- "img/asistentes/entrenadora/animacion/brazo.webp",
- "img/asistentes/entrenadora/animacion/cuerpo.webp",
  "img/asistentes/entrenadora/animo.webp",
  "img/asistentes/entrenadora/calendario.webp",
  "img/asistentes/entrenadora/celebra.webp",
@@ -107,9 +98,6 @@ const ARCHIVOS = [
  "img/asistentes/entrenadora/saludo.webp",
  "img/asistentes/entrenadora/sin_senal.webp",
  "img/asistentes/entrenadora.webp",
- "img/asistentes/mancuerna/animacion/brazo.json",
- "img/asistentes/mancuerna/animacion/brazo.webp",
- "img/asistentes/mancuerna/animacion/cuerpo.webp",
  "img/asistentes/mancuerna/animo.webp",
  "img/asistentes/mancuerna/calendario.webp",
  "img/asistentes/mancuerna/celebra.webp",
@@ -123,9 +111,6 @@ const ARCHIVOS = [
  "img/asistentes/mancuerna/saludo.webp",
  "img/asistentes/mancuerna/sin_senal.webp",
  "img/asistentes/mancuerna.webp",
- "img/asistentes/pesa/animacion/brazo.json",
- "img/asistentes/pesa/animacion/brazo.webp",
- "img/asistentes/pesa/animacion/cuerpo.webp",
  "img/asistentes/pesa/animo.webp",
  "img/asistentes/pesa/calendario.webp",
  "img/asistentes/pesa/celebra.webp",
@@ -139,9 +124,6 @@ const ARCHIVOS = [
  "img/asistentes/pesa/saludo.webp",
  "img/asistentes/pesa/sin_senal.webp",
  "img/asistentes/pesa.webp",
- "img/asistentes/profe/animacion/brazo.json",
- "img/asistentes/profe/animacion/brazo.webp",
- "img/asistentes/profe/animacion/cuerpo.webp",
  "img/asistentes/profe/animo.webp",
  "img/asistentes/profe/calendario.webp",
  "img/asistentes/profe/celebra.webp",
@@ -155,9 +137,6 @@ const ARCHIVOS = [
  "img/asistentes/profe/saludo.webp",
  "img/asistentes/profe/sin_senal.webp",
  "img/asistentes/profe.webp",
- "img/asistentes/quiltro/animacion/brazo.json",
- "img/asistentes/quiltro/animacion/brazo.webp",
- "img/asistentes/quiltro/animacion/cuerpo.webp",
  "img/asistentes/quiltro/animo.webp",
  "img/asistentes/quiltro/calendario.webp",
  "img/asistentes/quiltro/celebra.webp",
@@ -171,9 +150,6 @@ const ARCHIVOS = [
  "img/asistentes/quiltro/saludo.webp",
  "img/asistentes/quiltro/sin_senal.webp",
  "img/asistentes/quiltro.webp",
- "img/asistentes/robot/animacion/brazo.json",
- "img/asistentes/robot/animacion/brazo.webp",
- "img/asistentes/robot/animacion/cuerpo.webp",
  "img/asistentes/robot/animo.webp",
  "img/asistentes/robot/calendario.webp",
  "img/asistentes/robot/celebra.webp",
@@ -627,6 +603,7 @@ const ARCHIVOS = [
  "semana.js",
  "sesion-libre-ui.js",
  "tablero-original.js",
+ "tamano-texto.js",
  "temporada.js",
  "../contenido/checkin.json",
  "../contenido/cuestionario.json",
@@ -691,7 +668,6 @@ const ARCHIVOS = [
  "../nucleo/resumen-periodo.js",
  "../nucleo/resumen-plan.js",
  "../nucleo/resumen-sesion.js",
- "../nucleo/retorno-app.js",
  "../nucleo/semanal.js",
  "../nucleo/serie-completa.js",
  "../nucleo/series-retiradas.js",
@@ -727,19 +703,8 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   if (url.origin === 'https://fonts.googleapis.com' || url.origin === 'https://fonts.gstatic.com') { e.respondWith(fuente(req)); return; }
   if (url.origin !== location.origin) return; // lo externo pasa sin tocar
-  e.respondWith(archivoPublicado(req, url));
+  e.respondWith(redPrimero(req, url));
 });
-
-/** No mezclar archivos nuevos en la copia de una versión anterior. La actualización ocurre al instalar sw.js. */
-async function archivoPublicado(req, url) {
-  const clave = url.origin + url.pathname;
-  const publicado = ARCHIVOS.some(a => new URL(a, self.location.href).href === clave);
-  if (publicado || req.mode === 'navigate') {
-    const copia = await guardada(req, clave);
-    if (copia) return copia;
-  }
-  return redPrimero(req, url);
-}
 
 /** La copia guardada; para abrir una página, la portada de la app. */
 async function guardada(req, clave) {
@@ -757,7 +722,7 @@ function redPrimero(req, url) {
       if (r.ok) { const copia = r.clone(); caches.open(CACHE).then(c => c.put(clave, copia)); }
       return r;
     });
-    const reloj = setTimeout(() => guardada(req, clave).then(r => dar(r || Response.error())), LIMITE_MS);
+    const reloj = setTimeout(() => guardada(req, clave).then(dar), LIMITE_MS);
     red.then(r => { clearTimeout(reloj); dar(r); })
       .catch(() => { clearTimeout(reloj); guardada(req, clave).then(r => dar(r || Response.error())); });
   });

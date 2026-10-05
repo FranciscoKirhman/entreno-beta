@@ -80,6 +80,11 @@ export function abrirHoja({ titulo, nota = '', notaOculta = false, contenido = '
   const fondo = document.createElement('div');
   fondo.id = 'hoja';
   fondo.className = 'hoja-fondo';
+  const hoy = document.getElementById('vista-hoy');
+  if (hoy) {
+    fondo.classList.add('hoja-de-hoy');
+    fondo.style.setProperty('--hoy-base', getComputedStyle(hoy).getPropertyValue('--hoy-base').trim() || '17px');
+  }
   fondo.innerHTML = `<div class="hoja" role="dialog" aria-modal="true" aria-labelledby="hoja-titulo">
     <div class="asa" aria-hidden="true"></div>
     <h3 id="hoja-titulo">${esc(titulo)}${nota && notaOculta ? ' <button type="button" class="ayuda ayuda-titulo" data-ayuda-titulo aria-expanded="false" aria-label="¿Qué es?">?</button>' : ''}</h3>
