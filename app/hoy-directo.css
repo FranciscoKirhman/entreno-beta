@@ -154,3 +154,6 @@ body:has(#pantalla-pasos) .acciones-sesion{visibility:hidden}
 .serie-contenedor.arrastrando .serie{transition:none}
 .quitar-serie{position:absolute;inset:0 0 0 auto;display:grid;place-items:center;width:80px;min-height:44px;border:0;background:var(--critical);color:#fff;font-size:15px;font-weight:600;cursor:pointer}
 @media(prefers-reduced-motion:no-preference){.serie-contenedor .serie{transition:transform .18s ease-out,background-color .15s}}
+
+/* La nota se ve bajo el nombre y conserva espacio para tocarla aunque esté vacía. */
+#vista-hoy textarea.nota-ej{min-height:44px;font-size:17px;margin:4px 0 0 58px;width:calc(100% - 58px);padding:10px 0;line-height:1.4}

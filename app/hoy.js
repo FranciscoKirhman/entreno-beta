@@ -588,6 +588,18 @@ function sesionHoy(dia) {
 `;
 }
 
+function respuestasEjercicioHtml(e, id, nota) {
+  const preguntas = K.por_ejercicio.preguntas.filter(p => !p.mostrar_si || Object.entries(p.mostrar_si).every(([q, vals]) => vals.includes(nota[q])));
+  return `    ${e.nota && !/^Elige un peso/.test(e.nota) ? `<p class="pequeno suave">${esc(e.nota)}</p>` : ''}
+      <div class="preguntas-ej">
+        ${preguntas.map(p => `<div><span class="pequeno">${esc(p.texto)}</span>${p.tipo === 'escala'
+          ? escala(`n-${id}-${p.id}`, p.min, p.max, nota[p.id], p.extremos, `data-nota="${id}" data-p="${p.id}" data-num`)
+          : opcionesRadio(`n-${id}-${p.id}`, p.zonas ? [] : p.opciones, nota[p.id], `data-nota="${id}" data-p="${p.id}"`)}${p.zonas ? `<select data-nota="${id}" data-p="${p.id}"><option value="">Elige</option>${C.zonas[p.zonas].map(([z, t]) => `<option value="${z}"${nota[p.id] === z ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>` : ''}</div>`).join('')}
+        <label class="pequeno"><input type="checkbox" data-nota="${id}" data-p="para_entrenador"${chk(nota.para_entrenador)}> Que la vea mi entrenador</label>
+      </div>
+`;
+}
+
 function ejercicioHoy(e, k, f, previas, nota, dia) {
   const id = idDe(e, k);
   const aprox = filasDe(f, e, k).some(x => x?.aprox != null) ? aproximacionesHoy(dia, e, E.registro[f]?.[id], f) : [];
@@ -625,7 +637,6 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
       <button type="button" class="check" data-hecho="${id}" data-i="${i}" aria-pressed="${Boolean(r.hecho)}" aria-label="Serie ${etiq[i]} hecha">${r.hecho ? icono('visto', 'visto-serie') : ''}</button>
       ${(r.consejo || r.record?.length) && trabajo ? `<p class="consejo ${r.consejo?.tipo || 'bien'}">${r.record?.length ? '<span class="chip-record">Récord</span> ' : ''}${esc(r.consejo?.texto || '')}</p>` : ''}</div></div>`;
   }).join('');
-  const preguntas = K.por_ejercicio.preguntas.filter(p => !p.mostrar_si || Object.entries(p.mostrar_si).every(([q, vals]) => vals.includes(nota[q])));
   // En una superserie, el descanso va al terminar la vuelta (se elige en el último ejercicio).
   const desc = g ? descansoVuelta(dia.ejercicios, g) : descansoDe(e, k);
   const descTexto = g && g.pos < g.total ? 'sin descanso, sigue la superserie' : `descanso ${mmss(desc)}`;
@@ -640,21 +651,13 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
         ${ej && E.notasFijas?.[e.ejercicio_id] ? `<button type="button" class="nota-fija" data-nota-fija="${id}" aria-label="Nota fija: ${esc(E.notasFijas[e.ejercicio_id])}. Editar">${icono('lapiz', 'icono icono-chico')}<span>${esc(E.notasFijas[e.ejercicio_id])}</span></button>` : ''}</div>
       <button type="button" class="boton-icono" data-mas="${id}" aria-label="Más opciones de ${esc(nombre)}">${icono('puntos')}</button>
     </div>
+    <textarea class="nota-ej" rows="1" data-nota="${id}" data-p="nota" data-visible placeholder="Nota para tu entrenador" aria-label="Nota para tu entrenador sobre ${esc(nombre)}">${esc(nota.nota || '')}</textarea>
     <div class="tabla-series${seg ? ' seg' : dist ? ' dist' : ''}">
       <div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${queEs || u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : dist ? 'Metros' : 'Reps'}</span>${seg ? '<span aria-hidden="true"></span>' : dist ? '' : `<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el ${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}">${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}</button>`}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>
       ${filasHtml}
     </div>
     <div class="fila-agregar"><button type="button" class="boton agregar-serie" data-agregar="${id}">+ Agregar serie</button></div>
-    <details class="extra" data-panel="nota-${id}"${Object.keys(nota).some(k => !['nota', 'para_entrenador'].includes(k)) || abiertos.has(`nota-${id}`) ? ' open' : ''}><summary>Cómo te fue</summary>
-    ${e.nota && !/^Elige un peso/.test(e.nota) ? `<p class="pequeno suave">${esc(e.nota)}</p>` : ''}
-    <textarea class="nota-ej" rows="1" data-nota="${id}" data-p="nota" data-visible placeholder="Nota para tu entrenador" aria-label="Nota para tu entrenador sobre ${esc(nombre)}">${esc(nota.nota || '')}</textarea>
-      <div class="preguntas-ej">
-        ${preguntas.map(p => `<div><span class="pequeno">${esc(p.texto)}</span>${p.tipo === 'escala'
-          ? escala(`n-${id}-${p.id}`, p.min, p.max, nota[p.id], p.extremos, `data-nota="${id}" data-p="${p.id}" data-num`)
-          : opcionesRadio(`n-${id}-${p.id}`, p.zonas ? [] : p.opciones, nota[p.id], `data-nota="${id}" data-p="${p.id}"`)}${p.zonas ? `<select data-nota="${id}" data-p="${p.id}"><option value="">Elige</option>${C.zonas[p.zonas].map(([z, t]) => `<option value="${z}"${nota[p.id] === z ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>` : ''}</div>`).join('')}
-        <label class="pequeno"><input type="checkbox" data-nota="${id}" data-p="para_entrenador"${chk(nota.para_entrenador)}> Que la vea mi entrenador</label>
-      </div>
-    </details>
+
   </li>`;
 }
 
@@ -1115,6 +1118,17 @@ function enlazar(ir, dia) {
   // Ficha del ejercicio: cómo se hace, qué trabaja, tus marcas, por qué está en tu plan y alternativas.
   raiz.querySelectorAll('[data-ficha]').forEach(b => b.onclick = () => ir('ejercicio', { id: b.dataset.ficha, desde: 'hoy' }));
 
+  const abrirComoTeFue = (e, id, volver) => {
+    abrirHoja({ titulo: 'Cómo te fue', contenido: respuestasEjercicioHtml(e, id, E.notas[f]?.[id] || {}), volver,
+      opciones: [{ valor: 'listo', icono: icono('visto'), nombre: 'Listo' }], alElegir: repintar });
+    $('hoja').addEventListener('change', ev => {
+      const t = ev.target;
+      if (t.dataset.nota !== id) return;
+      guardarNota(id, t.dataset.p, t.type === 'checkbox' ? t.checked : t.dataset.num !== undefined ? Number(t.value) : t.value);
+      if (t.dataset.p === 'molestia') abrirComoTeFue(e, id, volver);
+    });
+  };
+
   // Menú ⋯ de cada ejercicio.
   raiz.querySelectorAll('[data-mas]').forEach(b => b.onclick = () => {
     const id = b.dataset.mas;
@@ -1130,6 +1144,7 @@ function enlazar(ir, dia) {
       opciones: [
         ...(ej ? [{ valor: 'ficha', icono: icono('libro'), nombre: 'Cómo se hace y por qué' }] : []),
         ...(ej ? [{ valor: 'cambiar', icono: icono('cambiar'), nombre: 'Cambiar este ejercicio' }] : []),
+        { valor: 'como', icono: icono('lapiz'), nombre: 'Cómo te fue' },
         { valor: 'calentar', icono: icono('fuego'), clase: 'tipo-calentamiento', nombre: 'Agregar series de calentamiento' },
         ...(ej && ej.equipamiento.some(q => q === 'barra_rack' || q === 'smith') ? [{ valor: 'discos', icono: icono('pesa'), nombre: 'Calculadora de discos' }] : []),
         ...(ej ? [{ valor: 'nota-fija', icono: icono('lapiz'), nombre: E.notasFijas?.[e.ejercicio_id] ? 'Editar la nota fija' : 'Nota fija (aparece siempre)' }] : []),
@@ -1148,6 +1163,7 @@ function enlazar(ir, dia) {
         else if (v === 'calentar') agregarFila(id, true);
         else if (v === 'discos') calculadoraDiscos(e, k, b);
         else if (v === 'nota-fija') editarNotaFija(e, b);
+        else if (v === 'como') abrirComoTeFue(e, id, b);
         else if (v === 'superserie') superserie(id, b);
         else if (v === 'prioriza') abrirHoja({ titulo: 'Si no te salen las repeticiones', nota: prioridadEsfuerzo(e, ej, D(), lesiones).texto, volver: b, opciones: [{ valor: 'ok', icono: icono('visto'), clase: 'confirmar', nombre: 'Entendido' }], alElegir: () => {} });
         else if (v === 'video') window.open(enlaceVideo(ej), '_blank', 'noopener');
