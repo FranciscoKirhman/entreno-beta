@@ -45,6 +45,8 @@ import { montarAnimaciones } from './animacion-ui.js';
 import { animacionDePaso } from '../nucleo/animaciones.js';
 import { modoEsfuerzo, escalaDe, aRpe, deRpe, rpeDeSerie, textoEsfuerzo, significado } from '../nucleo/esfuerzo.js';
 import { proponerEdicion, ordenarSesion } from './editar-sesion-ui.js';
+import { protegerDialogo } from './modal.js';
+import { fechaSesionActiva } from '../nucleo/sesion-activa.js';
 import { serieCompleta } from '../nucleo/serie-completa.js';
 import { proponerSesionVacia } from './sesion-libre-ui.js';
 import { ilustracionesCalentamiento } from '../nucleo/imagenes-calentamiento.js';
@@ -57,7 +59,8 @@ import { hayImagen, srcMiniatura } from './imagenes.js';
 const app = () => $('app');
 
 export function vistaHoy(ir, extra) {
-  const f = hoy();
+  liberarDialogo?.(); liberarDialogo = null;
+  const f = fechaSesionActiva(E, hoy());
   const plan = E.plan;
   if (!plan || plan.bloqueado) return ir('inicio');
   const dia = sesionDe(plan, f);
@@ -87,6 +90,7 @@ export function vistaHoy(ir, extra) {
     ${dia && !hechaEnHevy ? accesorioHtml(dia, f) : ''}
   </div>`;
   enlazar(ir, dia);
+  liberarDialogo = protegerDialogo($('pantalla-pasos'));
   montarAnimaciones(app(), caja => animacionDePaso({ name: caja.dataset.pasoNombre, clave: caja.dataset.pasoClave, agregar_id: caja.dataset.pasoEj }));
   document.getElementById('abrir-revision')?.addEventListener('click', () => ir('coach', { revisar: true }));
   actualizarPantalla(); // al empezar o al marcar la primera serie se pide la pantalla encendida; al guardar, se suelta
@@ -330,6 +334,7 @@ const guardadaHoy = f => E.sesiones.some(s => s.fecha === f && !s.origen);
 const enCurso = f => Boolean(inicioDe(f)) && !guardadaHoy(f);
 const sugeridoDe = (f, tipo) => E.sugeridos?.[f]?.[tipo] ?? null; // 'agregado' o 'descartado'
 const NOMBRE_PASOS = { cal: 'Calentamiento', est: 'Estiramiento' };
+let liberarDialogo = null;
 let pasosAbierta = null; // { fecha, tipo, i }: la pantalla paso a paso abierta (sigue abierta al repintar Hoy)
 
 /** Marca el comienzo de la sesión de hoy; false si ya había empezado. */
@@ -341,8 +346,9 @@ function empezarSesion(f) {
 /** Una sesión con series marcadas antes de que existiera "Empezar" parte en su primera serie marcada. */
 function completarInicio(dia, f) {
   if (inicioDe(f) || guardadaHoy(f)) return;
-  const t = dia.ejercicios.flatMap((e, k) => filasDe(f, e, k)).filter(x => x.hecho && x.t).map(x => x.t);
-  if (t.length) { (E.inicioSesion ||= {})[f] = Math.min(...t); guardar(); }
+  const hechas = dia.ejercicios.flatMap((e, k) => filasDe(f, e, k)).filter(x => x.hecho);
+  const t = hechas.map(x => Number(x.t)).filter(x => Number.isFinite(x) && x > 0 && x <= Date.now());
+  if (hechas.length) { (E.inicioSesion ||= {})[f] = t.length ? Math.min(...t) : Date.now(); guardar(); }
 }
 
 /** El calentamiento completo de hoy (con las series de aproximación), según los ejercicios y sus pesos. */
@@ -448,7 +454,7 @@ function pantallaPasosHtml(dia, f) {
       ${p.how ? `<p class="paso-instruccion">${esc(p.how)}</p>` : ''}
       ${p.por_que ? `<p class="paso-motivo pequeno">${esc(p.por_que)}</p>` : ''}
       ${i === 0 && conFilasC ? '<p class="pequeno suave">Las series livianas con peso están en cada ejercicio, en las filas C.</p>' : ''}
-      ${i === 0 && tipo === 'est' ? '<p class="pequeno suave">Opcional. Ayuda a mantener la movilidad, pero no evita el dolor muscular de los días siguientes. Estira hasta sentir tensión, sin dolor.</p>' : ''}
+      ${i === 0 && tipo === 'est' ? '<p class="pequeno suave">Opcional. Ayuda a mantener la movilidad, pero no reduce de forma importante el dolor muscular de los días siguientes. Estira hasta sentir tensión, sin dolor.</p>' : ''}
     </div>
     <div class="pasos-pie">
       ${i > 0 ? '<button type="button" class="boton" data-pasos="anterior">Anterior</button>' : ''}
@@ -654,7 +660,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
 }
 
 function enlazar(ir, dia) {
-  const f = hoy();
+  const f = dia?.fecha || hoy();
   $('bienestar-caja')?.addEventListener('toggle', ev => { bienestarAbierto = ev.target.open; });
   $('plan-hecho')?.addEventListener('toggle', ev => { planHechoAbierto = ev.target.open; });
   document.querySelectorAll('[data-b-campo]').forEach(boton => boton.onclick = async () => {
@@ -1017,7 +1023,7 @@ function enlazar(ir, dia) {
     const estado = E; // si cambia la cuenta o el día mientras corre, no se anota en otro lado
     iniciarTramos([{ seg: meta, texto: `${e.nombre || indice.porId.get(e.ejercicio_id)?.nombre || 'Serie'}, serie ${i + 1}` }], '¡Listo!', { alTerminar: segundos => {
       if (segundos < 3) return; // un toque por error no anota nada
-      if (E !== estado || f !== hoy()) return;
+      if (E !== estado || f !== fechaSesionActiva(E, hoy())) return;
       const { lista: actual } = materializar(f, e, k);
       actual[i] = { ...actual[i], reps: segundos };
       guardar();
@@ -1270,7 +1276,9 @@ function enlazar(ir, dia) {
   };
 
   // Terminar sesión (abajo o en la solapa): queda en el historial local y, con cuenta, en el servidor.
+  let terminando = false;
   const terminarSesion = async () => {
+    if (terminando) return;
     const series = [], notas = [];
     let orden = 0;
     dia.ejercicios.forEach((e, k) => {
@@ -1298,11 +1306,13 @@ function enlazar(ir, dia) {
     if (!series.length) { avisar('Marca al menos una serie como hecha.'); return; }
     // El id es del teléfono y se mantiene al guardar de nuevo: así la cuenta la reemplaza en vez de duplicarla.
     // Las sesiones importadas (Hevy) de ese día no se tocan.
-    const id = E.sesiones.find(s => s.fecha === f && !s.origen)?.id || crypto.randomUUID();
+    terminando = true;
+    const anteriorGuardada = E.sesiones.find(s => s.fecha === f && !s.origen);
+    const id = anteriorGuardada?.id || crypto.randomUUID();
     E.sesiones = E.sesiones.filter(s => !(s.fecha === f && !s.origen));
     const hora = ahora().slice(11);
     // Lo que duró: desde "Empezar" (o la primera serie) hasta ahora.
-    const minutos = inicioDe(f) ? Math.max(1, Math.round((Date.now() - inicioDe(f)) / 6e4)) : avance(dia).cifras.minutos ?? (cardio ? Math.round(cardio.duracion_seg / 60) : null);
+    const minutos = anteriorGuardada ? anteriorGuardada.duracion_min : inicioDe(f) ? Math.max(1, Math.round((Date.now() - inicioDe(f)) / 6e4)) : avance(dia).cifras.minutos ?? (cardio ? Math.round(cardio.duracion_seg / 60) : null);
     E.sesiones.push({ id, fecha: f, hora, titulo: dia.foco, duracion_min: minutos, series, notas });
     E.mensaje = `Sesión guardada: ${series.length} serie${series.length === 1 ? '' : 's'}.`;
     detenerDescanso();

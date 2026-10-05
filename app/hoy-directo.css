@@ -115,3 +115,6 @@ body:has(#acc-calentamiento) main{padding-bottom:calc(env(safe-area-inset-bottom
 .acc-textos small{font-size:12px;color:var(--ink-muted)}
 .acc-boton{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-width:44px;min-height:44px;padding:0 12px;border:0;border-radius:999px;background:var(--fill);color:var(--accent);font:600 15px/1 var(--f-texto);cursor:pointer}
 .acc-boton:active{opacity:.7}
+
+/* Con ambos avisos abiertos, el texto queda sobre el cronómetro. */
+body.con-descanso:has(#pantalla-pasos) #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 164px)}

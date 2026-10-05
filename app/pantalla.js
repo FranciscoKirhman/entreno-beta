@@ -2,15 +2,16 @@
 // todavía sin guardar), el teléfono no se apaga solo. Usa la API Wake Lock del navegador; si el teléfono no la
 // tiene, no pasa nada. El navegador la suelta al salir de la app, por eso se vuelve a pedir al volver.
 import { E, hoy } from './comun.js';
+import { fechaSesionActiva } from '../nucleo/sesion-activa.js';
 
 let bloqueo = null;
 let querer = false;
 
 export const encendidaDisponible = () => 'wakeLock' in navigator;
 
-/** Hay una sesión en curso hoy: se tocó "Empezar entrenamiento" o hay alguna serie marcada, y todavía no se guardó. */
+/** Hay una sesión en curso: conserva su fecha al cruzar medianoche y termina al guardar. */
 export function sesionEnCurso() {
-  const f = hoy();
+  const f = fechaSesionActiva(E, hoy());
   const marcada = Object.values(E.registro[f] || {}).some(filas => (filas || []).some(x => x?.hecho));
   return (marcada || Boolean(E.inicioSesion?.[f])) && !E.sesiones.some(s => s.fecha === f && !s.origen);
 }

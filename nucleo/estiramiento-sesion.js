@@ -1,5 +1,5 @@
 // Estiramiento de cierre según los ejercicios de la sesión, para las sesiones que no lo traen (las armadas desde cero y
-// las del motor del plan). Es opcional y corto: estirar después de entrenar ayuda a mantener la movilidad, pero no evita
+// las del motor del plan). Es opcional y corto: estirar después de entrenar ayuda a mantener la movilidad, pero no reduce de forma importante
 // el dolor muscular de los días siguientes (Herbert, de Noronha y Kamper, Cochrane 2011). Cada paso dura 30 s por lado,
 // dentro de los 10 a 30 s que recomienda el ACSM para mantener un estiramiento. Los nombres coinciden con las
 // animaciones de nucleo/animaciones.js y con los cronómetros de nucleo/calentamiento.js.

@@ -34,6 +34,8 @@ export const esVuelta = (anterior, vista) => anterior === 'ejercicio' || PADRE[a
 /** Qué hace "atrás" ahora, o null si no hay a dónde volver. Su "destino" es la pantalla a la que lleva, si se sabe. */
 export function accionAtras({ vista, extra, ir, conPlan }) {
   if (document.getElementById('hoja')) return () => cerrarHoja();
+  const minimizar = document.querySelector('#pantalla-pasos [data-pasos="minimizar"]');
+  if (minimizar) return () => minimizar.click();
   // El botón de volver de la pantalla sabe a dónde volver (la ficha, por ejemplo, a la ficha anterior); data-vuelve-a
   // dice a qué pantalla, cuando es otra.
   const boton = document.querySelector('#app .volver, #app [data-atras]:not([hidden]), #vista-seccion #a-perfil');
