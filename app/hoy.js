@@ -487,7 +487,7 @@ function solapaHtml(dia) {
   const f = dia.fecha;
   if (!enCurso(f)) return '';
   return `<div class="solapa-sesion" id="solapa">
-    <span class="solapa-foco">${esc(dia.foco)}</span>
+    <span class="solapa-foco">${esc(dia.foco)}<small>${avance(dia).hechas} de ${avance(dia).total} series</small></span>
     <span class="solapa-dato num" role="timer" aria-label="Tiempo de la sesión" id="solapa-tiempo" data-fecha="${f}">${transcurrido(f)}</span>
     <span class="solapa-dato num" aria-label="Volumen levantado">${esc(volumenTexto(avance(dia).cifras.volumen))}</span>
     <button type="button" class="solapa-terminar" data-terminar>Terminar</button>
@@ -548,44 +548,42 @@ const avanceHtml = ({ hechas, total, cifras: c }) => `<div class="avance" id="av
   ${hechas ? `<p class="cifras pequeno suave">${c.minutos ? `${c.minutos} min · ` : ''}${c.series} de trabajo · volumen ${esc(volumenTexto(c.volumen))}</p>` : ''}
 </div>`;
 
-function sesionHoy(dia) {
+function detallesSesionHtml(dia) {
   const f = dia.fecha;
-  const notas = E.notas[f] || {};
-  const progreso = avance(dia), guardada = guardadaHoy(f);
-  const todas = seriesAnotadas(E.sesiones, E.registro);
   const ejs = dia.ejercicios.map(e => indice.porId.get(e.ejercicio_id)).filter(Boolean);
   const prim = [...new Set(ejs.flatMap(ej => ej.musculos_primarios))];
   const sec = [...new Set(ejs.flatMap(ej => ej.musculos_secundarios))].filter(m => !prim.includes(m));
   const eligePeso = dia.ejercicios.some(e => /^Elige un peso/.test(e.nota || ''));
   // La duración cuenta el calentamiento solo si hoy lo hay (en una sesión desde cero, cuando se agregó).
   const calentamiento = pasosDe(dia, f, 'cal').length ? calentamientoCompleto(dia, f) : [];
+  return `    <p class="suave pequeno">${dia.hora ? `${esc(dia.hora)} · ` : ''}~${duracionSesion({ ...dia, calentamiento })} min · ${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? '' : 's'}</p>
+    ${prim.length ? `<div class="hoy-entrenas">${imagenesMusculos(prim.slice(0, 4))}<div><p class="sobretitulo">Hoy entrenas</p><p class="musculos-hoy">${esc(mayuscula(lista(prim.map(m => NOMBRE_MUSCULO[m] || m))))}</p>${sec.length ? `<p class="pequeno suave">Y un poco de ${esc(lista(sec.map(m => (NOMBRE_MUSCULO[m] || m).toLowerCase())))}</p>` : ''}</div></div>` : ''}
+    <p class="suave pequeno">${esc(dia.racional || '')}</p>
+    ${eligePeso ? '<p class="nota-sesion pequeno">Donde no hay peso, elige uno con el que te sobren las repeticiones de reserva (RIR) en la última serie. Lo anotas y la app ajusta desde ahí.</p>' : ''}
+`;
+}
+
+function sesionHoy(dia) {
+  const f = dia.fecha;
+  const notas = E.notas[f] || {};
+  const progreso = avance(dia), guardada = guardadaHoy(f);
+  const todas = seriesAnotadas(E.sesiones, E.registro);
   return `<section class="sesion-cab compacta" aria-label="Sesión de hoy">
     <div class="sesion-controles">
-      ${dia.ejercicios.length ? avanceHtml(progreso) : '<p class="pequeno suave">Sesión vacía. Abre Ejercicios para elegir desde el banco o ver recomendaciones para ti.</p>'}
+      ${dia.ejercicios.length ? (enCurso(f) ? '' : avanceHtml(progreso)) : '<p class="pequeno suave">Sesión vacía. Abre Ejercicios para elegir desde el banco o ver recomendaciones para ti.</p>'}
       <button type="button" class="boton chico" id="ajustar-hoy">${icono('ajustes')} Ajustar hoy</button>
       <button type="button" class="boton-icono" id="ver-detalles-sesion" aria-label="Detalles de la sesión">${icono('info')}</button>
     </div>
   </section>
-  <div class="accesos-entreno">
-    <button type="button" class="boton chico" id="banco-hoy-arriba">${icono('mas')} Ejercicios</button>
-    <button type="button" class="boton chico" data-elegir-cardio>Cardio</button>
-    ${dia.ejercicios.length ? '<button type="button" class="boton chico" id="sesion-vacia-arriba">Empezar vacía</button>' : ''}
-  </div>
   ${filaPasosHtml(dia, f, 'cal')}
   <ol class="ejercicios-hoy">${dia.ejercicios.map((e, k) => ejercicioHoy(e, k, f, e.ejercicio_id ? anterior(todas, e.ejercicio_id, f) : null, notas[idDe(e, k)] || {}, dia)).join('')}</ol>
   ${cardioHtml(dia.cardio)}
   ${filaPasosHtml(dia, f, 'est')}
   ${progreso.total && progreso.hechas === progreso.total ? sesionCompletaHtml({ guardada }) : ''}
-  <div class="fila-botones">${enCurso(f) || guardada
+  <div class="acciones-sesion">${enCurso(f) || guardada
     ? `<button type="button" class="boton primario grande" id="terminar" data-terminar>${guardada ? 'Guardar de nuevo' : 'Terminar sesión'}</button>`
     : '<button type="button" class="boton primario grande" id="empezar">Empezar entrenamiento</button>'}</div>
-  <details class="tarjeta detalles-sesion" id="detalles-sesion">
-    <summary>Detalles de la sesión</summary>
-    <p class="suave pequeno">${dia.hora ? `${esc(dia.hora)} · ` : ''}~${duracionSesion({ ...dia, calentamiento })} min · ${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? '' : 's'}</p>
-    ${prim.length ? `<div class="hoy-entrenas">${imagenesMusculos(prim.slice(0, 4))}<div><p class="sobretitulo">Hoy entrenas</p><p class="musculos-hoy">${esc(mayuscula(lista(prim.map(m => NOMBRE_MUSCULO[m] || m))))}</p>${sec.length ? `<p class="pequeno suave">Y un poco de ${esc(lista(sec.map(m => (NOMBRE_MUSCULO[m] || m).toLowerCase())))}</p>` : ''}</div></div>` : ''}
-    <p class="suave pequeno">${esc(dia.racional || '')}</p>
-    ${eligePeso ? '<p class="nota-sesion pequeno">Donde no hay peso, elige uno con el que te sobren las repeticiones de reserva (RIR) en la última serie. Lo anotas y la app ajusta desde ahí.</p>' : ''}
-  </details>`;
+`;
 }
 
 function ejercicioHoy(e, k, f, previas, nota, dia) {
@@ -638,7 +636,6 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
         <span class="ej-sub num">${esc(`${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${sufijo(e)}${dist ? '' : ` · RIR ${e.rir}`}${e.carga_kg ? ` · ${peso(e.carga_kg)}${queEs ? ` de ${queEs}` : ''}` : ''} · ${descTexto}`)}</span>
         ${ej ? '' : '<span class="chip">Indicado por tu profesional</span>'}
         ${ej && E.notasFijas?.[e.ejercicio_id] ? `<button type="button" class="nota-fija" data-nota-fija="${id}" aria-label="Nota fija: ${esc(E.notasFijas[e.ejercicio_id])}. Editar">${icono('lapiz', 'icono icono-chico')}<span>${esc(E.notasFijas[e.ejercicio_id])}</span></button>` : ''}</div>
-      ${ej ? `<button type="button" class="boton-icono" data-ficha="${e.ejercicio_id}" aria-label="Cómo se hace y por qué">${icono('info')}</button>` : ''}
       <button type="button" class="boton-icono" data-mas="${id}" aria-label="Más opciones de ${esc(nombre)}">${icono('puntos')}</button>
     </div>
     <div class="tabla-series${seg ? ' seg' : dist ? ' dist' : ''}">
@@ -723,17 +720,14 @@ function enlazar(ir, dia) {
   $('entrenar-igual')?.addEventListener('click', () => ir('coach', 'Hoy no tenía sesión pero quiero entrenar, ¿qué otra opción tienes?'));
   const empezarVacia = volver => proponerSesionVacia({ volver, alCambiar: () => ir('hoy') });
   $('sesion-vacia-hoy')?.addEventListener('click', ev => empezarVacia(ev.currentTarget));
-  $('sesion-vacia-arriba')?.addEventListener('click', ev => empezarVacia(ev.currentTarget));
   $('agregar-ejercicio-hoy')?.addEventListener('click', () => ir('banco', { desde: 'hoy' }));
   document.querySelectorAll('[data-elegir-cardio]').forEach(b => b.onclick = () => elegirCardio({ volver: b, alCambiar: () => vistaHoy(ir) }));
   if (!dia) return;
-  $('banco-hoy-arriba').onclick = () => ir('banco', { desde: 'hoy' });
 
-  $('ver-detalles-sesion')?.addEventListener('click', () => {
-    const detalles = $('detalles-sesion');
-    detalles.open = true;
-    detalles.scrollIntoView({ block: 'start' });
-  });
+  $('ver-detalles-sesion')?.addEventListener('click', ev => abrirHoja({
+    titulo: 'Detalles de la sesión', contenido: detallesSesionHtml(dia), volver: ev.currentTarget,
+    opciones: [{ valor: 'cerrar', icono: icono('visto'), nombre: 'Listo' }], alElegir: () => {},
+  }));
   const raiz = $('vista-hoy');
   const repintar = () => vistaHoyMantener(ir);
   $('cardio-hecho')?.addEventListener('click', () => {

@@ -18,7 +18,9 @@ export function enfocarTitulo(raiz) {
 }
 
 /** Entrada de una vista nueva: aparece y sube 6 px. Al volver atrás, entra desde la izquierda. */
-export const entrarVista = (el, vuelta = false) => animar(el, [{ opacity: 0, translate: vuelta ? '-14px 0' : '0 6px' }, { opacity: 1, translate: '0 0' }], { duration: vuelta ? 200 : 180 });
+export const entrarVista = (el, vuelta = false) => animar(el, el?.querySelector('#vista-hoy')
+  ? [{ opacity: 0 }, { opacity: 1 }]
+  : [{ opacity: 0, translate: vuelta ? '-14px 0' : '0 6px' }, { opacity: 1, translate: '0 0' }], { duration: vuelta ? 200 : 180 });
 
 /** Cambio de paso del cuestionario: entra desde el lado hacia donde se avanza (1) o se retrocede (-1). */
 export const entrarPaso = (el, direccion = 1) => animar(el, [{ opacity: 0, translate: `${direccion * 14}px 0` }, { opacity: 1, translate: '0 0' }], { duration: 200 });

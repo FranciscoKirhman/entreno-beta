@@ -118,3 +118,20 @@ body:has(#acc-calentamiento) main{padding-bottom:calc(env(safe-area-inset-bottom
 
 /* Con ambos avisos abiertos, el texto queda sobre el cronómetro. */
 body.con-descanso:has(#pantalla-pasos) #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 164px)}
+
+/* Un solo grupo de accesos al final y una acción visible sobre el menú. */
+#vista-hoy .ej-cab{grid-template-columns:48px minmax(0,1fr) 44px}
+#vista-hoy .sesion-controles{justify-content:flex-end}
+#vista-hoy .sesion-controles .boton-icono{flex-basis:44px}
+#vista-hoy .boton-icono{width:44px;height:44px}
+.solapa-foco small{display:block;font-size:12px;font-weight:400;color:var(--ink-muted);margin-top:2px}
+.acciones-sesion{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 76px);z-index:6;max-width:536px;margin:0 auto;padding:4px;border-radius:18px;background:color-mix(in srgb,var(--bg) 85%,transparent);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
+.acciones-sesion .boton{width:100%;margin:0}
+body:has(#vista-hoy) main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 230px)}
+body:has(#vista-hoy) .acc-pasos{bottom:calc(env(safe-area-inset-bottom,0px) + 144px)}
+body:has(#vista-hoy) #descanso{bottom:calc(env(safe-area-inset-bottom,0px) + 144px)}
+body:has(#vista-hoy) #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 212px)}
+body.con-descanso:has(#vista-hoy) #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 224px)}
+body:has(#pantalla-pasos) #descanso{bottom:calc(env(safe-area-inset-bottom,0px) + 84px)}
+body.con-descanso:has(#pantalla-pasos) #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 164px)}
+body:has(#pantalla-pasos) .acciones-sesion{visibility:hidden}
