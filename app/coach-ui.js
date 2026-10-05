@@ -14,7 +14,7 @@ import { icono } from './iconos.js';
 
 const SUGERENCIAS = ['¿Qué me toca hoy?', 'No entrené ayer', 'Falté hoy', 'Hoy no quiero hacer piernas', 'La máquina está ocupada', 'Solo tengo 30 minutos', 'Dormí mal y estoy cansado', 'Me duele el hombro', '¿Por qué hip thrust?'];
 const borradores = new WeakMap(), decisiones = new WeakSet();
-let consultaActual = null;
+let consultaActual = null, limpiarRedaccion = () => {};
 function borradorChat() {
   if (!borradores.has(E)) borradores.set(E, { texto: E.borradorChat || '', archivo: null, lectura: 0, leyendo: false });
   return borradores.get(E);
@@ -33,6 +33,10 @@ function recuperarConsultaInterrumpida() {
 export function vistaCoach(ir, mensajeInicial) {
   recuperarConsultaInterrumpida();
   const borrador = borradorChat(), estadoVista = E, usuarioVista = nube.usuarioId();
+  const editorAnterior = $('mensaje');
+  const redaccionActiva = Boolean(editorAnterior && document.activeElement === editorAnterior && !mensajeInicial?.enfocarAlternativas);
+  const seleccion = redaccionActiva ? [editorAnterior.selectionStart, editorAnterior.selectionEnd] : null;
+  limpiarRedaccion();
   if (E.plan?.bloqueado) avisar('Revisa las indicaciones de tu perfil antes de armar un plan.');
   // Desde el menú ⋯ de un ejercicio llega {ejercicio, nombre}: preguntas sobre ese ejercicio y el texto empezado.
   const sobre = mensajeInicial && typeof mensajeInicial === 'object' && mensajeInicial.ejercicio ? mensajeInicial : null;
@@ -48,7 +52,7 @@ export function vistaCoach(ir, mensajeInicial) {
     ${!E.plan ? '<p>Cuéntame qué quieres entrenar. Para preparar el primer plan, completa tu edad y acepta los términos en tu perfil.</p><button class="boton" id="perfil-chat">Completar mi perfil</button>' : ''}
     <div class="chat" id="chat" aria-live="polite">${E.chat.length ? E.chat.map(burbuja).join('') : '<p class="suave">Cuéntame qué pasa: si faltaste, si no quieres hacer algo hoy, si una máquina está ocupada, si dormiste mal o si te duele algo. También puedo explicarte por qué de cada ejercicio.</p>'}</div>
     <div class="chips sugerencias">${sugerencias.map(s => `<button type="button" class="sugerencia">${esc(s)}</button>`).join('')}</div>
-    <form id="form-chat" class="fila-chat chat-redaccion"><textarea id="mensaje" rows="2" maxlength="30000" placeholder="Cuéntame o pega tu plan…" aria-label="Mensaje"></textarea><button type="submit" class="boton primario">Enviar</button></form>
+    <div id="coach-redaccion"><form id="form-chat" class="fila-chat chat-redaccion"><textarea id="mensaje" rows="2" maxlength="30000" placeholder="Cuéntame o pega tu plan…" aria-label="Mensaje"></textarea><button type="submit" class="boton primario">Enviar</button></form></div>
     <div class="adjunto-chat"><label class="boton" for="archivo-chat">Adjuntar plan o historial</label><input id="archivo-chat" type="file" accept=".csv,.txt,text/csv,text/plain" hidden><button type="button" class="enlace" id="quitar-archivo" ${borrador.archivo || borrador.leyendo ? '' : 'hidden'}>Quitar archivo</button><button type="button" class="enlace" id="adjunto-futuro">Foto, PDF o audio (próximamente)</button><span id="archivo-chat-nombre" class="pequeno suave" role="status">${borrador.leyendo ? 'Leyendo el archivo…' : borrador.archivo ? esc(borrador.archivo.nombre) : 'CSV de Hevy o texto, hasta 200 KB'}</span></div>
     ${E.chat.length ? '<button type="button" class="enlace" id="limpiar">Borrar la conversación</button>' : ''}
   </div>`;
@@ -86,7 +90,7 @@ export function vistaCoach(ir, mensajeInicial) {
     }
   };
   const chat = $('chat');
-  chat.scrollTop = chat.scrollHeight;
+  prepararRedaccion();
   $('form-chat').onsubmit = ev => { ev.preventDefault(); const t = $('mensaje').value.trim(); if (borrador.leyendo) return avisar('Espera a que termine de leer el archivo.'); if (t || borrador.archivo) return enviar(t || 'Quiero importar este archivo.', ir, borrador.archivo); };
   document.querySelectorAll('.sugerencia').forEach(b => b.onclick = () => enviar(b.textContent, ir));
   $('limpiar')?.addEventListener('click', () => { if (E.chat.some(m => m.pendiente) || E.chat.some(m => decisiones.has(m))) return avisar('Espera a que termine esta consulta o decisión antes de borrar la conversación.'); E.chat = []; guardar(); vistaCoach(ir); });
@@ -105,7 +109,7 @@ export function vistaCoach(ir, mensajeInicial) {
       if (aceptada) { msg.opciones = null; msg.estadoPropuesta = op.accion.tipo === 'confirmar_ia' ? 'aplicada' : op.accion.tipo === 'descartar_ia' ? 'descartada' : null; }
       else if (E.chatPorTraer?.id === op.accion.id) msg.estadoPropuesta = 'por_comprobar';
       guardar();
-    } finally { decisiones.delete(msg); if (vigente()) vistaCoach(ir); }
+    } finally { decisiones.delete(msg); if (vigente()) vistaCoach(ir, { respuesta: true, enfocarAlternativas: true }); }
   });
   // La revisión de sesiones sin registro: cada respuesta se ve en el chat, como si se hubiera escrito.
   $('revision-registro')?.addEventListener('click', async ev => {
@@ -120,12 +124,58 @@ export function vistaCoach(ir, mensajeInicial) {
     if (b.disabled || !vigente()) return;
     b.disabled = true;
     try { await decidir(r === 'hice' ? { tipo: 'la_hice', fecha } : { tipo: 'no_hecha', fecha }, r === 'hice' ? `La hice: ${foco} del ${diaCorto(fecha)}` : `No hice ${foco} del ${diaCorto(fecha)}`, ir); }
-    finally { if (vigente()) vistaCoach(ir); }
+    finally { if (vigente()) vistaCoach(ir, { respuesta: true, enfocarAlternativas: true }); }
   });
   // Desde el aviso de Hoy: la revisión ya está arriba; el foco va a su pregunta para que se lea primero.
-  if (revisar && porRevisar.length) requestAnimationFrame(() => $('revision-titulo')?.focus({ preventScroll: true }));
+  if (revisar && porRevisar.length) {
+    const titulo = $('revision-titulo');
+    requestAnimationFrame(() => { if (vigente() && titulo?.isConnected) titulo.focus({ preventScroll: true }); });
+  }
+  else if (redaccionActiva) {
+    const editor = $('mensaje');
+    requestAnimationFrame(() => {
+      if (!vigente() || !editor?.isConnected) return;
+      editor.focus({ preventScroll: true }); editor.setSelectionRange(...seleccion);
+    });
+  }
+  if (!revisar && (mensajeInicial?.respuesta || E.chat.length && !mensajeInicial)) mostrarUltimaRespuesta(estadoVista, usuarioVista, !redaccionActiva);
   if (typeof mensajeInicial === 'string') enviar(mensajeInicial, ir);
   else if (sobre) { const m = $('mensaje'); if (!borrador.texto) { m.value = `Sobre ${sobre.nombre}: `; borrador.texto = E.borradorChat = m.value; guardar(); } m.focus(); m.setSelectionRange(m.value.length, m.value.length); }
+}
+
+/** El documento es la única zona de desplazamiento. Reserva el alto real del editor y del menú. */
+function prepararRedaccion() {
+  const panel = $('coach-redaccion'), app = $('app'), nav = $('nav');
+  let observador;
+  const limpiar = () => { observador?.disconnect(); window.removeEventListener('resize', medir); };
+  const medir = () => {
+    if (!panel.isConnected) { limpiar(); return; }
+    const distancia = nav && !nav.hidden ? `${Math.max(12, window.innerHeight - nav.getBoundingClientRect().top + 8)}px` : 'calc(env(safe-area-inset-bottom,0px) + 12px)';
+    app.style.setProperty('--coach-menu-distancia', distancia);
+    app.style.setProperty('--coach-redaccion-alto', `${panel.getBoundingClientRect().height}px`);
+  };
+  medir();
+  if (typeof ResizeObserver !== 'undefined') {
+    observador = new ResizeObserver(medir); observador.observe(panel); if (nav) observador.observe(nav);
+  }
+  window.addEventListener('resize', medir);
+  limpiarRedaccion = limpiar;
+}
+
+/** Las alternativas y la aceptación quedan sobre el editor; una respuesta larga conserva un solo scroll. */
+function mostrarUltimaRespuesta(estado, usuario, enfocar) {
+  const indice = E.chat.findLastIndex(m => m.rol === 'coach');
+  const mensaje = $(`mensaje-chat-${indice}`);
+  if (!mensaje) return;
+  requestAnimationFrame(() => {
+    if (E !== estado || nube.usuarioId() !== usuario || !mensaje.isConnected) return;
+    const opciones = mensaje.querySelector('.opciones-chat'), primera = opciones?.querySelector('button');
+    const disponible = $('coach-redaccion').getBoundingClientRect().top - 64;
+    const destino = mensaje.getBoundingClientRect().height <= disponible ? mensaje
+      : opciones?.getBoundingClientRect().height <= disponible ? opciones : primera || mensaje;
+    destino.scrollIntoView({ block: destino === primera ? 'start' : 'end', behavior: 'instant' });
+    if (enfocar) (primera || mensaje).focus({ preventScroll: true });
+  });
 }
 
 /** Ejecuta una opción (del chat o de la revisión): la deja escrita como respuesta de la persona y aplica su resultado. */
@@ -207,7 +257,7 @@ function burbuja(m, i) {
   const opciones = opcionesMensaje(m), ocupada = decisiones.has(m);
   // semana: cómo quedaría (o quedó) la semana, día por día, con lo que cambia marcado.
   const semana = m.semana?.length ? `<ul class="semana-chat">${m.semana.map(d => `<li class="${d.libre ? 'libre' : d.cambio ? 'cambia' : ''}"><span class="num">${esc(diaCorto(d.fecha))}</span><strong>${esc(d.foco)}</strong>${d.cambio ? `<small>${esc(d.cambio)}</small>` : ''}</li>`).join('')}</ul>` : '';
-  return `<div class="burbuja ${m.rol}">${esc(m.texto)}${m.enlace ? ` <a class="enlace" href="${esc(m.enlace)}" target="_blank" rel="noopener">Ver videos</a>` : ''}${semana}${m.propuesta ? propuestaChatHtml({ ...m.propuesta, estado: m.estadoPropuesta || m.propuesta.estado }) : ''}${opciones?.length ? `<div class="opciones-chat" ${ocupada ? 'aria-busy="true"' : ''}>${opciones.map((o, k) => `<button type="button" ${ocupada ? 'disabled' : ''} class="boton${['confirmar', 'confirmar_ia', 'aceptar_alternativa'].includes(o.accion?.tipo) && k === 0 ? ' primario' : ''}" data-msg="${i}" data-opcion="${k}">${esc(o.etiqueta)}</button>${o.nota ? `<span class="pequeno suave nota-opcion">${esc(o.nota)}</span>` : ''}${o.avisos?.length ? `<span class="pequeno suave">${esc(o.avisos.join(' '))}</span>` : ''}`).join('')}</div>` : ''}</div>`;
+  return `<div id="mensaje-chat-${i}" tabindex="-1" class="burbuja ${m.rol}"><div class="texto-chat">${esc(m.texto)}${m.enlace ? ` <a class="enlace" href="${esc(m.enlace)}" target="_blank" rel="noopener">Ver videos</a>` : ''}</div>${semana}${m.propuesta ? propuestaChatHtml({ ...m.propuesta, estado: m.estadoPropuesta || m.propuesta.estado }) : ''}${opciones?.length ? `<div class="opciones-chat" ${ocupada ? 'aria-busy="true"' : ''}>${opciones.map((o, k) => `<button type="button" ${ocupada ? 'disabled' : ''} class="boton${['confirmar', 'confirmar_ia', 'aceptar_alternativa'].includes(o.accion?.tipo) && k === 0 ? ' primario' : ''}" data-msg="${i}" data-opcion="${k}">${esc(o.etiqueta)}</button>${o.nota ? `<span class="pequeno suave nota-opcion">${esc(o.nota)}</span>` : ''}${o.avisos?.length ? `<span class="pequeno suave">${esc(o.avisos.join(' '))}</span>` : ''}`).join('')}</div>` : ''}</div>`;
 }
 
 async function enviar(texto, ir, archivo = null) {
@@ -247,7 +297,7 @@ async function enviar(texto, ir, archivo = null) {
     if (archivo && borrador.archivo === archivo) borrador.archivo = null;
   }
   guardar();
-  if ($('vista-coach')?.isConnected) vistaCoach(ir);
+  if ($('vista-coach')?.isConnected) vistaCoach(ir, { respuesta: true });
   return completada;
 }
 

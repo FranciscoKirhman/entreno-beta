@@ -138,7 +138,7 @@ pre.prompt{white-space:pre-wrap;word-break:break-word;background:var(--fill);bor
 .galeria figure{margin:0}
 .galeria img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:10px;background:var(--surface-2)}
 .galeria figcaption{font-size:12px;color:var(--ink-muted)}
-.chat{display:flex;flex-direction:column;gap:8px;max-height:52vh;overflow-y:auto;padding:4px 0}
+.chat{display:flex;flex-direction:column;gap:8px;padding:4px 0}
 .burbuja{max-width:88%;padding:10px 14px;border-radius:18px;font-size:16px;white-space:pre-wrap}
 .burbuja.persona{align-self:flex-end;background:var(--accent);color:var(--accent-ink);border-bottom-right-radius:4px}
 .burbuja.coach{align-self:flex-start;background:var(--surface);border:0;border-bottom-left-radius:4px}
@@ -942,4 +942,20 @@ html.deslizando-atras body{overflow-x:clip}
 .propuesta-chat ul{padding-left:20px}
 .propuesta-chat details{margin-top:8px}
 .propuesta-chat dd{margin-left:12px}
+
+/* Coach: un solo desplazamiento, con el editor sobre el menú y espacio para la última respuesta. */
+main:has(#vista-coach){padding-bottom:calc(var(--coach-redaccion-alto,100px) + var(--coach-menu-distancia,78px) + 20px)}
+#vista-coach{min-height:calc(100svh - 220px);min-width:0}
+#vista-coach .burbuja{overflow-wrap:anywhere;white-space:normal}
+#vista-coach .texto-chat{white-space:pre-wrap}
+#vista-coach .burbuja,#vista-coach .opciones-chat,#vista-coach [data-opcion]{scroll-margin-bottom:calc(var(--coach-redaccion-alto,100px) + var(--coach-menu-distancia,78px) + 20px);scroll-margin-top:calc(env(safe-area-inset-top,0px) + 64px)}
+#vista-coach button,#vista-coach label[for],#vista-coach a,#vista-coach summary,#vista-coach textarea{min-height:44px;min-width:44px}
+#vista-coach label[for],#vista-coach a,#vista-coach summary{display:inline-flex;align-items:center}
+#vista-coach summary{cursor:pointer;gap:8px}
+#vista-coach summary::before{content:'›';font-size:20px;transition:transform .15s}
+#vista-coach details[open]>summary::before{transform:rotate(90deg)}
+#vista-coach .opciones-chat .boton{min-height:44px}
+#coach-redaccion{position:fixed;left:16px;right:16px;bottom:var(--coach-menu-distancia,calc(env(safe-area-inset-bottom,0px) + 78px));z-index:5;max-width:528px;margin:0 auto;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:0 4px 20px rgba(0,0,0,.08)}
+#coach-redaccion .fila-chat{margin-top:0}
+#coach-redaccion textarea{resize:none}
 .burbuja{overflow-wrap:anywhere;min-width:0}
