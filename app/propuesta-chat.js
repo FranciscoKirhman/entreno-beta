@@ -6,10 +6,11 @@ import { firmaPerfil } from '../nucleo/firma-perfil.js';
 
 const ETIQUETAS = { objetivo_principal: 'Objetivo', tiempo_entrenando: 'Experiencia', dias_meta: 'Días por semana', dias_firmes: 'Días seguros', duracion_min: 'Minutos por sesión', dias_no_puedo: 'Días que no podís', musculos_prioridad: 'Prioridades', rotacion: 'Variedad' };
 export function propuestaChatHtml(p) {
+  const estado = ({ aplicada: 'Cambios aceptados', descartada: 'Propuesta descartada', por_comprobar: 'Confirmación por comprobar', no_disponible: 'Propuesta no disponible' })[p.estado] || 'Por confirmar';
   const paquete = p.paquete || { plan: p.plan };
   const plan = paquete.plan;
   const filas = (paquete.sesiones || []).map(x => `<li><strong>${esc(x.sesion.fecha || new Date(x.sesion.inicio).toLocaleDateString('sv-SE', { timeZone: 'America/Santiago' }))}: ${esc(x.sesion.titulo)}</strong>${x.sesion.comentario ? `<p>${esc(x.sesion.comentario)}</p>` : ''}<ul>${x.series.map(s => `<li>${esc(s.ejercicio_nombre)}: ${detalleSerie(s)}${s.ejercicio_id ? '' : ' (conservado por nombre)'}</li>`).join('')}</ul></li>`).join('');
-  return `<div class="propuesta-chat"><p><strong>Por confirmar</strong></p><ul>${(p.resumen || ['Revisa el plan antes de decidir.']).map(t => `<li>${esc(t)}</li>`).join('')}</ul><details><summary>Ver los cambios completos</summary>
+  return `<div class="propuesta-chat"><p><strong>${estado}</strong></p><ul>${(p.resumen || ['Revisa el plan antes de decidir.']).map(t => `<li>${esc(t)}</li>`).join('')}</ul><details><summary>Ver los cambios completos</summary>
     ${paquete.respuestas ? `<dl>${Object.entries(ETIQUETAS).filter(([k]) => paquete.respuestas[k] !== undefined).map(([k, label]) => `<dt>${label}</dt><dd>${esc(Array.isArray(paquete.respuestas[k]) ? paquete.respuestas[k].join(', ') : paquete.respuestas[k])}</dd>`).join('')}</dl>` : ''}
     ${plan ? plan.dias.map(d => `<p><strong>${esc(d.fecha)}${d.hora ? ', ' + esc(d.hora).slice(0, 5) : ''}: ${esc(d.foco)}</strong><br>${d.ejercicios.map(e => `${esc(e.nombre || e.ejercicio_id)}: ${esc(e.series)} series de ${esc(e.reps_min)} a ${esc(e.reps_max)} ${esc(e.unidad || 'reps')}, RIR ${esc(e.rir)}, ${e.carga_kg == null ? 'peso por elegir' : esc(e.carga_kg) + ' kg'}, descanso ${esc(e.descanso_seg)} s`).join('<br>')}</p>`).join('') : ''}
     ${filas ? `<ul>${filas}</ul>` : ''}
@@ -67,8 +68,8 @@ export async function actualizarChatConfirmado() {
     const recibo = await nube.estadoPropuestaIA(pendiente.id);
     if (!vigente()) return false;
     if (recibo.propuesta?.estado === 'pendiente') throw new Error('La confirmación sigue pendiente de comprobar. Sincroniza más tarde o descarta esa propuesta.');
-    if (recibo.propuesta?.estado !== 'aplicada') { delete E.chatPorTraer; guardar(); return true; }
-    pendiente.confirmado = true; guardar();
+    if (recibo.propuesta?.estado !== 'aplicada') { resolverMensajeChat(pendiente.id, recibo.propuesta?.estado === 'descartada' ? 'descartada' : 'no_disponible'); delete E.chatPorTraer; guardar(); return true; }
+    pendiente.confirmado = true; resolverMensajeChat(pendiente.id, 'aplicada'); guardar();
   }
   const sinEdicion = k => JSON.stringify(E[k]) === pendiente.firmas[k];
   const [plan, respuestas, sesiones, bienestar, suplementos, tomas] = await Promise.all([
@@ -85,8 +86,13 @@ export async function actualizarChatConfirmado() {
   E.bienestar = unirEdicionesMapa({ ...bienestar, ...Object.fromEntries(Object.entries(E.bienestar).filter(([, b]) => !b.enCuenta)) }, E.bienestar, anteriores('bienestar'));
   E.suplementos = unirEdicionesLista(suplementos, E.suplementos, anteriores('suplementos'), s => s.id);
   E.tomas = unirEdicionesLista(tomas, E.tomas, anteriores('tomas'), t => `${t.suplemento_id}|${t.fecha}|${String(t.hora || '').slice(0, 5)}`);
+  resolverMensajeChat(pendiente.id, 'aplicada');
   delete E.chatPorTraer;
   guardar(); return true;
+}
+
+function resolverMensajeChat(id, estado) {
+  for (const m of E.chat || []) if (m.propuesta?.id === id) { m.estadoPropuesta = estado; m.opciones = null; }
 }
 
 function unirEdicionesMapa(remotas, actuales, anteriores) {

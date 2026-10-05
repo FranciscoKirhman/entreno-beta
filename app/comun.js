@@ -232,11 +232,29 @@ export const ctxNucleo = () => ({
 /** Cambia el plan local y, con cuenta, lo guarda en el servidor (que lo valida). */
 /** Cambia el plan aquí y, con cuenta, en el servidor. Devuelve el aviso si el servidor no lo aceptó (o null). */
 export async function cambiarPlan(plan, mensaje, nube) {
+  const estado = E, usuario = nube?.usuarioId?.();
+  if (E.chatPorTraer) {
+    const aviso = 'Sincroniza los cambios del chat antes de modificar el plan.';
+    E.mensaje = aviso; guardar(); return aviso;
+  }
+  const remoto = nube?.conectado() && !plan.libre;
+  // La copia pendiente también impide confirmar otra propuesta mientras esta
+  // escritura sigue en curso, y permite recuperarla si se cierra la app.
+  if (remoto) E.planPendiente = structuredClone(plan);
+  else if (plan.libre) delete E.planPendiente;
   E.plan = plan; E.mensaje = mensaje || null; guardar();
   // El plan libre (entrenar sin plan) queda en el teléfono; las sesiones sí se sincronizan.
-  if (!nube?.conectado() || plan.libre) return null;
-  try { const r = await nube.guardarPlan(plan); E.plan.id = r.id; delete E.planPendiente; guardar(); return null; }
+  if (!remoto) return null;
+  const firma = JSON.stringify(plan);
+  const vigente = () => E === estado && nube?.usuarioId?.() === usuario && E.plan === plan && JSON.stringify(E.plan) === firma && !E.chatPorTraer;
+  const cambioDeAmbito = 'La cuenta o el plan cambió mientras se guardaba. Revisa el estado actual antes de continuar.';
+  try {
+    const r = await nube.guardarPlan(plan);
+    if (!vigente()) return cambioDeAmbito;
+    E.plan.id = r.id; delete E.planPendiente; guardar(); return null;
+  }
   catch (e) {
+    if (!vigente()) return cambioDeAmbito;
     const aviso = `Se cambió en este teléfono, pero el servidor no lo aceptó: ${e.datos?.errores?.map(x => x.mensaje).join(' ') || e.message}`;
     E.mensaje = aviso; guardar();
     E.planPendiente = structuredClone(plan); guardar();
