@@ -73,6 +73,7 @@ const valida = (f, { noPuedo, hechas }) => !noPuedo.includes(diaSemana(f)) && !h
  * entrenar, y así en cadena hasta caer en un día libre (como correr las sesiones). Nunca toca lo ya hecho.
  */
 export function correr(plan, fecha, destino, { noPuedo = [], hechas = [], hasta } = {}) {
+  if (hechas.includes(fecha)) return null;
   const nuevo = structuredClone(plan);
   let mover = sesionDe(nuevo, fecha), a = destino;
   if (!mover || !valida(destino, { noPuedo, hechas })) return null;
@@ -171,6 +172,7 @@ export function fechasLibres(plan, { hoy, noPuedo = [], hechas = [], desde = hoy
 export function alternativaEnFecha(plan, fecha, destino, ctx) {
   const s = sesionDe(plan, fecha);
   if (!s) return { error: `El ${diaCorto(fecha)} no tenías sesión.` };
+  if ((ctx.hechas || []).includes(fecha)) return { error: `${s.foco} del ${diaCorto(fecha)} ya está registrada como hecha.` };
   const r = correr(plan, fecha, destino, { noPuedo: ctx.respuestas?.dias_no_puedo || [], hechas: ctx.hechas || [], hasta: sumarDias(ctx.hoy, 20) });
   if (!r) return { error: `No puedo poner ${s.foco} el ${diaCorto(destino)}.` };
   return { id: `fecha:${destino}`, titulo: `Hacer ${s.foco} el ${diaCorto(destino)}`, detalle: demas(r.cambios, fecha), diferencia: 'La fecha la elegiste tú.', avisos: r.avisos, cambios: r.cambios, plan: r.plan, destino };

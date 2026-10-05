@@ -35,6 +35,9 @@ import { CONFIG } from './config.js';
 import { sinSenalHtml } from './estados-visuales.js';
 import { entrarVista, entrarPose, dibujarGraficos } from './movimiento.js';
 import { instalarAtras, accionAtras, esVuelta, recordarPantalla, alturaDe, volviendoConGesto } from './atras.js';
+import { guardarRetorno } from './comun.js';
+import { fechaSesionActiva } from '../nucleo/sesion-activa.js';
+import { pantallaGuardada, retornoGuardado } from '../nucleo/retorno-app.js';
 
 // ── Plan y cuenta ───────────────────────────────────────────────────────────
 /** Arma (o rehace) el plan con las respuestas y muestra la pantalla "Tu plan". */
@@ -78,37 +81,57 @@ async function armarPlan({ mensaje = null } = {}) {
 /** Al entrar: si la cuenta ya tiene plan, se usa ese; si no, se sube lo de este teléfono. */
 async function sincronizarAlEntrar({ forzar = false } = {}) {
   activarCuenta(nube.usuarioId());
+  const estadoInicial = E, usuarioInicial = nube.usuarioId();
+  const recuperada = await recuperarCopia();
+  if (nube.usuarioId() !== usuarioInicial || !recuperada && E !== estadoInicial) throw new Error('La cuenta cambió durante la sincronización.');
   const estado = E, usuario = nube.usuarioId();
+  const respuestasAlEntrar = JSON.stringify(E.respuestas);
+  let planAlEntrar = JSON.stringify(E.plan);
+  const preferenciasAlEntrar = JSON.stringify({ unidad: R().unidad, asistente: E.asistente });
+  const comprobar = () => { if (E !== estado || nube.usuarioId() !== usuario) throw new Error('La cuenta cambió durante la sincronización.'); };
   const consultar = async fn => {
-    const comprobar = () => { if (E !== estado || nube.usuarioId() !== usuario) throw new Error('La cuenta cambió durante la sincronización.'); };
     comprobar(); const resultado = await fn(); comprobar(); return resultado;
   };
-  if (E.preferenciasPendientes) { await consultar(() => nube.guardarPreferencias(E.preferenciasPendientes)); E.firmaPreferenciasCuenta = JSON.stringify(E.preferenciasPendientes); delete E.preferenciasPendientes; guardar(); }
-  if (E.planPendiente) { const r = await consultar(() => nube.guardarPlan(E.planPendiente)); E.plan = { ...E.planPendiente, id: r.id }; delete E.planPendiente; guardar(); }
+  if (E.preferenciasPendientes) {
+    const enviadas = structuredClone(E.preferenciasPendientes), firma = JSON.stringify(enviadas);
+    await consultar(() => nube.guardarPreferencias(enviadas));
+    E.firmaPreferenciasCuenta = firma;
+    if (JSON.stringify(E.preferenciasPendientes) === firma) delete E.preferenciasPendientes;
+    guardar(); // cualquier preferencia nueva conserva su pendiente hasta que se confirme su propia subida
+  }
+  if (E.planPendiente) {
+    const enviado = structuredClone(E.planPendiente), firma = JSON.stringify(enviado);
+    const r = await consultar(() => nube.guardarPlan(enviado));
+    if (JSON.stringify(E.plan) === firma) { E.plan = { ...E.plan, id: r.id }; planAlEntrar = JSON.stringify(E.plan); }
+    if (JSON.stringify(E.planPendiente) === firma) delete E.planPendiente;
+    guardar();
+  }
   const respuestas = await consultar(() => nube.cargarRespuestas());
   const plan = await consultar(() => nube.cargarPlan());
   if (respuestas) {
     const borrador = E.firmaPlan && firmaRespuestas(E.firmaPlan) !== firmaRespuestas();
-    if (!borrador) E.respuestas = respuestas;
+    if (!borrador && JSON.stringify(E.respuestas) === respuestasAlEntrar) E.respuestas = { ...respuestas, escala_esfuerzo: R().escala_esfuerzo };
   }
-  if (plan) E.plan = conPropios(plan, E.plan);
+  if (plan) { if (JSON.stringify(E.plan) === planAlEntrar) E.plan = conPropios(plan, E.plan); }
   else if (R().objetivo_principal && E.plan?.dias?.length && !E.plan.bloqueado && !E.plan.id && !E.plan.libre) {
     // Perfil local copiado a una cuenta vacía: se sube su plan tal cual (el servidor lo valida), sin armar otro.
     await consultar(() => nube.guardarCuestionario(R()));
-    try { const r = await consultar(() => nube.guardarPlan(E.plan)); E.plan.id = r.id; }
+    const enviado = structuredClone(E.plan), firma = JSON.stringify(enviado);
+    try { const r = await consultar(() => nube.guardarPlan(enviado)); if (JSON.stringify(E.plan) === firma) E.plan.id = r.id; }
     catch (e) {
-      if (/cuenta cambió/.test(e.message)) throw e;
-      E.planPendiente = structuredClone(E.plan);
+      comprobar();
+      if (JSON.stringify(E.plan) !== firma) throw e;
+      E.planPendiente = enviado;
       E.mensaje = `Tu plan quedó en este teléfono, pero el servidor no lo aceptó: ${e.datos?.errores?.map(x => x.mensaje).join(' ') || e.message}`;
     }
   }
   else if (R().objetivo_principal && !E.plan?.libre) await consultar(() => armarPlan()); // quien entrena sin plan lo arma cuando quiera
   let p = await consultar(() => nube.cargarPreferencias());
   if (!p.preferencias_actualizadas) { p = { unidad: R().unidad || 'kg', asistente: E.asistente || 'entrenadora' }; await consultar(() => nube.guardarPreferencias(p)); }
-  R().unidad = p.unidad; E.asistente = p.asistente || 'entrenadora';
-  E.firmaPreferenciasCuenta = JSON.stringify({ unidad: R().unidad, asistente: E.asistente });
+  if (JSON.stringify({ unidad: R().unidad, asistente: E.asistente }) === preferenciasAlEntrar) { R().unidad = p.unidad; E.asistente = p.asistente || 'entrenadora'; }
+  E.firmaPreferenciasCuenta = JSON.stringify({ unidad: p.unidad, asistente: p.asistente || 'entrenadora' });
   try { E.suplementos = await consultar(() => nube.subirLocal({ suplementos: E.suplementos, tomas: E.tomas, consentimientos: E.consentimientos })); }
-  catch (e) { console.warn('No se pudo subir lo anotado en este teléfono', e); }
+  catch (e) { comprobar(); console.warn('No se pudo subir lo anotado en este teléfono', e); }
   // Sesiones e indicaciones anotadas sin cuenta: a la cola, que las sube con su id (sin duplicar).
   for (const s of E.sesiones.filter(x => !x.enCuenta && x.origen !== 'ejemplo')) {
     Object.assign(s, prepararSesion(s));
@@ -121,11 +144,11 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
     if (!(E.pendientes || []).some(x => x.tipo === 'bienestar' && x.clave === fecha)) dejarPendiente('bienestar', fecha, datos);
   }
   try { for (const i of await consultar(() => nube.cargarIndicaciones())) if (!E.indicaciones.some(x => x.id === i.id)) E.indicaciones.push(i); }
-  catch (e) { console.warn('No se pudieron traer las indicaciones de la cuenta', e); }
+  catch (e) { comprobar(); console.warn('No se pudieron traer las indicaciones de la cuenta', e); }
   guardar();
   await consultar(() => subirPendientes({ forzar }));
   // Ejercicios propios, medidas, notas fijas y fechas del ciclo (antes solo en el teléfono).
-  try { await consultar(() => sincronizarDatosTelefono()); } catch (e) { console.warn('No se pudieron sincronizar los datos del teléfono', e); }
+  try { await consultar(() => sincronizarDatosTelefono()); } catch (e) { comprobar(); console.warn('No se pudieron sincronizar los datos del teléfono', e); }
   E.sesiones = unirSesiones(E.sesiones, idsPropios(await consultar(() => nube.cargarSesiones()), E.ejerciciosPropios || []), E.pendientes || []);
   E.bienestar = { ...await consultar(() => nube.cargarBienestar()), ...Object.fromEntries(Object.entries(E.bienestar).filter(([, b]) => !b.enCuenta)) };
   guardar();
@@ -146,7 +169,7 @@ function vistaInicio() {
 // ── Navegación ──────────────────────────────────────────────────────────────
 const VISTAS_CON_PLAN = ['hoy', 'semana', 'coach', 'progreso', 'checkin', 'plan', 'resumen', 'eleccion'];
 const PESTANA = { eleccion: 'hoy', banco: 'mas', checkin: 'semana', plan: 'semana', perfil: 'mas', seccion: 'mas', pasado: 'progreso', 'tablero-original': 'mas' };
-let antesDeFicha = null, finEntrada = null, extraActual = null, primeraVista = true;
+let antesDeFicha = null, finEntrada = null, extraActual = null, primeraVista = true, retornoInicial = null;
 function ir(vista, extra) {
   if (VISTAS_CON_PLAN.includes(vista) && (!E.plan)) vista = 'inicio';
   if (VISTAS_CON_PLAN.includes(vista) && E.plan?.bloqueado) { vistaBloqueada(); return; }
@@ -177,7 +200,11 @@ function ir(vista, extra) {
   mostrarMensaje(); // los avisos se muestran una vez, flotando sobre el menú
   window.scrollTo(0, vuelta ? alturaDe(vista) || 0 : 0);
   // Al llegar a Hoy (o al abrir la app ahí) con la sesión empezada, la pantalla queda en el ejercicio que sigue.
-  if (vista === 'hoy' && (vista !== anterior || primeraVista) && !volviendo && !extra?.ej) requestAnimationFrame(irAlEjercicioEnCurso);
+  if (vista === 'hoy' && (vista !== anterior || primeraVista) && !volviendo && !extra?.ej && !retornoInicial) requestAnimationFrame(irAlEjercicioEnCurso);
+  if (retornoInicial?.vista === vista) {
+    const y = retornoInicial.y; retornoInicial = null;
+    requestAnimationFrame(() => scrollTo(0, y));
+  }
   primeraVista = false;
   if (volviendo) requestAnimationFrame(() => {
     scrollTo(0, volviendo.y);
@@ -234,21 +261,48 @@ const EJEMPLO = {
 // Versión de prueba en el celular: guarda la app para que abra sin señal en el gimnasio.
 if (CONFIG.sinSenal && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(e => console.warn('Sin modo sin señal', e));
 
-// El perfil personal persiste al abrir. El ejemplo solo empieza por elección explícita.
-await nube.iniciar({ claveSesion: claveSesionCuenta() });
+// Primero la copia de este perfil y su segunda copia. La red no participa en el primer dibujo.
+activarCuenta(nube.usuarioGuardado({ claveSesion: claveSesionCuenta() }));
 // Si el almacenamiento principal quedó atrás de la segunda copia del teléfono, se vuelve a lo último que se escribió.
 const avisarRecuperado = async () => { if (await recuperarCopia()) E.mensaje = 'Recuperé lo último que anotaste desde la copia de seguridad de este teléfono.'; };
-if (nube.conectado()) {
-  activarCuenta(nube.usuarioId());
-  await avisarRecuperado(); // antes de sincronizar: lo del teléfono se une con la cuenta
-  try { await sincronizarAlEntrar(); }
-  catch { E.mensaje = 'No pude sincronizar ahora. Puedes seguir con la copia de esta cuenta en el teléfono y reintentar en Más.'; }
-  if (nube.entroPorEnlace()) { E.mensaje = `Entraste como ${nube.correo()}.`; E.vista = E.plan ? 'hoy' : 'inicio'; }
-} else await avisarRecuperado();
+await avisarRecuperado();
+// La app restaura su propia posición después de dibujar, sin una segunda corrección del navegador.
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+retornoInicial = retornoGuardado(E.pantallaGuardada, E, hoy());
 // Con plan, la primera vez del día se elige entre la sesión planificada y una vacía (salvo a mitad del cuestionario).
-ir(!['cuestionario', 'perfil', 'seccion'].includes(E.vista) && eleccionPendiente() ? 'eleccion'
-  : ['cuestionario', 'hoy', 'semana', 'coach', 'progreso', 'mas', 'checkin', 'plan', 'perfil', 'seccion', 'tablero-original'].includes(E.vista) ? E.vista : (E.plan ? 'hoy' : 'inicio'));
+ir(!retornoInicial && !['cuestionario', 'perfil', 'seccion'].includes(E.vista) && eleccionPendiente() ? 'eleccion'
+  : retornoInicial?.vista || (['cuestionario', 'hoy', 'semana', 'coach', 'progreso', 'mas', 'checkin', 'plan', 'perfil', 'seccion', 'tablero-original'].includes(E.vista) ? E.vista : (E.plan ? 'hoy' : 'inicio')), retornoInicial?.extra);
+requestAnimationFrame(() => requestAnimationFrame(() => { $('app').dataset.cargaMs = String(Math.round(performance.now())); }));
 // Atrás: deslizar desde el borde izquierdo o el botón atrás del teléfono (app/atras.js).
 instalarAtras(() => accionAtras({ vista: E.vista, extra: extraActual, ir, conPlan: Boolean(E.plan) }));
 // Con la clave de Hevy Pro, lo nuevo de Hevy entra solo; si llega algo, se redibuja la vista (sin mover la pantalla).
-hevyAlAbrir(() => { if (['hoy', 'semana', 'progreso'].includes(E.vista) && !document.querySelector('#hoja')) { const y = scrollY; ir(E.vista); scrollTo(0, y); } });
+let repintadoPendiente = false;
+function repintarSinMover() {
+  if (document.querySelector('#hoja, #pantalla-pasos') || document.activeElement?.matches('input, textarea, select, [contenteditable="true"]')) { repintadoPendiente = true; return; }
+  repintadoPendiente = false;
+  const y = scrollY; ir(E.vista, extraActual); scrollTo(0, y);
+}
+document.addEventListener('focusout', () => setTimeout(() => { if (repintadoPendiente) repintarSinMover(); }, 0));
+document.addEventListener('click', () => { if (repintadoPendiente) setTimeout(repintarSinMover, 250); });
+const guardarPantalla = () => guardarRetorno(pantallaGuardada(E.vista, extraActual, scrollY, E.vista === 'hoy' ? fechaSesionActiva(E, hoy()) : hoy()));
+addEventListener('pagehide', guardarPantalla);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') guardarPantalla(); });
+
+async function iniciarEnSegundoPlano() {
+  const alIniciar = E;
+  const iniciado = await nube.iniciar({ claveSesion: claveSesionCuenta(), vigente: () => E === alIniciar });
+  if (E !== alIniciar) return;
+  // Si no se pudo verificar la cuenta sin señal, se conserva su copia local. No cambia a otro perfil.
+  if (iniciado) { activarCuenta(nube.usuarioId()); await avisarRecuperado(); }
+  if (nube.conectado()) {
+    const estado = E;
+    try { await sincronizarAlEntrar(); }
+    catch { if (E === estado) E.mensaje = 'No pude sincronizar ahora. Puedes seguir con la copia de esta cuenta en el teléfono y reintentar en Más.'; }
+    if (E !== estado) return;
+    if (nube.entroPorEnlace()) { E.mensaje = `Entraste como ${nube.correo()}.`; E.vista = E.plan ? 'hoy' : 'inicio'; }
+  }
+  repintarSinMover();
+  hevyAlAbrir(() => { if (['hoy', 'semana', 'progreso'].includes(E.vista)) repintarSinMover(); });
+}
+// Dejar que la copia llegue a la pantalla antes de cargar el cliente de cuentas o hacer consultas.
+requestAnimationFrame(() => setTimeout(() => iniciarEnSegundoPlano().catch(e => console.warn('No pude iniciar la cuenta', e)), 0));
