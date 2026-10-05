@@ -45,6 +45,7 @@ import { montarAnimaciones } from './animacion-ui.js';
 import { animacionDePaso } from '../nucleo/animaciones.js';
 import { modoEsfuerzo, escalaDe, aRpe, deRpe, rpeDeSerie, textoEsfuerzo, significado } from '../nucleo/esfuerzo.js';
 import { proponerEdicion, ordenarSesion } from './editar-sesion-ui.js';
+import { enlazarDeslizarSeries } from './deslizar-serie.js';
 import { protegerDialogo } from './modal.js';
 import { fechaSesionActiva } from '../nucleo/sesion-activa.js';
 import { serieCompleta } from '../nucleo/serie-completa.js';
@@ -298,6 +299,7 @@ function ponerAproximaciones(dia, f) {
       puestas[id] = true; cambio = true;
       return;
     }
+    if (puestas[id] === 'editadas') return;
     // Sin tocar todavía: la cantidad sigue a la que calcula la app.
     const auto = (lista || []).filter(x => x?.aprox != null);
     if (!auto.length || auto.some(x => x.hecho || x.kg != null || x.reps != null)) return;
@@ -614,14 +616,14 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     const antes = prev ? (seg ? ((prev.duracion_seg ?? prev.reps) != null ? `${prev.duracion_seg ?? prev.reps} s` : '')
       : dist ? `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.distancia_m != null ? `${prev.distancia_m} m` : ''}`
       : `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.reps ?? ''}`) : '';
-    return `<div class="serie tipo-${t}${r.hecho ? ' hecha' : ''}${seg ? ' seg' : dist ? ' dist' : ''}">
+    return `<div class="serie-contenedor"><button type="button" class="quitar-serie" data-quitar-serie="${id}" data-i="${i}" aria-label="Quitar la serie ${etiq[i]} de ${esc(e.nombre || ej?.nombre || id)}" tabindex="-1" hidden>Quitar</button><div class="serie tipo-${t}${r.hecho ? ' hecha' : ''}${seg ? ' seg' : dist ? ' dist' : ''}">
       <button type="button" class="tipo-serie" data-tipo-serie="${id}" data-i="${i}" aria-label="Serie ${etiq[i]}, ${TIPOS_SERIE[t].nombre.toLowerCase()}. Cambiar el tipo">${etiq[i]}</button>
       <span class="antes num">${esc(antes)}</span>
       ${seg ? '' : `<input type="text" inputmode="decimal" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="kg" value="${esc(coma(enUnidad(r.kg)))}" placeholder="${esc(coma(enUnidad(kgGris)))}" aria-label="${u === 'lb' ? 'Libras' : 'Kilos'}${queEs ? ` de ${queEs}` : ''}, serie ${etiq[i]}">`}
       <input type="text" inputmode="numeric" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="reps" value="${esc(r.reps ?? '')}" placeholder="${esc(repsGris ?? '')}" aria-label="${seg ? 'Segundos' : dist ? 'Metros' : 'Repeticiones'}, serie ${etiq[i]}">
       ${seg ? (r.hecho ? '<span aria-hidden="true"></span>' : `<button type="button" class="crono-serie" data-crono="${id}" data-i="${i}" aria-label="Contar los segundos de la serie ${etiq[i]}">${icono('reloj', 'icono')}</button>`) : dist ? '' : trabajo ? cajaEsfuerzo(id, i, r, e, etiq[i]) : '<span aria-hidden="true"></span>'}
       <button type="button" class="check" data-hecho="${id}" data-i="${i}" aria-pressed="${Boolean(r.hecho)}" aria-label="Serie ${etiq[i]} hecha">${r.hecho ? icono('visto', 'visto-serie') : ''}</button>
-      ${(r.consejo || r.record?.length) && trabajo ? `<p class="consejo ${r.consejo?.tipo || 'bien'}">${r.record?.length ? '<span class="chip-record">Récord</span> ' : ''}${esc(r.consejo?.texto || '')}</p>` : ''}</div>`;
+      ${(r.consejo || r.record?.length) && trabajo ? `<p class="consejo ${r.consejo?.tipo || 'bien'}">${r.record?.length ? '<span class="chip-record">Récord</span> ' : ''}${esc(r.consejo?.texto || '')}</p>` : ''}</div></div>`;
   }).join('');
   const preguntas = K.por_ejercicio.preguntas.filter(p => !p.mostrar_si || Object.entries(p.mostrar_si).every(([q, vals]) => vals.includes(nota[q])));
   // En una superserie, el descanso va al terminar la vuelta (se elige en el último ejercicio).
@@ -851,6 +853,14 @@ function enlazar(ir, dia) {
     guardar();
   }
 
+  const quitarFila = (id, i) => {
+    const { e, k } = ejercicioDe(id), { lista, n } = materializar(f, e, k);
+    if (lista[i]?.aprox != null) (((E.aproxPuestas ||= {})[f] ||= {}))[id] = 'editadas';
+    lista.splice(i, 1); fijarFilas(f, id, n - 1);
+    guardar(); repintar(); avisar('Serie quitada.');
+  };
+  enlazarDeslizarSeries(raiz, quitarFila);
+
   // Tocar el número de la serie: elegir el tipo (como en Hevy), con una explicación detrás de cada "?".
   raiz.querySelectorAll('[data-tipo-serie]').forEach(b => b.onclick = () => {
     const { e, k } = ejercicioDe(b.dataset.tipoSerie);
@@ -866,7 +876,7 @@ function enlazar(ir, dia) {
       alElegir: t => {
         if (t === 'superserie') { superserie(idDe(e, k), b); return; }
         const { lista, n } = materializar(f, e, k);
-        if (t === 'quitar') { lista.splice(i, 1); fijarFilas(f, idDe(e, k), n - 1); }
+        if (t === 'quitar') { quitarFila(idDe(e, k), i); return; }
         else {
           const r = { ...lista[i], tipo: t };
           delete r.fallo;
