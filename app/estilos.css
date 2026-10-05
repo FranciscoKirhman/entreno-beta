@@ -933,3 +933,13 @@ html.deslizando-atras body{overflow-x:clip}
 .opciones-chat .nota-opcion{margin:-2px 2px 6px;line-height:1.4}
 @media (max-width:360px){.semana-chat .num{flex-basis:70px}.semana-chat small{margin-left:80px}}
 .semana-chat li.libre strong{color:var(--ink-muted);font-weight:400}
+
+/* Conversación y propuesta: texto largo legible también a 375 px. */
+.chat-redaccion{align-items:flex-end}
+.chat-redaccion textarea{flex:1;min-width:0;max-width:100%;resize:vertical;font:inherit;border-radius:16px;padding:12px;background:var(--fill);color:var(--ink);border:1px solid var(--line)}
+.adjunto-chat{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 0}
+.propuesta-chat{white-space:normal;overflow-wrap:anywhere;margin-top:10px}
+.propuesta-chat ul{padding-left:20px}
+.propuesta-chat details{margin-top:8px}
+.propuesta-chat dd{margin-left:12px}
+.burbuja{overflow-wrap:anywhere;min-width:0}

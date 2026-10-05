@@ -92,12 +92,13 @@ export function proveedoresDisponibles() {
 }
 
 async function funcion(nombre, { metodo = 'POST', cuerpo } = {}) {
-  const r = await fetch(`${CONFIG.funcionesUrl}/${nombre}`, {
+  const ambito = ambitoActual(), token = sesion.access_token;
+  const r = await ambito.consultar(() => fetch(`${CONFIG.funcionesUrl}/${nombre}`, {
     method: metodo,
-    headers: { Authorization: `Bearer ${sesion.access_token}`, apikey: CONFIG.supabaseAnonKey, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${token}`, apikey: CONFIG.supabaseAnonKey, 'Content-Type': 'application/json' },
     body: cuerpo ? JSON.stringify(cuerpo) : undefined,
-  });
-  const d = await r.json().catch(() => ({}));
+  }));
+  const d = await ambito.consultar(() => r.json().catch(() => ({})));
   if (!r.ok) throw Object.assign(new Error(d.error || `El servidor respondió ${r.status}`), { datos: d, status: r.status });
   return d;
 }
@@ -129,6 +130,10 @@ export async function guardarCuestionario(respuestas) {
 }
 export async function consentir(tipo, otorgado = true) {
   ok(await supa.from('consentimientos').insert({ user_id: uid(), tipo, version: CONFIG.versionConsentimientos, otorgado }));
+}
+export async function consentirChat(otorgado = true) {
+  const ambito = ambitoActual(), { cliente, usuario } = ambito;
+  ok(await ambito.consultar(() => cliente.from('consentimientos').insert({ user_id: usuario, tipo: 'ia_transferencia', version: 'chat_v2', otorgado })));
 }
 export async function cargarRespuestas() {
   const d = ok(await supa.from('cuestionarios').select('respuestas').order('creado', { ascending: false }).limit(1));
@@ -222,7 +227,17 @@ export async function guardarCheckin({ semana, plan_inicio, banderas, series, se
   ok(await supa.from('checkins').insert({ user_id: uid(), tipo: 'semanal', respuestas: { semana, plan_inicio },
     resumen_automatico: { series, sesiones }, banderas_rojas: banderas, cambios_aplicados: cambios }));
 }
-export const chat = (mensaje, historial) => funcion('coach', { cuerpo: { mensaje, historial } });
+export const chat = (mensaje, historial, archivo) => funcion('coach', { cuerpo: { mensaje, historial, ...(archivo ? { archivo } : {}) } });
+export const estadoChat = () => funcion('coach', { metodo: 'GET' });
+export async function cargarSuplementos() {
+  const ambito = ambitoActual(), { cliente, usuario } = ambito;
+  const filas = ok(await ambito.consultar(() => cliente.from('suplementos').select('id, nombre, dosis, horas, dias, activo').eq('user_id', usuario)));
+  return filas.map(s => ({ ...s, horas: (s.horas || []).map(h => h.slice(0, 5)) }));
+}
+export async function cargarTomas() {
+  const ambito = ambitoActual(), { cliente, usuario } = ambito;
+  return ok(await ambito.consultar(() => cliente.from('suplementos_tomas').select('suplemento_id, fecha, hora').eq('user_id', usuario).order('fecha')));
+}
 
 // ── Suplementos ─────────────────────────────────────────────────────────────
 export async function guardarSuplemento(s) {
@@ -316,9 +331,18 @@ export const detallesAutorizacion = id => supa.auth.oauth.getAuthorizationDetail
 export const aprobarAutorizacion = id => supa.auth.oauth.approveAuthorization(id, { skipBrowserRedirect: true }).then(ok);
 export const negarAutorizacion = id => supa.auth.oauth.denyAuthorization(id, { skipBrowserRedirect: true }).then(ok);
 export async function autorizarConexionIA(clientId) {
-  ok(await supa.from('conexiones_ia').upsert({ user_id: uid(), client_id: clientId, activa: true, actualizado: new Date().toISOString() }));
+  const ambito = ambitoActual(), { cliente, usuario } = ambito;
+  ok(await ambito.consultar(() => cliente.from('conexiones_ia').upsert({ user_id: usuario, client_id: clientId, activa: true, version_permiso: 2, actualizado: new Date().toISOString() })));
 }
-export const conexionesIA = () => supa.auth.oauth.listGrants().then(ok);
+export async function conexionesIA() {
+  const ambito = ambitoActual(), { cliente, usuario } = ambito;
+  const [g, permisos] = await Promise.all([
+    ambito.consultar(() => cliente.auth.oauth.listGrants()).then(ok),
+    ambito.consultar(() => cliente.from('conexiones_ia').select('client_id, activa, version_permiso').eq('user_id', usuario)).then(ok),
+  ]);
+  const grants = g.items || g.grants || (Array.isArray(g) ? g : []);
+  return grants.map(x => ({ ...x, ...permisos.find(p => p.client_id === (x.client?.id || x.client_id)) }));
+}
 export async function revocarConexionIA(clientId) {
   const ambito = ambitoActual(), { cliente, usuario } = ambito;
   // Primero se bloquean las herramientas; incluso un token todavía vigente deja de funcionar.
@@ -326,5 +350,6 @@ export async function revocarConexionIA(clientId) {
   ok(await ambito.consultar(() => cliente.auth.oauth.revokeGrant({ clientId })));
 }
 export const propuestasIA = () => funcion('propuestas-ia', { metodo: 'GET' });
+export const estadoPropuestaIA = id => funcion(`propuestas-ia?id=${encodeURIComponent(id)}`, { metodo: 'GET' });
 export const confirmarPropuestaIA = id => funcion('propuestas-ia', { cuerpo: { id } });
 export const descartarPropuestaIA = id => funcion('propuestas-ia', { metodo: 'DELETE', cuerpo: { id } });

@@ -38,6 +38,7 @@ import { instalarAtras, accionAtras, esVuelta, recordarPantalla, alturaDe, volvi
 import { guardarRetorno } from './comun.js';
 import { fechaSesionActiva } from '../nucleo/sesion-activa.js';
 import { pantallaGuardada, retornoGuardado } from '../nucleo/retorno-app.js';
+import { actualizarChatConfirmado } from './propuesta-chat.js';
 
 // ── Plan y cuenta ───────────────────────────────────────────────────────────
 /** Arma (o rehace) el plan con las respuestas y muestra la pantalla "Tu plan". */
@@ -85,13 +86,17 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
   const recuperada = await recuperarCopia();
   if (nube.usuarioId() !== usuarioInicial || !recuperada && E !== estadoInicial) throw new Error('La cuenta cambió durante la sincronización.');
   const estado = E, usuario = nube.usuarioId();
-  const respuestasAlEntrar = JSON.stringify(E.respuestas);
+  let respuestasAlEntrar = JSON.stringify(E.respuestas);
   let planAlEntrar = JSON.stringify(E.plan);
   const preferenciasAlEntrar = JSON.stringify({ unidad: R().unidad, asistente: E.asistente });
   const comprobar = () => { if (E !== estado || nube.usuarioId() !== usuario) throw new Error('La cuenta cambió durante la sincronización.'); };
   const consultar = async fn => {
     comprobar(); const resultado = await fn(); comprobar(); return resultado;
   };
+  if (E.chatPorTraer) {
+    if (!await consultar(() => actualizarChatConfirmado())) throw new Error('La cuenta cambió al recuperar los cambios del chat.');
+    respuestasAlEntrar = JSON.stringify(E.respuestas); planAlEntrar = JSON.stringify(E.plan);
+  }
   if (E.preferenciasPendientes) {
     const enviadas = structuredClone(E.preferenciasPendientes), firma = JSON.stringify(enviadas);
     await consultar(() => nube.guardarPreferencias(enviadas));
@@ -167,7 +172,7 @@ function vistaInicio() {
 }
 
 // ── Navegación ──────────────────────────────────────────────────────────────
-const VISTAS_CON_PLAN = ['hoy', 'semana', 'coach', 'progreso', 'checkin', 'plan', 'resumen', 'eleccion'];
+const VISTAS_CON_PLAN = ['hoy', 'semana', 'progreso', 'checkin', 'plan', 'resumen', 'eleccion'];
 const PESTANA = { eleccion: 'hoy', banco: 'mas', checkin: 'semana', plan: 'semana', perfil: 'mas', seccion: 'mas', pasado: 'progreso', 'tablero-original': 'mas' };
 let antesDeFicha = null, finEntrada = null, extraActual = null, primeraVista = true, retornoInicial = null;
 function ir(vista, extra) {

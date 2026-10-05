@@ -112,8 +112,8 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     vistaMas(ir, { armarPlan, sincronizarAlEntrar });
   });
   enlazarRecordatorios();
-  document.querySelectorAll('[data-escala-esfuerzo]').forEach(b => b.onclick = () => { R().escala_esfuerzo = b.dataset.escalaEsfuerzo; E.mensaje = `Esfuerzo en ${b.dataset.escalaEsfuerzo === 'rir' ? 'RIR (repeticiones en reserva)' : 'RPE (de 6 a 10)'}.`; guardar(); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); });
-  document.querySelectorAll('[data-unidad]').forEach(b => b.onclick = () => { R().unidad = b.dataset.unidad; E.mensaje = `Peso en ${b.dataset.unidad === 'lb' ? 'libras' : 'kilos'}.`; guardar(); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); });
+  document.querySelectorAll('[data-escala-esfuerzo]').forEach(b => b.onclick = () => { R().escala_esfuerzo = b.dataset.escalaEsfuerzo; E.mensaje = `Esfuerzo en ${b.dataset.escalaEsfuerzo === 'rir' ? 'RIR (repeticiones en reserva)' : 'RPE (de 6 a 10)'}.`; guardar(); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); }, ir);
+  document.querySelectorAll('[data-unidad]').forEach(b => b.onclick = () => { R().unidad = b.dataset.unidad; E.mensaje = `Peso en ${b.dataset.unidad === 'lb' ? 'libras' : 'kilos'}.`; guardar(); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); }, ir);
   enlazarConexiones(() => vistaMas(ir, { armarPlan, sincronizarAlEntrar }));
   // data-elegir-tema y no data-tema: <html data-tema> es el que pinta el tema.
   document.querySelectorAll('[data-elegir-tema]').forEach(b => b.onclick = () => {
@@ -122,7 +122,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
   });
   $('pantalla-encendida').onchange = ev => { E.pantallaEncendida = ev.target.checked; guardar(); actualizarPantalla(); };
   enlazarIACopiar(ir);
-  enlazarConexionIA(async () => { await sincronizarAlEntrar({ forzar: true }); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); });
+  enlazarConexionIA(async () => { await sincronizarAlEntrar({ forzar: true }); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); }, ir);
   // Compartir el plan como texto (como las rutinas de Hevy): la otra persona lo pega en "Importar un plan".
   $('compartir-plan')?.addEventListener('click', async () => {
     const texto = planATexto(E.plan, { semana: semanaDe(E.plan, hoy()) || 1 });

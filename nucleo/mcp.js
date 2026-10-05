@@ -116,7 +116,8 @@ export const HERRAMIENTAS = [
       },
       required: ['fecha', 'ejercicios'],
     },
-    async run({ fecha, titulo, ejercicios }, { datos, indice }) {
+    async run({ fecha, titulo, ejercicios }, ctx) {
+      const { datos, indice } = ctx;
       if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha || '')) return { ...texto('Fecha inválida: usa AAAA-MM-DD.'), isError: true };
       const desconocidos = ejercicios.map(e => e.ejercicio).filter(id => !indice.porId.has(id));
       if (desconocidos.length) return { ...texto(`No están en el catálogo: ${desconocidos.join(', ')}. Usa buscar_ejercicios.`), isError: true };
@@ -126,7 +127,7 @@ export const HERRAMIENTAS = [
         tipo: 'efectiva', carga_kg: s.carga_kg ?? null, reps: s.reps, rir: s.rir ?? null,
       })));
       const id = await datos.registrarSesion({ sesion: { fecha, titulo: titulo || 'Sesión', origen: 'manual' }, series });
-      return texto({ registrada: true, id, series: series.length });
+      return texto({ registrada: !ctx.soloProponer, ...(ctx.soloProponer ? { esperando_confirmacion: true } : {}), id, series: series.length });
     },
   },
 ];
@@ -260,7 +261,7 @@ HERRAMIENTAS.push(
 /** Procesa un mensaje JSON-RPC. Devuelve la respuesta, o null si era una notificación. */
 export async function procesarMensaje(msg, ctx) {
   if (!msg || typeof msg !== 'object' || Array.isArray(msg)) return { jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Solicitud inválida' } };
-  const disponibles = HERRAMIENTAS.filter(h => !ctx.herramientasPermitidas || ctx.herramientasPermitidas.includes(h.name));
+  const disponibles = (ctx.herramientas || HERRAMIENTAS).filter(h => !ctx.herramientasPermitidas || ctx.herramientasPermitidas.includes(h.name));
   const responder = result => ({ jsonrpc: '2.0', id: msg.id, result });
   const fallar = (code, message) => ({ jsonrpc: '2.0', id: msg.id ?? null, error: { code, message } });
   if (msg?.jsonrpc !== '2.0' || typeof msg.method !== 'string') return fallar(-32600, 'Solicitud inválida');
@@ -285,7 +286,7 @@ export async function procesarMensaje(msg, ctx) {
         const args = msg.params?.arguments ?? {};
         const error = validarArgumentos(args, h.inputSchema);
         if (error) return responder({ ...texto(error), isError: true });
-        return responder(await h.run(args, ctx));
+        return responder(ctx.ejecutarHerramienta ? await ctx.ejecutarHerramienta(h.name, args) : await h.run(args, ctx));
       } catch (e) {
         return responder({ ...texto(`Error: ${e.message}`), isError: true });
       }
@@ -324,7 +325,7 @@ export function validarArgumentos(v, s, ruta = 'argumentos') {
   } else {
     if (tipo === 'integer' ? !Number.isInteger(v) : typeof v !== tipo) return `${ruta}: tipo inválido.`;
     if (typeof v === 'number' && (!Number.isFinite(v) || v < (s.minimum ?? -Infinity) || v > (s.maximum ?? Infinity))) return `${ruta}: fuera del rango permitido.`;
-    if (typeof v === 'string' && v.length > 30000) return `${ruta}: texto demasiado largo.`;
+    if (typeof v === 'string' && v.length > (s.maxLength ?? 30000)) return `${ruta}: texto demasiado largo.`;
   }
   if (s.enum && !s.enum.includes(v)) return `${ruta}: valor no permitido.`;
   return null;
