@@ -948,14 +948,22 @@ main:has(#vista-coach){padding-bottom:calc(var(--coach-redaccion-alto,100px) + v
 #vista-coach{min-height:calc(100svh - 220px);min-width:0}
 #vista-coach .burbuja{overflow-wrap:anywhere;white-space:normal}
 #vista-coach .texto-chat{white-space:pre-wrap}
-#vista-coach .burbuja,#vista-coach .opciones-chat,#vista-coach [data-opcion]{scroll-margin-bottom:calc(var(--coach-redaccion-alto,100px) + var(--coach-menu-distancia,78px) + 20px);scroll-margin-top:calc(env(safe-area-inset-top,0px) + 64px)}
+#vista-coach .burbuja,#vista-coach .opciones-chat,#vista-coach [data-opcion],#permisos-chat{scroll-margin-bottom:calc(var(--coach-redaccion-alto,100px) + var(--coach-menu-distancia,78px) + 20px);scroll-margin-top:calc(env(safe-area-inset-top,0px) + 64px)}
 #vista-coach button,#vista-coach label[for],#vista-coach a,#vista-coach summary,#vista-coach textarea{min-height:44px;min-width:44px}
 #vista-coach label[for],#vista-coach a,#vista-coach summary{display:inline-flex;align-items:center}
 #vista-coach summary{cursor:pointer;gap:8px}
-#vista-coach summary::before{content:'›';font-size:20px;transition:transform .15s}
+#vista-coach summary::before{content:'›';font-size:20px}
 #vista-coach details[open]>summary::before{transform:rotate(90deg)}
 #vista-coach .opciones-chat .boton{min-height:44px}
 #coach-redaccion{position:fixed;left:16px;right:16px;bottom:var(--coach-menu-distancia,calc(env(safe-area-inset-bottom,0px) + 78px));z-index:5;max-width:528px;margin:0 auto;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:0 4px 20px rgba(0,0,0,.08)}
 #coach-redaccion .fila-chat{margin-top:0}
 #coach-redaccion textarea{resize:none}
+#coach-redaccion .coach-herramientas{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:4px}
+#chat-adjuntos{min-width:0;max-width:100%}
+#chat-adjuntos[open]{flex-basis:100%}
+#chat-adjuntos .adjunto-chat{margin:4px 0;overflow-wrap:anywhere}
+#estado-chat{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:44px}
+#permisos-chat h2{margin-top:0}
+#ideas-chat{margin-top:4px}
+.aviso.neutro{background:var(--surface-2);color:var(--ink);border:1px solid var(--line)}
 .burbuja{overflow-wrap:anywhere;min-width:0}

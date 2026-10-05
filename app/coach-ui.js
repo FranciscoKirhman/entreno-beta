@@ -8,11 +8,18 @@ import { E, guardar, esc, $, ctxNucleo, cambiarPlan, hoy, avisar } from './comun
 import { responder, aplicarOpcion } from '../nucleo/coach.js';
 import * as nube from './nube.js';
 import { sesionesPorRevisar, diaCorto } from '../nucleo/sin-registro.js';
-import { sesionDe } from '../nucleo/agenda.js';
+import { sesionDe, sumarDias } from '../nucleo/agenda.js';
 import { borradorNuevo } from '../nucleo/dia-pasado.js';
 import { icono } from './iconos.js';
 
 const SUGERENCIAS = ['¿Qué me toca hoy?', 'No entrené ayer', 'Falté hoy', 'Hoy no quiero hacer piernas', 'La máquina está ocupada', 'Solo tengo 30 minutos', 'Dormí mal y estoy cansado', 'Me duele el hombro', '¿Por qué hip thrust?'];
+function sugerenciasCoach(sobre) {
+  if (sobre) return [`¿Cómo se hace ${sobre.nombre}?`, `¿Por qué ${sobre.nombre}?`, `La máquina de ${sobre.nombre} está ocupada`, `Me duele al hacer ${sobre.nombre}`];
+  if (!Array.isArray(E.plan?.dias) || E.plan.bloqueado) return ['Quiero un plan para empezar', 'Quiero importar mi historial', 'Quiero organizar mis suplementos'];
+  const dia = sesionDe(E.plan, hoy()), ejercicio = dia?.ejercicios?.[0];
+  if (E.chat.length) return [SUGERENCIAS[0], dia ? SUGERENCIAS[5] : SUGERENCIAS[6], ejercicio?.nombre ? `¿Por qué ${ejercicio.nombre}?` : SUGERENCIAS[7]];
+  return dia ? [SUGERENCIAS[0], sesionDe(E.plan, sumarDias(hoy(), -1)) ? SUGERENCIAS[1] : SUGERENCIAS[4], SUGERENCIAS[5], SUGERENCIAS[6]] : [SUGERENCIAS[0], SUGERENCIAS[6], SUGERENCIAS[7]];
+}
 const borradores = new WeakMap(), decisiones = new WeakSet();
 let consultaActual = null, limpiarRedaccion = () => {};
 function borradorChat() {
@@ -42,26 +49,27 @@ export function vistaCoach(ir, mensajeInicial) {
   const sobre = mensajeInicial && typeof mensajeInicial === 'object' && mensajeInicial.ejercicio ? mensajeInicial : null;
   const revisar = Boolean(mensajeInicial?.revisar); // desde el aviso de Hoy
   const porRevisar = sesionesPorRevisar(E.plan, E.sesiones, { hoy: hoy(), marcas: E.marcasPlan || {}, despues: E.revisarDespues || {} });
-  const sugerencias = sobre
-    ? [`¿Cómo se hace ${sobre.nombre}?`, `¿Por qué ${sobre.nombre}?`, `La máquina de ${sobre.nombre} está ocupada`, `Me duele al hacer ${sobre.nombre}`]
-    : SUGERENCIAS;
+  const sugerencias = sugerenciasCoach(sobre), otrasIdeas = SUGERENCIAS.filter(s => !sugerencias.includes(s));
   $('app').innerHTML = `<div id="vista-coach">
     <h1>Coach</h1>
     ${revisionHtml(porRevisar)}
-    <p id="estado-chat" class="pequeno suave" role="status">${nube.conectado() ? 'Revisando la conexión del chat…' : 'Las opciones de Entreno funcionan sin señal. Entra a tu cuenta para conversar con IA.'}</p>
     ${!E.plan ? '<p>Cuéntame qué quieres entrenar. Para preparar el primer plan, completa tu edad y acepta los términos en tu perfil.</p><button class="boton" id="perfil-chat">Completar mi perfil</button>' : ''}
-    <div class="chat" id="chat" aria-live="polite">${E.chat.length ? E.chat.map(burbuja).join('') : '<p class="suave">Cuéntame qué pasa: si faltaste, si no quieres hacer algo hoy, si una máquina está ocupada, si dormiste mal o si te duele algo. También puedo explicarte por qué de cada ejercicio.</p>'}</div>
-    <div class="chips sugerencias">${sugerencias.map(s => `<button type="button" class="sugerencia">${esc(s)}</button>`).join('')}</div>
-    <div id="coach-redaccion"><form id="form-chat" class="fila-chat chat-redaccion"><textarea id="mensaje" rows="2" maxlength="30000" placeholder="Cuéntame o pega tu plan…" aria-label="Mensaje"></textarea><button type="submit" class="boton primario">Enviar</button></form></div>
-    <div class="adjunto-chat"><label class="boton" for="archivo-chat">Adjuntar plan o historial</label><input id="archivo-chat" type="file" accept=".csv,.txt,text/csv,text/plain" hidden><button type="button" class="enlace" id="quitar-archivo" ${borrador.archivo || borrador.leyendo ? '' : 'hidden'}>Quitar archivo</button><button type="button" class="enlace" id="adjunto-futuro">Foto, PDF o audio (próximamente)</button><span id="archivo-chat-nombre" class="pequeno suave" role="status">${borrador.leyendo ? 'Leyendo el archivo…' : borrador.archivo ? esc(borrador.archivo.nombre) : 'CSV de Hevy o texto, hasta 200 KB'}</span></div>
+    <div class="chat" id="chat" aria-live="polite">${E.chat.length ? E.chat.map(burbuja).join('') : '<p class="suave">Cuéntame qué pasa: si faltaste, si no quieres hacer algo hoy, si una máquina está ocupada, si dormiste mal o si te duele algo. También puedo explicarte el porqué de cada ejercicio.</p>'}</div>
+    <section id="permisos-chat" class="tarjeta" hidden></section>
+    <div id="sugerencias-principales" class="chips sugerencias">${sugerencias.map(s => `<button type="button" class="sugerencia">${esc(s)}</button>`).join('')}</div>
+    <details id="ideas-chat"><summary>Más ideas</summary><div class="chips">${otrasIdeas.map(s => `<button type="button" class="sugerencia">${esc(s)}</button>`).join('')}</div></details>
+    <div id="coach-redaccion">
+      <form id="form-chat" class="fila-chat chat-redaccion"><textarea id="mensaje" rows="2" maxlength="30000" placeholder="Cuéntame o pega tu plan…" aria-label="Mensaje"></textarea><button type="submit" class="boton primario">Enviar</button></form>
+      <div class="coach-herramientas"><details id="chat-adjuntos" ${borrador.archivo || borrador.leyendo ? 'open' : ''}><summary>Adjuntar</summary><div class="adjunto-chat"><label class="boton" for="archivo-chat">Adjuntar plan o historial</label><input id="archivo-chat" type="file" accept=".csv,.txt,text/csv,text/plain" hidden><button type="button" class="enlace" id="quitar-archivo" ${borrador.archivo || borrador.leyendo ? '' : 'hidden'}>Quitar archivo</button><button type="button" class="enlace" id="adjunto-futuro">Foto, PDF o audio (próximamente)</button><span id="archivo-chat-nombre" class="pequeno suave" role="status">${borrador.leyendo ? 'Leyendo el archivo…' : borrador.archivo ? esc(borrador.archivo.nombre) : 'CSV de Hevy o texto, hasta 200 KB'}</span></div></details><div id="estado-chat" class="pequeno suave" role="status">${nube.conectado() ? 'Revisando IA…' : 'Sin IA · opciones disponibles'}</div></div>
+    </div>
     ${E.chat.length ? '<button type="button" class="enlace" id="limpiar">Borrar la conversación</button>' : ''}
   </div>`;
   $('perfil-chat')?.addEventListener('click', () => ir('perfil'));
-  revisarEstadoChat();
+  revisarEstadoChat(ir);
   const vigente = () => E === estadoVista && nube.usuarioId() === usuarioVista && $('vista-coach')?.isConnected;
   $('mensaje').value = borrador.texto;
   $('mensaje').oninput = ev => { if (!vigente()) return; borrador.texto = ev.target.value; E.borradorChat = borrador.texto; guardar(); };
-  $('adjunto-futuro').onclick = () => avisar('Foto, PDF y audio están preparados para una próxima integración. Por ahora adjunta CSV o texto.');
+  $('adjunto-futuro').onclick = () => avisar('Todavía no lee fotos, PDF ni audio. Por ahora adjunta CSV o texto.', 'neutro');
   $('quitar-archivo').onclick = () => {
     if (!vigente()) return;
     borrador.lectura++; borrador.leyendo = false; borrador.archivo = null;
@@ -138,7 +146,7 @@ export function vistaCoach(ir, mensajeInicial) {
       editor.focus({ preventScroll: true }); editor.setSelectionRange(...seleccion);
     });
   }
-  if (!revisar && (mensajeInicial?.respuesta || E.chat.length && !mensajeInicial)) mostrarUltimaRespuesta(estadoVista, usuarioVista, !redaccionActiva);
+  if (!revisar && (mensajeInicial?.respuesta || E.chat.length && !mensajeInicial && !porRevisar.length)) mostrarUltimaRespuesta(estadoVista, usuarioVista, !redaccionActiva);
   if (typeof mensajeInicial === 'string') enviar(mensajeInicial, ir);
   else if (sobre) { const m = $('mensaje'); if (!borrador.texto) { m.value = `Sobre ${sobre.nombre}: `; borrador.texto = E.borradorChat = m.value; guardar(); } m.focus(); m.setSelectionRange(m.value.length, m.value.length); }
 }
@@ -250,7 +258,9 @@ function opcionesMensaje(m) {
     { etiqueta: 'Revisar y sincronizar en Más', accion: { tipo: 'ir', vista: 'mas' } },
     ...(!pendiente || !E.chatPorTraer.confirmado ? [{ etiqueta: 'Descartar', accion: { tipo: 'descartar_ia', id: m.propuesta.id } }] : []),
   ];
-  return ['aplicada', 'descartada', 'no_disponible'].includes(m.estadoPropuesta) ? null : m.opciones;
+  if (['aplicada', 'descartada', 'no_disponible'].includes(m.estadoPropuesta)) return null;
+  return m.opciones?.length ? m.opciones : m.rol === 'coach' && !m.pendiente
+    ? Array.isArray(E.plan?.dias) && !E.plan.bloqueado ? irA('semana') : [{ etiqueta: 'Completar mi perfil', accion: { tipo: 'ir', vista: 'perfil' } }] : null;
 }
 
 function burbuja(m, i) {
@@ -268,7 +278,7 @@ async function enviar(texto, ir, archivo = null) {
   const borrador = borradorChat();
   let completada = true, consulta;
   E.chat.push({ rol: 'persona', texto });
-  const r = E.plan ? responder(texto, ctxNucleo()) : { requiere_ia: true, texto: 'Podemos preparar tu primer plan cuando completes los datos básicos del perfil.' };
+  const r = Array.isArray(E.plan?.dias) && !E.plan.bloqueado ? responder(texto, ctxNucleo()) : { requiere_ia: true, texto: 'Podemos preparar tu primer plan cuando completes los datos básicos del perfil.' };
   if ((r.requiere_ia || archivo) && nube.conectado()) {
     const mensaje = { rol: 'coach', texto: 'Pensando…', pendiente: true };
     consulta = consultaActual = { estado, usuario, mensaje };
@@ -301,19 +311,26 @@ async function enviar(texto, ir, archivo = null) {
   return completada;
 }
 
-async function revisarEstadoChat() {
+async function revisarEstadoChat(ir) {
   if (!nube.conectado()) return;
   const out = $('estado-chat'), usuario = nube.usuarioId(), estado = E;
   try {
     const r = await nube.estadoChat();
     if (E !== estado || usuario !== nube.usuarioId() || !out.isConnected) return;
-    if (!r.disponible) out.textContent = 'Chat con IA preparado. Falta activar la clave en el servidor.';
+    if (!r.disponible) out.textContent = 'IA sin activar';
     else if (r.autorizado) {
-      out.innerHTML = `Chat con OpenAI habilitado. Los cambios se confirman abajo. <button class="enlace" id="revocar-chat">Desactivar IA</button>`;
-      $('revocar-chat').onclick = async () => { await nube.consentirChat(false); if (E !== estado || usuario !== nube.usuarioId()) return; E.consentimientos.ia_transferencia = false; guardar(); revisarEstadoChat(); };
+      out.innerHTML = `OpenAI activo <button class="enlace" id="revocar-chat">Desactivar IA</button>`;
+      $('revocar-chat').onclick = async () => { await nube.consentirChat(false); if (E !== estado || usuario !== nube.usuarioId()) return; E.consentimientos.ia_transferencia = false; guardar(); if (out.isConnected) revisarEstadoChat(ir); };
     } else {
-      out.innerHTML = 'Para usar IA, tus mensajes, archivos TXT y los datos necesarios de tu plan, historial, preferencias, suplementos y bienestar se envían a OpenAI cuando los consultes. Las lesiones requieren además tu permiso de salud. Tú aceptas cada cambio. <button class="boton" id="activar-chat">Permitir el chat con OpenAI</button>';
-      $('activar-chat').onclick = async ev => { ev.currentTarget.disabled = true; try { await nube.consentirChat(); if (E !== estado || usuario !== nube.usuarioId()) return; E.consentimientos.ia_transferencia = true; guardar(); revisarEstadoChat(); } catch { if (out.isConnected) out.textContent = 'No pude registrar el permiso. Reintenta con señal.'; } };
+      out.innerHTML = '<button class="enlace" id="ver-permiso-chat">Activar IA</button>';
+      const panel = $('permisos-chat');
+      panel.innerHTML = '<h2 id="permiso-chat-titulo" tabindex="-1">Chat con OpenAI</h2><p>Para usar IA, tus mensajes, archivos TXT y los datos necesarios de tu plan, historial, preferencias, suplementos y bienestar se envían a OpenAI cuando los consultes. Las lesiones requieren además tu permiso de salud. Tú aceptas cada cambio.</p><button class="boton" id="activar-chat">Permitir el chat con OpenAI</button><p id="permiso-chat-error" role="status"></p>';
+      $('ver-permiso-chat').onclick = () => {
+        if (E !== estado || usuario !== nube.usuarioId() || !panel.isConnected) return;
+        panel.hidden = false; panel.scrollIntoView({ block: 'end', behavior: 'instant' });
+        $('permiso-chat-titulo').focus({ preventScroll: true });
+      };
+      $('activar-chat').onclick = async ev => { ev.currentTarget.disabled = true; try { await nube.consentirChat(); if (E !== estado || usuario !== nube.usuarioId()) return; E.consentimientos.ia_transferencia = true; guardar(); if (panel.isConnected && out.isConnected) vistaCoach(ir); } catch { if (E === estado && usuario === nube.usuarioId() && panel.isConnected) { $('permiso-chat-error').textContent = 'No pude registrar el permiso. Reintenta con señal.'; ev.currentTarget.disabled = false; } } };
     }
-  } catch { if (out.isConnected) out.textContent = 'No pude comprobar la IA. Las opciones de Entreno siguen disponibles.'; }
+  } catch { if (out.isConnected) out.textContent = 'IA sin comprobar · opciones disponibles'; }
 }
