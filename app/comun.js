@@ -78,8 +78,8 @@ try {
 // La segunda copia (IndexedDB) se lee al cargar cada ámbito (al abrir y al entrar a una cuenta), antes de escribirla de
 // nuevo: si el almacenamiento principal quedó atrás, recuperarCopia() la usa. alCargar guarda la hora del estado
 // principal tal como estaba al cargarlo.
-let alCargar = { clave: CLAVE, guardadoEn: lecturaFallida ? 0 : Number(E.guardadoEn) || 0 };
-leerCopia(CLAVE);
+let revisionLocal = 0;
+let alCargar = { clave: CLAVE, guardadoEn: lecturaFallida ? 0 : Number(E.guardadoEn) || 0, lectura: leerCopia(CLAVE), consumida: false, revisionInicial: revisionLocal };
 // Los ejercicios que crea la persona (nucleo/propios.js) se suman al catálogo del teléfono: así el banco, Hoy, el
 // validador y el historial los tratan como cualquier otro. Se rehace en cada guardado (cambia con la cuenta o el ejemplo).
 export function alinearPropios() {
@@ -90,6 +90,7 @@ export function alinearPropios() {
   for (const e of propios) if (e?.id && !indice.porId.has(e.id)) { const ej = { ...e, propio: true }; indice.ejercicios.push(ej); indice.porId.set(ej.id, ej); }
 }
 export function guardar() {
+  revisionLocal += 1;
   alinearPropios();
   try {
     if (lecturaFallida) throw new Error('Los datos anteriores no se pudieron leer');
@@ -132,14 +133,15 @@ export function activarCuenta(id = null) {
   if (modoEjemplo) salirEjemplo();
   const nueva = id ? `entreno-cuenta-${id}${perfilDePrueba ? '-prueba-' + perfilDePrueba.id : ''}` : CLAVE_PERSONAL;
   if (CLAVE === nueva) return;
-  if (!guardar()) throw new Error('Respalda los cambios pendientes antes de cambiar de cuenta.');
+  const sinCambiosDesdeCarga = !lecturaFallida && !alCargar.consumida && alCargar.clave === CLAVE && revisionLocal === alCargar.revisionInicial;
+  if (!sinCambiosDesdeCarga && !guardar()) throw new Error('Respalda los cambios pendientes antes de cambiar de cuenta.');
   let datos;
   try { datos = JSON.parse(localStorage.getItem(nueva) || '{}'); }
   catch { throw new Error('No pude leer la copia de esa cuenta. Tus datos actuales se conservan.'); }
   E = { ...VACIO(), ...datos }; CLAVE = nueva; ambitoDatos = id || AMBITO_LOCAL; personal = E;
-  alCargar = { clave: nueva, guardadoEn: Number(datos.guardadoEn) || 0 };
-  leerCopia(nueva); // antes de guardar: la copia anterior de esta cuenta queda leída
-  lecturaFallida = false; guardar();
+  alCargar = { clave: nueva, guardadoEn: Number(datos.guardadoEn) || 0, lectura: leerCopia(nueva, { renovar: true }), consumida: false, revisionInicial: revisionLocal };
+  // La copia nueva se recupera antes de guardar: no dar una hora nueva a un estado vacío todavía.
+  lecturaFallida = false; alinearPropios();
 }
 export function resumenLocal() {
   const d = JSON.parse(localStorage.getItem(CLAVE_PERSONAL) || '{}');
@@ -168,17 +170,29 @@ export const reiniciar = () => { lecturaFallida = false; E = VACIO(); guardar();
  * falló), vuelve a lo último que se escribió. Devuelve true si recuperó algo.
  */
 export async function recuperarCopia() {
-  const { clave, guardadoEn } = alCargar;
-  const copia = await leerCopia(clave);
-  const estado = CLAVE === clave && !modoEjemplo ? estadoDeCopia(guardadoEn, copia) : null;
+  const carga = alCargar, { clave, guardadoEn } = carga, revision = revisionLocal;
+  if (carga.consumida || modoEjemplo || CLAVE !== clave) return false;
+  const copia = await carga.lectura;
+  if (carga !== alCargar || CLAVE !== clave || modoEjemplo || carga.consumida) return false;
+  carga.consumida = true;
+  // Si la persona guardó algo mientras se leía la copia, conserva esos cambios actuales.
+  if (revision !== revisionLocal) return false;
+  const estado = estadoDeCopia(guardadoEn, copia);
   if (!estado) return false;
   E = { ...VACIO(), ...estado };
+  personal = E;
   lecturaFallida = false; errorGuardado = null;
   guardar();
   return true;
 }
+/** La navegación automática nunca debe convertir una copia todavía sin recuperar en una escritura nueva. */
+export function guardarRetorno(pantalla) {
+  if (!modoEjemplo && !alCargar.consumida) return false;
+  E.pantallaGuardada = pantalla;
+  return guardar();
+}
 // Al pasar al fondo o cerrar, se guarda lo que esté en memoria (la copia se escribe de inmediato en copia-entreno.js).
-if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && !lecturaFallida) guardar(); });
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && !lecturaFallida && (modoEjemplo || alCargar.consumida)) guardar(); });
 /** Versión de prueba: borra el cuestionario y el plan para volver a probarlos, y deja lo anotado (historial,
  *  series, notas, suplementos e indicaciones). */
 export function empezarDeNuevo() {

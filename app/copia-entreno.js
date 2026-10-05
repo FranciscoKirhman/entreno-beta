@@ -21,9 +21,9 @@ const pedir = (modo, hacer) => abrir().then(db => new Promise((ok, mal) => {
 
 // Antes de escribir una copia hay que haberla leído: si el principal se perdió, la copia anterior es lo que se recupera.
 const leidas = new Map();
-/** Lee la copia de una clave de datos ({guardadoEn, texto} o null). Una sola lectura por clave. */
-export function leerCopia(clave) {
-  if (!leidas.has(clave)) leidas.set(clave, pedir('readonly', s => s.get(clave)).then(x => x || null).catch(() => null));
+/** Lee la copia de una clave; al volver a ese ámbito se pide una lectura nueva antes de escribir. */
+export function leerCopia(clave, { renovar = false } = {}) {
+  if (renovar || !leidas.has(clave)) leidas.set(clave, pedir('readonly', s => s.get(clave)).then(x => x || null).catch(() => null));
   return leidas.get(clave);
 }
 
@@ -45,8 +45,9 @@ export async function vaciarCopia() {
 
 // Al pasar al fondo (cambiar de app, bloquear el teléfono) o cerrar, la copia se escribe de inmediato.
 if (typeof document !== 'undefined') {
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') vaciarCopia(); });
-  addEventListener('pagehide', () => { vaciarCopia(); });
+  // comun.js guarda la memoria en otro listener: se espera a que terminen todos antes de vaciar la copia.
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') queueMicrotask(vaciarCopia); });
+  addEventListener('pagehide', () => { queueMicrotask(vaciarCopia); });
 }
 // Pide al teléfono que no borre solo el almacenamiento de la app (si lo permite; si no, no pasa nada).
 try { if (navigator.storage?.persist && navigator.storage.persisted) navigator.storage.persisted().then(si => si || navigator.storage.persist()).catch(() => {}); } catch { /* sin permiso */ }

@@ -8,7 +8,16 @@ import { perfilPruebaActivo, claveSesionPerfilPrueba } from '../nucleo/perfiles-
 
 let supa = null, sesion = null, porEnlace = false;
 
-export async function iniciar({ claveSesion = null } = {}) {
+/** Solo el ámbito de la copia del teléfono, sin validar ni dar acceso al servidor antes de iniciar la cuenta. */
+export function usuarioGuardado({ claveSesion = 'entreno-sesion' } = {}) {
+  if (!CONFIG.supabaseUrl) return null;
+  try {
+    const id = JSON.parse(localStorage.getItem(claveSesion) || 'null')?.user?.id;
+    return typeof id === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id) ? id : null;
+  } catch { return null; }
+}
+
+export async function iniciar({ claveSesion = null, vigente = () => true } = {}) {
   // El correo trae un código y un enlace. Si se entró tocando el enlace, la URL vuelve con ?code=… y
   // supabase-js lo canjea al iniciar (flujo PKCE: solo funciona en el navegador que pidió el correo).
   if (!CONFIG.supabaseUrl) return false; // versión de prueba: todo queda en este teléfono
@@ -19,8 +28,10 @@ export async function iniciar({ claveSesion = null } = {}) {
     const perfil = claveSesion === null && CONFIG.modoPrueba ? perfilPruebaActivo(localStorage) : null;
     const storageKey = claveSesion ?? claveSesionPerfilPrueba(perfil?.id || null);
     const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+    if (!vigente()) return false;
     supa = createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey, { auth: { persistSession: true, storageKey, flowType: 'pkce' } });
     const { data } = await supa.auth.getSession();
+    if (!vigente()) { supa = null; sesion = null; return false; }
     sesion = data.session;
     supa.auth.onAuthStateChange((_e, s) => { sesion = s; });
     porEnlace = conCodigo && Boolean(sesion);
@@ -37,6 +48,15 @@ export const conectado = () => Boolean(sesion);
 export const correo = () => sesion?.user?.email || null;
 export const usuarioId = () => sesion?.user?.id || null;
 const uid = () => sesion.user.id;
+// Una operación con varios pasos conserva su cuenta: cada espera puede devolver el control a la pantalla de acceso.
+function ambitoActual() {
+  const cliente = supa, usuario = usuarioId();
+  const comprobar = () => {
+    if (!cliente || !usuario || supa !== cliente || usuarioId() !== usuario) throw new Error('La cuenta cambió durante la sincronización.');
+  };
+  comprobar();
+  return { cliente, usuario, comprobar, async consultar(hacer) { comprobar(); const r = await hacer(); comprobar(); return r; } };
+}
 export async function cargarPreferencias() {
   return ok(await supa.from('perfiles').select('unidad, asistente, preferencias_actualizadas').eq('id', uid()).single());
 }
@@ -87,24 +107,25 @@ const ok = ({ data, error }) => { if (error) throw error; return data; };
 const TIPOS_CONSENTIMIENTO = { terminos: 'terminos', privacidad: 'privacidad', consentimiento_salud: 'datos_salud', ia_transferencia: 'ia_transferencia', seguimiento_ciclo: 'ciclo_menstrual', marketing: 'marketing' };
 
 export async function guardarCuestionario(respuestas) {
-  ok(await supa.from('cuestionarios').insert({ user_id: uid(), version_cuestionario: 1, respuestas }));
-  ok(await supa.from('lugares').delete().eq('user_id', uid()));
+  const ambito = ambitoActual(), { cliente, usuario } = ambito;
+  ok(await ambito.consultar(() => cliente.from('cuestionarios').insert({ user_id: usuario, version_cuestionario: 1, respuestas })));
+  ok(await ambito.consultar(() => cliente.from('lugares').delete().eq('user_id', usuario)));
   if (respuestas.lugares?.length) {
-    ok(await supa.from('lugares').insert(respuestas.lugares.map((l, i) => ({
-      user_id: uid(), nombre: l.nombre || `Lugar ${i + 1}`, tipo: l.tipo || 'gimnasio_completo', equipamiento: l.equipamiento || [],
+    ok(await ambito.consultar(() => cliente.from('lugares').insert(respuestas.lugares.map((l, i) => ({
+      user_id: usuario, nombre: l.nombre || `Lugar ${i + 1}`, tipo: l.tipo || 'gimnasio_completo', equipamiento: l.equipamiento || [],
       mancuerna_max_kg: l.mancuerna_max_kg || null, incremento_minimo_kg: Number(l.incremento_minimo_kg) || 2.5, principal: i === 0,
-    }))));
+    })))));
   }
-  ok(await supa.from('lesiones').delete().eq('user_id', uid()));
+  ok(await ambito.consultar(() => cliente.from('lesiones').delete().eq('user_id', usuario)));
   if (respuestas.lesiones?.length) {
-    ok(await supa.from('lesiones').insert(respuestas.lesiones.map(l => ({
-      user_id: uid(), region: l.region, lado: l.lado || null, tipo: l.tipo || 'molestia', intensidad: l.intensidad ?? null,
+    ok(await ambito.consultar(() => cliente.from('lesiones').insert(respuestas.lesiones.map(l => ({
+      user_id: usuario, region: l.region, lado: l.lado || null, tipo: l.tipo || 'molestia', intensidad: l.intensidad ?? null,
       gatillantes: l.gatillantes || null, desde: l.desde || null, alta: l.alta || null, activa: true,
-    }))));
+    })))));
   }
   const consentimientos = Object.entries(TIPOS_CONSENTIMIENTO).filter(([k]) => typeof respuestas[k] === 'boolean')
-    .map(([k, tipo]) => ({ user_id: uid(), tipo, version: CONFIG.versionConsentimientos, otorgado: respuestas[k] }));
-  if (consentimientos.length) ok(await supa.from('consentimientos').insert(consentimientos));
+    .map(([k, tipo]) => ({ user_id: usuario, tipo, version: CONFIG.versionConsentimientos, otorgado: respuestas[k] }));
+  if (consentimientos.length) ok(await ambito.consultar(() => cliente.from('consentimientos').insert(consentimientos)));
 }
 export async function consentir(tipo, otorgado = true) {
   ok(await supa.from('consentimientos').insert({ user_id: uid(), tipo, version: CONFIG.versionConsentimientos, otorgado }));
@@ -156,9 +177,10 @@ export async function registrarSesion({ id, fecha, hora, titulo, duracion_min, s
   return id;
 }
 export async function cargarSesiones() {
+  const ambito = ambitoActual(), { cliente, usuario } = ambito;
   const filas = []; let desde = 0;
   for (;;) {
-    const lote = ok(await supa.from('sesiones').select('*, series(*), notas_ejercicio(*)').order('inicio').order('id').range(desde, desde + 499));
+    const lote = ok(await ambito.consultar(() => cliente.from('sesiones').select('*, series(*), notas_ejercicio(*)').eq('user_id', usuario).order('inicio').order('id').range(desde, desde + 499)));
     filas.push(...lote); if (lote.length < 500) break; desde += 500;
   }
   return filas.map(sesionDelServidor);
@@ -173,16 +195,16 @@ const EXTENSION = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 
 
 /** Sube la indicación con el id del teléfono (reintentar no la duplica) y, si viene, su foto o PDF. */
 export async function guardarIndicacion(ind, archivo = null) {
-  const usuario = uid();
+  const ambito = ambitoActual(), { cliente, usuario } = ambito;
   let ruta = ind.archivo || null;
   if (archivo) {
     ruta = `${usuario}/${ind.id}.${EXTENSION[archivo.type] || 'bin'}`;
-    ok(await supa.storage.from('indicaciones').upload(ruta, archivo, { contentType: archivo.type, upsert: true }));
+    ok(await ambito.consultar(() => cliente.storage.from('indicaciones').upload(ruta, archivo, { contentType: archivo.type, upsert: true })));
   }
-  ok(await supa.from('indicaciones').upsert({
+  ok(await ambito.consultar(() => cliente.from('indicaciones').upsert({
     id: ind.id, user_id: usuario, profesional: ind.profesional || null, fecha: ind.fecha || null, hasta: ind.hasta || null,
     restricciones: ind.restricciones || {}, ejercicios: ind.ejercicios || [], notas: ind.notas || null, archivo: ruta, activa: ind.activa !== false,
-  }, { onConflict: 'id' }));
+  }, { onConflict: 'id' })));
   return ruta;
 }
 export async function cargarIndicaciones() {
@@ -213,25 +235,26 @@ export const CAMPOS_BIENESTAR = ['sueno_horas', 'sueno_calidad', 'cansancio', 'a
  * trae los suplementos de la cuenta si este teléfono no tiene. Devuelve la lista de suplementos a usar.
  */
 export async function subirLocal({ bienestar = {}, suplementos = [], tomas = [], consentimientos = {} }) {
+  const ambito = ambitoActual(), { cliente, usuario } = ambito;
   // Consentimientos dados en este teléfono antes de entrar (fotos, cuidado de lesiones…): quedan registrados
   // con fecha y versión, una vez por tipo.
   const dados = Object.keys(consentimientos).filter(k => consentimientos[k] === true);
   if (dados.length) {
-    const ya = new Set(ok(await supa.from('consentimientos').select('tipo').eq('otorgado', true).eq('version', CONFIG.versionConsentimientos)).map(x => x.tipo));
-    for (const tipo of dados.filter(t => !ya.has(t))) await consentir(tipo).catch(e => console.warn('Consentimiento no registrado', tipo, e.message));
+    const ya = new Set(ok(await ambito.consultar(() => cliente.from('consentimientos').select('tipo').eq('user_id', usuario).eq('otorgado', true).eq('version', CONFIG.versionConsentimientos))).map(x => x.tipo));
+    for (const tipo of dados.filter(t => !ya.has(t))) await ambito.consultar(() => consentir(tipo).catch(e => console.warn('Consentimiento no registrado', tipo, e.message)));
   }
-  const filas = Object.entries(bienestar).map(([fecha, b]) => ({ user_id: uid(), fecha, ...Object.fromEntries(CAMPOS_BIENESTAR.filter(k => b[k] !== undefined).map(k => [k, b[k]])) }));
-  if (filas.length) ok(await supa.from('bienestar_diario').upsert(filas));
-  for (const x of suplementos) await guardarSuplemento(x);
+  const filas = Object.entries(bienestar).map(([fecha, b]) => ({ user_id: usuario, fecha, ...Object.fromEntries(CAMPOS_BIENESTAR.filter(k => b[k] !== undefined).map(k => [k, b[k]])) }));
+  if (filas.length) ok(await ambito.consultar(() => cliente.from('bienestar_diario').upsert(filas)));
+  for (const x of suplementos) await ambito.consultar(() => guardarSuplemento(x));
   if (tomas.length) {
-    const ya = ok(await supa.from('suplementos_tomas').select('suplemento_id, fecha, hora'));
+    const ya = ok(await ambito.consultar(() => cliente.from('suplementos_tomas').select('suplemento_id, fecha, hora').eq('user_id', usuario)));
     const clave = t => `${t.suplemento_id}|${t.fecha}|${String(t.hora || '').slice(0, 5)}`;
     const hay = new Set(ya.map(clave));
-    const nuevas = tomas.filter(t => !hay.has(clave(t))).map(t => ({ user_id: uid(), suplemento_id: t.suplemento_id, fecha: t.fecha, hora: t.hora || null }));
-    if (nuevas.length) ok(await supa.from('suplementos_tomas').insert(nuevas));
+    const nuevas = tomas.filter(t => !hay.has(clave(t))).map(t => ({ user_id: usuario, suplemento_id: t.suplemento_id, fecha: t.fecha, hora: t.hora || null }));
+    if (nuevas.length) ok(await ambito.consultar(() => cliente.from('suplementos_tomas').insert(nuevas)));
   }
   if (suplementos.length) return suplementos;
-  const enCuenta = ok(await supa.from('suplementos').select('id, nombre, dosis, horas, dias, activo').eq('activo', true));
+  const enCuenta = ok(await ambito.consultar(() => cliente.from('suplementos').select('id, nombre, dosis, horas, dias, activo').eq('user_id', usuario).eq('activo', true)));
   return enCuenta.map(x => ({ ...x, horas: (x.horas || []).map(h => h.slice(0, 5)) }));
 }
 export async function borrarSuplemento(id) { ok(await supa.from('suplementos').delete().eq('id', id)); }
@@ -239,22 +262,25 @@ export async function registrarToma(suplemento_id, fecha, hora) { ok(await supa.
 
 // ── Fotos de progreso (bucket privado) ─────────────────────────────────────
 export async function subirFoto({ fecha, angulo, archivo }) {
-  const ruta = `${uid()}/${fecha}-${Date.now()}.${(archivo.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')}`;
-  ok(await supa.storage.from('fotos-progreso').upload(ruta, archivo, { contentType: archivo.type }));
-  ok(await supa.from('fotos_progreso').insert({ user_id: uid(), fecha, archivo: ruta, angulo }));
+  const ambito = ambitoActual(), { cliente, usuario } = ambito;
+  const ruta = `${usuario}/${fecha}-${Date.now()}.${(archivo.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')}`;
+  ok(await ambito.consultar(() => cliente.storage.from('fotos-progreso').upload(ruta, archivo, { contentType: archivo.type })));
+  ok(await ambito.consultar(() => cliente.from('fotos_progreso').insert({ user_id: usuario, fecha, archivo: ruta, angulo })));
 }
 export async function listarFotos() {
-  const filas = ok(await supa.from('fotos_progreso').select('id, fecha, angulo, archivo').order('fecha'));
+  const ambito = ambitoActual(), { cliente, usuario } = ambito;
+  const filas = ok(await ambito.consultar(() => cliente.from('fotos_progreso').select('id, fecha, angulo, archivo').eq('user_id', usuario).order('fecha')));
   const out = [];
   for (const f of filas) {
-    const { data } = await supa.storage.from('fotos-progreso').createSignedUrl(f.archivo, 3600);
+    const { data } = await ambito.consultar(() => cliente.storage.from('fotos-progreso').createSignedUrl(f.archivo, 3600));
     out.push({ ...f, url: data?.signedUrl });
   }
   return out;
 }
 export async function borrarFoto(f) {
-  ok(await supa.storage.from('fotos-progreso').remove([f.archivo]));
-  ok(await supa.from('fotos_progreso').delete().eq('id', f.id));
+  const ambito = ambitoActual(), { cliente, usuario } = ambito;
+  ok(await ambito.consultar(() => cliente.storage.from('fotos-progreso').remove([f.archivo])));
+  ok(await ambito.consultar(() => cliente.from('fotos_progreso').delete().eq('user_id', usuario).eq('id', f.id)));
 }
 
 // ── Cuenta ──────────────────────────────────────────────────────────────────
@@ -270,12 +296,20 @@ export async function borrarDatoTelefono(clave) { ok(await supa.from('datos_tele
 export const cargarIniciosRegla = async () => ok(await supa.from('ciclo_registros').select('inicio_regla')).map(x => x.inicio_regla);
 /** Deja en la cuenta exactamente estas fechas de inicio de la regla. */
 export async function guardarIniciosRegla(fechas) {
-  const actuales = await cargarIniciosRegla();
+  const ambito = ambitoActual(), { cliente, usuario } = ambito;
+  const actuales = ok(await ambito.consultar(() => cliente.from('ciclo_registros').select('inicio_regla').eq('user_id', usuario))).map(x => x.inicio_regla);
   const sobran = actuales.filter(f => !fechas.includes(f)), faltan = fechas.filter(f => !actuales.includes(f));
-  if (sobran.length) ok(await supa.from('ciclo_registros').delete().in('inicio_regla', sobran));
-  if (faltan.length) ok(await supa.from('ciclo_registros').insert(faltan.map(f => ({ user_id: uid(), inicio_regla: f }))));
+  if (sobran.length) ok(await ambito.consultar(() => cliente.from('ciclo_registros').delete().eq('user_id', usuario).in('inicio_regla', sobran)));
+  if (faltan.length) ok(await ambito.consultar(() => cliente.from('ciclo_registros').insert(faltan.map(f => ({ user_id: usuario, inicio_regla: f })))));
 }
-export async function borrarCuenta() { await funcion('cuenta', { metodo: 'DELETE' }); await supa.auth.signOut(); sesion = null; }
+export async function borrarCuenta() {
+  const ambito = ambitoActual();
+  await ambito.consultar(() => funcion('cuenta', { metodo: 'DELETE' }));
+  ambito.comprobar();
+  await ambito.cliente.auth.signOut();
+  // signOut también avisa que la sesión terminó; conserva una cuenta distinta que pudiera haber entrado mientras tanto.
+  if (supa === ambito.cliente && (!sesion || usuarioId() === ambito.usuario)) sesion = null;
+}
 
 // Conexión directa: el proveedor de identidad conserva claves y tokens OAuth.
 export const detallesAutorizacion = id => supa.auth.oauth.getAuthorizationDetails(id).then(ok);
@@ -286,9 +320,10 @@ export async function autorizarConexionIA(clientId) {
 }
 export const conexionesIA = () => supa.auth.oauth.listGrants().then(ok);
 export async function revocarConexionIA(clientId) {
+  const ambito = ambitoActual(), { cliente, usuario } = ambito;
   // Primero se bloquean las herramientas; incluso un token todavía vigente deja de funcionar.
-  ok(await supa.from('conexiones_ia').update({ activa: false }).eq('user_id', uid()).eq('client_id', clientId));
-  ok(await supa.auth.oauth.revokeGrant({ clientId }));
+  ok(await ambito.consultar(() => cliente.from('conexiones_ia').update({ activa: false }).eq('user_id', usuario).eq('client_id', clientId)));
+  ok(await ambito.consultar(() => cliente.auth.oauth.revokeGrant({ clientId })));
 }
 export const propuestasIA = () => funcion('propuestas-ia', { metodo: 'GET' });
 export const confirmarPropuestaIA = id => funcion('propuestas-ia', { cuerpo: { id } });
