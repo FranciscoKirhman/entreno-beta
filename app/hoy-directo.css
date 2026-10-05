@@ -157,3 +157,6 @@ body:has(#pantalla-pasos) .acciones-sesion{visibility:hidden}
 
 /* La nota se ve bajo el nombre y conserva espacio para tocarla aunque esté vacía. */
 #vista-hoy textarea.nota-ej{min-height:44px;font-size:17px;margin:4px 0 0 58px;width:calc(100% - 58px);padding:10px 0;line-height:1.4}
+
+.acc-siguiente .acc-abrir{width:100%}
+.acc-siguiente .acc-textos{flex:1}

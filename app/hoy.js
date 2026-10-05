@@ -47,6 +47,7 @@ import { modoEsfuerzo, escalaDe, aRpe, deRpe, rpeDeSerie, textoEsfuerzo, signifi
 import { proponerEdicion, ordenarSesion } from './editar-sesion-ui.js';
 import { enlazarDeslizarSeries } from './deslizar-serie.js';
 import { protegerDialogo } from './modal.js';
+import { siguienteSerie } from '../nucleo/siguiente-serie.js';
 import { fechaSesionActiva } from '../nucleo/sesion-activa.js';
 import { serieCompleta } from '../nucleo/serie-completa.js';
 import { proponerSesionVacia } from './sesion-libre-ui.js';
@@ -105,11 +106,13 @@ export function vistaHoy(ir, extra) {
 /** Con la sesión empezada, al llegar a Hoy la pantalla queda en el ejercicio que se está haciendo: el de la serie que
  *  sigue a la última marcada. Sin series marcadas, Hoy parte arriba. */
 export function irAlEjercicioEnCurso() {
-  const checks = [...document.querySelectorAll('#vista-hoy .ej [data-hecho]')];
-  const ultima = checks.findLastIndex(c => c.getAttribute('aria-pressed') === 'true');
-  if (ultima < 0) return;
-  const sigue = checks.slice(ultima + 1).find(c => c.getAttribute('aria-pressed') !== 'true') || checks.find(c => c.getAttribute('aria-pressed') !== 'true');
-  sigue?.closest('.ej')?.scrollIntoView({ block: 'start' });
+  const f = fechaSesionActiva(E, hoy()), dia = sesionDe(E.plan, f);
+  if (!dia || !enCurso(f)) return;
+  const sigue = siguienteSerie(dia, dia.ejercicios.map((e, k) => filasDe(f, e, k)));
+  if (!sigue) return;
+  const control = document.querySelector(`#vista-hoy [data-hecho="${CSS.escape(sigue.ejercicioId)}"][data-i="${sigue.filaIndice}"]`);
+  control?.closest('.serie-contenedor')?.scrollIntoView({ block: 'center', behavior: sinMovimiento() ? 'auto' : 'smooth' });
+  control?.focus({ preventScroll: true });
 }
 
 /** La serie recién marcada: el visto se dibuja, la fila toma su color y la barra de avance crece desde donde estaba.
@@ -471,7 +474,7 @@ function accesorioHtml(dia, f) {
   if (!enCurso(f) || pasosAbierta?.fecha === f) return '';
   const pasos = pasosDe(dia, f, 'cal');
   const s = estadoPasos(pasos, 'cal', f);
-  if (!pasos.length || s.completo || s.saltado || avance(dia).hechas) return '';
+  if (!pasos.length || s.completo || s.saltado || avance(dia).hechas) return siguienteSerieHtml(dia, f);
   const p = pasos[s.sigue], parte = partePaso(p.name);
   const tramos = tramosDePaso(p.name, p.seg_estimados), total = tramos.reduce((x, t) => x + t.seg, 0);
   return `<div class="acc-pasos" id="acc-calentamiento">
@@ -481,6 +484,27 @@ function accesorioHtml(dia, f) {
     </button>
     ${tramos.length ? `<button type="button" class="acc-boton reloj-paso" data-tramos="${esc(JSON.stringify(tramos))}" aria-label="Cronómetro de ${esc(reloj(total))}">▶ <span class="num">${reloj(total)}</span></button>` : ''}
     <button type="button" class="acc-boton" data-acc-hecho aria-label="${esc(`${parte.nombre}: hecho, ir al siguiente`)}">${icono('visto')}</button>
+  </div>`;
+}
+
+function siguienteSerieHtml(dia, f) {
+  const siguiente = siguienteSerie(dia, dia.ejercicios.map((e, k) => filasDe(f, e, k)));
+  if (!siguiente) return '';
+  const { ejercicioIndice: k, filaIndice: i, etiqueta } = siguiente;
+  const e = dia.ejercicios[k], id = idDe(e, k), filas = filasDe(f, e, k), r = filas[i];
+  const tipo = tipoDe(r), posicion = filas.slice(0, i).filter(x => deTrabajo(tipoDe(x))).length;
+  const previo = anterior(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f)?.series[posicion];
+  const aproximacion = r.aprox != null ? aproximacionesHoy(dia, e, filas, f)[r.aprox] : null;
+  const anteriorHoy = [...filas.slice(0, i)].reverse().find(x => deTrabajo(tipoDe(x)) && x.kg != null);
+  const kg = r.kg ?? (deTrabajo(tipo) ? anteriorHoy?.kg ?? e.carga_kg ?? previo?.carga_kg : aproximacion?.kg);
+  const reps = r.reps ?? (e.unidad === 'seg' ? e.reps_min : deTrabajo(tipo) || e.unidad === 'm' ? e.reps_max : aproximacion?.reps);
+  const dosis = e.unidad === 'seg' ? `${reps ?? ''} s` : `${kg != null ? `${peso(kg)} × ` : ''}${reps ?? ''}${e.unidad === 'm' ? ' m' : ' reps'}`;
+  return `<div class="acc-pasos acc-siguiente" id="acc-siguiente">
+    <button type="button" class="acc-abrir" data-siguiente-serie aria-label="${esc(`Sigue: ${nombreDe(e)}, serie ${etiqueta}, ${dosis}. Ir a la serie`)}">
+      <span class="acc-icono" aria-hidden="true">${icono('pesa')}</span>
+      <span class="acc-textos"><strong>Sigue: ${esc(nombreDe(e))}</strong><small>Serie ${esc(etiqueta)} · ${esc(dosis)}</small></span>
+      ${icono('flecha', 'icono fila-pasos-flecha')}
+    </button>
   </div>`;
 }
 
@@ -1020,6 +1044,7 @@ function enlazar(ir, dia) {
       }
     });
   }
+  raiz.querySelector('[data-siguiente-serie]')?.addEventListener('click', irAlEjercicioEnCurso);
   raiz.querySelectorAll('.reloj-paso').forEach(b => b.onclick = () => iniciarTramos(JSON.parse(b.dataset.tramos), b.dataset.final || '¡Listo!'));
   // Series por tiempo, como en Hevy: cuenta hacia atrás desde lo escrito o lo del plan y, al terminar (o al tocar
   // Listo antes), anota los segundos hechos y marca la serie, que parte el descanso.
