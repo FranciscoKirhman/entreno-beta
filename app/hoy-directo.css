@@ -201,3 +201,13 @@ body:has(#pantalla-pasos) .acciones-sesion{visibility:hidden}
 .hoja-de-hoy .extremos{font-size:var(--hoy12)}
 .hoja-de-hoy button:active:not(:disabled){filter:brightness(.86)}
 @media(prefers-reduced-motion:no-preference){.hoja-de-hoy button{transition:background-color .15s,color .15s,filter .12s}}
+
+/* La misma barra atraviesa el espacio entre tarjetas de una superserie. Las letras también la identifican. */
+#vista-hoy .ejercicios-hoy>li.en-superserie{position:relative;box-shadow:none;padding-left:18px}
+#vista-hoy .en-superserie::before{content:"";position:absolute;left:0;top:-10px;bottom:-10px;width:4px;background:var(--ss)}
+#vista-hoy .en-superserie.ss-inicio::before{top:12px;border-radius:4px 4px 0 0}
+#vista-hoy .en-superserie.ss-fin::before{bottom:12px;border-radius:0 0 4px 4px}
+/* El resumen plegado conserva la flecha en la misma fila y los récords dejan libre Terminar. */
+#vista-hoy .bienestar-caja>summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px}
+#vista-hoy .bienestar-titulo{max-width:60vw}
+body:has(#vista-hoy) .medalla-record{bottom:calc(env(safe-area-inset-bottom,0px) + 224px)}

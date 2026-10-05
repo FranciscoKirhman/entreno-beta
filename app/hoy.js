@@ -667,8 +667,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
   const desc = g ? descansoVuelta(dia.ejercicios, g) : descansoDe(e, k);
   const descTexto = g && g.pos < g.total ? 'sin descanso, sigue la superserie' : `descanso ${mmss(desc)}`;
   const nombre = e.nombre || ej?.nombre || id;
-  return `<li class="ej tarjeta${g ? ` en-superserie ss-${g.letra}${g.pos === 1 ? ' ss-inicio' : ''}` : ''}" id="ej-${id}">
-    ${g?.pos === 1 ? `<p class="titulo-ss">Superserie ${g.letra} · sin descanso entre estos ${g.total}, descansas al terminar la vuelta</p>` : ''}
+  return `<li class="ej tarjeta${g ? ` en-superserie ss-${g.letra}${g.pos === 1 ? ' ss-inicio' : ''}${g.pos === g.total ? ' ss-fin' : ''}` : ''}" id="ej-${id}"${g ? ` aria-label="${esc(nombre)}, superserie ${g.letra}, ejercicio ${g.pos} de ${g.total}"` : ''}>
     <div class="ej-cab">
       ${ej ? `<button type="button" class="ej-abrir" data-ficha="${e.ejercicio_id}" aria-label="${esc(nombre)}: cómo se hace y por qué">${miniatura(e.ejercicio_id)}</button>` : `<span class="miniatura vacia"></span>`}
       <div class="ej-textos"><span class="nombre">${g ? `<span class="chip-ss">${etiquetaSuperserie(g)}</span>` : ''}${esc(nombre)}</span>
