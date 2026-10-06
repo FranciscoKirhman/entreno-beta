@@ -10,6 +10,7 @@ import { perfilDelRetornoCuenta } from '../nucleo/retorno-cuenta.js';
 import { CONFIG } from './config.js';
 import { leerCopia, escribirCopia } from './copia-entreno.js';
 import { estadoDeCopia } from '../nucleo/copia-segura.js';
+import { revisarTrasladoCuenta } from '../nucleo/consentimiento-nube.js';
 
 const cargar = u => fetch(u).then(r => { if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.json(); });
 export const [C, catalogo, K, EVIDENCIA, PLANES, TECNICA] = await Promise.all(
@@ -157,6 +158,9 @@ export function resumenLocal() {
   const d = JSON.parse(localStorage.getItem(CLAVE_PERSONAL) || '{}');
   return { perfil: Boolean(Object.keys(d.respuestas || {}).length), sesiones: (d.sesiones || []).filter(s => s.origen !== 'ejemplo').length };
 }
+export function revisionTrasladoLocal() {
+  return revisarTrasladoCuenta(JSON.parse(localStorage.getItem(CLAVE_PERSONAL) || '{}'), hoy());
+}
 // La recuperación se acredita solo en esta ejecución y para esta copia de la cuenta.
 let cuentaLeida = null;
 export function marcarCuentaRecuperada(usuario = null) { cuentaLeida = usuario ? { usuario, estado: E } : null; }
@@ -170,6 +174,8 @@ export function traerPerfilLocal(usuario) {
   if (!cuentaRecuperada(usuario)) throw new Error('Recupera primero los datos de esta cuenta con Sincronizar ahora.');
   if (CLAVE === CLAVE_PERSONAL || !cuentaVaciaParaTraslado()) throw new Error('La cuenta debe estar vacía para copiar el perfil local.');
   const d = JSON.parse(localStorage.getItem(CLAVE_PERSONAL) || '{}');
+  const revision = revisarTrasladoCuenta(d, hoy());
+  if (!revision.ok) throw new Error(revision.mensaje);
   E = { ...VACIO(), ...structuredClone(d), pendientes: [], chat: [] };
   E.sesiones = E.sesiones.filter(s => s.origen !== 'ejemplo').map(s => ({ ...s, enCuenta: false }));
   E.bienestar = Object.fromEntries(Object.entries(E.bienestar).map(([f, b]) => [f, { ...b, enCuenta: false }]));

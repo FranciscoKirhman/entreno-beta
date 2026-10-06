@@ -6,6 +6,7 @@ import { sesionDelServidor } from '../nucleo/sincronizacion.js';
 import { planSinPropios, sinIdPropio } from '../nucleo/propios.js';
 import { perfilPruebaActivo, claveSesionPerfilPrueba } from '../nucleo/perfiles-prueba.js';
 import { destinoCuenta, esRetornoCuenta, limpiarRetornoCuenta, perfilDelRetornoCuenta } from '../nucleo/retorno-cuenta.js';
+import { exigirPermisoSaludCuestionario } from '../nucleo/consentimiento-nube.js';
 
 let supa = null, sesion = null, porEnlace = false, perfilSesion = null;
 const errorAcceso = mensaje => Object.assign(new Error(mensaje), { code: 'acceso_retornado_fallido' });
@@ -41,7 +42,7 @@ export async function iniciar({ claveSesion = null, vigente = () => true } = {})
     perfilSesion = storageKey.startsWith('entreno-sesion-prueba-') ? storageKey.slice('entreno-sesion-prueba-'.length) : null;
     if (url.searchParams.has('error') || hash.has('error')) {
       const cancelado = (url.searchParams.get('error') || hash.get('error')) === 'access_denied';
-      throw errorAcceso(cancelado ? 'Cancelaste el acceso. Puedes volver a entrar desde Más. Tus datos se conservan.' : 'No pude completar el acceso. Pide otro enlace desde este teléfono. Tus datos se conservan.');
+      throw errorAcceso(cancelado ? 'Cancelaste el acceso. Puedes volver a entrar desde Más. Tus datos se conservan.' : 'No pude completar el acceso. Intenta de nuevo o entra con tu correo. Tus datos se conservan.');
     }
     if (conCodigo) {
       // Canjear explícitamente permite informar un enlace vencido o abierto en otro navegador,
@@ -61,7 +62,7 @@ export async function iniciar({ claveSesion = null, vigente = () => true } = {})
     if (!vigente()) { if (cliente && supa === cliente) { supa = null; sesion = null; } return false; }
     if (conRetorno) {
       if (cliente && supa === cliente) sesion = null;
-      throw errorAcceso(e.code === 'acceso_retornado_fallido' ? e.message : 'No pude completar el acceso. Pide otro enlace desde este teléfono. Tus datos se conservan.');
+      throw errorAcceso(e.code === 'acceso_retornado_fallido' ? e.message : 'No pude completar el acceso. Intenta de nuevo o entra con tu correo. Tus datos se conservan.');
     }
     if (!cliente || supa === cliente) { supa = null; sesion = null; }
     return false;
@@ -102,7 +103,12 @@ export async function verificarCodigo(email, token) {
   if (error) throw error;
   sesion = data.session;
 }
-export async function salir() { await supa.auth.signOut(); sesion = null; }
+export async function salir() {
+  const { cliente, usuario } = ambitoActual();
+  const resultado = await cliente.auth.signOut();
+  if (resultado?.error) throw resultado.error;
+  if (supa === cliente && (!sesion || usuarioId() === usuario)) sesion = null;
+}
 
 /** Entrar o crear la cuenta con Google o Apple. Sale a su página y vuelve con ?code=…, que iniciar() canjea. */
 export async function entrarCon(proveedor) {
@@ -139,6 +145,7 @@ const ok = ({ data, error }) => { if (error) throw error; return data; };
 const TIPOS_CONSENTIMIENTO = { terminos: 'terminos', privacidad: 'privacidad', consentimiento_salud: 'datos_salud', ia_transferencia: 'ia_transferencia', seguimiento_ciclo: 'ciclo_menstrual', marketing: 'marketing' };
 
 export async function guardarCuestionario(respuestas) {
+  exigirPermisoSaludCuestionario(respuestas);
   const ambito = ambitoActual(), { cliente, usuario } = ambito;
   ok(await ambito.consultar(() => cliente.from('cuestionarios').insert({ user_id: usuario, version_cuestionario: 1, respuestas })));
   ok(await ambito.consultar(() => cliente.from('lugares').delete().eq('user_id', usuario)));

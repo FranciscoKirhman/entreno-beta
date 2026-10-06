@@ -1,6 +1,6 @@
 import { validarRespaldo } from '../nucleo/respaldo.js';
 // Vista Más: cuenta, ajustar con tu IA (copiar y pegar o conexión directa), importar un plan escrito y reiniciar.
-import { E, guardar, reiniciar, empezarDeNuevo, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje, unidadPeso, modoEjemplo, activarCuenta, resumenLocal, traerPerfilLocal, cuentaRecuperada, cuentaVaciaParaTraslado, avisar } from './comun.js';
+import { E, guardar, reiniciar, empezarDeNuevo, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje, unidadPeso, modoEjemplo, activarCuenta, resumenLocal, traerPerfilLocal, revisionTrasladoLocal, cuentaRecuperada, cuentaVaciaParaTraslado, avisar } from './comun.js';
 import { esExportacionHevy, importarParaTelefono } from '../nucleo/hevy-csv.js';
 import { claveHevy, ultimaHevy, guardarClaveHevy, sincronizarHevy } from './hevy-auto.js';
 import { soporte, configAvisos, cambiarAvisos, activarAvisos, notificar, enlaceCalendario } from './avisos.js';
@@ -366,11 +366,12 @@ function restaurarValido(r) {
 
 function cuentaHtml() {
   if (!nube.hay()) return E.errorAccesoCuenta ? `<h3>Cuenta</h3><p class="aviso alerta" role="alert">${esc(E.errorAccesoCuenta)}</p><p class="pequeno">Vuelve a abrir Entreno para pedir otro acceso. Tu perfil local se conserva.</p>` : '<h3>Versión de prueba</h3><p class="pequeno">Todo lo que anotas queda guardado solo en este teléfono. Las cuentas, la sincronización y la IA del coach llegan con la beta.</p>';
+  const revision = nube.conectado() && cuentaVaciaParaTraslado() && resumenLocal().perfil ? revisionTrasladoLocal() : null;
   if (nube.conectado()) return `<h3>Cuenta</h3><p>Entraste como <strong class="correo-cuenta">${esc(nube.correo())}</strong>. Tu plan y tus sesiones guardadas se sincronizan con esta cuenta.</p>
     ${R().demo_privada ? '<p class="pequeno">Demo privada con historial importado. El cuestionario es ficticio y las pruebas de interfaz no son entrenamientos reales.</p>' : ''}
     <p class="pequeno">El historial guardado se recupera en tus otros dispositivos. Las series todavía en curso permanecen en este teléfono hasta guardar la sesión. Las fotos y documentos locales se conservan por separado.</p>
     <button type="button" class="boton" id="sincronizar">Sincronizar ahora</button><p id="estado-sincronizacion" role="status"></p>
-    ${cuentaVaciaParaTraslado() && resumenLocal().perfil ? `<div class="aviso ojo"><strong>Tu perfil sigue en este teléfono</strong><p class="pequeno">${cuentaRecuperada(nube.usuarioId()) ? 'La cuenta está vacía. Revisa el traslado y confírmalo para ver tu plan en otros dispositivos.' : 'Primero pulsa Sincronizar ahora para comprobar si la cuenta tiene datos.'} Tu perfil local conserva ${resumenLocal().sesiones} sesiones.</p></div><button type="button" class="boton primario" id="copiar-local" ${cuentaRecuperada(nube.usuarioId()) ? '' : 'disabled'}>Revisar traslado del perfil local</button>` : ''}
+    ${revision ? `<div class="aviso ojo"><strong>Tu perfil sigue en este teléfono</strong><p class="pequeno">${cuentaRecuperada(nube.usuarioId()) ? 'La cuenta está vacía. Revisa el traslado y confírmalo para ver tu plan en otros dispositivos.' : 'Primero pulsa Sincronizar ahora para comprobar si la cuenta tiene datos.'} Tu perfil local conserva ${resumenLocal().sesiones} sesiones.</p>${revision.ok ? '' : `<p class="pequeno" role="alert">${esc(revision.mensaje)}</p><button type="button" class="boton" id="completar-local">Completar mi perfil local</button><p class="pequeno">Vuelves al perfil de este teléfono. Después entra de nuevo con tu cuenta para revisar el traslado.</p>`}</div><button type="button" class="boton primario" id="copiar-local" ${cuentaRecuperada(nube.usuarioId()) && revision.ok ? '' : 'disabled'}>Revisar traslado del perfil local</button>` : ''}
     <div class="fila-botones"><button type="button" class="boton" id="descargar">Descargar mis datos</button><button type="button" class="boton" id="salir">Salir</button></div>
     <div class="fila-botones"><button type="button" class="boton" id="borrar-cuenta">Borrar mi cuenta</button></div><div id="datos-descargados"></div>`;
   return `<h3>Entrar</h3><p class="pequeno">Con una cuenta, puedes sincronizar tus sesiones guardadas. El coach usa reglas mientras la IA no esté habilitada. Entra con Google o recibe un acceso por correo, sin contraseña.</p>
@@ -383,6 +384,16 @@ function cuentaHtml() {
 
 function enlazarCuenta(ir, sincronizarAlEntrar) {
   pintarProveedores();
+  $('completar-local')?.addEventListener('click', async ev => {
+    const b = ev.currentTarget, estado = E, usuario = nube.usuarioId();
+    b.disabled = true;
+    try {
+      await nube.salir();
+      if (E !== estado || nube.usuarioId()) return;
+      activarCuenta(); ir('perfil');
+    } catch (e) { if (E === estado && (!nube.usuarioId() || nube.usuarioId() === usuario)) b.textContent = `No pude volver al perfil local: ${e.message}. Reintenta.`; }
+    finally { b.disabled = false; }
+  });
   $('ya-tengo-codigo')?.addEventListener('click', () => {
     if (!$('correo').reportValidity()) return;
     $('form-codigo').hidden = false;
@@ -397,7 +408,7 @@ function enlazarCuenta(ir, sincronizarAlEntrar) {
     try { const resultado = await sincronizarAlEntrar({ forzar: true }); if (vigente()) {
       salida.textContent = resultado.mensaje;
       const traslado = $('copiar-local');
-      if (traslado) traslado.disabled = !resultado.completa || !cuentaRecuperada(usuario) || !cuentaVaciaParaTraslado();
+      if (traslado) traslado.disabled = !resultado.completa || !cuentaRecuperada(usuario) || !cuentaVaciaParaTraslado() || !revisionTrasladoLocal().ok;
     } }
     catch (e) { if (vigente()) salida.textContent = `No pude sincronizar: ${e.message}. Tus datos del teléfono se conservan.`; }
     finally { if (vigente()) b.disabled = false; }
@@ -405,6 +416,8 @@ function enlazarCuenta(ir, sincronizarAlEntrar) {
   $('copiar-local')?.addEventListener('click', async ev => {
     const b = ev.currentTarget;
     if (!cuentaRecuperada(nube.usuarioId()) || !cuentaVaciaParaTraslado()) { delete b.dataset.confirmar; b.textContent = 'Recupera esta cuenta con Sincronizar ahora antes de revisar el traslado.'; return; }
+    const permisos = revisionTrasladoLocal();
+    if (!permisos.ok) { delete b.dataset.confirmar; delete b.dataset.usuario; b.textContent = permisos.mensaje; return; }
     if (!b.dataset.confirmar) { b.dataset.confirmar = '1'; b.dataset.usuario = nube.usuarioId(); b.textContent = `Confirmar traslado a ${nube.correo()}: perfil y ${resumenLocal().sesiones} sesiones, sin fotos ni documentos`; return; }
     if (b.dataset.usuario !== nube.usuarioId()) { delete b.dataset.confirmar; b.textContent = 'La cuenta cambió. Vuelve a revisar el traslado.'; return; }
     let estado = E;
@@ -418,6 +431,8 @@ function enlazarCuenta(ir, sincronizarAlEntrar) {
         E.mensaje = !revision.completa ? revision.mensaje : 'La cuenta ya tiene datos. Se conservan ambas copias y el traslado necesita revisión.';
         guardar(); ir('mas'); return;
       }
+      const permisosActuales = revisionTrasladoLocal();
+      if (!permisosActuales.ok) { delete b.dataset.confirmar; delete b.dataset.usuario; b.textContent = permisosActuales.mensaje; return; }
       traerPerfilLocal(usuario); estado = E;
       const resultado = await sincronizarAlEntrar();
       if (!vigente()) return;
