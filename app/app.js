@@ -5,7 +5,7 @@
 import { sincronizarDatosTelefono } from './datos-nube.js';
 import { hevyAlAbrir } from './hevy-auto.js';
 import { conPropios, idsPropios } from '../nucleo/propios.js';
-import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo, entrarEjemplo, salirEjemplo, modoEjemplo, errorGuardado, activarCuenta, perfilDePrueba, recuperarCopia, claveSesionCuenta } from './comun.js';
+import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo, entrarEjemplo, salirEjemplo, modoEjemplo, errorGuardado, activarCuenta, perfilDePrueba, recuperarCopia, claveSesionCuenta, marcarCuentaRecuperada } from './comun.js';
 import { prepararSesion, unirSesiones } from '../nucleo/sincronizacion.js';
 import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
 import { derivar } from '../nucleo/derivar.js';
@@ -82,6 +82,7 @@ async function armarPlan({ mensaje = null } = {}) {
 /** Al entrar: si la cuenta ya tiene plan, se usa ese; si no, se sube lo de este teléfono. */
 async function sincronizarAlEntrar({ forzar = false } = {}) {
   activarCuenta(nube.usuarioId());
+  marcarCuentaRecuperada();
   const estadoInicial = E, usuarioInicial = nube.usuarioId();
   const recuperada = await recuperarCopia();
   if (nube.usuarioId() !== usuarioInicial || !recuperada && E !== estadoInicial) throw new Error('La cuenta cambió durante la sincronización.');
@@ -93,6 +94,12 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
   const consultar = async fn => {
     comprobar(); const resultado = await fn(); comprobar(); return resultado;
   };
+  const avisos = [];
+  const avisar = (parte, e) => {
+    comprobar();
+    avisos.push({ parte, mensaje: e.datos?.errores?.map(x => x.mensaje).join(' ') || e.message });
+  };
+  let planIntentado = false;
   if (E.chatPorTraer) {
     if (!await consultar(() => actualizarChatConfirmado())) throw new Error('La cuenta cambió al recuperar los cambios del chat.');
     respuestasAlEntrar = JSON.stringify(E.respuestas); planAlEntrar = JSON.stringify(E.plan);
@@ -106,37 +113,48 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
   }
   if (E.planPendiente) {
     const enviado = structuredClone(E.planPendiente), firma = JSON.stringify(enviado);
-    const r = await consultar(() => nube.guardarPlan(enviado));
-    if (JSON.stringify(E.plan) === firma) { E.plan = { ...E.plan, id: r.id }; planAlEntrar = JSON.stringify(E.plan); }
-    if (JSON.stringify(E.planPendiente) === firma) delete E.planPendiente;
-    guardar();
+    planIntentado = true;
+    try {
+      await consultar(() => nube.guardarCuestionario(structuredClone(R())));
+      const r = await consultar(() => nube.guardarPlan(enviado));
+      if (JSON.stringify(E.plan) === firma) { E.plan = { ...E.plan, id: r.id }; planAlEntrar = JSON.stringify(E.plan); }
+      if (JSON.stringify(E.planPendiente) === firma) delete E.planPendiente;
+      guardar();
+    } catch (e) { avisar('Plan', e); }
   }
   const respuestas = await consultar(() => nube.cargarRespuestas());
   const plan = await consultar(() => nube.cargarPlan());
   if (respuestas) {
     const borrador = E.firmaPlan && firmaRespuestas(E.firmaPlan) !== firmaRespuestas();
-    if (!borrador && JSON.stringify(E.respuestas) === respuestasAlEntrar) E.respuestas = { ...respuestas, escala_esfuerzo: R().escala_esfuerzo };
+    if (!E.planPendiente && !borrador && JSON.stringify(E.respuestas) === respuestasAlEntrar) E.respuestas = { ...respuestas, escala_esfuerzo: R().escala_esfuerzo };
   }
-  if (plan) { if (JSON.stringify(E.plan) === planAlEntrar) E.plan = conPropios(plan, E.plan); }
-  else if (R().objetivo_principal && E.plan?.dias?.length && !E.plan.bloqueado && !E.plan.id && !E.plan.libre) {
+  if (plan) { if (!E.planPendiente && JSON.stringify(E.plan) === planAlEntrar) E.plan = conPropios(plan, E.plan); }
+  else if (!planIntentado && !E.planPendiente && R().objetivo_principal && E.plan?.dias?.length && !E.plan.bloqueado && !E.plan.id && !E.plan.libre) {
     // Perfil local copiado a una cuenta vacía: se sube su plan tal cual (el servidor lo valida), sin armar otro.
-    await consultar(() => nube.guardarCuestionario(R()));
     const enviado = structuredClone(E.plan), firma = JSON.stringify(enviado);
-    try { const r = await consultar(() => nube.guardarPlan(enviado)); if (JSON.stringify(E.plan) === firma) E.plan.id = r.id; }
+    try {
+      await consultar(() => nube.guardarCuestionario(structuredClone(R())));
+      const r = await consultar(() => nube.guardarPlan(enviado));
+      if (JSON.stringify(E.plan) === firma) E.plan.id = r.id;
+    }
     catch (e) {
       comprobar();
-      if (JSON.stringify(E.plan) !== firma) throw e;
-      E.planPendiente = enviado;
-      E.mensaje = `Tu plan quedó en este teléfono, pero el servidor no lo aceptó: ${e.datos?.errores?.map(x => x.mensaje).join(' ') || e.message}`;
+      if (JSON.stringify(E.plan) === firma) E.planPendiente = enviado;
+      avisar('Plan', e);
     }
   }
-  else if (R().objetivo_principal && !E.plan?.libre) await consultar(() => armarPlan()); // quien entrena sin plan lo arma cuando quiera
+  else if (!E.planPendiente && R().objetivo_principal && !E.plan?.libre) await consultar(() => armarPlan()); // quien entrena sin plan lo arma cuando quiera
   let p = await consultar(() => nube.cargarPreferencias());
   if (!p.preferencias_actualizadas) { p = { unidad: R().unidad || 'kg', asistente: E.asistente || 'entrenadora' }; await consultar(() => nube.guardarPreferencias(p)); }
   if (JSON.stringify({ unidad: R().unidad, asistente: E.asistente }) === preferenciasAlEntrar) { R().unidad = p.unidad; E.asistente = p.asistente || 'entrenadora'; }
   E.firmaPreferenciasCuenta = JSON.stringify({ unidad: p.unidad, asistente: p.asistente || 'entrenadora' });
-  try { E.suplementos = await consultar(() => nube.subirLocal({ suplementos: E.suplementos, tomas: E.tomas, consentimientos: E.consentimientos })); }
-  catch (e) { comprobar(); console.warn('No se pudo subir lo anotado en este teléfono', e); }
+  const locales = structuredClone({ suplementos: E.suplementos, tomas: E.tomas, consentimientos: E.consentimientos });
+  const firmaLocales = JSON.stringify(locales);
+  try {
+    const recibidos = await consultar(() => nube.subirLocal(locales));
+    if (JSON.stringify({ suplementos: E.suplementos, tomas: E.tomas, consentimientos: E.consentimientos }) === firmaLocales) E.suplementos = recibidos;
+    else avisar('Suplementos y permisos', new Error('Hay cambios nuevos pendientes de enviar.'));
+  } catch (e) { avisar('Suplementos y permisos', e); }
   // Sesiones e indicaciones anotadas sin cuenta: a la cola, que las sube con su id (sin duplicar).
   for (const s of E.sesiones.filter(x => !x.enCuenta && x.origen !== 'ejemplo')) {
     Object.assign(s, prepararSesion(s));
@@ -149,14 +167,28 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
     if (!(E.pendientes || []).some(x => x.tipo === 'bienestar' && x.clave === fecha)) dejarPendiente('bienestar', fecha, datos);
   }
   try { for (const i of await consultar(() => nube.cargarIndicaciones())) if (!E.indicaciones.some(x => x.id === i.id)) E.indicaciones.push(i); }
-  catch (e) { comprobar(); console.warn('No se pudieron traer las indicaciones de la cuenta', e); }
+  catch (e) { avisar('Indicaciones', e); }
   guardar();
   await consultar(() => subirPendientes({ forzar }));
   // Ejercicios propios, medidas, notas fijas y fechas del ciclo (antes solo en el teléfono).
-  try { await consultar(() => sincronizarDatosTelefono()); } catch (e) { comprobar(); console.warn('No se pudieron sincronizar los datos del teléfono', e); }
+  try { await consultar(() => sincronizarDatosTelefono()); } catch (e) { avisar('Datos del teléfono', e); }
   E.sesiones = unirSesiones(E.sesiones, idsPropios(await consultar(() => nube.cargarSesiones()), E.ejerciciosPropios || []), E.pendientes || []);
   E.bienestar = { ...await consultar(() => nube.cargarBienestar()), ...Object.fromEntries(Object.entries(E.bienestar).filter(([, b]) => !b.enCuenta)) };
+  const pendientes = E.pendientes?.length || 0;
+  const partes = avisos.map(x => `${x.parte}: ${x.mensaje}`);
+  if (E.planPendiente && !avisos.some(x => x.parte === 'Plan')) partes.push('plan pendiente');
+  if (E.preferenciasPendientes) partes.push('preferencias pendientes');
+  if (pendientes) partes.push(`${pendientes} elementos pendientes`);
+  if (Object.entries(E.nubeDatos || {}).some(([k, v]) => v.pendiente && (k !== 'medidas_cuerpo' || E.consentimientos?.medidas_cuerpo === true)) && !avisos.some(x => x.parte === 'Datos del teléfono')) partes.push('datos del teléfono pendientes');
+  const completa = !partes.length;
+  const mensaje = completa ? `Sincronización completa. ${E.sesiones.length} sesiones disponibles en esta cuenta.`
+    : `Sincronización incompleta. ${partes.join('. ')}. La copia del teléfono se conserva. Reintenta en Más.`;
+  if (!completa || E.mensaje === E.sincronizacionCuenta?.mensaje) E.mensaje = completa ? null : mensaje;
+  E.sincronizacionCuenta = { completa, pendientes, avisos, mensaje };
+  comprobar();
+  if (completa) marcarCuentaRecuperada(usuario);
   guardar();
+  return E.sincronizacionCuenta;
 }
 
 function vistaBloqueada() {
@@ -300,11 +332,12 @@ async function iniciarEnSegundoPlano() {
   // Si no se pudo verificar la cuenta sin señal, se conserva su copia local. No cambia a otro perfil.
   if (iniciado) { activarCuenta(nube.usuarioId()); await avisarRecuperado(); }
   if (nube.conectado()) {
-    const estado = E;
-    try { await sincronizarAlEntrar(); }
-    catch { if (E === estado) E.mensaje = 'No pude sincronizar ahora. Puedes seguir con la copia de esta cuenta en el teléfono y reintentar en Más.'; }
-    if (E !== estado) return;
-    if (nube.entroPorEnlace()) { E.mensaje = `Entraste como ${nube.correo()}.`; E.vista = E.plan ? 'hoy' : 'inicio'; }
+    const estado = E, usuario = nube.usuarioId(), vigente = () => E === estado && nube.usuarioId() === usuario;
+    let resultado;
+    try { resultado = await sincronizarAlEntrar(); }
+    catch { if (vigente()) E.mensaje = 'No pude sincronizar ahora. Puedes seguir con la copia de esta cuenta en el teléfono y reintentar en Más.'; }
+    if (!vigente()) return;
+    if (nube.entroPorEnlace()) { if (resultado?.completa) E.mensaje = `Entraste como ${nube.correo()}.`; E.vista = E.plan ? 'hoy' : 'inicio'; }
   }
   repintarSinMover();
   hevyAlAbrir(() => { if (['hoy', 'semana', 'progreso'].includes(E.vista)) repintarSinMover(); });

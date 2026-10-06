@@ -183,7 +183,7 @@ const CALENTAMIENTO_ZONA = {
  * @param p.historial  series efectivas recientes [{ejercicio_id, carga_kg, reps, rir?, rpe?, fecha}]
  */
 /** @param anteriores ids de los ejercicios del bloque que termina: si a la persona le gusta variar, se cambian algunos. */
-export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historial = [], anteriores = null }) {
+export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historial = /** @type {Array<Record<string, any>>} */ ([]), anteriores = null }) {
   if (d.alerta === 'bloqueo') return { bloqueado: true, mensaje: d.mensaje_alerta };
   if (d.errores?.length) return { bloqueado: true, mensaje: d.errores.join(' ') };
 

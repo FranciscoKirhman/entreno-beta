@@ -1,6 +1,6 @@
 import { validarRespaldo } from '../nucleo/respaldo.js';
 // Vista Más: cuenta, ajustar con tu IA (copiar y pegar o conexión directa), importar un plan escrito y reiniciar.
-import { E, guardar, reiniciar, empezarDeNuevo, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje, unidadPeso, modoEjemplo, activarCuenta, resumenLocal, traerPerfilLocal, avisar } from './comun.js';
+import { E, guardar, reiniciar, empezarDeNuevo, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje, unidadPeso, modoEjemplo, activarCuenta, resumenLocal, traerPerfilLocal, cuentaRecuperada, cuentaVaciaParaTraslado, avisar } from './comun.js';
 import { esExportacionHevy, importarParaTelefono } from '../nucleo/hevy-csv.js';
 import { claveHevy, ultimaHevy, guardarClaveHevy, sincronizarHevy } from './hevy-auto.js';
 import { soporte, configAvisos, cambiarAvisos, activarAvisos, notificar, enlaceCalendario } from './avisos.js';
@@ -369,7 +369,7 @@ function cuentaHtml() {
     ${R().demo_privada ? '<p class="pequeno">Demo privada con historial importado. El cuestionario es ficticio y las pruebas de interfaz no son entrenamientos reales.</p>' : ''}
     <p class="pequeno">El historial guardado se recupera en tus otros dispositivos. Las series todavía en curso permanecen en este teléfono hasta guardar la sesión. Las fotos y documentos locales se conservan por separado.</p>
     <button type="button" class="boton" id="sincronizar">Sincronizar ahora</button><p id="estado-sincronizacion" role="status"></p>
-    ${!Object.keys(R()).some(k => k !== 'unidad') && !E.sesiones.length && resumenLocal().perfil ? `<p class="pequeno">Hay un perfil local con ${resumenLocal().sesiones} sesiones. No se ha enviado a esta cuenta.</p><button type="button" class="boton" id="copiar-local">Revisar traslado del perfil local</button>` : ''}
+    ${cuentaVaciaParaTraslado() && resumenLocal().perfil ? `<p class="pequeno">Hay un perfil local con ${resumenLocal().sesiones} sesiones. No se ha enviado a esta cuenta. Usa Sincronizar ahora para comprobar primero la cuenta.</p><button type="button" class="boton" id="copiar-local" ${cuentaRecuperada(nube.usuarioId()) ? '' : 'disabled'}>Revisar traslado del perfil local</button>` : ''}
     <div class="fila-botones"><button type="button" class="boton" id="descargar">Descargar mis datos</button><button type="button" class="boton" id="salir">Salir</button></div>
     <div class="fila-botones"><button type="button" class="boton" id="borrar-cuenta">Borrar mi cuenta</button></div><div id="datos-descargados"></div>`;
   return `<h3>Entrar</h3><p class="pequeno">Con una cuenta, puedes sincronizar tus sesiones guardadas. El coach usa reglas mientras la IA no esté habilitada. Entra con Google o con tu correo: te mandamos un código y un enlace, sin contraseña.</p>
@@ -388,16 +388,42 @@ function enlazarCuenta(ir, sincronizarAlEntrar) {
     $('codigo').focus();
   });
   $('sincronizar')?.addEventListener('click', async ev => {
-    const b = ev.currentTarget; b.disabled = true; $('estado-sincronizacion').textContent = 'Sincronizando…';
-    try { await sincronizarAlEntrar({ forzar: true }); $('estado-sincronizacion').textContent = E.pendientes?.length ? `Quedan ${E.pendientes.length} elementos pendientes. La copia del teléfono se conserva.` : `Sincronización completa. ${E.sesiones.length} sesiones disponibles en esta cuenta.`; }
-    catch (e) { $('estado-sincronizacion').textContent = `No pude sincronizar: ${e.message}. Tus datos del teléfono se conservan.`; }
-    finally { b.disabled = false; }
+    const b = ev.currentTarget, estado = E, usuario = nube.usuarioId(), salida = $('estado-sincronizacion');
+    const vigente = () => E === estado && nube.usuarioId() === usuario && $('estado-sincronizacion') === salida;
+    b.disabled = true; salida.textContent = 'Sincronizando…';
+    const trasladoInicial = $('copiar-local');
+    if (trasladoInicial) { trasladoInicial.disabled = true; delete trasladoInicial.dataset.confirmar; trasladoInicial.textContent = 'Revisar traslado del perfil local'; }
+    try { const resultado = await sincronizarAlEntrar({ forzar: true }); if (vigente()) {
+      salida.textContent = resultado.mensaje;
+      const traslado = $('copiar-local');
+      if (traslado) traslado.disabled = !resultado.completa || !cuentaRecuperada(usuario) || !cuentaVaciaParaTraslado();
+    } }
+    catch (e) { if (vigente()) salida.textContent = `No pude sincronizar: ${e.message}. Tus datos del teléfono se conservan.`; }
+    finally { if (vigente()) b.disabled = false; }
   });
   $('copiar-local')?.addEventListener('click', async ev => {
     const b = ev.currentTarget;
-    if (!b.dataset.confirmar) { b.dataset.confirmar = '1'; b.textContent = `Confirmar traslado a ${nube.correo()}: perfil y ${resumenLocal().sesiones} sesiones, sin fotos ni documentos`; return; }
-    try { traerPerfilLocal(); await sincronizarAlEntrar(); E.mensaje = 'Perfil copiado. Se conserva la copia local; las fotos y documentos no se trasladaron.'; guardar(); ir(E.plan ? 'hoy' : 'mas'); }
-    catch (e) { E.mensaje = `No pude completar el traslado: ${e.message}. Reintenta la sincronización.`; guardar(); ir('mas'); }
+    if (!cuentaRecuperada(nube.usuarioId()) || !cuentaVaciaParaTraslado()) { delete b.dataset.confirmar; b.textContent = 'Recupera esta cuenta con Sincronizar ahora antes de revisar el traslado.'; return; }
+    if (!b.dataset.confirmar) { b.dataset.confirmar = '1'; b.dataset.usuario = nube.usuarioId(); b.textContent = `Confirmar traslado a ${nube.correo()}: perfil y ${resumenLocal().sesiones} sesiones, sin fotos ni documentos`; return; }
+    if (b.dataset.usuario !== nube.usuarioId()) { delete b.dataset.confirmar; b.textContent = 'La cuenta cambió. Vuelve a revisar el traslado.'; return; }
+    let estado = E;
+    const usuario = nube.usuarioId(), vigente = () => E === estado && nube.usuarioId() === usuario;
+    b.disabled = true;
+    try {
+      const revision = await sincronizarAlEntrar({ forzar: true });
+      if (!vigente()) return;
+      if (!revision.completa || !cuentaRecuperada(usuario) || !cuentaVaciaParaTraslado()) {
+        delete b.dataset.confirmar;
+        E.mensaje = !revision.completa ? revision.mensaje : 'La cuenta ya tiene datos. Se conservan ambas copias y el traslado necesita revisión.';
+        guardar(); ir('mas'); return;
+      }
+      traerPerfilLocal(usuario); estado = E;
+      const resultado = await sincronizarAlEntrar();
+      if (!vigente()) return;
+      E.mensaje = resultado.completa ? 'Perfil enviado a la cuenta. Se conserva la copia local; las fotos y documentos no se trasladaron.' : `El perfil se copió a este teléfono para el traslado. ${resultado.mensaje} Las fotos y documentos no se trasladaron.`;
+      guardar(); ir(resultado.completa && E.plan ? 'hoy' : 'mas');
+    } catch (e) { if (vigente()) { E.mensaje = `No pude completar el traslado: ${e.message}. La copia local se conserva. Reintenta la sincronización.`; guardar(); ir('mas'); } }
+    finally { b.disabled = false; }
   });
   $('form-correo')?.addEventListener('submit', async ev => {
     ev.preventDefault();
@@ -406,11 +432,14 @@ function enlazarCuenta(ir, sincronizarAlEntrar) {
   });
   $('form-codigo')?.addEventListener('submit', async ev => {
     ev.preventDefault();
+    const origen = E, salida = $('estado-cuenta');
     try { await nube.verificarCodigo($('correo').value.trim(), $('codigo').value); }
-    catch (e) { $('estado-cuenta').textContent = `El código no funcionó: ${e.message}`; return; }
+    catch (e) { if (E === origen && $('estado-cuenta') === salida) salida.textContent = `El código no funcionó: ${e.message}`; return; }
+    if (E !== origen) return;
     activarCuenta(nube.usuarioId());
-    try { await sincronizarAlEntrar(); E.mensaje = `Entraste como ${nube.correo()}.`; }
-    catch (e) { E.mensaje = `Entraste, pero no pude sincronizar: ${e.message}. Reintenta en Más.`; }
+    const estado = E, usuario = nube.usuarioId(), vigente = () => E === estado && nube.usuarioId() === usuario;
+    try { const resultado = await sincronizarAlEntrar(); if (!vigente()) return; E.mensaje = resultado.completa ? `Entraste como ${nube.correo()}.` : resultado.mensaje; }
+    catch (e) { if (!vigente()) return; E.mensaje = `Entraste, pero no pude sincronizar: ${e.message}. Reintenta en Más.`; }
     guardar(); ir(E.plan ? 'hoy' : 'mas');
   });
   $('salir')?.addEventListener('click', async () => { await nube.salir(); activarCuenta(); E.mensaje = 'Saliste de tu cuenta. Volviste al perfil local. La copia de la cuenta se conserva por separado.'; guardar(); ir('mas'); });

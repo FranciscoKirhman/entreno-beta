@@ -152,7 +152,7 @@ export async function cargarPlan() {
     estructura: p.estructura, generado_por: p.generado_por, justificacion: p.justificacion,
     dias: p.plan_dias.sort((a, b) => (a.fecha < b.fecha ? -1 : 1)).map(d => ({
       fecha: d.fecha, semana: d.semana, plantilla: d.plantilla, foco: d.foco, tipo: d.tipo, firme: d.firme, hora: d.hora?.slice(0, 5) || null,
-      lugar: d.lugares?.nombre || null, racional: d.racional, calentamiento: d.calentamiento, cardio: d.cardio,
+      lugar: d.lugares?.nombre || null, racional: d.racional, calentamiento: d.calentamiento, estiramiento: d.estiramiento, cardio: d.cardio,
       ejercicios: d.plan_ejercicios.sort((a, b) => a.orden - b.orden).map(e => ({
         ejercicio_id: e.ejercicio_id, orden: e.orden, prioridad: e.prioridad, series: e.series, reps_min: e.reps_min, reps_max: e.reps_max,
         unidad: e.unidad, rir: e.rir, descanso_seg: e.descanso_seg, carga_kg: e.carga_kg == null ? null : Number(e.carga_kg), nota: e.nota,
@@ -256,7 +256,7 @@ export async function subirLocal({ bienestar = {}, suplementos = [], tomas = [],
   const dados = Object.keys(consentimientos).filter(k => consentimientos[k] === true);
   if (dados.length) {
     const ya = new Set(ok(await ambito.consultar(() => cliente.from('consentimientos').select('tipo').eq('user_id', usuario).eq('otorgado', true).eq('version', CONFIG.versionConsentimientos))).map(x => x.tipo));
-    for (const tipo of dados.filter(t => !ya.has(t))) await ambito.consultar(() => consentir(tipo).catch(e => console.warn('Consentimiento no registrado', tipo, e.message)));
+    for (const tipo of dados.filter(t => !ya.has(t))) await ambito.consultar(() => consentir(tipo));
   }
   const filas = Object.entries(bienestar).map(([fecha, b]) => ({ user_id: usuario, fecha, ...Object.fromEntries(CAMPOS_BIENESTAR.filter(k => b[k] !== undefined).map(k => [k, b[k]])) }));
   if (filas.length) ok(await ambito.consultar(() => cliente.from('bienestar_diario').upsert(filas)));

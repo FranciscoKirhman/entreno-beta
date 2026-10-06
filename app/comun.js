@@ -147,8 +147,18 @@ export function resumenLocal() {
   const d = JSON.parse(localStorage.getItem(CLAVE_PERSONAL) || '{}');
   return { perfil: Boolean(Object.keys(d.respuestas || {}).length), sesiones: (d.sesiones || []).filter(s => s.origen !== 'ejemplo').length };
 }
-export function traerPerfilLocal() {
-  if (CLAVE === CLAVE_PERSONAL || Object.keys(E.respuestas).some(k => k !== 'unidad') || E.sesiones.length) throw new Error('La cuenta debe estar vacía para copiar el perfil local.');
+// La recuperación se acredita solo en esta ejecución y para esta copia de la cuenta.
+let cuentaLeida = null;
+export function marcarCuentaRecuperada(usuario = null) { cuentaLeida = usuario ? { usuario, estado: E } : null; }
+export function cuentaRecuperada(usuario) { return Boolean(usuario && cuentaLeida?.usuario === usuario && cuentaLeida.estado === E); }
+export function cuentaVaciaParaTraslado() {
+  return !E.plan && !E.planPendiente && !Object.keys(E.respuestas || {}).some(k => k !== 'unidad') && !E.sesiones.length
+    && !E.indicaciones.length && !E.suplementos.length && !E.tomas.length && !Object.keys(E.bienestar).length
+    && !Object.keys(E.notasFijas || {}).length && !E.ejerciciosPropios?.length && !E.medidas?.length;
+}
+export function traerPerfilLocal(usuario) {
+  if (!cuentaRecuperada(usuario)) throw new Error('Recupera primero los datos de esta cuenta con Sincronizar ahora.');
+  if (CLAVE === CLAVE_PERSONAL || !cuentaVaciaParaTraslado()) throw new Error('La cuenta debe estar vacía para copiar el perfil local.');
   const d = JSON.parse(localStorage.getItem(CLAVE_PERSONAL) || '{}');
   E = { ...VACIO(), ...structuredClone(d), pendientes: [], chat: [] };
   E.sesiones = E.sesiones.filter(s => s.origen !== 'ejemplo').map(s => ({ ...s, enCuenta: false }));
