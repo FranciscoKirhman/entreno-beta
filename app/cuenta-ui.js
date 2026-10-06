@@ -28,10 +28,13 @@ export function pintarProveedores() {
       tarjeta.querySelector('#cuenta-correo')?.classList.toggle('primario', !listos.length);
       caja.querySelectorAll('[data-proveedor]').forEach(b => {
         b.onclick = async () => {
-          const estado = tarjeta.querySelector('[data-estado-cuenta]');
+          const estado = tarjeta.querySelector('[data-estado-cuenta], #estado-cuenta');
           b.disabled = true;
-          guardar(); // sale a la página del proveedor: lo de este teléfono queda guardado antes
-          try { await nube.entrarCon(b.dataset.proveedor); }
+          try {
+            if (!guardar()) throw new Error('Respalda los cambios pendientes antes de entrar.');
+            if (estado) estado.textContent = 'Abriendo el acceso…';
+            await nube.entrarCon(b.dataset.proveedor);
+          }
           catch (e) { b.disabled = false; if (estado) estado.textContent = `No pude abrir ${NOMBRES[b.dataset.proveedor].replace('Continuar con ', '')}: ${e.message}`; }
         };
       });

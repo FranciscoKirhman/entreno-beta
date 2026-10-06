@@ -56,5 +56,5 @@ async function mostrar() {
     document.getElementById('negar').onclick = () => resolver(false);
   } catch { mensaje('La solicitud venció o no es válida. Vuelve a iniciar la conexión desde ChatGPT o Claude.'); }
 }
-await nube.iniciar();
-await mostrar();
+try { await nube.iniciar(); await mostrar(); }
+catch { mensaje('No pude completar el acceso. Abre el enlace en el mismo navegador donde lo pediste, o vuelve a iniciar la conexión desde ChatGPT o Claude. Tus datos locales se conservan.'); }

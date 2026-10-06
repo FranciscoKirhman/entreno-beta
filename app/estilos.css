@@ -74,7 +74,7 @@ p{margin:6px 0}
 .pregunta .por-que{font-size:13px;color:var(--ink-muted);margin:6px 0 0}
 .pregunta .ayuda{font-size:13px;color:var(--ink-muted);margin:0 0 6px}
 .requerida::after{content:" *";color:var(--accent)}
-input[type=text],input[type=number],input[type=date],input[type=search],select,textarea{width:100%;min-height:44px;padding:9px 12px;border:0;border-radius:10px;background:var(--fill)}
+input[type=text],input[type=email],input[type=number],input[type=date],input[type=search],select,textarea{width:100%;min-height:44px;padding:9px 12px;border:0;border-radius:10px;background:var(--fill)}
 textarea{min-height:90px;resize:vertical}
 .opciones{display:flex;flex-direction:column;gap:6px}
 .opciones label,.chips label{display:flex;align-items:center;gap:10px;padding:10px 12px;border:0;border-radius:10px;background:var(--fill);cursor:pointer}

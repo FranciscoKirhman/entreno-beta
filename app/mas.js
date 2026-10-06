@@ -38,7 +38,7 @@ function pruebaHtml() {
   </section>`;
 }
 
-export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
+export function vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel = null }) {
   const estadoMas = estadoVistaMas();
   $('app').innerHTML = `<div id="vista-mas">
     <h1>Más</h1>
@@ -209,6 +209,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar }) {
     reiniciar(); ir('inicio');
   };
   organizarMas({ estado: estadoMas });
+  if (panel) $('vista-mas')?.dispatchEvent(new CustomEvent('abrir-ajuste-mas', { detail: panel }));
   mostrarMensaje();
 }
 
@@ -364,20 +365,20 @@ function restaurarValido(r) {
 }
 
 function cuentaHtml() {
-  if (!nube.hay()) return '<h3>Versión de prueba</h3><p class="pequeno">Todo lo que anotas queda guardado solo en este teléfono. Las cuentas, la sincronización y la IA del coach llegan con la beta.</p>';
+  if (!nube.hay()) return E.errorAccesoCuenta ? `<h3>Cuenta</h3><p class="aviso alerta" role="alert">${esc(E.errorAccesoCuenta)}</p><p class="pequeno">Vuelve a abrir Entreno para pedir otro acceso. Tu perfil local se conserva.</p>` : '<h3>Versión de prueba</h3><p class="pequeno">Todo lo que anotas queda guardado solo en este teléfono. Las cuentas, la sincronización y la IA del coach llegan con la beta.</p>';
   if (nube.conectado()) return `<h3>Cuenta</h3><p>Entraste como <strong class="correo-cuenta">${esc(nube.correo())}</strong>. Tu plan y tus sesiones guardadas se sincronizan con esta cuenta.</p>
     ${R().demo_privada ? '<p class="pequeno">Demo privada con historial importado. El cuestionario es ficticio y las pruebas de interfaz no son entrenamientos reales.</p>' : ''}
     <p class="pequeno">El historial guardado se recupera en tus otros dispositivos. Las series todavía en curso permanecen en este teléfono hasta guardar la sesión. Las fotos y documentos locales se conservan por separado.</p>
     <button type="button" class="boton" id="sincronizar">Sincronizar ahora</button><p id="estado-sincronizacion" role="status"></p>
-    ${cuentaVaciaParaTraslado() && resumenLocal().perfil ? `<p class="pequeno">Hay un perfil local con ${resumenLocal().sesiones} sesiones. No se ha enviado a esta cuenta. Usa Sincronizar ahora para comprobar primero la cuenta.</p><button type="button" class="boton" id="copiar-local" ${cuentaRecuperada(nube.usuarioId()) ? '' : 'disabled'}>Revisar traslado del perfil local</button>` : ''}
+    ${cuentaVaciaParaTraslado() && resumenLocal().perfil ? `<div class="aviso ojo"><strong>Tu perfil sigue en este teléfono</strong><p class="pequeno">${cuentaRecuperada(nube.usuarioId()) ? 'La cuenta está vacía. Revisa el traslado y confírmalo para ver tu plan en otros dispositivos.' : 'Primero pulsa Sincronizar ahora para comprobar si la cuenta tiene datos.'} Tu perfil local conserva ${resumenLocal().sesiones} sesiones.</p></div><button type="button" class="boton primario" id="copiar-local" ${cuentaRecuperada(nube.usuarioId()) ? '' : 'disabled'}>Revisar traslado del perfil local</button>` : ''}
     <div class="fila-botones"><button type="button" class="boton" id="descargar">Descargar mis datos</button><button type="button" class="boton" id="salir">Salir</button></div>
     <div class="fila-botones"><button type="button" class="boton" id="borrar-cuenta">Borrar mi cuenta</button></div><div id="datos-descargados"></div>`;
-  return `<h3>Entrar</h3><p class="pequeno">Con una cuenta, puedes sincronizar tus sesiones guardadas. El coach usa reglas mientras la IA no esté habilitada. Entra con Google o con tu correo: te mandamos un código y un enlace, sin contraseña.</p>
+  return `<h3>Entrar</h3><p class="pequeno">Con una cuenta, puedes sincronizar tus sesiones guardadas. El coach usa reglas mientras la IA no esté habilitada. Entra con Google o recibe un acceso por correo, sin contraseña.</p>
     <div class="cuenta-proveedores" data-proveedores></div>
-    <form id="form-correo" class="fila-chat"><input type="email" id="correo" required placeholder="tu@correo.cl" autocomplete="email" aria-label="Correo"><button type="submit" class="boton primario">Mandar código</button></form>
+    <form id="form-correo" class="fila-chat"><input type="email" id="correo" required placeholder="tu@correo.cl" autocomplete="email" aria-label="Correo"><button type="submit" class="boton primario">Mandar acceso</button></form>
     <button type="button" class="enlace" id="ya-tengo-codigo">Ya tengo un código</button>
     <form id="form-codigo" class="fila-chat" hidden><input type="text" id="codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Código del correo" aria-label="Código"><button type="submit" class="boton primario">Entrar</button></form>
-    <p class="pequeno" id="estado-cuenta"></p>`;
+    <p class="${E.errorAccesoCuenta ? 'aviso alerta' : 'pequeno'}" id="estado-cuenta" role="${E.errorAccesoCuenta ? 'alert' : 'status'}">${esc(E.errorAccesoCuenta || '')}</p>`;
 }
 
 function enlazarCuenta(ir, sincronizarAlEntrar) {
@@ -427,8 +428,13 @@ function enlazarCuenta(ir, sincronizarAlEntrar) {
   });
   $('form-correo')?.addEventListener('submit', async ev => {
     ev.preventDefault();
-    try { await nube.pedirCodigo($('correo').value.trim()); $('form-codigo').hidden = false; $('estado-cuenta').textContent = 'Te mandamos un correo. Escribe aquí el código, o toca el enlace del correo desde este mismo teléfono.'; $('codigo').focus(); }
-    catch (e) { $('estado-cuenta').textContent = `No se pudo mandar el código: ${e.message}`; }
+    const boton = ev.currentTarget.querySelector('button[type="submit"]'), estado = E, usuario = nube.usuarioId(), salida = $('estado-cuenta');
+    const vigente = () => E === estado && nube.usuarioId() === usuario && $('estado-cuenta') === salida;
+    if (boton.disabled) return;
+    boton.disabled = true;
+    try { await nube.pedirCodigo($('correo').value.trim()); if (!vigente()) return; delete E.errorAccesoCuenta; guardar(); $('form-codigo').hidden = false; salida.className = 'pequeno'; salida.setAttribute('role', 'status'); salida.textContent = 'Revisa el correo para entrar en este dispositivo. Si trae un código, escríbelo aquí; si trae un enlace, ábrelo en este mismo navegador.'; $('codigo').focus(); }
+    catch (e) { if (vigente()) salida.textContent = `No se pudo mandar el acceso: ${e.message}`; }
+    finally { boton.disabled = false; }
   });
   $('form-codigo')?.addEventListener('submit', async ev => {
     ev.preventDefault();
@@ -440,7 +446,7 @@ function enlazarCuenta(ir, sincronizarAlEntrar) {
     const estado = E, usuario = nube.usuarioId(), vigente = () => E === estado && nube.usuarioId() === usuario;
     try { const resultado = await sincronizarAlEntrar(); if (!vigente()) return; E.mensaje = resultado.completa ? `Entraste como ${nube.correo()}.` : resultado.mensaje; }
     catch (e) { if (!vigente()) return; E.mensaje = `Entraste, pero no pude sincronizar: ${e.message}. Reintenta en Más.`; }
-    guardar(); ir(E.plan ? 'hoy' : 'mas');
+    guardar(); ir(E.plan ? 'hoy' : 'mas', E.plan ? undefined : { panel: 'cuenta' });
   });
   $('salir')?.addEventListener('click', async () => { await nube.salir(); activarCuenta(); E.mensaje = 'Saliste de tu cuenta. Volviste al perfil local. La copia de la cuenta se conserva por separado.'; guardar(); ir('mas'); });
   $('descargar')?.addEventListener('click', async () => {

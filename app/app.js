@@ -5,7 +5,7 @@
 import { sincronizarDatosTelefono } from './datos-nube.js';
 import { hevyAlAbrir } from './hevy-auto.js';
 import { conPropios, idsPropios } from '../nucleo/propios.js';
-import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo, entrarEjemplo, salirEjemplo, modoEjemplo, errorGuardado, activarCuenta, perfilDePrueba, recuperarCopia, claveSesionCuenta, marcarCuentaRecuperada } from './comun.js';
+import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo, entrarEjemplo, salirEjemplo, modoEjemplo, errorGuardado, errorRetornoCuenta, activarCuenta, perfilDePrueba, recuperarCopia, claveSesionCuenta, marcarCuentaRecuperada } from './comun.js';
 import { prepararSesion, unirSesiones } from '../nucleo/sincronizacion.js';
 import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
 import { derivar } from '../nucleo/derivar.js';
@@ -228,7 +228,7 @@ function ir(vista, extra) {
   const vistas = {
     inicio: vistaInicio, eleccion: () => vistaEleccion(ir), cuestionario: () => vistaRapido(ir, armarPlan), perfil: () => vistaPerfil(ir, armarPlan), seccion: () => vistaSeccion(ir),
     plan: () => vistaPlan(ir, { armarPlan, nuevo: extra?.nuevo }), hoy: () => vistaHoy(ir, extra), ejercicio: () => vistaFicha(ir, extra || {}), semana: () => vistaSemana(ir),
-    banco: () => vistaBanco(ir, extra || {}), coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), resumen: () => vistaResumen(ir, extra || {}), progreso: () => vistaProgreso(ir), pasado: () => vistaDiaPasado(ir, extra || {}), mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar }), 'tablero-original': () => vistaTableroOriginal(ir),
+    banco: () => vistaBanco(ir, extra || {}), coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), resumen: () => vistaResumen(ir, extra || {}), progreso: () => vistaProgreso(ir), pasado: () => vistaDiaPasado(ir, extra || {}), mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel: extra?.panel }), 'tablero-original': () => vistaTableroOriginal(ir),
   };
   // Al volver atrás, la pantalla queda a la altura donde se dejó (la misma que se vio debajo al deslizar).
   const vuelta = vista !== anterior && (esVuelta(anterior, vista) || volviendoConGesto());
@@ -326,18 +326,30 @@ addEventListener('pagehide', guardarPantalla);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') guardarPantalla(); });
 
 async function iniciarEnSegundoPlano() {
-  const alIniciar = E;
-  const iniciado = await nube.iniciar({ claveSesion: claveSesionCuenta(), vigente: () => E === alIniciar });
+  const alIniciar = E, usuarioAlIniciar = nube.usuarioId();
+  let iniciado;
+  try { iniciado = await nube.iniciar({ claveSesion: claveSesionCuenta(), vigente: () => E === alIniciar }); }
+  catch (e) {
+    if (E !== alIniciar || nube.usuarioId() !== usuarioAlIniciar) return;
+    E.mensaje = errorRetornoCuenta || (e.code === 'acceso_retornado_fallido' ? e.message : 'No pude abrir tu cuenta. Pide otro acceso desde Más, Cuenta. Tus datos del teléfono se conservan.');
+    E.errorAccesoCuenta = E.mensaje;
+    E.vista = 'mas'; extraActual = { panel: 'cuenta' };
+    guardar(); repintarSinMover(); return;
+  }
   if (E !== alIniciar) return;
   // Si no se pudo verificar la cuenta sin señal, se conserva su copia local. No cambia a otro perfil.
-  if (iniciado) { activarCuenta(nube.usuarioId()); await avisarRecuperado(); }
+  if (iniciado) { delete E.errorAccesoCuenta; activarCuenta(nube.usuarioId()); await avisarRecuperado(); }
   if (nube.conectado()) {
     const estado = E, usuario = nube.usuarioId(), vigente = () => E === estado && nube.usuarioId() === usuario;
     let resultado;
     try { resultado = await sincronizarAlEntrar(); }
     catch { if (vigente()) E.mensaje = 'No pude sincronizar ahora. Puedes seguir con la copia de esta cuenta en el teléfono y reintentar en Más.'; }
     if (!vigente()) return;
-    if (nube.entroPorEnlace()) { if (resultado?.completa) E.mensaje = `Entraste como ${nube.correo()}.`; E.vista = E.plan ? 'hoy' : 'inicio'; }
+    if (nube.entroPorEnlace()) {
+      if (resultado?.completa) E.mensaje = `Entraste como ${nube.correo()}.`;
+      E.vista = E.plan ? 'hoy' : 'mas';
+      extraActual = E.plan ? null : { panel: 'cuenta' };
+    }
   }
   repintarSinMover();
   hevyAlAbrir(() => { if (['hoy', 'semana', 'progreso'].includes(E.vista)) repintarSinMover(); });

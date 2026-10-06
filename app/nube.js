@@ -5,8 +5,10 @@ import { aIso } from '../nucleo/hevy-csv.js';
 import { sesionDelServidor } from '../nucleo/sincronizacion.js';
 import { planSinPropios, sinIdPropio } from '../nucleo/propios.js';
 import { perfilPruebaActivo, claveSesionPerfilPrueba } from '../nucleo/perfiles-prueba.js';
+import { destinoCuenta, esRetornoCuenta, limpiarRetornoCuenta, perfilDelRetornoCuenta } from '../nucleo/retorno-cuenta.js';
 
-let supa = null, sesion = null, porEnlace = false;
+let supa = null, sesion = null, porEnlace = false, perfilSesion = null;
+const errorAcceso = mensaje => Object.assign(new Error(mensaje), { code: 'acceso_retornado_fallido' });
 
 /** Solo el ámbito de la copia del teléfono, sin validar ni dar acceso al servidor antes de iniciar la cuenta. */
 export function usuarioGuardado({ claveSesion = 'entreno-sesion' } = {}) {
@@ -22,26 +24,53 @@ export async function iniciar({ claveSesion = null, vigente = () => true } = {})
   // supabase-js lo canjea al iniciar (flujo PKCE: solo funciona en el navegador que pidió el correo).
   if (!CONFIG.supabaseUrl) return false; // versión de prueba: todo queda en este teléfono
   const url = new URL(location.href);
-  const conCodigo = url.searchParams.has('code');
+  const conCodigo = url.searchParams.has('code'), conRetorno = esRetornoCuenta(url);
+  let cliente = null;
+  porEnlace = false;
   try {
     // La autorización de IA abre una página independiente y usa el mismo botón elegido en Entreno.
-    const perfil = claveSesion === null && CONFIG.modoPrueba ? perfilPruebaActivo(localStorage) : null;
-    const storageKey = claveSesion ?? claveSesionPerfilPrueba(perfil?.id || null);
+    const retorno = CONFIG.modoPrueba ? perfilDelRetornoCuenta(url, localStorage) : null;
+    const perfil = claveSesion === null && CONFIG.modoPrueba && !retorno ? perfilPruebaActivo(localStorage) : null;
+    const storageKey = claveSesion ?? claveSesionPerfilPrueba(retorno ? retorno.perfilId : perfil?.id || null);
+    if (retorno && storageKey !== claveSesionPerfilPrueba(retorno.perfilId)) throw errorAcceso('El perfil de este enlace cambió. Abre Entreno, elige tu perfil y pide otro acceso. Tus datos se conservan.');
+    const hash = new URLSearchParams(url.hash.slice(1));
     const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
     if (!vigente()) return false;
-    supa = createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey, { auth: { persistSession: true, storageKey, flowType: 'pkce' } });
-    const { data } = await supa.auth.getSession();
-    if (!vigente()) { supa = null; sesion = null; return false; }
+    cliente = createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey, { auth: { persistSession: true, storageKey, flowType: 'pkce', detectSessionInUrl: !conRetorno } });
+    supa = cliente; sesion = null;
+    perfilSesion = storageKey.startsWith('entreno-sesion-prueba-') ? storageKey.slice('entreno-sesion-prueba-'.length) : null;
+    if (url.searchParams.has('error') || hash.has('error')) {
+      const cancelado = (url.searchParams.get('error') || hash.get('error')) === 'access_denied';
+      throw errorAcceso(cancelado ? 'Cancelaste el acceso. Puedes volver a entrar desde Más. Tus datos se conservan.' : 'No pude completar el acceso. Pide otro enlace desde este teléfono. Tus datos se conservan.');
+    }
+    if (conCodigo) {
+      // Canjear explícitamente permite informar un enlace vencido o abierto en otro navegador,
+      // incluso si ese navegador conservaba una sesión anterior.
+      const { error } = await cliente.auth.exchangeCodeForSession(url.searchParams.get('code'));
+      if (!vigente() || supa !== cliente) { if (supa === cliente) { supa = null; sesion = null; } return false; }
+      if (error) throw errorAcceso('No pude completar el acceso. Abre el enlace en el mismo navegador donde lo pediste, o solicita uno nuevo desde este teléfono. Tus datos se conservan.');
+    }
+    const { data, error } = await cliente.auth.getSession();
+    if (!vigente() || supa !== cliente) { if (supa === cliente) { supa = null; sesion = null; } return false; }
+    if (error || (conCodigo && !data?.session)) throw errorAcceso('No pude recuperar el acceso. Pide otro enlace desde este teléfono. Tus datos se conservan.');
     sesion = data.session;
-    supa.auth.onAuthStateChange((_e, s) => { sesion = s; });
+    cliente.auth.onAuthStateChange((_e, s) => { if (supa === cliente) sesion = s; });
     porEnlace = conCodigo && Boolean(sesion);
     return true;
-  } catch { supa = null; return false; }
+  } catch (e) {
+    if (!vigente()) { if (cliente && supa === cliente) { supa = null; sesion = null; } return false; }
+    if (conRetorno) {
+      if (cliente && supa === cliente) sesion = null;
+      throw errorAcceso(e.code === 'acceso_retornado_fallido' ? e.message : 'No pude completar el acceso. Pide otro enlace desde este teléfono. Tus datos se conservan.');
+    }
+    if (!cliente || supa === cliente) { supa = null; sesion = null; }
+    return false;
+  }
   finally {
-    if (conCodigo) { url.searchParams.delete('code'); history.replaceState(null, '', url.pathname + url.search + url.hash); }
+    if (conRetorno && location.href === url.href) { const limpia = new URL(limpiarRetornoCuenta(url)); history.replaceState(null, '', limpia.pathname + limpia.search + limpia.hash); }
   }
 }
-/** true si en esta carga se entró con el enlace del correo. */
+/** true si en esta carga se completó el regreso del correo, Google o Apple. */
 export const entroPorEnlace = () => porEnlace;
 export const hay = () => Boolean(supa);
 export const conectado = () => Boolean(sesion);
@@ -65,7 +94,7 @@ export async function guardarPreferencias(p) {
 }
 
 export async function pedirCodigo(email, destino = location.origin + location.pathname) {
-  const { error } = await supa.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: destino } });
+  const { error } = await supa.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: destinoCuenta(destino, perfilSesion) } });
   if (error) throw error;
 }
 export async function verificarCodigo(email, token) {
@@ -77,7 +106,9 @@ export async function salir() { await supa.auth.signOut(); sesion = null; }
 
 /** Entrar o crear la cuenta con Google o Apple. Sale a su página y vuelve con ?code=…, que iniciar() canjea. */
 export async function entrarCon(proveedor) {
-  const { error } = await supa.auth.signInWithOAuth({ provider: proveedor, options: { redirectTo: location.origin + location.pathname } });
+  if (!['google', 'apple'].includes(proveedor)) throw new Error('Ese proveedor de acceso no está disponible.');
+  if (!supa) throw new Error('No pude conectar con el servidor. Reintenta cuando tengas señal.');
+  const { error } = await supa.auth.signInWithOAuth({ provider: proveedor, options: { redirectTo: destinoCuenta(location.origin + location.pathname, perfilSesion), ...(proveedor === 'google' ? { queryParams: { prompt: 'select_account' } } : {}) } });
   if (error) throw error;
 }
 let proveedores = null;

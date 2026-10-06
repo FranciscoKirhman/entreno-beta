@@ -5,7 +5,8 @@ import { validarRespaldo } from '../nucleo/respaldo.js';
 import { crearIndice } from '../nucleo/catalogo.js';
 import { derivar } from '../nucleo/derivar.js';
 import { estadoDelPlan } from '../nucleo/registrado.js';
-import { perfilPruebaActivo, clavePerfilPrueba, claveSesionPerfilPrueba } from '../nucleo/perfiles-prueba.js';
+import { perfilPruebaActivo, clavePerfilPrueba, claveSesionPerfilPrueba, seleccionarPerfilPrueba } from '../nucleo/perfiles-prueba.js';
+import { perfilDelRetornoCuenta } from '../nucleo/retorno-cuenta.js';
 import { CONFIG } from './config.js';
 import { leerCopia, escribirCopia } from './copia-entreno.js';
 import { estadoDeCopia } from '../nucleo/copia-segura.js';
@@ -48,6 +49,15 @@ export const volumenTexto = kg => `${Math.round(enUnidad(kg) || 0).toLocaleStrin
 // ── Estado guardado en este navegador ───────────────────────────────────────
 const CLAVE_ORIGINAL = 'entreno-v2';
 let errorPerfilPrueba = null;
+export let errorRetornoCuenta = null;
+// El acceso vuelve al perfil que lo pidió, antes de elegir sus claves de datos y sesión.
+// Un retorno inválido conserva la selección actual; nunca se interpreta como una copia local dañada.
+if (CONFIG.modoPrueba && typeof location !== 'undefined') {
+  try {
+    const retorno = perfilDelRetornoCuenta(location.href, localStorage);
+    if (retorno) seleccionarPerfilPrueba(localStorage, retorno.perfilId);
+  } catch (e) { errorRetornoCuenta = e.message; }
+}
 export const perfilDePrueba = (() => {
   try { return CONFIG.modoPrueba ? perfilPruebaActivo(localStorage) : null; }
   catch (e) { errorPerfilPrueba = e.message; return null; }

@@ -1,7 +1,7 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
 // Los archivos de cada publicación se leen desde su copia; una versión nueva instala otra copia completa.
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-05 21:53 · 30cbb45";
+const VERSION = "2026-10-05 22:22 · f975375";
 const ARCHIVOS = [
  "./",
  "animacion-ui.js",
@@ -694,6 +694,7 @@ const ARCHIVOS = [
  "../nucleo/resumen-plan.js",
  "../nucleo/resumen-sesion.js",
  "../nucleo/retorno-app.js",
+ "../nucleo/retorno-cuenta.js",
  "../nucleo/semanal.js",
  "../nucleo/serie-completa.js",
  "../nucleo/series-retiradas.js",
