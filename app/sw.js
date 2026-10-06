@@ -1,7 +1,7 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
 // Los archivos de cada publicación se leen desde su copia; una versión nueva instala otra copia completa.
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-05 22:22 · f975375";
+const VERSION = "2026-10-05 22:32 · c6b76f1";
 const ARCHIVOS = [
  "./",
  "animacion-ui.js",
@@ -715,7 +715,9 @@ const FUENTES = 'entreno-b-fuentes';
 const LIMITE_MS = 3000; // con señal que existe pero no llega, no esperar más que esto
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARCHIVOS)).then(() => self.skipWaiting()));
+  // Una caché nueva tampoco debe heredar respuestas HTTP de la publicación anterior.
+  const peticiones = ARCHIVOS.map(a => new Request(new URL(a, self.location.href), { cache: 'reload', credentials: 'same-origin' }));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(peticiones)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
