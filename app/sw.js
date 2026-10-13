@@ -1,7 +1,7 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
 // Los archivos de cada publicación se leen desde su copia; una versión nueva instala otra copia completa.
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-06 12:07 · aeab479";
+const VERSION = "2026-10-13 10:45 · e2be8f3";
 const ARCHIVOS = [
  "./",
  "animacion-ui.js",
@@ -12,6 +12,8 @@ const ARCHIVOS = [
  "avisos.js",
  "banco.css",
  "banco.js",
+ "calendario-asistencia.css",
+ "calendario-asistencia.js",
  "cambios-ui.js",
  "cardio-ui.js",
  "checkin.js",
@@ -617,7 +619,6 @@ const ARCHIVOS = [
  "oauth-ui.js",
  "oauth.html",
  "pantalla.js",
- "perfiles/indice.json",
  "perfiles-prueba-ui.js",
  "plan.js",
  "progreso-ejercicio.js",
@@ -641,6 +642,7 @@ const ARCHIVOS = [
  "../nucleo/animaciones-frente.js",
  "../nucleo/animaciones.js",
  "../nucleo/bienestar.js",
+ "../nucleo/calendario-asistencia.js",
  "../nucleo/calentamiento-sesion.js",
  "../nucleo/calentamiento.js",
  "../nucleo/cambios.js",

@@ -35,7 +35,7 @@ export function ajustarEjercicio({ objetivo: o, hechas, semanas = [], subioRecie
 
   const completas = hechas.length >= o.series;
   const todasAlTope = completas && hechas.slice(0, o.series).every(s => s.reps >= o.reps_max);
-  const conReserva = hechas.every(s => reserva(s) == null || reserva(s) >= o.rir - 0.5);
+  const conReserva = hechas.every(s => reserva(s) != null && Number.isFinite(reserva(s)) && reserva(s) >= o.rir - 0.5);
   const sobrabanMuchas = hechas.every(s => reserva(s) != null && reserva(s) >= 4);
   const bajoElRango = hechas.some(s => s.reps < o.reps_min);
 
@@ -55,6 +55,9 @@ export function ajustarEjercicio({ objetivo: o, hechas, semanas = [], subioRecie
   }
 
   // Calidad: con técnica rota, rango parcial o dolor, no se sube aunque se hayan completado las repeticiones.
+  if (hechas.some(s => reserva(s) == null || !Number.isFinite(reserva(s)))) return mantener('sin_esfuerzo', 'Falta el esfuerzo de alguna serie: confirma RPE o RIR antes de aumentar carga o repeticiones.');
+  if (!completas) return mantener('series_incompletas', 'Faltan series del plan: completa la sesión antes de aumentar carga o repeticiones.');
+  if (!conReserva) return mantener('esfuerzo_alto', 'Las series salieron más difíciles que la reserva pedida: consolida el mismo peso y las mismas repeticiones.');
   const cal = calidadPermiteSubir(calidad || {});
   if (!cal.ok && ((todasAlTope && conReserva) || sobrabanMuchas)) return mantener('calidad', cal.motivo);
 
@@ -89,13 +92,16 @@ function ajustarAsistido({ objetivo: o, hechas, subioRecien, incremento, calidad
   if (!ayuda) return mantener('sin_carga', 'No anotaste la ayuda de la máquina: anótala en la próxima sesión para poder ajustarla.');
   const completas = hechas.length >= o.series;
   const todasAlTope = completas && hechas.slice(0, o.series).every(s => s.reps >= o.reps_max);
-  const conReserva = hechas.every(s => reserva(s) == null || reserva(s) >= o.rir - 0.5);
+  const conReserva = hechas.every(s => reserva(s) != null && Number.isFinite(reserva(s)) && reserva(s) >= o.rir - 0.5);
   const sobrabanMuchas = hechas.every(s => reserva(s) != null && reserva(s) >= 4);
   const bajoElRango = hechas.some(s => s.reps < o.reps_min);
   if (subioRecien && bajoElRango && incremento) {
     return { accion: 'bajar_carga', carga_kg: ayuda + incremento, reps_min: o.reps_min, reps_max: o.reps_max, regla: 'anclaje',
       motivo: `Con ${kg(ayuda)} de ayuda no salió el rango completo. Vuelves a ${kg(ayuda + incremento)} de ayuda una semana antes de intentarlo de nuevo.` };
   }
+  if (hechas.some(s => reserva(s) == null || !Number.isFinite(reserva(s)))) return mantener('sin_esfuerzo', 'Falta el esfuerzo de alguna serie: confirma RPE o RIR antes de aumentar carga o repeticiones.');
+  if (!completas) return mantener('series_incompletas', 'Faltan series del plan: completa la sesión antes de aumentar carga o repeticiones.');
+  if (!conReserva) return mantener('esfuerzo_alto', 'Las series salieron más difíciles que la reserva pedida: consolida el mismo peso y las mismas repeticiones.');
   const cal = calidadPermiteSubir(calidad || {});
   if (!cal.ok && ((todasAlTope && conReserva) || sobrabanMuchas)) return mantener('calidad', cal.motivo);
   if ((todasAlTope && conReserva) || sobrabanMuchas) {

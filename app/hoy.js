@@ -549,7 +549,8 @@ function cardioHtml(texto) {
     <div class="cab-tarjeta"><h3>Cardio</h3><button type="button" class="boton chico" data-elegir-cardio>Cambiar</button>${total ? `<button type="button" class="boton chico reloj-paso" data-tramos="${esc(JSON.stringify(tramos))}" data-final="¡Cardio listo!">▶ ${reloj(total)}</button>` : ''}</div>
     ${imagen && hayImagen(imagen) ? `<img class="cardio-imagen" src="${imagen}" alt="" width="96" height="96">` : ''}<p class="pequeno">${esc(texto)}</p>
     <button type="button" class="boton chico" id="cardio-hecho" aria-pressed="${Boolean(E.cardioHecho?.[hoy()]?.hecho && E.cardioHecho[hoy()].texto === texto)}">${E.cardioHecho?.[hoy()]?.hecho && E.cardioHecho[hoy()].texto === texto ? 'Cardio hecho ✓' : 'Marcar cardio como hecho'}</button>
-    ${E.cardioHecho?.[hoy()]?.hecho && E.cardioHecho[hoy()].texto === texto ? `<div class="fila-cardio"><label class="pequeno">Minutos <input type="text" inputmode="numeric" id="cardio-min" value="${esc(E.cardioHecho[hoy()].minutos ?? '')}" placeholder="${total ? Math.round(total / 60) : ''}" aria-label="Minutos de cardio (opcional)"></label><label class="pequeno">Distancia <input type="text" inputmode="decimal" id="cardio-km" value="${esc(coma(E.cardioHecho[hoy()].distancia_km ?? ''))}" placeholder="km" aria-label="Distancia en kilómetros (opcional)"> km</label></div>` : ''}
+    <div class="fila-cardio"><label class="pequeno">Minutos <input type="text" inputmode="decimal" id="cardio-min" value="${esc(coma(E.cardioHecho?.[hoy()]?.texto === texto ? E.cardioHecho[hoy()].minutos ?? '' : ''))}" placeholder="${total ? Math.round(total / 60) : ''}" aria-label="Minutos reales de cardio"></label><label class="pequeno">Distancia <input type="text" inputmode="decimal" id="cardio-km" value="${esc(coma(E.cardioHecho?.[hoy()]?.texto === texto ? E.cardioHecho[hoy()].distancia_km ?? '' : ''))}" placeholder="km" aria-label="Distancia en kilómetros (opcional)"> km</label></div>
+    <p class="pequeno suave">Anota el tiempo real. Marcar hecho sin minutos conserva la duración sugerida como estimación.</p>
     ${porRpe ? `<div class="tramos-cardio" aria-hidden="true">${tramos.map(t => `<i style="flex:${t.seg}"><b>${Math.round(t.seg / 60)}′</b><span>RPE ${esc(t.rpe)}</span></i>`).join('')}</div>` : ''}
   </section>`;
 }
@@ -762,12 +763,18 @@ function enlazar(ir, dia) {
   const repintar = () => vistaHoyMantener(ir);
   $('cardio-hecho')?.addEventListener('click', () => {
     const antes = E.cardioHecho?.[f];
-    (E.cardioHecho ||= {})[f] = { texto: dia.cardio, hecho: !(antes?.texto === dia.cardio && antes.hecho) };
+    (E.cardioHecho ||= {})[f] = { ...(antes?.texto === dia.cardio ? antes : {}), texto: dia.cardio, hecho: !(antes?.texto === dia.cardio && antes.hecho) };
     guardar(); repintar();
   });
-  // Opcional, como el cardio por distancia y tiempo de Hevy: los minutos reales y los kilómetros.
-  $('cardio-min')?.addEventListener('input', ev => { E.cardioHecho[f].minutos = numero(ev.target.value); guardar(); });
-  $('cardio-km')?.addEventListener('input', ev => { E.cardioHecho[f].distancia_km = numero(ev.target.value); guardar(); });
+  const marcaCardioActual = () => {
+    E.cardioHecho ||= {};
+    if (E.cardioHecho[f]?.texto !== dia.cardio) E.cardioHecho[f] = { texto: dia.cardio, hecho: false };
+    return E.cardioHecho[f];
+  };
+  // Las mediciones se pueden anotar antes de marcar hecho y se conservan al desmarcar.
+
+  $('cardio-min')?.addEventListener('input', ev => { marcaCardioActual().minutos = numero(ev.target.value); guardar(); });
+  $('cardio-km')?.addEventListener('input', ev => { marcaCardioActual().distancia_km = numero(ev.target.value); guardar(); });
   const ejercicioDe = id => { const k = dia.ejercicios.findIndex((x, j) => idDe(x, j) === id); return { e: dia.ejercicios[k], k }; };
   const lugar = (R().lugares || [])[0];
   /** Consejo para la serie siguiente (nucleo/series.js), según reps, esfuerzo y fallo. Solo en las de trabajo. */

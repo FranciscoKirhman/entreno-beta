@@ -1,4 +1,5 @@
 // Vista Semana: el plan por semanas, mover o faltar a un día, y agendar según el calendario de Google (.ics).
+import { calendarioHtml, enlazarCalendario } from './calendario-asistencia.js';
 import { E, guardar, R, D, esc, $, fechaCorta, presc, cambiarPlan, hoy, indice, mostrarMensaje, sesionVista, mostrarSemana } from './comun.js';
 import { ordenarOpcionales } from '../nucleo/opcionales.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
@@ -72,6 +73,7 @@ export function vistaSemana(ir) {
     <h1>Tu plan</h1>
     <p class="resumen-plan">${p.semanas} semanas · ${resumen.sesiones} sesiones en ${diasSemana.length} días: ${esc(diasSemana.map(d => DIAS_CORTOS[d]).join(', '))}</p>
     <button type="button" class="enlace" id="ver-plan">Ver tu plan explicado&nbsp;›</button>
+    ${calendarioHtml()}
     ${tarjetaDescarga()}
     ${avisoCheckin(true)}
     ${tarjetaTemporada()}
@@ -98,6 +100,7 @@ export function vistaSemana(ir) {
     </section>
   </div>`;
   const raiz = $('vista-semana');
+  enlazarCalendario(() => vistaSemana(ir));
   enlazarTemporada(() => vistaSemana(ir));
   $('ver-plan').onclick = () => ir('plan');
   raiz.querySelectorAll('[data-ir-checkin]').forEach(b => b.onclick = () => ir('checkin', b.dataset.irCheckin));

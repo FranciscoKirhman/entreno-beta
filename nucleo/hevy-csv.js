@@ -186,6 +186,14 @@ export function aFilas(w, indice, origen = 'hevy_csv') {
   };
 }
 
+/** Conserva las notas originales sin interpretarlas como un diagnóstico. */
+export function notasDeHevy(w, indice) {
+  return w.exercises.filter(e => String(e.notes || '').trim()).map(e => ({
+    fecha: w.start_time.slice(0, 10), ejercicio_id: indice ? buscar(indice, e.title)?.id ?? null : null,
+    ejercicio_nombre: e.title, respuestas: {}, nota: String(e.notes).trim(), para_entrenador: true, origen: 'hevy',
+  }));
+}
+
 /**
  * La exportación de Hevy → sesiones en el formato del teléfono (las que guarda la app), sin repetir las que ya se
  * importaron antes. Sirven para "la vez anterior", el historial y para que el plan parta con los pesos reales.
@@ -201,7 +209,7 @@ export function importarParaTelefono(texto, indice, existentes = []) {
     series.filter(s => !s.ejercicio_id).forEach(s => sinCatalogo.add(s.ejercicio_nombre));
     return {
       id: `hevy-${w.id}`, origen: 'hevy', id_externo: w.id, clave: claveSesion(w), fecha: w.start_time.slice(0, 10), hora: w.start_time.slice(11, 16),
-      titulo: sesion.titulo, duracion_min: sesion.duracion_min, comentario: sesion.comentario, notas: [],
+      titulo: sesion.titulo, duracion_min: sesion.duracion_min, comentario: sesion.comentario, notas: notasDeHevy(w, indice),
       series: series.map(s => ({ ...s, rir: s.tipo === 'fallo' ? 0 : s.rpe != null ? Math.max(0, 10 - s.rpe) : null })),
     };
   });

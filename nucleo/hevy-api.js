@@ -2,7 +2,7 @@
 // exportar el archivo. La API acepta llamadas desde el navegador, así que no hace falta servidor. Las sesiones quedan
 // igual que las importadas del CSV (misma clave de fecha, hora y título), así nunca se duplican.
 import { buscar } from './catalogo.js';
-import { aFilas, claveSesion } from './hevy-csv.js';
+import { aFilas, claveSesion, notasDeHevy } from './hevy-csv.js';
 
 export const API_HEVY = 'https://api.hevyapp.com/v1';
 
@@ -39,7 +39,7 @@ export function sesionesDesdeApi(ws, indice, existentes = [], nombresIngles = ne
     series.filter(x => !x.ejercicio_id).forEach(x => sinCatalogo.add(x.ejercicio_nombre));
     return {
       id: `hevy-${w0.id}`, origen: 'hevy', id_externo: w0.id, clave: claveSesion(w), fecha: w.start_time.slice(0, 10), hora: w.start_time.slice(11, 16),
-      titulo: sesion.titulo, duracion_min: sesion.duracion_min, comentario: sesion.comentario, notas: [],
+      titulo: sesion.titulo, duracion_min: sesion.duracion_min, comentario: sesion.comentario, notas: notasDeHevy(w, indice),
       series: series.map(s => ({ ...s, rir: s.tipo === 'fallo' ? 0 : s.rpe != null ? Math.max(0, 10 - s.rpe) : null })),
     };
   }).sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
