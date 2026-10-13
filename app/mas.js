@@ -1,6 +1,6 @@
 import { validarRespaldo } from '../nucleo/respaldo.js';
 // Vista Más: cuenta, ajustar con tu IA (copiar y pegar o conexión directa), importar un plan escrito y reiniciar.
-import { E, guardar, reiniciar, empezarDeNuevo, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje, unidadPeso, modoEjemplo, activarCuenta, resumenLocal, traerPerfilLocal, revisionTrasladoLocal, cuentaRecuperada, cuentaVaciaParaTraslado, avisar } from './comun.js';
+import { E, guardar, reiniciar, empezarDeNuevo, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje, unidadPeso, modoEjemplo, activarCuenta, resumenLocal, traerPerfilLocal, revisionTrasladoLocal, cuentaRecuperada, cuentaVaciaParaTraslado, avisar, asegurarExtras } from './comun.js';
 import { esExportacionHevy, importarParaTelefono } from '../nucleo/hevy-csv.js';
 import { importarOtraApp } from '../nucleo/otras-apps.js';
 import { lectorPesos, juntarPesos } from '../nucleo/salud-apple.js';
@@ -204,6 +204,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel = null }) {
       let estadoCambiado = false;
       try {
         const fotos = await Promise.all((r.fotos || []).map(async f => ({ id: f.id, fecha: f.fecha, angulo: f.angulo, blob: await (async () => { const blob = await (await fetch(f.datos)).blob(); const imagen = await createImageBitmap(blob); imagen.close(); return blob; })() })));
+        await asegurarExtras(); // el respaldo puede traer ejercicios del banco ampliado
         await restaurarFotosAtomicas(fotos, () => { restaurar(r); estadoCambiado = true; });
         E.mensaje = `Respaldo restaurado, con ${fotos.length} fotos.`;
         guardar(); ir(E.plan ? 'hoy' : 'inicio');
@@ -345,6 +346,7 @@ function enlazarConexiones(repintar) {
     const texto = await archivo.text();
     if (!esExportacionHevy(texto)) { out.innerHTML = '<div class="aviso alerta">Ese archivo no es la exportación de entrenamientos de Hevy (workout_data.csv).</div>'; return; }
     let r;
+    await asegurarExtras();
     try { r = importarParaTelefono(texto, indice, E.sesiones); }
     catch (e) { out.innerHTML = `<div class="aviso alerta">No pude leer el archivo: ${esc(e.message)}</div>`; return; }
     E.sesiones.push(...r.nuevas);
@@ -359,6 +361,7 @@ function enlazarConexiones(repintar) {
     if (!archivo) return;
     const out = $('estado-otra-app');
     let r;
+    await asegurarExtras(); // los nombres del banco ampliado también se reconocen
     try { r = importarOtraApp(await archivo.text(), indice, E.sesiones, { unidad: unidadPeso() }); }
     catch (e) { out.innerHTML = `<div class="aviso alerta">${esc(e.message)}</div>`; return; }
     E.sesiones.push(...r.nuevas);

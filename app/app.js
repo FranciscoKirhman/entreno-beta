@@ -6,7 +6,7 @@ import { recuperarCuentaPrincipal } from './recuperar-cuenta.js';
 import { sincronizarDatosTelefono } from './datos-nube.js';
 import { hevyAlAbrir } from './hevy-auto.js';
 import { conPropios, idsPropios } from '../nucleo/propios.js';
-import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo, entrarEjemplo, salirEjemplo, modoEjemplo, errorGuardado, errorRetornoCuenta, activarCuenta, perfilDePrueba, recuperarCopia, claveSesionCuenta, marcarCuentaRecuperada, EXTRAS } from './comun.js';
+import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo, entrarEjemplo, salirEjemplo, modoEjemplo, errorGuardado, errorRetornoCuenta, activarCuenta, perfilDePrueba, recuperarCopia, claveSesionCuenta, marcarCuentaRecuperada, EXTRAS, asegurarExtras, usaExtras } from './comun.js';
 import { prepararSesion, unirSesiones } from '../nucleo/sincronizacion.js';
 import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
 import { derivar } from '../nucleo/derivar.js';
@@ -16,6 +16,7 @@ import { vistaEntrenar } from './entrenar.js';
 import { vistaRutina } from './rutinas.js';
 import { pintarMiniSesion } from './mini-sesion.js';
 import { observarCuerpos } from './cuerpo.js';
+import { elegirSeccionProgreso } from './progreso-hevy.js';
 import { vistaFicha } from './ficha.js';
 import { vistaDiaPasado } from './dia-pasado.js';
 import { vistaSemana } from './semana.js';
@@ -272,7 +273,8 @@ function ir(vista, extra) {
   programarAvisos(); // recordatorios de hoy con lo último (sesión hecha, suplemento tomado)
   actualizarPantalla(); // con una sesión en curso, la pantalla no se apaga sola
 }
-$('nav').addEventListener('click', e => { const b = e.target.closest('[data-ir]'); if (b) ir(b.dataset.ir === 'hoy' && E.plan ? 'eleccion' : b.dataset.ir); });
+// Tocar una pestaña abre su portada (en Progreso, sin la subpantalla que quedó abierta), como Hevy.
+$('nav').addEventListener('click', e => { const b = e.target.closest('[data-ir]'); if (!b) return; if (b.dataset.ir === 'progreso') elegirSeccionProgreso(null); ir(b.dataset.ir === 'hoy' && E.plan ? 'eleccion' : b.dataset.ir); });
 // El enlace de los perfiles también sirve si la app ya estaba abierta (solo cambia lo que va después del #).
 addEventListener('hashchange', () => abrirEnlacePerfiles());
 
@@ -316,6 +318,8 @@ activarCuenta(nube.usuarioGuardado({ claveSesion: claveSesionCuenta() }));
 // Si el almacenamiento principal quedó atrás de la segunda copia del teléfono, se vuelve a lo último que se escribió.
 const avisarRecuperado = async () => { if (await recuperarCopia()) E.mensaje = 'Recuperé lo último que anotaste desde la copia de seguridad de este teléfono.'; };
 await avisarRecuperado();
+// El banco ampliado: ya, si lo guardado usa alguno de sus ejercicios; si no, después de abrir.
+if (usaExtras(E)) await asegurarExtras(); else setTimeout(asegurarExtras, 3000);
 // La app restaura su propia posición después de dibujar, sin una segunda corrección del navegador.
 if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 retornoInicial = retornoGuardado(E.pantallaGuardada, E, hoy());

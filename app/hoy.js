@@ -534,7 +534,7 @@ function cabSesionHtml(dia) {
   return `<header class="cab-sesion" id="solapa">
     <div class="cab-sesion-fila">
       <button type="button" class="cab-sesion-boton" data-minimizar aria-label="${corriendo ? 'Minimizar la sesión' : 'Volver a Entrenar'}">${icono('flecha', 'icono icono-abajo')}</button>
-      <h1 class="cab-sesion-titulo">${esc(dia.foco)}</h1>
+      <h1 class="cab-sesion-titulo"><button type="button" class="cab-sesion-menu" data-menu-sesion aria-haspopup="dialog" aria-label="${esc(`${dia.foco}: ajustar hoy, detalles y más`)}"><span>${esc(dia.foco)}</span>${icono('flecha', 'icono cab-sesion-chevron')}</button></h1>
       <button type="button" class="cab-sesion-boton" data-temporizador aria-label="Temporizador">${icono('reloj')}</button>
       ${accion}
     </div>
@@ -628,7 +628,9 @@ function sesionHoy(dia) {
   const notas = E.notas[f] || {};
   const progreso = avance(dia), guardada = guardadaHoy(f);
   const todas = seriesAnotadas(E.sesiones, E.registro);
-  return `<section class="sesion-cab compacta" aria-label="Sesión de hoy">
+  // "Ajustar hoy" y los detalles se abren desde el nombre de la sesión, arriba (data-menu-sesion): así la primera
+  // serie queda más arriba, como en Hevy. Los botones siguen aquí, escondidos, con sus manejadores.
+  return `<section class="sesion-cab compacta" aria-label="Sesión de hoy" hidden>
     <div class="sesion-controles">
       <button type="button" class="boton chico" id="ajustar-hoy">${icono('ajustes')} Ajustar hoy</button>
       <button type="button" class="boton-icono" id="ver-detalles-sesion" aria-label="Detalles de la sesión">${icono('info')}</button>
@@ -804,6 +806,24 @@ function enlazar(ir, dia) {
     opciones: [{ valor: 'cerrar', icono: icono('visto'), nombre: 'Listo' }], alElegir: () => {},
   }));
   const raiz = $('vista-hoy');
+  raiz.querySelector('[data-menu-sesion]')?.addEventListener('click', ev => {
+    const b = ev.currentTarget, corriendo = enCurso(f);
+    abrirHoja({
+      titulo: dia.foco, volver: b,
+      opciones: [
+        { valor: 'ajustar', icono: icono('ajustes'), nombre: 'Ajustar hoy' },
+        { valor: 'detalles', icono: icono('info'), nombre: 'Detalles de la sesión' },
+        ...(dia.ejercicios.length > 1 ? [{ valor: 'ordenar', icono: icono('cambiar'), nombre: 'Ordenar ejercicios' }] : []),
+        { valor: 'ajustes', icono: icono('ajustes'), nombre: 'Ajustes de la sesión' },
+        ...(corriendo ? [{ valor: 'descartar', icono: icono('basurero'), clase: 'quitar', nombre: 'Descartar sesión', peligro: true }] : []),
+      ],
+      alElegir: v => {
+        if (v === 'ordenar') return ordenarSesion({ volver: b, alCambiar: repintar });
+        const boton = { ajustar: 'ajustar-hoy', detalles: 'ver-detalles-sesion', ajustes: 'ajustes-sesion', descartar: 'descartar-sesion' }[v];
+        if (boton) $(boton)?.click();
+      },
+    });
+  });
   raiz.querySelectorAll('[data-paso-dosis]').forEach(b => b.onclick = () => {
     const tipo = b.dataset.pasoDosis, i = Number(b.dataset.pasoIndice), p = pasosDe(dia, f, tipo)[i];
     const parte = partePaso(p.name), clave = p.clave || `${i}|${p.name}`;

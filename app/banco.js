@@ -1,5 +1,5 @@
 import { datoCambiado } from './datos-nube.js';
-import { C, E, indice, esc, $, ctxNucleo, guardar, avisar, IMAGENES } from './comun.js';
+import { C, E, indice, esc, $, ctxNucleo, guardar, avisar, IMAGENES, asegurarExtras, EXTRAS } from './comun.js';
 import { abrirHoja, cerrarHoja } from './hoja.js';
 import { crearPropio, TIPOS_PROPIO } from '../nucleo/propios.js';
 import { buscarEjercicios, motivoNoAgregar } from '../nucleo/editar-sesion.js';
@@ -12,7 +12,7 @@ import { pintarRecomendaciones } from './recomendaciones-ui.js';
 import { agregarARutina } from './rutinas.js';
 
 let despuesDe = null;
-let texto = '', musculo = '', equipo = '', ultimoDesde = 'mas', soloFuera = true;
+let texto = '', musculo = '', equipo = '', ultimoDesde = 'mas', soloFuera = true, conAmpliado = true;
 // Desde la sesión, como el "Agregar ejercicio" de Hevy: se eligen varios y se agregan juntos (o como superserie).
 const elegidos = new Set();
 /** Los ejercicios hechos hace poco, del más reciente al más antiguo (para la sección Recientes). */
@@ -44,6 +44,7 @@ export function vistaBanco(ir, { desde = ultimoDesde, despues = despuesDe } = {}
       <button type="button" class="banco-filtro${equipo ? ' activo' : ''}" data-filtro="equipo" aria-haspopup="dialog">${esc(equipo ? EQUIPO[equipo] || mayuscula(equipo.replaceAll('_', ' ')) : 'Todo el equipo')}</button>
       <button type="button" class="banco-filtro${musculo ? ' activo' : ''}" data-filtro="musculo" aria-haspopup="dialog">${esc(musculo ? mayuscula(NOMBRE_MUSCULO[musculo] || musculo) : 'Todos los músculos')}</button>
       <label class="banco-filtro banco-filtro-casilla${soloFuera ? ' activo' : ''}"><input type="checkbox" id="banco-fuera"${soloFuera ? ' checked' : ''}> Solo los que no están hoy</label>
+      <label class="banco-filtro banco-filtro-casilla${conAmpliado ? ' activo' : ''}"><input type="checkbox" id="banco-ampliado"${conAmpliado ? ' checked' : ''}> Incluir el banco ampliado (sin revisión)</label>
     </div>
     <div class="banco-accesos">
       <button type="button" class="banco-acceso-fila" id="banco-cardio">${icono('pulso')}<span><strong>Cardio</strong><small>9 actividades con imágenes</small></span>${icono('flecha', 'icono banco-chevron')}</button>
@@ -73,7 +74,7 @@ export function vistaBanco(ir, { desde = ultimoDesde, despues = despuesDe } = {}
   };
   const pintar = () => {
     const enHoy = new Set(ctxNucleo().plan?.dias.find(d => d.fecha === ctxNucleo().hoy)?.ejercicios.map(e => e.ejercicio_id) || []);
-    const xs = buscarEjercicios(indice, { texto, musculo, equipo, nombresMusculos: NOMBRE_MUSCULO, nombresEquipos: EQUIPO }).filter(e => !soloFuera || !enHoy.has(e.id));
+    const xs = buscarEjercicios(indice, { texto, musculo, equipo, nombresMusculos: NOMBRE_MUSCULO, nombresEquipos: EQUIPO }).filter(e => (!soloFuera || !enHoy.has(e.id)) && (conAmpliado || !e.extra));
     pintarRecomendaciones(xs, ir);
     // Recientes, como Hevy: lo último que hiciste, arriba de la lista completa (sin buscar ni filtrar).
     const rec = !texto && !musculo && !equipo ? recientes().filter(id => xs.some(e => e.id === id)).map(id => indice.porId.get(id)) : [];
@@ -84,6 +85,8 @@ export function vistaBanco(ir, { desde = ultimoDesde, despues = despuesDe } = {}
     if (!xs.length) { $('banco-lista').innerHTML = '<p class="banco-vacio">No encontré ejercicios con esos filtros. Prueba otra palabra o elige Todos.</p>'; return; }
     const grupos = new Map();
     for (const e of xs) { const l = letra(e); if (!grupos.has(l)) grupos.set(l, []); grupos.get(l).push(e); }
+    // En cada letra, primero los revisados; después los del banco ampliado (sin revisión).
+    for (const es of grupos.values()) es.sort((a, b) => Number(Boolean(a.extra)) - Number(Boolean(b.extra)));
     $('banco-lista').innerHTML = [...grupos].map(([l, es]) => `<section class="banco-letra" aria-label="${esc(l)}"><h3 aria-hidden="true">${esc(l)}</h3><ul class="banco-grupo">${es.map(fila).join('')}</ul></section>`).join('');
   };
   // La barra de abajo con lo elegido: "Agregar N ejercicios" y, con dos o más, "Como superserie".
@@ -176,6 +179,7 @@ export function vistaBanco(ir, { desde = ultimoDesde, despues = despuesDe } = {}
   $('banco-cardio').onclick = () => elegirCardio({ volver: $('banco-cardio'), alCambiar: () => ir('hoy') });
   $('banco-buscar').oninput = ev => { texto = ev.target.value; pintar(); };
   $('banco-fuera').onchange = ev => { soloFuera = ev.target.checked; pintar(); };
+  $('banco-ampliado').onchange = ev => { conAmpliado = ev.target.checked; pintar(); };
   // Filtros como la hoja de Hevy: una cuadrícula con su imagen, "Limpiar filtros" y "Mostrar N resultados". Solo
   // aparecen las opciones que tienen resultados con lo demás elegido (como el filtro de equipo de OpenGym).
   const contar = (m, q) => buscarEjercicios(indice, { texto, musculo: m, equipo: q, nombresMusculos: NOMBRE_MUSCULO, nombresEquipos: EQUIPO }).length;
@@ -210,4 +214,6 @@ export function vistaBanco(ir, { desde = ultimoDesde, despues = despuesDe } = {}
     if (agregar && !agregar.disabled) proponerEdicion({ tipo: 'agregar', ejercicio: agregar.dataset.bancoAgregar, despues: despuesDe }, { volver: agregar, alCambiar: () => ir('hoy') });
   };
   pintar();
+  // El banco ampliado llega aparte (app/comun.js): cuando esté, se vuelve a dibujar la lista.
+  if (!EXTRAS.length) asegurarExtras().then(() => { if ($('vista-banco')?.isConnected) pintar(); });
 }

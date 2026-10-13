@@ -2,7 +2,7 @@ import { sufijo } from '../nucleo/unidades.js';
 import { validarRespaldo } from '../nucleo/respaldo.js';
 // Estado y utilidades que comparten las vistas de la app. Todo funciona sin cuenta (en este navegador);
 // con cuenta, nube.js sincroniza con Supabase.
-import { crearIndice } from '../nucleo/catalogo.js';
+import { crearIndice, normalizar } from '../nucleo/catalogo.js';
 import { derivar } from '../nucleo/derivar.js';
 import { estadoDelPlan } from '../nucleo/registrado.js';
 import { perfilPruebaActivo, clavePerfilPrueba, claveSesionPerfilPrueba, seleccionarPerfilPrueba } from '../nucleo/perfiles-prueba.js';
@@ -18,10 +18,25 @@ export const [C, catalogo, K, EVIDENCIA, PLANES, TECNICA] = await Promise.all(
 // Banco ampliado (contenido/ejercicios-extra.json, datos MIT de hasaneyldrm/exercises-dataset, sin imágenes): se
 // pueden buscar, agregar a mano y reconocer al importar, pero no tienen revisión profesional ni entran al plan
 // automático (su patrón es 'otro', que el motor no usa) ni a las recomendaciones.
-const EXTRA = await cargar('../contenido/ejercicios-extra.json').catch(() => null);
-export const EXTRAS = (EXTRA?.ejercicios || []).map(x => ({ id: x.id, nombre: x.n, nombre_hevy: null, alias: [x.en], patron: 'otro',
-  musculos_primarios: x.p, musculos_secundarios: x.s, equipamiento: x.q, carga_articular: [], nivel_minimo: 'principiante', tipo: x.t, preferencia: 9, extra: true }));
-export const indice = crearIndice({ ...catalogo, ejercicios: [...catalogo.ejercicios, ...EXTRAS] });
+// Se carga aparte (asegurarExtras), no al abrir la app: pesa 200 KB. Al abrir solo si ya usaste alguno.
+export const EXTRAS = [];
+export const indice = crearIndice(catalogo);
+let cargaExtras = null;
+/** Carga el banco ampliado una vez y lo suma al índice (sin pisar nombres del catálogo revisado). */
+export function asegurarExtras() {
+  return (cargaExtras ||= cargar('../contenido/ejercicios-extra.json').then(d => {
+    for (const x of d?.ejercicios || []) {
+      if (indice.porId.has(x.id)) continue;
+      const e = { id: x.id, nombre: x.n, nombre_hevy: null, alias: [x.en], patron: 'otro', musculos_primarios: x.p, musculos_secundarios: x.s,
+        equipamiento: x.q, carga_articular: [], nivel_minimo: 'principiante', tipo: x.t, preferencia: 9, extra: true };
+      EXTRAS.push(e); indice.ejercicios.push(e); indice.porId.set(e.id, e);
+      for (const n of [e.nombre, ...e.alias]) { const k = normalizar(n); if (!indice.porNombre.has(k)) indice.porNombre.set(k, e); }
+    }
+    return EXTRAS;
+  }).catch(() => { cargaExtras = null; return EXTRAS; }));
+}
+/** Si lo guardado usa ejercicios del banco ampliado, hay que tenerlos antes de dibujar. */
+export const usaExtras = e => /"extra_\d/.test(JSON.stringify([e?.sesiones, e?.plan, e?.rutinas, e?.registro]));
 /** Imágenes que hay en app/img (las genera herramientas/imagenes.mjs): así no se piden las que todavía no existen. */
 export const IMAGENES = new Set(await fetch('img/disponibles.json').then(r => (r.ok ? r.json() : [])).catch(() => []));
 

@@ -31,7 +31,7 @@ import { ritmoDe, textoRitmo } from './progreso-ejercicio.js';
 import { miniatura } from './imagenes.js';
 import { icono } from './iconos.js';
 import { ajuste } from './ajustes-sesion.js';
-import { graficoSemanasHtml, tableroProgresoHtml, enlazarProgresoHevy, esfuerzoHtml, enlazarEsfuerzo, anioHtml, enlazarAnio, musculosMapaHtml, enlazarMusculosMapa } from './progreso-hevy.js';
+import { graficoSemanasHtml, tableroProgresoHtml, enlazarProgresoHevy, esfuerzoHtml, enlazarEsfuerzo, anioHtml, enlazarAnio, musculosMapaHtml, enlazarMusculosMapa, seccionProgreso, elegirSeccionProgreso, TITULO_SECCION } from './progreso-hevy.js';
 
 const DIAS = [[1, 'L'], [2, 'M'], [3, 'M'], [4, 'J'], [5, 'V'], [6, 'S'], [0, 'D']];
 const nombreEj = id => indice.porId.get(id)?.nombre || id;
@@ -335,8 +335,10 @@ export async function vistaProgreso(ir) {
   const resumen = resumenParaEntrenador(notas, indice);
   const cons = E.suplementos.length ? constancia(E.suplementos, E.tomas, hoy()) : null;
   const cola = estadoCola();
-  $('app').innerHTML = `<div id="vista-progreso">
-    <h1>Progreso</h1>
+  const sec = seccionProgreso();
+  $('app').innerHTML = `<div id="vista-progreso"${sec ? ` data-en-seccion="${sec}"` : ''}>
+    ${sec ? `<button type="button" class="volver" id="p-volver" data-vuelve-a="progreso">${icono('flecha', 'icono flecha-atras')} Progreso</button>` : ''}
+    <h1>${sec ? TITULO_SECCION[sec] : 'Progreso'}</h1>
     ${bienvenidaProgreso()}
     ${calendarioHtml()}
     <div class="progreso-accesos"><button type="button" class="boton" id="progreso-datos">Mis datos</button></div>
@@ -348,17 +350,22 @@ export async function vistaProgreso(ir) {
       ${nube.conectado() && cola.total ? `<div class="aviso ojo" id="cola">${cola.total} cosa${cola.total === 1 ? '' : 's'} esperando subir a tu cuenta (${[cola.sesiones && `${cola.sesiones} ${cola.sesiones === 1 ? 'sesión' : 'sesiones'}`, cola.indicaciones && `${cola.indicaciones} indicación${cola.indicaciones === 1 ? '' : 'es'}`, cola.bienestar && `${cola.bienestar} registro${cola.bienestar === 1 ? '' : 's'} de bienestar`].filter(Boolean).join(', ')}). Quedan guardadas en este teléfono y se suben solas cuando hay señal.${cola.detenidos ? ` Después de varios intentos se pausó${cola.error ? ` (${esc(cola.error)})` : ''}.` : ''}
         <div class="fila-botones"><button type="button" class="boton" id="reintentar">Reintentar ahora</button></div></div>` : ''}
     </section>
-    <h2 class="titulo-seccion" id="p-detalle">Tus estadísticas</h2>
+    <div data-seccion-p="estadisticas">
     ${musculosMapaHtml()}
     ${semanaHtml()}
     ${franjaHtml()}
     ${esfuerzoHtml(R().escala_esfuerzo === 'rir' ? 'rir' : 'rpe')}
+    ${resumenPeriodoHtml()}
+    ${suenoAnimoHtml()}
+    </div>
+    <div data-seccion-p="calendario">
     ${constanciaHtml()}
     ${anioHtml()}
-    ${resumenPeriodoHtml()}
+    </div>
+    <div data-seccion-p="ejercicios">
     ${ejerciciosHtml()}
-    ${suenoAnimoHtml()}
-
+    </div>
+    <div data-seccion-p="medidas">
     ${medidasHtml()}
 
     <section class="tarjeta">
@@ -371,6 +378,7 @@ export async function vistaProgreso(ir) {
         <div id="fotos" class="galeria"><p class="suave pequeno">Cargando…</p></div>`
       : `<label class="pequeno casilla"><input type="checkbox" id="consentir-fotos"> Acepto guardar fotos de mi cuerpo como datos personales sensibles, solo para ver mi progreso.</label>`}
     </section>
+    </div>
 
     <section class="tarjeta">
       <h3>Suplementos</h3>
@@ -412,8 +420,9 @@ export async function vistaProgreso(ir) {
   $('progreso-datos').onclick=()=>ir('datos');
   document.querySelector('[data-ir-mas]')?.addEventListener('click', () => ir('mas'));
   enlazarHistorial(ir);
-  enlazarProgresoHevy(() => { const y = scrollY; vistaProgreso(ir); scrollTo(0, y); });
+  enlazarProgresoHevy(() => { const y = scrollY; vistaProgreso(ir); scrollTo(0, y); }, () => { vistaProgreso(ir); scrollTo(0, 0); });
   enlazarAnio();
+  $('p-volver')?.addEventListener('click', () => { elegirSeccionProgreso(null); vistaProgreso(ir); scrollTo(0, 0); });
   enlazarMusculosMapa(() => { const y = scrollY; vistaProgreso(ir); scrollTo(0, y); });
   enlazarEsfuerzo(() => { const y = scrollY; vistaProgreso(ir); scrollTo(0, y); });
   $('anotar-pasado')?.addEventListener('click', () => ir('pasado'));

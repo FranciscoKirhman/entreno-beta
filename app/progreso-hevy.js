@@ -46,19 +46,24 @@ export function graficoSemanasHtml() {
   </section>`;
 }
 
+// Cada botón del panel abre su propia pantalla, como el "Dashboard" de Hevy (Progreso → Estadísticas, etc.).
+export const TITULO_SECCION = { estadisticas: 'Estadísticas', ejercicios: 'Ejercicios', medidas: 'Medidas', calendario: 'Calendario' };
+let seccion = null;
+export const seccionProgreso = () => seccion;
+export const elegirSeccionProgreso = s => { seccion = TITULO_SECCION[s] ? s : null; };
+
 /** Panel de cuatro botones, como el "Dashboard" del perfil de Hevy. */
 export function tableroProgresoHtml() {
-  const botones = [['p-musculos', 'grafico', 'Estadísticas'], ['p-ejercicios', 'pesa', 'Ejercicios'], ['medidas-cuerpo', 'persona', 'Medidas'], ['p-calendario', 'calendario', 'Calendario']];
-  return `<div class="tablero-progreso">${botones.map(([id, ic, t]) => `<button type="button" class="tablero-boton" data-ir-seccion="${id}">${icono(ic)}<span>${t}</span></button>`).join('')}</div>`;
+  const botones = [['estadisticas', 'grafico'], ['ejercicios', 'pesa'], ['medidas', 'persona'], ['calendario', 'calendario']];
+  return `<div class="tablero-progreso">${botones.map(([id, ic]) => `<button type="button" class="tablero-boton" data-ir-seccion="${id}">${icono(ic)}<span>${TITULO_SECCION[id]}</span>${icono('flecha', 'icono tablero-flecha')}</button>`).join('')}</div>`;
 }
 
-export function enlazarProgresoHevy(repintar) {
+export function enlazarProgresoHevy(repintar, abrirSeccion = repintar) {
   document.querySelectorAll('[data-metrica-semana]').forEach(b => b.onclick = () => { metrica = b.dataset.metricaSemana; repintar(); });
   document.querySelectorAll('[data-ir-seccion]').forEach(b => b.onclick = () => {
-    const destino = $(b.dataset.irSeccion);
-    if (!destino) return;
-    if (destino.tagName === 'DETAILS') destino.open = true;
-    (destino.closest('section, details') || destino).scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    elegirSeccionProgreso(b.dataset.irSeccion);
+    abrirSeccion();
+    const medidas = $('medidas-cuerpo'); if (seccion === 'medidas' && medidas?.tagName === 'DETAILS') medidas.open = true;
   });
 }
 
