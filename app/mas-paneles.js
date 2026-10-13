@@ -1,9 +1,11 @@
 // Más: atajos y listas. Los controles originales se mueven, nunca se clonan.
 // Cada ajuste ocupa una vista de detalle; cambiar de grupo conserva lo escrito.
-import { E } from './comun.js';
+import { E, R, esc } from './comun.js';
 import { imagenAvatar } from './avatares.js';
 import { icono } from './iconos.js';
 
+// Como el perfil de Hevy: el nombre y cuántos entrenamientos llevas (sin los del ejemplo, salvo en el ejemplo).
+const cuantas = () => { const n = (E.sesiones || []).length; return `${n.toLocaleString('es-CL')} entrenamiento${n === 1 ? '' : 's'}`; };
 const vistas = new WeakMap(); // Borradores en memoria, separados por perfil y cuenta.
 const BORRADORES = ['plan-texto', 'plan-semanas', 'respuesta'];
 const TITULOS = {
@@ -93,7 +95,7 @@ export function organizarMas({ estado: anterior = null } = {}) {
   const resumen = document.createElement('div');
   resumen.className = 'mas-resumen';
   resumen.innerHTML = '<button type="button" class="mas-perfil" id="mas-perfil">' + imagenAvatar() +
-    '<span class="mas-texto"><strong>Tu perfil</strong><small>Foto, equipo y preferencias</small></span>' + icono('flecha', 'icono mas-flecha') + '</button>' +
+    '<span class="mas-texto"><strong>' + esc(R()?.apodo || 'Tu perfil') + '</strong><small>' + cuantas() + ' · Foto, equipo y preferencias</small></span>' + icono('flecha', 'icono mas-flecha') + '</button>' +
     '<section class="mas-grupo"><h2>Entrenamiento</h2><div class="mas-atajos" aria-label="Atajos de entrenamiento">' +
     '<span data-mas-banco></span>' + atajo('plan', 'Tu plan', 'calendario') + atajo('ia', 'IA', 'chat') + '</div></section>' +
     grupo('Preferencias', fila('recordatorios', 'Recordatorios', 'reloj') + fila('pantalla', 'Pantalla y unidades', 'ajustes')) +

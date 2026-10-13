@@ -28,6 +28,7 @@ import { normalizar } from '../nucleo/catalogo.js';
 import { ritmoDe, textoRitmo } from './progreso-ejercicio.js';
 import { miniatura } from './imagenes.js';
 import { icono } from './iconos.js';
+import { graficoSemanasHtml, tableroProgresoHtml, enlazarProgresoHevy } from './progreso-hevy.js';
 
 const DIAS = [[1, 'L'], [2, 'M'], [3, 'M'], [4, 'J'], [5, 'V'], [6, 'S'], [0, 'D']];
 const nombreEj = id => indice.porId.get(id)?.nombre || id;
@@ -39,12 +40,12 @@ let medidaElegida = null, medidasAbierto = false;
 
 /** Sesiones para el historial: las guardadas (de la app o importadas de Hevy) y los días con series marcadas sin terminar. */
 function historial() {
-  const out = E.sesiones.map(s => ({ id: s.id, fecha: s.fecha, titulo: s.titulo, origen: s.origen, comentario: s.comentario,
-    series: (s.series || []).map(x => ({ nombre: x.ejercicio_nombre || nombreEj(x.ejercicio_id), carga_kg: x.carga_kg, reps: x.reps ?? x.duracion_seg, tipo: x.tipo, asistido: esAsistido(indice.porId.get(x.ejercicio_id)), distancia_m: x.distancia_m, duracion_seg: x.duracion_seg })) }));
+  const out = E.sesiones.map(s => ({ id: s.id, fecha: s.fecha, titulo: s.titulo, origen: s.origen, comentario: s.comentario, duracion_min: s.duracion_min, hora: s.hora,
+    series: (s.series || []).map(x => ({ ejercicio_id: x.ejercicio_id, nombre: x.ejercicio_nombre || nombreEj(x.ejercicio_id), carga_kg: x.carga_kg, reps: x.reps ?? x.duracion_seg, tipo: x.tipo, asistido: esAsistido(indice.porId.get(x.ejercicio_id)), distancia_m: x.distancia_m, duracion_seg: x.duracion_seg })) }));
   for (const [fecha, porEj] of Object.entries(E.registro)) {
     if (E.sesiones.some(s => s.fecha === fecha && !s.origen)) continue;
     const series = Object.entries(porEj || {}).flatMap(([id, l]) => (l || []).filter(x => x?.hecho)
-      .map(x => ({ nombre: nombreEj(id), carga_kg: x.kg ?? null, reps: x.reps ?? null, tipo: tipoParaGuardar(x) })));
+      .map(x => ({ ejercicio_id: id, nombre: nombreEj(id), carga_kg: x.kg ?? null, reps: x.reps ?? null, tipo: tipoParaGuardar(x) })));
     if (series.length) out.push({ fecha, titulo: (E.plan && sesionDe(E.plan, fecha)?.foco) || 'Sesión', sinTerminar: true, series });
   }
   return out.sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0));
@@ -86,7 +87,7 @@ function franjaHtml() {
   const seguido = filas.filter(f => f.seguido);
   const cambio = f => (Math.abs(f.cambio) < 0.5 ? 'igual que antes' : `${f.cambio > 0 ? 'subió' : 'bajó'} ${n(Math.abs(f.cambio))}`);
   return `<section class="tarjeta">
-    <h3>Músculos contra lo recomendado</h3>
+    <h3 id="p-estadisticas">Músculos contra lo recomendado</h3>
     <p class="pequeno suave">Series de los últimos 12 días, llevadas a una semana. La franja de tu nivel es de ${lo} a ${hi} por semana${prioridad.size ? '; tus zonas prioritarias pueden pasarse un poco' : ''}.</p>
     ${seguido.length ? `<p class="aviso ojo pequeno">${esc(seguido.map(f => nombre(f.musculo)).join(', '))} ${seguido.length === 1 ? 'lleva' : 'llevan'} más de 3 semanas bajo la franja.</p>` : ''}
     <ul class="franja-musculos">${filas.map(f => `<li>
@@ -192,7 +193,7 @@ function constanciaHtml() {
   const celdas = LETRAS.map((l, d) => `<span class="cal-letra" aria-hidden="true">${l}</span>${c.semanas.map(w => { const x = w.dias[d]; return `<span class="cal-dia${x.entreno ? ' hecho' : ''}${x.futuro ? ' futuro' : ''}${x.fecha === hoy() ? ' hoy' : ''}" title="${esc(fechaCorta(x.fecha))}${x.entreno ? ': entrenaste' : ''}"></span>`; }).join('')}`).join('');
   const entrenados = c.semanas.reduce((a, w) => a + w.total, 0);
   return `<section class="tarjeta">
-    <h3>Constancia</h3>
+    <h3 id="p-calendario">Constancia</h3>
     <div class="cifras-resumen">
       ${cifra(c.racha === 1 ? '1 semana' : `${c.racha} semanas`, c.racha === 1 ? 'con entrenamiento' : 'seguidas entrenando')}
       ${cifra(desde, c.diasDesdeUltimo === 0 ? 'entrenaste' : 'desde tu último entrenamiento')}
@@ -225,7 +226,7 @@ function ejerciciosHtml() {
     return `<li><button type="button" class="fila-ejercicio" data-ficha="${esc(id)}">${miniatura(id)}<span><span class="nombre">${esc(nombreEj(id))}</span><span class="pequeno suave">${esc(textoRitmo(r, { asistido, corto: true }) || `${sesiones} ${sesiones === 1 ? 'sesión' : 'sesiones'}, falta para ver el ritmo`)}</span></span>${icono('flecha', 'icono chevron')}</button></li>`;
   };
   return `<section class="tarjeta">
-    <h3>Tu ritmo por ejercicio</h3>
+    <h3 id="p-ejercicios">Tu ritmo por ejercicio</h3>
     <p class="pequeno suave">Cuánto cambió tu máximo estimado en las últimas 8 semanas. Toca uno para ver sus gráficos y su historial.</p>
     <ul class="lista-ejercicios">${(todosEjercicios ? lista : lista.slice(0, 5)).map(fila).join('')}</ul>
     ${lista.length > 5 ? `<button type="button" class="enlace" id="todos-ejercicios">${todosEjercicios ? 'Ver menos' : `Ver los ${lista.length}`}</button>` : ''}
@@ -281,22 +282,41 @@ function listaHistorialHtml(h = historial()) {
   const textoSeries = xs => (xs.some(x => x.distancia_m || (x.duracion_seg && !x.carga_kg))
     ? xs.map(x => `${x.carga_kg ? `${peso(x.carga_kg)} × ` : ''}${[x.distancia_m && distancia(x.distancia_m), x.duracion_seg && reloj(x.duracion_seg)].filter(Boolean).join(' en ')}`).filter(Boolean).join(', ')
     : seriesTexto(xs));
+  // Cada sesión como una publicación de Hevy (sin me gusta ni comentarios): título, cuándo, tiempo, volumen y
+  // récords, y los ejercicios con su miniatura. Tocarla abre el resumen; las series quedan en "Ver las series".
   const item = s => {
     const porEj = [];
     for (const x of s.series) {
       let g = porEj.find(y => y.nombre === x.nombre);
-      if (!g) porEj.push(g = { nombre: x.nombre, trabajo: [], calentamiento: 0 });
+      if (!g) porEj.push(g = { nombre: x.nombre, id: x.ejercicio_id, trabajo: [], calentamiento: 0 });
       if (x.tipo === 'calentamiento') g.calentamiento++; else g.trabajo.push(x);
     }
     const recs = (s.id && records.get(s.id)) || [];
-    return `<li><details><summary><span class="fecha-h">${esc(fechaCorta(s.fecha))}</span><span class="titulo-h">${esc(s.titulo || 'Sesión')}${s.origen === 'hevy' ? ' <span class="chip">Hevy</span>' : s.origen === 'ejemplo' ? ' <span class="chip">Ejemplo</span>' : ''}${s.sinTerminar && s.fecha === hoy() ? ' <span class="chip">en curso</span>' : ''}${recs.length ? ` <span class="chip-record">${recs.length === 1 ? '1 récord' : `${recs.length} récords`}</span>` : ''}</span><span class="cifra-h num">${series(s.series.filter(deTrabajo).length)}</span></summary>
+    const abre = s.id && !s.sinTerminar;
+    const chips = `${s.origen === 'hevy' ? ' <span class="chip">Hevy</span>' : s.origen === 'ejemplo' ? ' <span class="chip">Ejemplo</span>' : ''}${s.sinTerminar && s.fecha === hoy() ? ' <span class="chip">en curso</span>' : ''}`;
+    return `<li class="publicacion">
+      <${abre ? `button type="button" data-resumen="${esc(s.id)}"` : 'div'} class="publicacion-cab">
+        <span class="publicacion-titulo">${esc(s.titulo || 'Sesión')}${chips}</span>
+        <span class="pequeno suave">${esc(fechaCorta(s.fecha))}${s.hora ? ` · ${esc(s.hora)}` : ''}</span>
+      </${abre ? 'button' : 'div'}>
       ${s.comentario ? `<p class="pequeno comentario-h">"${esc(s.comentario)}"</p>` : ''}
-      <ul class="pequeno detalle-h">${porEj.map(g => `<li><strong>${esc(g.nombre)}</strong>: ${esc(textoSeries(g.trabajo) || 'sin series de trabajo')}${g.calentamiento ? ` <span class="suave">(+${g.calentamiento} de calentamiento)</span>` : ''}</li>`).join('')}</ul>${s.id && !s.sinTerminar ? `<button type="button" class="enlace pequeno" data-resumen="${esc(s.id)}">Ver resumen: récords y cómo te fue</button>` : ''}${s.id && !s.origen && !s.sinTerminar && s.fecha < hoy() ? ` <button type="button" class="enlace pequeno" data-corregir="${esc(s.id)}">Corregir esta sesión</button>` : ''}</details></li>`;
+      <div class="publicacion-cifras">
+        <span><small>Tiempo</small><strong class="num">${s.duracion_min ? `${s.duracion_min} min` : 'sin dato'}</strong></span>
+        <span><small>Volumen</small><strong class="num">${esc(volumenTexto(volumen(s.series)))}</strong></span>
+        <span><small>Récords</small><strong class="num">${recs.length ? `${icono('trofeo', 'icono trofeo-pub')}${recs.length}` : '0'}</strong></span>
+      </div>
+      <ul class="publicacion-ejercicios">${porEj.slice(0, 3).map(g => `<li>${g.id && indice.porId.get(g.id) ? miniatura(g.id).replace('<img ', '<img loading="lazy" ') : '<span class="miniatura vacia"></span>'}<span>${esc(series(g.trabajo.length))} · ${esc(g.nombre)}</span></li>`).join('')}</ul>
+      ${porEj.length > 3 ? `<p class="pequeno suave publicacion-mas">y ${porEj.length - 3} ejercicio${porEj.length - 3 === 1 ? '' : 's'} más</p>` : ''}
+      <details class="publicacion-series"><summary class="pequeno">Ver las series</summary>
+        <ul class="pequeno detalle-h">${porEj.map(g => `<li><strong>${esc(g.nombre)}</strong>: ${esc(textoSeries(g.trabajo) || 'sin series de trabajo')}${g.calentamiento ? ` <span class="suave">(+${g.calentamiento} de calentamiento)</span>` : ''}</li>`).join('')}</ul>
+        ${s.id && !s.origen && !s.sinTerminar && s.fecha < hoy() ? `<button type="button" class="enlace pequeno" data-corregir="${esc(s.id)}">Corregir esta sesión</button>` : ''}
+      </details>
+    </li>`;
   };
   if (palabras.length && !encontradas.length) return `<p class="pequeno suave">No encontré sesiones con "${esc(buscar)}". Prueba con un ejercicio, el nombre de la sesión o una fecha, como "sept" o "15 sept".</p>`;
   const lista = encontradas;
   return `<p class="pequeno">${esc(palabras.length ? `${lista.length} ${lista.length === 1 ? 'sesión encontrada' : 'sesiones encontradas'}.` : resumen)}</p>
-    <ul class="historial">${(verTodo ? lista : lista.slice(0, palabras.length ? 20 : 6)).map(item).join('')}</ul>
+    <ul class="historial publicaciones">${(verTodo ? lista : lista.slice(0, palabras.length ? 20 : 6)).map(item).join('')}</ul>
     ${lista.length > (palabras.length ? 20 : 6) ? `<button type="button" class="enlace" id="ver-todo">${verTodo ? 'Ver menos' : `Ver las ${lista.length} sesiones`}</button>` : ''}`;
 }
 
@@ -311,18 +331,21 @@ export async function vistaProgreso(ir) {
   $('app').innerHTML = `<div id="vista-progreso">
     <h1>Progreso</h1>
     ${bienvenidaProgreso()}
+    ${graficoSemanasHtml()}
+    ${tableroProgresoHtml()}
+    <section class="tarjeta tarjeta-entrenamientos">
+      <h3>Entrenamientos</h3>
+      ${historialHtml()}
+      ${nube.conectado() && cola.total ? `<div class="aviso ojo" id="cola">${cola.total} cosa${cola.total === 1 ? '' : 's'} esperando subir a tu cuenta (${[cola.sesiones && `${cola.sesiones} ${cola.sesiones === 1 ? 'sesión' : 'sesiones'}`, cola.indicaciones && `${cola.indicaciones} indicación${cola.indicaciones === 1 ? '' : 'es'}`, cola.bienestar && `${cola.bienestar} registro${cola.bienestar === 1 ? '' : 's'} de bienestar`].filter(Boolean).join(', ')}). Quedan guardadas en este teléfono y se suben solas cuando hay señal.${cola.detenidos ? ` Después de varios intentos se pausó${cola.error ? ` (${esc(cola.error)})` : ''}.` : ''}
+        <div class="fila-botones"><button type="button" class="boton" id="reintentar">Reintentar ahora</button></div></div>` : ''}
+    </section>
+    <h2 class="titulo-seccion" id="p-detalle">Tus estadísticas</h2>
     ${semanaHtml()}
     ${franjaHtml()}
     ${constanciaHtml()}
     ${resumenPeriodoHtml()}
     ${ejerciciosHtml()}
     ${suenoAnimoHtml()}
-    <section class="tarjeta">
-      <h3>Historial</h3>
-      ${historialHtml()}
-      ${nube.conectado() && cola.total ? `<div class="aviso ojo" id="cola">${cola.total} cosa${cola.total === 1 ? '' : 's'} esperando subir a tu cuenta (${[cola.sesiones && `${cola.sesiones} ${cola.sesiones === 1 ? 'sesión' : 'sesiones'}`, cola.indicaciones && `${cola.indicaciones} indicación${cola.indicaciones === 1 ? '' : 'es'}`, cola.bienestar && `${cola.bienestar} registro${cola.bienestar === 1 ? '' : 's'} de bienestar`].filter(Boolean).join(', ')}). Quedan guardadas en este teléfono y se suben solas cuando hay señal.${cola.detenidos ? ` Después de varios intentos se pausó${cola.error ? ` (${esc(cola.error)})` : ''}.` : ''}
-        <div class="fila-botones"><button type="button" class="boton" id="reintentar">Reintentar ahora</button></div></div>` : ''}
-    </section>
 
     ${medidasHtml()}
 
@@ -376,6 +399,7 @@ export async function vistaProgreso(ir) {
 
   document.querySelector('[data-ir-mas]')?.addEventListener('click', () => ir('mas'));
   enlazarHistorial(ir);
+  enlazarProgresoHevy(() => { const y = scrollY; vistaProgreso(ir); scrollTo(0, y); });
   $('anotar-pasado')?.addEventListener('click', () => ir('pasado'));
   // El buscador repinta solo la lista, para no perder el teclado.
   $('buscar-historial')?.addEventListener('input', ev => { buscar = ev.target.value; verTodo = false; $('lista-historial').innerHTML = listaHistorialHtml(); enlazarHistorial(ir); });

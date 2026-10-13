@@ -12,7 +12,7 @@ let alFin = null, inicio = 0;
 let inicioTramo = 0;
 const ANILLO = 2 * Math.PI * 22;
 const hechos = () => Math.round((Date.now() - inicio) / 1000);
-const formato = seg => `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')}`;
+const formato = seg => `${String(Math.floor(seg / 60)).padStart(2, '0')}:${String(seg % 60).padStart(2, '0')}`; // 02:29, como Hevy
 
 function caja() {
   let el = document.getElementById('descanso');
@@ -20,7 +20,7 @@ function caja() {
     el = document.createElement('div');
     el.id = 'descanso';
     el.setAttribute('role', 'timer');
-    el.innerHTML = `<div class="descanso-cab"><span class="descanso-anillo" aria-hidden="true"><svg viewBox="0 0 48 48"><circle class="pista" cx="24" cy="24" r="22"/><circle class="progreso" cx="24" cy="24" r="22" stroke-dasharray="${ANILLO.toFixed(2)}"/></svg><span class="descanso-asistente"></span></span><div class="texto"><span class="etiqueta pequeno"></span><strong class="tiempo num"></strong></div></div>
+    el.innerHTML = `<i class="descanso-linea" aria-hidden="true"><b></b></i><div class="descanso-cab"><span class="descanso-anillo" aria-hidden="true"><svg viewBox="0 0 48 48"><circle class="pista" cx="24" cy="24" r="22"/><circle class="progreso" cx="24" cy="24" r="22" stroke-dasharray="${ANILLO.toFixed(2)}"/></svg><span class="descanso-asistente"></span></span><div class="texto"><span class="etiqueta pequeno"></span><strong class="tiempo num"></strong></div></div>
       <div class="descanso-controles"><button type="button" class="boton" data-menos aria-label="Restar 15 segundos">−15</button>
       <button type="button" class="boton" data-mas aria-label="Sumar 15 segundos">+15</button>
       <button type="button" class="boton" data-listo>Saltar</button></div>`;
@@ -49,6 +49,7 @@ function pintar() {
   // Cuatro veces por segundo, con una transición lineal de 250 ms: se vacía de forma continua. Solo cambia el trazo.
   const queda = Math.max(0, fin - Date.now()), total = Math.max(1, fin - inicioTramo);
   el.querySelector('.descanso-anillo .progreso').style.strokeDashoffset = (ANILLO * (1 - queda / total)).toFixed(2);
+  el.querySelector('.descanso-linea b').style.width = `${((queda / total) * 100).toFixed(1)}%`; // la línea de arriba, como Hevy
   el.classList.toggle('ultimos', queda > 0 && queda <= 3000);
   const personaje = el.querySelector('.descanso-asistente');
   const pose = resta ? 'cronometro' : 'animo', asistente = asistenteActual();

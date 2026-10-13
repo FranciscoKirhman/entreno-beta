@@ -47,7 +47,7 @@ function rutinaHtml(d, s) {
   const boton = esHoy ? (s.enCurso ? '<button type="button" class="boton primario" data-ir-sesion>Seguir la sesión</button>'
       : hecha ? '<button type="button" class="boton" data-ir-sesion>Ver la sesión</button>'
       : '<button type="button" class="boton primario" data-empezar-hoy>Empezar rutina</button>')
-    : hecha || d.fecha < s.f ? '' : `<button type="button" class="boton" data-traer="${d.fecha}">Hacerla hoy</button>`;
+    : hecha || d.fecha < s.f ? '' : `<button type="button" class="boton primario" data-traer="${d.fecha}">Empezar rutina</button>`;
   return `<li class="rutina${esHoy ? ' es-hoy' : ''}">
     <div class="rutina-cab"><h3>${esc(d.foco)}</h3>${chipDia(d, s)}</div>
     <p class="pequeno suave rutina-ejercicios">${esc(lista || 'Sin ejercicios todavía')}</p>
@@ -93,16 +93,16 @@ export function vistaEntrenar(ir) {
     <span class="sobretitulo">${esc(fecha)}</span>
     <h1>Entrenar</h1>
     ${hoyHtml(s)}
-    <h2 class="titulo-seccion">Inicio rápido</h2>
-    <div class="inicio-rapido">
-      <button type="button" class="boton fila-boton" id="sesion-vacia">${icono('mas')} Sesión vacía</button>
-      <button type="button" class="boton fila-boton" data-elegir-cardio>${icono('pulso')} Cardio</button>
-    </div>
+    <button type="button" class="boton fila-boton boton-vacia" id="sesion-vacia">${icono('mas')} Empezar sesión vacía</button>
     ${s.avisoSinRegistro}
     ${D().mensaje_alerta ? `<div class="aviso ojo">${esc(D().mensaje_alerta)}</div>` : ''}
     ${avisoCheckin()}
     ${avisoDescargaCorto()}
-    <div class="cab-rutinas"><h2 class="titulo-seccion">Rutinas</h2><button type="button" class="enlace" id="ver-semana">${icono('calendario', 'icono icono-chico')} Ver la semana</button></div>
+    <h2 class="titulo-seccion">Rutinas</h2>
+    <div class="botones-rutinas">
+      <button type="button" class="boton fila-boton" id="ver-plan">${icono('libro')} Tu plan</button>
+      <button type="button" class="boton fila-boton" id="ver-semana">${icono('calendario')} La semana</button>
+    </div>
     <section class="carpeta-rutinas">
       <button type="button" class="carpeta-cab" id="carpeta-plan" aria-expanded="${planAbierto}">${icono('flecha', `icono carpeta-flecha${planAbierto ? ' abierta' : ''}`)}<span>Tu plan, ${cual} (${semana.length})</span></button>
       ${planAbierto ? `<ul class="rutinas">${semana.map(d => rutinaHtml(d, s)).join('') || '<li class="pequeno suave">Esta semana no tiene sesiones.</li>'}</ul>` : ''}
@@ -116,6 +116,7 @@ export function vistaEntrenar(ir) {
   $('sesion-vacia').onclick = ev => proponerSesionVacia({ volver: ev.currentTarget, alCambiar: () => { empezarHoy(); ir('hoy', { sesion: true }); } });
   raiz.querySelectorAll('[data-elegir-cardio]').forEach(b => b.onclick = () => elegirCardio({ volver: b, alCambiar: () => ir('hoy', { sesion: true }) }));
   $('ver-semana').onclick = () => ir('semana');
+  $('ver-plan').onclick = () => ir('plan');
   $('abrir-revision')?.addEventListener('click', () => ir('coach', { revisar: true }));
   raiz.querySelectorAll('[data-ir-checkin]').forEach(b => b.onclick = () => ir('checkin', b.dataset.irCheckin));
   raiz.querySelectorAll('[data-ir-semana]').forEach(b => b.onclick = () => ir('semana'));

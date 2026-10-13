@@ -14,7 +14,8 @@ const detalle = s => {
 export function pintarMiniSesion(vista, ir) {
   let barra = document.getElementById('mini-sesion');
   const s = E.plan ? estadoHoy() : null;
-  const ver = Boolean(s?.enCurso && s.dia) && vista !== 'hoy' && vista !== 'inicio';
+  // No en la sesión ni encima de ella (el selector de ejercicios), donde no hay pestañas.
+  const ver = Boolean(s?.enCurso && s.dia) && vista !== 'hoy' && vista !== 'inicio' && !document.body.classList.contains('en-sesion');
   clearInterval(reloj); reloj = null;
   document.body.classList.toggle('con-mini-sesion', ver);
   if (!ver) { barra?.remove(); return; }
