@@ -41,7 +41,7 @@ function pruebaHtml() {
 export function vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel = null }) {
   const estadoMas = estadoVistaMas();
   $('app').innerHTML = `<div id="vista-mas">
-    <h1>Más</h1>
+    <h1>Perfil</h1>
     <section class="tarjeta" data-mas-panel="banco"><h3>Banco de ejercicios</h3><p class="pequeno suave">Busca por nombre, músculo o equipo, revisa la técnica y agrega ejercicios a hoy.</p><button type="button" class="boton" id="abrir-banco">Explorar ejercicios</button></section>
     ${CONFIG.modoPrueba ? pruebaHtml() : ''}
     ${E.tableroOrigen?.datos ? '<section class="tarjeta"><h3>Tu tablero original</h3><p class="pequeno suave">Consulta el calendario, las series y las indicaciones de tu copia del tablero.</p><button type="button" class="boton" id="ver-tablero-original">Abrir tablero original</button></section>' : ''}

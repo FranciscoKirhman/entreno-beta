@@ -57,6 +57,7 @@ import { IMAGENES } from './comun.js';
 import { elegirCardio } from './cardio-ui.js';
 import { CARDIOS, registroCardio } from '../nucleo/cardio.js';
 import { hayImagen, srcMiniatura } from './imagenes.js';
+import { abrirAjustesSesion, ajuste } from './ajustes-sesion.js';
 
 
 const app = () => $('app');
@@ -69,28 +70,19 @@ export function vistaHoy(ir, extra) {
   const dia = sesionDe(plan, f);
   if (dia) { ponerAproximaciones(dia, f); completarInicio(dia, f); }
   const b = E.bienestar[f];
-  const sups = checklist(E.suplementos, E.tomas, f, ahora());
   const proxima = plan.dias.find(d => d.fecha > f);
   // Lo registrado (en la app o importado de Hevy) dice qué sesión del plan se hizo y qué quedó pendiente.
   const reg = estadoDelPlan(plan, E.sesiones, { hoy: f, marcas: E.marcasPlan || {} });
   const hechaEnHevy = Boolean(dia) && !dia.libre && dia.foco !== 'Sesión libre' && reg.hoy.de === f && Boolean(reg.porDia.get(f)?.sesion?.origen);
-  app().innerHTML = `<div id="vista-hoy">
-    ${dia && !hechaEnHevy ? solapaHtml(dia) : ''}
-    ${dia && pasosAbierta?.fecha === f ? pantallaPasosHtml(dia, f) : ''}
-    <span class="sobretitulo">${esc(new Date(f + 'T12:00:00Z').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }))}</span>
-    <h1>${dia && !hechaEnHevy ? esc(dia.foco) : 'Hoy'}</h1>
+  // La sesión es una pantalla aparte, como en Hevy: sin sesión para hoy (descanso) o ya registrada en Hevy, Entrenar.
+  if (!dia || (hechaEnHevy && !extra?.sesion && !enCurso(f))) return ir('entrenar');
+  document.body.classList.add('en-sesion');
+  app().innerHTML = `<div id="vista-hoy" class="pantalla-sesion">
+    ${cabSesionHtml(dia)}
+    ${pasosAbierta?.fecha === f ? pantallaPasosHtml(dia, f) : ''}
+    ${hechaEnHevy ? registradoHoyHtml(reg, dia, f, proxima) : ''}
     ${bienestarHtml(f, b, dia)}
-    ${dia ? (hechaEnHevy ? `${registradoHoyHtml(reg, dia, f, proxima)}<details class="extra plan-hecho" id="plan-hecho"${planHechoAbierto ? ' open' : ''}><summary>La sesión del plan, por si quieres anotar algo aquí</summary>${sesionHoy(dia)}</details>` : sesionHoy(dia)) : descansoHtml(proxima)}
-    <div class="banco-acceso"><button type="button" class="boton" id="sesion-vacia-hoy">Empezar sesión vacía</button><button type="button" class="boton" id="agregar-ejercicio-hoy">Agregar ejercicio desde el banco</button><button type="button" class="boton" data-elegir-cardio>Elegir cardio</button></div>
-    ${!hechaEnHevy ? registradoHoyHtml(reg, dia, f, proxima) : ''}
-    <div class="despues-de-entrenar">
-      ${D().mensaje_alerta ? `<div class="aviso ojo">${esc(D().mensaje_alerta)}</div>` : ''}
-      ${avisoCheckin()}
-      ${avisoDescargaCorto()}
-      ${avisoSinRegistro(f)}
-      ${sups.length ? `<section class="tarjeta"><h3>Suplementos</h3><ul class="lista-check">${sups.map(s => `<li class="${s.estado}"><button type="button" class="check" data-toma="${s.suplemento_id}" ${s.estado === 'tomada' ? 'disabled aria-pressed="true"' : 'aria-pressed="false"'} aria-label="Marcar ${esc(s.nombre)} como tomado">${s.estado === 'tomada' ? '✓' : ''}</button><span>${esc(s.nombre)}${s.dosis ? ` · ${esc(s.dosis)}` : ''}</span><span class="suave pequeno">${s.hora || ''}${s.estado === 'atrasada' ? ' · atrasado' : ''}</span></li>`).join('')}</ul></section>` : ''}
-    </div>
-
+    ${sesionHoy(dia)}
   </div>`;
   aplicarTamanoTexto();
   enlazar(ir, dia);
@@ -318,11 +310,13 @@ function ponerAproximaciones(dia, f) {
   });
   if (cambio) guardar();
 }
-const descansoDe = (e, k) => E.descansos?.[idDe(e, k)] ?? e.descanso_seg ?? 90;
+const descansoDe = (e, k) => E.descansos?.[idDe(e, k)] ?? e.descanso_seg ?? ajuste('descanso');
 /** Descanso de la vuelta de una superserie: el que eligió en el último ejercicio o, si no, el más largo del plan. */
-const descansoVuelta = (ejs, g) => { const u = ejs[g.miembros.at(-1)]; return E.descansos?.[idDe(u, g.miembros.at(-1))] ?? Math.max(...g.miembros.map(m => ejs[m].descanso_seg ?? 90)); };
+const descansoVuelta = (ejs, g) => { const u = ejs[g.miembros.at(-1)]; return E.descansos?.[idDe(u, g.miembros.at(-1))] ?? Math.max(...g.miembros.map(m => ejs[m].descanso_seg ?? ajuste('descanso'))); };
 const nombreDe = e => e.nombre || indice.porId.get(e.ejercicio_id)?.nombre || '';
 const mmss = seg => (seg ? `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')}` : 'sin descanso');
+/** 150 → "2 min 30 s", como la línea de descanso de Hevy. */
+const largo = seg => [Math.floor(seg / 60) && `${Math.floor(seg / 60)} min`, seg % 60 && `${seg % 60} s`].filter(Boolean).join(' ');
 const DESCANSOS = [0, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300];
 
 // Paneles abiertos ("Cómo te fue"): siguen abiertos aunque la vista se vuelva a dibujar.
@@ -415,8 +409,9 @@ function filaPasosHtml(dia, f, tipo) {
   }
   const s = estadoPasos(pasos, tipo, f);
   const medidas = E.pasosMedidas?.[f]?.[tipo] || {};
-  return `<section class="tarjeta pasos-tabla" aria-label="${NOMBRE_PASOS[tipo]}">
-    <div class="cab-tarjeta"><h3>${NOMBRE_PASOS[tipo]}</h3><span class="pequeno suave">${s.n} de ${pasos.length} hechos</span></div>
+  // Plegado en una línea, como pidió Francisco (docs/32, D6): se abre al tocarlo y sigue abierto al repintar.
+  return `<details class="tarjeta pasos-tabla" data-panel="pasos-${tipo}" aria-label="${NOMBRE_PASOS[tipo]}"${abiertos.has(`pasos-${tipo}`) ? ' open' : ''}>
+    <summary class="cab-tarjeta"><h3>${icono(tipo === 'cal' ? 'fuego' : 'persona', 'icono icono-pasos')} ${NOMBRE_PASOS[tipo]}</h3><span class="pequeno suave">${s.completo ? 'Hecho ✓' : `${s.n} de ${pasos.length} hechos`}</span></summary>
     <p class="pequeno suave">${tipo === 'cal' ? 'Las aproximaciones están como filas C en cada ejercicio.' : 'Opcional al terminar. Anota segundos, repeticiones o minutos según lo previsto.'}</p>
     <div class="pasos-tabla-cab" aria-hidden="true"><span>Movimiento y previsto</span><span>Realizado</span><span>Hecho</span></div>
     ${pasos.map((p, i) => { const parte = partePaso(p.name), clave = p.clave || `${i}|${p.name}`;
@@ -426,7 +421,7 @@ function filaPasosHtml(dia, f, tipo) {
         <button type="button" class="boton-icono paso-tabla-hecho" data-paso-tabla="${tipo}" data-paso-indice="${i}" aria-pressed="${s.hechos[i]}" aria-label="${esc(`${s.hechos[i] ? 'Desmarcar' : 'Marcar'} ${parte.nombre} como hecho`)}">${s.hechos[i] ? icono('visto') : '○'}</button>
       </div>`; }).join('')}
     <p class="pequeno suave">Marcar hecho confirma el movimiento. El valor realizado queda sin medir si no lo anotas.</p>
-  </section>`;
+  </details>`;
 }
 
 /** La pantalla paso a paso: arriba Minimizar, el título y Saltar; el avance (cada paso se puede tocar); el paso con su
@@ -516,16 +511,27 @@ function siguienteSerieHtml(dia, f) {
   </div>`;
 }
 
-/** La solapa de arriba con la sesión en curso, como Hevy: cuánto lleva, cuánto levantó y Terminar. */
-function solapaHtml(dia) {
-  const f = dia.fecha;
-  if (!enCurso(f)) return '';
-  return `<div class="solapa-sesion" id="solapa">
-    <span class="solapa-foco">${esc(dia.foco)}<small>${avance(dia).hechas} de ${avance(dia).total} series</small></span>
-    <span class="solapa-cifras"><span class="solapa-dato num" role="timer" aria-label="Tiempo de la sesión" id="solapa-tiempo" data-fecha="${f}">${transcurrido(f)}</span>
-    <span class="solapa-dato num" aria-label="Volumen levantado">${esc(volumenTexto(avance(dia).cifras.volumen))}</span></span>
-    <button type="button" class="solapa-terminar" data-terminar>Terminar</button>
-  </div>`;
+/** Arriba de la sesión, como Hevy: minimizar, el nombre, el temporizador y Terminar (o Empezar); debajo, duración,
+ *  volumen y series, y una línea que se llena con las series hechas. */
+function cabSesionHtml(dia) {
+  const f = dia.fecha, a = avance(dia), corriendo = enCurso(f), guardada = guardadaHoy(f);
+  const accion = corriendo ? '<button type="button" class="cab-sesion-principal" data-terminar>Terminar</button>'
+    : guardada ? '<button type="button" class="cab-sesion-principal" data-terminar>Guardar</button>'
+    : '<button type="button" class="cab-sesion-principal" data-empezar>Empezar</button>';
+  return `<header class="cab-sesion" id="solapa">
+    <div class="cab-sesion-fila">
+      <button type="button" class="cab-sesion-boton" data-minimizar aria-label="${corriendo ? 'Minimizar la sesión' : 'Volver a Entrenar'}">${icono('flecha', 'icono icono-abajo')}</button>
+      <h1 class="cab-sesion-titulo">${esc(dia.foco)}</h1>
+      <button type="button" class="cab-sesion-boton" data-temporizador aria-label="Temporizador">${icono('reloj')}</button>
+      ${accion}
+    </div>
+    <div class="cab-sesion-cifras">
+      <span><small>Duración</small><strong class="num"${corriendo ? ` role="timer" id="solapa-tiempo" data-fecha="${f}"` : ''}>${corriendo ? transcurrido(f) : guardada ? `${E.sesiones.find(s => s.fecha === f && !s.origen)?.duracion_min ?? 0} min` : '0:00'}</strong></span>
+      <span><small>Volumen</small><strong class="num">${esc(volumenTexto(a.cifras.volumen))}</strong></span>
+      <span><small>Series</small><strong class="num">${a.hechas} de ${a.total}</strong></span>
+    </div>
+    <div class="avance cab-avance" id="avance" aria-hidden="true"><div class="medidor"><i style="width:${a.total ? Math.round((a.hechas / a.total) * 100) : 0}%"></i></div></div>
+  </header>`;
 }
 function transcurrido(f) {
   const seg = Math.max(0, Math.floor((Date.now() - (inicioDe(f) || Date.now())) / 1000));
@@ -605,7 +611,7 @@ function sesionHoy(dia) {
   const todas = seriesAnotadas(E.sesiones, E.registro);
   return `<section class="sesion-cab compacta" aria-label="Sesión de hoy">
     <div class="sesion-controles">
-      ${dia.ejercicios.length ? (enCurso(f) ? '' : avanceHtml(progreso)) : '<p class="pequeno suave">Sesión vacía. Agrega tu primer ejercicio desde el banco, al final de la lista.</p>'}
+      ${dia.ejercicios.length ? '' : '<p class="pequeno suave">Sesión vacía. Agrega tu primer ejercicio con el botón de abajo.</p>'}
       <button type="button" class="boton chico" id="ajustar-hoy">${icono('ajustes')} Ajustar hoy</button>
       <button type="button" class="boton-icono" id="ver-detalles-sesion" aria-label="Detalles de la sesión">${icono('info')}</button>
     </div>
@@ -615,9 +621,15 @@ function sesionHoy(dia) {
   ${cardioHtml(dia.cardio)}
   ${filaPasosHtml(dia, f, 'est')}
   ${progreso.total && progreso.hechas === progreso.total ? sesionCompletaHtml({ guardada }) : ''}
-  <div class="acciones-sesion">${enCurso(f) || guardada
-    ? `<button type="button" class="boton primario grande" id="terminar" data-terminar>${guardada ? 'Guardar de nuevo' : 'Terminar sesión'}</button>`
-    : '<button type="button" class="boton primario grande" id="empezar">Empezar entrenamiento</button>'}</div>
+  <div class="fin-sesion">
+    <button type="button" class="boton agregar-ejercicio" id="agregar-ejercicio-hoy">${icono('mas')} Agregar ejercicio</button>
+    ${enCurso(f) || guardada ? `<button type="button" class="boton primario grande" id="terminar" data-terminar>${guardada ? 'Guardar de nuevo' : 'Terminar sesión'}</button>` : ''}
+    <div class="fila-fin-sesion">
+      <button type="button" class="boton" id="ajustes-sesion">${icono('ajustes')} Ajustes</button>
+      ${enCurso(f) ? '<button type="button" class="boton peligro" id="descartar-sesion">Descartar sesión</button>' : ''}
+    </div>
+  </div>
+  ${enCurso(f) || guardada ? '' : '<div class="acciones-sesion"><button type="button" class="boton primario grande" id="empezar" data-empezar>Empezar entrenamiento</button></div>'}
 `;
 }
 
@@ -643,11 +655,14 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
   const u = unidadPeso();
   const seg = e.unidad === 'seg';
   const dist = e.unidad === 'm'; // peso y distancia, como la caminata del granjero
+  const conEsfuerzo = ajuste('esfuerzo'); // la columna RPE o RIR se puede ocultar en Ajustes de la sesión
   // Qué es el peso anotado: la ayuda de la máquina (asistidos) o lo que se agrega al cuerpo (lastre).
   const ejCat = indice.porId.get(e.ejercicio_id);
   const queEs = esAsistido(ejCat) ? 'ayuda' : conLastre(ejCat) ? 'lastre' : '';
   let iTrabajo = 0; // posición entre las series de trabajo, para mostrar lo de la vez anterior
   let kgHoy = null; // el último peso escrito hoy en una serie de trabajo: pasa a ser el gris de las siguientes
+  // El consejo del entrenador va solo bajo la última serie de trabajo hecha: las anteriores ya se leyeron.
+  const ultimaHecha = filas.reduce((u, x, j) => (x.hecho && deTrabajo(tipoDe(x)) ? j : u), -1);
   const filasHtml = filas.map((r, i) => {
     const t = tipoDe(r);
     const trabajo = deTrabajo(t);
@@ -661,31 +676,34 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     const antes = prev ? (seg ? ((prev.duracion_seg ?? prev.reps) != null ? `${prev.duracion_seg ?? prev.reps} s` : '')
       : dist ? `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.distancia_m != null ? `${prev.distancia_m} m` : ''}`
       : `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.reps ?? ''}`) : '';
-    return `<div class="serie-contenedor"><button type="button" class="quitar-serie" data-quitar-serie="${id}" data-i="${i}" aria-label="Quitar la serie ${etiq[i]} de ${esc(e.nombre || ej?.nombre || id)}" tabindex="-1" hidden>Quitar</button><div class="serie tipo-${t}${r.hecho ? ' hecha' : ''}${seg ? ' seg' : dist ? ' dist' : ''}">
-      <button type="button" class="tipo-serie" data-tipo-serie="${id}" data-i="${i}" aria-label="Serie ${etiq[i]}, ${TIPOS_SERIE[t].nombre.toLowerCase()}. Cambiar el tipo">${etiq[i]}</button>
-      <span class="antes num">${esc(antes)}</span>
+    // Como en Hevy, tocar lo de la vez anterior lo copia a la fila (sin marcarla).
+    const copiar = prev && !r.hecho && antes ? ` data-copiar="${id}" data-i="${i}" data-kg="${prev.carga_kg ?? ''}" data-reps="${seg ? prev.duracion_seg ?? prev.reps ?? '' : dist ? prev.distancia_m ?? '' : prev.reps ?? ''}"` : '';
+    return `<div class="serie-contenedor"><button type="button" class="quitar-serie" data-quitar-serie="${id}" data-i="${i}" aria-label="Quitar la serie ${etiq[i]} de ${esc(e.nombre || ej?.nombre || id)}" tabindex="-1" hidden>Quitar</button><div class="serie tipo-${t}${r.hecho ? ' hecha' : ''}${seg ? ' seg' : dist ? ' dist' : !conEsfuerzo ? ' sin-esfuerzo' : ''}${r.record?.length && r.hecho ? ' con-record' : ''}">
+      <button type="button" class="tipo-serie" data-tipo-serie="${id}" data-i="${i}" aria-label="Serie ${etiq[i]}, ${TIPOS_SERIE[t].nombre.toLowerCase()}${r.record?.length && r.hecho ? ', récord' : ''}. Cambiar el tipo">${etiq[i]}${r.record?.length && r.hecho ? icono('trofeo', 'icono trofeo-serie') : ''}</button>
+      ${copiar ? `<button type="button" class="antes num"${copiar} aria-label="${esc(`La vez anterior: ${antes}. Copiar a la serie ${etiq[i]}`)}">${esc(antes)}</button>` : `<span class="antes num">${esc(antes)}</span>`}
       ${seg ? '' : `<input type="text" inputmode="decimal" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="kg" value="${esc(coma(enUnidad(r.kg)))}" placeholder="${esc(coma(enUnidad(kgGris)))}" aria-label="${u === 'lb' ? 'Libras' : 'Kilos'}${queEs ? ` de ${queEs}` : ''}, serie ${etiq[i]}">`}
       <input type="text" inputmode="numeric" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="reps" value="${esc(r.reps ?? '')}" placeholder="${esc(repsGris ?? '')}" aria-label="${seg ? 'Segundos' : dist ? 'Metros' : 'Repeticiones'}, serie ${etiq[i]}">
-      ${seg ? (r.hecho ? '<span aria-hidden="true"></span>' : `<button type="button" class="crono-serie" data-crono="${id}" data-i="${i}" aria-label="Contar los segundos de la serie ${etiq[i]}">${icono('reloj', 'icono')}</button>`) : dist ? '' : trabajo ? cajaEsfuerzo(id, i, r, e, etiq[i]) : '<span aria-hidden="true"></span>'}
+      ${seg ? (r.hecho ? '<span aria-hidden="true"></span>' : `<button type="button" class="crono-serie" data-crono="${id}" data-i="${i}" aria-label="Contar los segundos de la serie ${etiq[i]}">${icono('reloj', 'icono')}</button>`) : dist || !conEsfuerzo ? '' : trabajo ? cajaEsfuerzo(id, i, r, e, etiq[i]) : '<span aria-hidden="true"></span>'}
       <button type="button" class="check" data-hecho="${id}" data-i="${i}" aria-pressed="${Boolean(r.hecho)}" aria-label="Serie ${etiq[i]} hecha">${r.hecho ? icono('visto', 'visto-serie') : ''}</button>
-      ${(r.consejo || r.record?.length) && trabajo ? `<p class="consejo ${r.consejo?.tipo || 'bien'}">${r.record?.length ? '<span class="chip-record">Récord</span> ' : ''}${esc(r.consejo?.texto || '')}</p>` : ''}</div></div>`;
+      ${r.consejo?.texto && trabajo && i === ultimaHecha ? `<p class="consejo ${r.consejo?.tipo || 'bien'}">${esc(r.consejo.texto)}</p>` : ''}</div></div>`;
   }).join('');
   // En una superserie, el descanso va al terminar la vuelta (se elige en el último ejercicio).
   const desc = g ? descansoVuelta(dia.ejercicios, g) : descansoDe(e, k);
-  const descTexto = g && g.pos < g.total ? 'sin descanso, sigue la superserie' : `descanso ${mmss(desc)}`;
+  const descTexto = g && g.pos < g.total ? 'Sin descanso, sigue la superserie' : `Descanso: ${desc ? largo(desc) : 'apagado'}`;
   const nombre = e.nombre || ej?.nombre || id;
   return `<li class="ej tarjeta${g ? ` en-superserie ss-${g.letra}${g.pos === 1 ? ' ss-inicio' : ''}${g.pos === g.total ? ' ss-fin' : ''}` : ''}" id="ej-${id}"${g ? ` aria-label="${esc(nombre)}, superserie ${g.letra}, ejercicio ${g.pos} de ${g.total}"` : ''}>
     <div class="ej-cab">
       ${ej ? `<button type="button" class="ej-abrir" data-ficha="${e.ejercicio_id}" aria-label="${esc(nombre)}: cómo se hace y por qué">${miniatura(e.ejercicio_id)}</button>` : `<span class="miniatura vacia"></span>`}
       <div class="ej-textos"><span class="nombre">${g ? `<span class="chip-ss">${etiquetaSuperserie(g)}</span>` : ''}${esc(nombre)}</span>
-        <span class="ej-sub num">${esc(`${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${sufijo(e)}${dist ? '' : ` · RIR ${e.rir}`}${e.carga_kg ? ` · ${peso(e.carga_kg)}${queEs ? ` de ${queEs}` : ''}` : ''} · ${descTexto}`)}</span>
+        <span class="ej-sub num">${esc(`${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${sufijo(e)}${dist ? '' : ` · RIR ${e.rir}`}${queEs && e.carga_kg ? ` · ${peso(e.carga_kg)} de ${queEs}` : ''}`)}</span>
         ${ej ? '' : '<span class="chip">Indicado por tu profesional</span>'}
         ${ej && E.notasFijas?.[e.ejercicio_id] ? `<button type="button" class="nota-fija" data-nota-fija="${id}" aria-label="Nota fija: ${esc(E.notasFijas[e.ejercicio_id])}. Editar">${icono('lapiz', 'icono icono-chico')}<span>${esc(E.notasFijas[e.ejercicio_id])}</span></button>` : ''}</div>
-      <button type="button" class="boton-icono" data-mas="${id}" aria-label="Más opciones de ${esc(nombre)}">${icono('puntos')}</button>
+      <button type="button" class="boton-icono menu-ej" data-mas="${id}" aria-label="Más opciones de ${esc(nombre)}">${icono('puntos')}</button>
     </div>
     <textarea class="nota-ej" rows="1" data-nota="${id}" data-p="nota" data-visible placeholder="Nota para tu entrenador" aria-label="Nota para tu entrenador sobre ${esc(nombre)}">${esc(nota.nota || '')}</textarea>
-    <div class="tabla-series${seg ? ' seg' : dist ? ' dist' : ''}">
-      <div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${queEs || u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : dist ? 'Metros' : 'Reps'}</span>${seg ? '<span aria-hidden="true"></span>' : dist ? '' : `<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el ${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}">${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}</button>`}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>
+    ${g && g.pos < g.total ? `<p class="linea-descanso sin-toque">${icono('reloj')} ${esc(descTexto)}</p>` : `<button type="button" class="linea-descanso" data-descanso-ej="${id}">${icono('reloj')} ${esc(descTexto)}</button>`}
+    <div class="tabla-series${seg ? ' seg' : dist ? ' dist' : !conEsfuerzo ? ' sin-esfuerzo' : ''}">
+      <div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${queEs || u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : dist ? 'Metros' : 'Reps'}</span>${seg ? '<span aria-hidden="true"></span>' : dist || !conEsfuerzo ? '' : `<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el ${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}">${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}</button>`}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>
       ${filasHtml}
     </div>
     <div class="fila-agregar"><button type="button" class="boton agregar-serie" data-agregar="${id}">+ Agregar serie</button></div>
@@ -754,9 +772,6 @@ function enlazar(ir, dia) {
   });
   document.querySelectorAll('[data-ir-checkin]').forEach(b => b.onclick = () => ir('checkin', b.dataset.irCheckin));
   document.querySelectorAll('[data-ir-semana]').forEach(b => b.onclick = () => ir('semana'));
-  $('entrenar-igual')?.addEventListener('click', () => ir('coach', 'Hoy no tenía sesión pero quiero entrenar, ¿qué otra opción tienes?'));
-  const empezarVacia = volver => proponerSesionVacia({ volver, alCambiar: () => ir('hoy') });
-  $('sesion-vacia-hoy')?.addEventListener('click', ev => empezarVacia(ev.currentTarget));
   $('agregar-ejercicio-hoy')?.addEventListener('click', () => ir('banco', { desde: 'hoy' }));
   document.querySelectorAll('[data-elegir-cardio]').forEach(b => b.onclick = () => elegirCardio({ volver: b, alCambiar: () => vistaHoy(ir) }));
   if (!dia) return;
@@ -999,15 +1014,34 @@ function enlazar(ir, dia) {
   };
   raiz.querySelectorAll('[data-agregar]').forEach(b => b.onclick = () => agregarFila(b.dataset.agregar, false));
 
-  // Empezar: parte el tiempo de la solapa y, si hay calentamiento pendiente, abre su pantalla.
-  $('empezar')?.addEventListener('click', () => {
+  // Empezar (arriba o abajo): parte el tiempo de la sesión.
+  raiz.querySelectorAll('[data-empezar]').forEach(b => b.onclick = () => {
     empezarSesion(f);
     pasosAbierta = null;
     guardar(); repintar();
     actualizarPantalla();
-    if (pasosAbierta) $('pasos-titulo')?.focus({ preventScroll: true });
-    else document.querySelector('.pasos-tabla, #vista-hoy .ej [data-hecho]')?.closest('.ej')?.scrollIntoView({ block: 'start', behavior: sinMovimiento() ? 'auto' : 'smooth' });
+    document.querySelector('.pasos-tabla, #vista-hoy .ej [data-hecho]')?.closest('.pasos-tabla, .ej')?.scrollIntoView({ block: 'start', behavior: sinMovimiento() ? 'auto' : 'smooth' });
   });
+  // Minimizar, como la flecha de Hevy: la sesión sigue corriendo y queda una barra sobre las pestañas.
+  raiz.querySelector('[data-minimizar]')?.addEventListener('click', () => ir('entrenar'));
+  // El reloj de arriba: un temporizador suelto, aparte del descanso automático.
+  raiz.querySelector('[data-temporizador]')?.addEventListener('click', ev => abrirHoja({
+    titulo: 'Temporizador', volver: ev.currentTarget, nota: 'Corre abajo, como el descanso. Puedes sumar o restar 15 segundos.',
+    opciones: [30, 60, 90, 120, 180, 300].map(x => ({ valor: String(x), icono: icono('reloj'), nombre: largo(x) })),
+    alElegir: x => iniciarDescanso(Number(x), 'Temporizador'),
+  }));
+  // La línea "Descanso" de cada ejercicio abre su selector, como en Hevy.
+  raiz.querySelectorAll('[data-descanso-ej]').forEach(b => b.onclick = () => abrirDescanso(b.dataset.descansoEj, b));
+  // Tocar lo de la vez anterior lo copia a la fila.
+  raiz.querySelectorAll('[data-copiar]').forEach(b => b.onclick = () => {
+    const { e, k } = ejercicioDe(b.dataset.copiar), { lista } = materializar(f, e, k), i = Number(b.dataset.i);
+    const kg = b.dataset.kg === '' ? null : Number(b.dataset.kg), reps = b.dataset.reps === '' ? null : Number(b.dataset.reps);
+    lista[i] = { ...lista[i], ...(kg != null && e.unidad !== 'seg' ? { kg } : {}), ...(reps != null ? { reps } : {}) };
+    guardar(); repintar();
+    document.querySelector(`#vista-hoy [data-hecho="${CSS.escape(b.dataset.copiar)}"][data-i="${i}"]`)?.focus({ preventScroll: true });
+  });
+  $('ajustes-sesion')?.addEventListener('click', ev => abrirAjustesSesion(ev.currentTarget, { ir, alCambiar: repintar }));
+  $('descartar-sesion')?.addEventListener('click', ev => descartarSesion({ volver: ev.currentTarget, alDescartar: () => ir('entrenar') }));
 
   // Calentamiento y estiramiento: su fila (o la barra de abajo) abre la pantalla paso a paso.
   const abrirPasos = tipo => {
@@ -1138,6 +1172,7 @@ function enlazar(ir, dia) {
     lista[i] = r;
     guardar();
     // Descanso hasta la serie siguiente (sin descanso antes de un drop set); con la última de la sesión, guardarla.
+    let siguienteSS = null;
     const a = avance(dia);
     if (r.hecho && a.hechas === a.total) { detenerDescanso(); avisar('¡Sesión completa! Toca "Terminar sesión" para guardarla.'); }
     else if (r.hecho) {
@@ -1151,7 +1186,7 @@ function enlazar(ir, dia) {
         const sig = despuesDeSerie(dia.ejercicios, k, pendientes);
         const quien = j => `${etiquetaSuperserie(g[j])} ${nombreDe(dia.ejercicios[j])}`;
         const vuelta = descansoVuelta(dia.ejercicios, g[k]);
-        if (!sig.descansar) { detenerDescanso(); avisar(`Superserie: sigue con ${quien(sig.siguiente)}, sin descanso.`); }
+        if (!sig.descansar) { detenerDescanso(); avisar(`Superserie: sigue con ${quien(sig.siguiente)}, sin descanso.`); siguienteSS = sig.siguiente; }
         else if (vuelta) {
           document.getElementById('aviso-flotante')?.classList.remove('visible');
           iniciarDescanso(vuelta, sig.siguiente != null ? `Descanso · vuelve a ${etiquetaSuperserie(g[sig.siguiente])}` : 'Descanso · sigue otro ejercicio');
@@ -1161,7 +1196,9 @@ function enlazar(ir, dia) {
     const anchoAntes = document.querySelector('#avance .medidor i')?.style.width || '0%';
     repintar();
     if (r.hecho) serieRecienMarcada(id, i, anchoAntes);
-    if (recs.length) mostrarMedalla(recs, nombreDe(e));
+    if (recs.length && ajuste('avisoRecord')) mostrarMedalla(recs, nombreDe(e));
+    // Superserie, como el desplazamiento inteligente de Hevy: la pantalla baja sola al ejercicio que sigue.
+    if (siguienteSS != null && ajuste('superserieSigue')) requestAnimationFrame(() => document.getElementById(`ej-${idDe(dia.ejercicios[siguienteSS], siguienteSS)}`)?.scrollIntoView({ block: 'start', behavior: sinMovimiento() ? 'auto' : 'smooth' }));
   }
   raiz.querySelectorAll('[data-hecho]').forEach(b => b.onclick = () => marcarSerie(b.dataset.hecho, Number(b.dataset.i)));
 
@@ -1195,25 +1232,24 @@ function enlazar(ir, dia) {
     const { e, k } = ejercicioDe(id);
     const ej = indice.porId.get(e.ejercicio_id);
     const g = grupos(dia.ejercicios)[k];
-    // En una superserie, el descanso es el de la vuelta y se elige en el último ejercicio.
-    const idDescanso = g ? idDe(dia.ejercicios[g.miembros.at(-1)], g.miembros.at(-1)) : id;
     const desc = g ? descansoVuelta(dia.ejercicios, g) : descansoDe(e, k);
     const lesiones = (R().lesiones || []).filter(l => l.activa !== false).map(l => l.region);
+    // El orden del menú de Hevy (ordenar, reemplazar, superserie, quitar) y después lo propio de Entreno.
     abrirHoja({
       titulo: nombreDe(e), volver: b,
       opciones: [
+        ...(dia.ejercicios.length > 1 ? [{ valor: 'ordenar', icono: icono('ajustes'), nombre: 'Ordenar ejercicios' }] : []),
+        ...(ej ? [{ valor: 'cambiar', icono: icono('cambiar'), nombre: 'Reemplazar ejercicio' }] : []),
+        ...(ej ? [{ valor: 'superserie', icono: icono('cadena'), nombre: g ? `Superserie ${g.letra}: cambiar o sacar` : 'Agregar a superserie' }] : []),
+        { valor: 'quitar-hoy', icono: icono('basurero'), nombre: 'Quitar de esta sesión', peligro: true },
         ...(ej ? [{ valor: 'ficha', icono: icono('libro'), nombre: 'Cómo se hace y por qué' }] : []),
-        ...(ej ? [{ valor: 'cambiar', icono: icono('cambiar'), nombre: 'Cambiar este ejercicio' }] : []),
-        { valor: 'como', icono: icono('lapiz'), nombre: 'Cómo te fue' },
         { valor: 'calentar', icono: icono('fuego'), clase: 'tipo-calentamiento', nombre: 'Agregar series de calentamiento' },
-        ...(ej && ej.equipamiento.some(q => q === 'barra_rack' || q === 'smith') ? [{ valor: 'discos', icono: icono('pesa'), nombre: 'Calculadora de discos' }] : []),
         ...(ej ? [{ valor: 'nota-fija', icono: icono('lapiz'), nombre: E.notasFijas?.[e.ejercicio_id] ? 'Editar la nota fija' : 'Nota fija (aparece siempre)' }] : []),
         { valor: 'descanso', icono: icono('reloj'), nombre: `Descanso: ${mmss(desc)}${g ? ' (al terminar la vuelta)' : ''}` },
-        ...(ej ? [{ valor: 'superserie', icono: icono('cadena'), nombre: g ? `Superserie ${g.letra}` : 'Hacer superserie' }] : []),
+        ...(ej && ej.equipamiento.some(q => q === 'barra_rack' || q === 'smith') ? [{ valor: 'discos', icono: icono('pesa'), nombre: 'Calculadora de discos' }] : []),
+        { valor: 'como', icono: icono('lapiz'), nombre: 'Cómo te fue' },
         ...(ej && porReps(e) ? [{ valor: 'prioriza', icono: icono('objetivo'), nombre: 'Si no me salen las repeticiones' }] : []),
         ...(ej ? [{ valor: 'video', icono: icono('video'), nombre: 'Ver videos de técnica' }] : []),
-        ...(dia.ejercicios.length > 1 ? [{ valor: 'ordenar', icono: icono('ajustes'), nombre: 'Ordenar los ejercicios de hoy' }] : []),
-        { valor: 'quitar-hoy', icono: icono('cerrar'), nombre: 'Quitar de esta sesión', peligro: true },
         { valor: 'preguntar', icono: icono('chat'), nombre: `Preguntar a ${nombreAsistente()}` },
         ...(ej ? [{ valor: 'nunca', icono: icono('cerrar'), clase: 'quitar', nombre: 'No volver a hacer este ejercicio', peligro: true }] : []),
       ],
@@ -1231,15 +1267,24 @@ function enlazar(ir, dia) {
         else if (v === 'ordenar') ordenarSesion({ volver: b, alCambiar: repintar });
         else if (v === 'quitar-hoy') proponerEdicion({ tipo: 'quitar', ejercicio: id }, { volver: b, alCambiar: repintar });
         else if (v === 'nunca') noVolver(e, b);
-        else if (v === 'descanso') abrirHoja({
-          titulo: g ? `Descanso de la superserie ${g.letra}` : 'Descanso entre series', volver: b,
-          nota: g ? 'Se descansa al terminar la vuelta, no entre los ejercicios de la superserie.' : 'El cronómetro parte solo al marcar una serie.',
-          opciones: DESCANSOS.map(x => ({ valor: String(x), icono: x === desc ? icono('visto') : '', clase: 'confirmar', nombre: x ? mmss(x) : 'Sin descanso' })),
-          alElegir: x => { (E.descansos ||= {})[idDescanso] = Number(x); guardar(); repintar(); },
-        });
+        else if (v === 'descanso') abrirDescanso(id, b);
       },
     });
   });
+
+  // Descanso entre series de un ejercicio (en una superserie, el de la vuelta, que se guarda en el último ejercicio).
+  function abrirDescanso(id, b) {
+    const { e, k } = ejercicioDe(id);
+    const g = grupos(dia.ejercicios)[k];
+    const idDescanso = g ? idDe(dia.ejercicios[g.miembros.at(-1)], g.miembros.at(-1)) : id;
+    const desc = g ? descansoVuelta(dia.ejercicios, g) : descansoDe(e, k);
+    abrirHoja({
+      titulo: g ? `Descanso de la superserie ${g.letra}` : `Descanso: ${nombreDe(e)}`, volver: b,
+      nota: g ? 'Se descansa al terminar la vuelta, no entre los ejercicios de la superserie.' : 'El cronómetro parte solo al marcar una serie.',
+      opciones: DESCANSOS.map(x => ({ valor: String(x), icono: x === desc ? icono('visto') : '', clase: 'confirmar', nombre: x ? largo(x) : 'Apagado' })),
+      alElegir: x => { (E.descansos ||= {})[idDescanso] = Number(x); guardar(); repintar(); },
+    });
+  }
 
   // Nota fija, como Hevy: aparece cada vez que haces ese ejercicio (la altura del asiento, el agarre). Es del
   // ejercicio, no del día; la nota para el entrenador sigue siendo de cada sesión.
@@ -1357,7 +1402,7 @@ function enlazar(ir, dia) {
 
   // Terminar sesión (abajo o en la solapa): queda en el historial local y, con cuenta, en el servidor.
   let terminando = false;
-  const terminarSesion = async () => {
+  const terminarSesion = async ({ titulo = dia.foco, comentario = '' } = {}) => {
     if (terminando) return;
     const series = [], notas = [];
     let orden = 0;
@@ -1393,12 +1438,12 @@ function enlazar(ir, dia) {
     const hora = ahora().slice(11);
     // Lo que duró: desde "Empezar" (o la primera serie) hasta ahora.
     const minutos = anteriorGuardada ? anteriorGuardada.duracion_min : inicioDe(f) ? Math.max(1, Math.round((Date.now() - inicioDe(f)) / 6e4)) : avance(dia).cifras.minutos ?? (cardio ? Math.round(cardio.duracion_seg / 60) : null);
-    E.sesiones.push({ id, fecha: f, hora, titulo: dia.foco, duracion_min: minutos, series, notas });
+    E.sesiones.push({ id, fecha: f, hora, titulo, duracion_min: minutos, series, notas, ...(comentario ? { comentario } : {}) });
     E.mensaje = `Sesión guardada: ${series.length} serie${series.length === 1 ? '' : 's'}.`;
     detenerDescanso();
     guardar();
     if (nube.conectado()) {
-      const subio = await subirACuenta('sesion', id, { fecha: f, hora, titulo: dia.foco, duracion_min: minutos, series, notas });
+      const subio = await subirACuenta('sesion', id, { fecha: f, hora, titulo, duracion_min: minutos, series, notas, ...(comentario ? { comentario } : {}) });
       E.mensaje += subio ? ' También quedó en tu cuenta.' : ' Todavía no se pudo subir a tu cuenta: queda en este teléfono y se sube sola cuando vuelva la señal.';
       guardar();
     }
@@ -1406,8 +1451,80 @@ function enlazar(ir, dia) {
     pasosAbierta = null;
     ir('resumen', { id });
   };
-  raiz.querySelectorAll('[data-terminar]').forEach(b => b.onclick = terminarSesion);
+  // Terminar, como en Hevy: antes de guardar, una pantalla con el título, las cifras, cómo te fue y lo que no se marcó.
+  raiz.querySelectorAll('[data-terminar]').forEach(b => b.onclick = () => {
+    const a = avance(dia), anterior = E.sesiones.find(s => s.fecha === f && !s.origen);
+    const sinMarcar = a.total - a.hechas, cardioHecho = Boolean(registroCardio(dia.cardio, E.cardioHecho?.[f]));
+    if (!a.hechas && !cardioHecho) { avisar('Marca al menos una serie como hecha.'); return; }
+    const minutos = anterior ? anterior.duracion_min : inicioDe(f) ? Math.max(1, Math.round((Date.now() - inicioDe(f)) / 6e4)) : null;
+    const cuando = new Date(f + 'T12:00:00Z').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+    let titulo = anterior?.titulo || dia.foco, comentario = anterior?.comentario || '';
+    abrirHoja({
+      titulo: anterior ? 'Guardar de nuevo' : 'Guardar sesión', volver: b,
+      contenido: `<div class="guardar-sesion">
+        <label class="guardar-titulo"><span class="pequeno suave">Título</span><input type="text" id="guardar-titulo" maxlength="80" value="${esc(titulo)}"></label>
+        <div class="guardar-cifras">
+          <span><small>Duración</small><strong class="num">${minutos != null ? `${minutos} min` : 'sin medir'}</strong></span>
+          <span><small>Volumen</small><strong class="num">${esc(volumenTexto(a.cifras.volumen))}</strong></span>
+          <span><small>Series</small><strong class="num">${a.hechas}</strong></span>
+        </div>
+        <p class="pequeno suave guardar-cuando">${icono('calendario', 'icono icono-chico')} ${esc(mayuscula(cuando))}${inicioDe(f) ? `, desde las ${esc(new Date(inicioDe(f)).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }))}` : ''}</p>
+        <label class="guardar-nota"><span class="pequeno suave">¿Cómo te fue?</span><textarea id="guardar-comentario" rows="3" maxlength="500" placeholder="Deja una nota de la sesión">${esc(comentario)}</textarea></label>
+        ${sinMarcar > 0 ? `<p class="aviso ojo pequeno">${sinMarcar === 1 ? 'Queda 1 serie sin marcar: no se guarda.' : `Quedan ${sinMarcar} series sin marcar: no se guardan.`} Si las hiciste, vuelve y márcalas.</p>` : ''}
+      </div>`,
+      opciones: [
+        { valor: 'guardar', icono: icono('visto'), clase: 'confirmar', nombre: anterior ? 'Guardar de nuevo' : 'Guardar sesión' },
+        { valor: 'volver', icono: icono('flecha'), nombre: 'Volver a la sesión' },
+        ...(anterior ? [] : [{ valor: 'descartar', icono: icono('basurero'), clase: 'quitar', nombre: 'Descartar sesión', peligro: true }]),
+      ],
+      alElegir: v => {
+        if (v === 'guardar') terminarSesion({ titulo: titulo.trim() || dia.foco, comentario: comentario.trim() });
+        else if (v === 'descartar') descartarSesion({ volver: b, alDescartar: () => ir('entrenar') });
+      },
+    });
+    $('guardar-titulo')?.addEventListener('input', ev => { titulo = ev.target.value; });
+    $('guardar-comentario')?.addEventListener('input', ev => { comentario = ev.target.value; });
+  });
 }
+
+/** Descartar la sesión en curso, como en Hevy: borra lo anotado hoy (series, notas, pasos) después de confirmar.
+ *  Las sesiones ya guardadas y las importadas de Hevy no se tocan. */
+export function descartarSesion({ volver = null, alDescartar } = {}) {
+  const f = fechaSesionActiva(E, hoy());
+  abrirHoja({
+    titulo: '¿Descartar la sesión?', volver,
+    nota: 'Se borra lo que anotaste hoy en esta sesión: series, notas y pasos. No se puede deshacer.',
+    opciones: [{ valor: 'si', icono: icono('basurero'), clase: 'quitar', nombre: 'Sí, descartar', peligro: true }, { valor: 'no', icono: icono('flecha'), nombre: 'No, seguir entrenando' }],
+    alElegir: v => {
+      if (v !== 'si') return;
+      for (const k of ['inicioSesion', 'registro', 'filas', 'aproxPuestas', 'notas', 'pasos', 'pasosClaves', 'pasosSaltados', 'pasosMedidas', 'cardioHecho', 'retirados']) if (E[k]?.[f]) delete E[k][f];
+      detenerDescanso();
+      pasosAbierta = null;
+      guardar();
+      actualizarPantalla();
+      avisar('Sesión descartada.');
+      alDescartar?.();
+    },
+  });
+}
+
+/** Lo que hay que saber de hoy para la pestaña Entrenar (app/entrenar.js). */
+export function estadoHoy() {
+  const f = fechaSesionActiva(E, hoy());
+  const plan = E.plan, dia = plan ? sesionDe(plan, f) : null;
+  const reg = estadoDelPlan(plan, E.sesiones, { hoy: f, marcas: E.marcasPlan || {} });
+  const hechaEnHevy = Boolean(dia) && !dia.libre && dia.foco !== 'Sesión libre' && reg.hoy.de === f && Boolean(reg.porDia.get(f)?.sesion?.origen);
+  return { f, dia, reg, hechaEnHevy, proxima: plan?.dias.find(d => d.fecha > f), enCurso: enCurso(f), guardada: guardadaHoy(f),
+    avance: dia ? avance(dia) : null, inicio: inicioDe(f), registradoHtml: dia || reg.hoy.sesiones.length ? registradoHoyHtml(reg, dia, f, plan?.dias.find(d => d.fecha > f)) : '',
+    avisoSinRegistro: avisoSinRegistro(f) };
+}
+/** Empieza la sesión de hoy desde Entrenar (parte el tiempo y pide la pantalla encendida). */
+export function empezarHoy() {
+  const f = fechaSesionActiva(E, hoy());
+  if (empezarSesion(f)) guardar();
+  actualizarPantalla();
+}
+export { transcurrido };
 
 /** Vuelve a dibujar Hoy sin mover la pantalla ni perder el campo o el botón donde estaba el foco. */
 function vistaHoyMantener(ir) {

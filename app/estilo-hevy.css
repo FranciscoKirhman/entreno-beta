@@ -1,0 +1,214 @@
+/* Estilo Hevy con los colores de Entreno (docs/32-copiar-hevy.md). Va al final: ordena la sesión como Hevy (pantalla
+   aparte, filas planas alternadas, descanso abajo), el menú de pestañas de vidrio como iOS y la pestaña Entrenar. */
+
+/* ── Menú de pestañas de vidrio (Liquid Glass de iOS) ────────────────────────────────────────────── */
+:root{--vidrio:color-mix(in srgb,var(--surface) 42%,transparent);--vidrio-brillo:rgba(255,255,255,.55);--vidrio-borde:rgba(0,0,0,.08)}
+@media (prefers-color-scheme: dark){:root:not([data-tema="claro"]){--vidrio:color-mix(in srgb,var(--surface) 46%,transparent);--vidrio-brillo:rgba(255,255,255,.16);--vidrio-borde:rgba(255,255,255,.08)}}
+:root[data-tema="oscuro"]{--vidrio:color-mix(in srgb,var(--surface) 46%,transparent);--vidrio-brillo:rgba(255,255,255,.16);--vidrio-borde:rgba(255,255,255,.08)}
+.nav-inferior{grid-template-columns:repeat(4,1fr);left:20px;right:20px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);max-width:400px;padding:4px;border:0;border-radius:999px;
+  background:var(--vidrio) linear-gradient(180deg,color-mix(in srgb,var(--vidrio-brillo) 45%,transparent),transparent 60%);
+  -webkit-backdrop-filter:blur(12px) saturate(200%);backdrop-filter:blur(12px) saturate(200%);
+  box-shadow:inset 0 1px 0 var(--vidrio-brillo),inset 0 0 0 .5px var(--vidrio-borde),0 10px 30px rgba(0,0,0,.18),0 1px 3px rgba(0,0,0,.08)}
+.nav-inferior button{min-height:54px;border-radius:999px;color:var(--ink);font-size:10.5px;font-weight:600}
+.nav-inferior button[aria-current="true"]{color:var(--accent);background:color-mix(in srgb,var(--ink) 9%,transparent)}
+.nav-inferior svg circle.trazo{fill:none;stroke:currentColor}
+@media (prefers-reduced-motion:no-preference){.nav-inferior button{transition:background-color .2s,color .2s}}
+/* Durante la sesión no hay pestañas, como en Hevy. */
+body.en-sesion #nav{display:none!important}
+
+/* ── Cabecera de la sesión: minimizar, nombre, reloj y Terminar; debajo duración, volumen y series ── */
+.cab-sesion{position:sticky;top:0;z-index:8;margin:calc(-12px - env(safe-area-inset-top,0px)) -16px 6px;padding:calc(env(safe-area-inset-top,0px) + 8px) 12px 0;
+  background:color-mix(in srgb,var(--bg) 82%,transparent);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px)}
+body:has(.barra #modo:not([hidden])) .cab-sesion{top:calc(env(safe-area-inset-top,0px) + 38px);margin-top:0}
+.cab-sesion-fila{display:grid;grid-template-columns:40px minmax(0,1fr) 40px auto;align-items:center;gap:6px;min-height:44px}
+.cab-sesion-titulo,#vista-hoy .cab-sesion-titulo{margin:0;font:600 17px/1.2 var(--f-titulo);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cab-sesion-boton{display:grid;place-items:center;width:40px;height:40px;padding:0;border:0;border-radius:999px;background:transparent;color:var(--ink);cursor:pointer}
+.cab-sesion-boton .icono{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.cab-sesion-principal{min-height:36px;padding:0 16px;border:0;border-radius:999px;background:var(--accent);color:var(--accent-ink);font:600 15px/1 var(--f-texto);cursor:pointer}
+.cab-sesion-principal:active,.cab-sesion-boton:active{opacity:.7}
+.cab-sesion-cifras{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:6px 4px 8px}
+.cab-sesion-cifras span{display:flex;flex-direction:column;min-width:0}
+.cab-sesion-cifras small{font-size:12px;color:var(--ink-muted)}
+.cab-sesion-cifras strong{font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#vista-hoy .cab-sesion-cifras strong{font-size:var(--hoy15,16px)}
+.cab-avance{margin:0 -12px}
+.cab-avance .medidor{height:2px;border-radius:0;background:var(--line);overflow:hidden}
+.cab-avance .medidor i{display:block;height:100%;background:var(--good);transition:width .25s}
+.solapa-sesion{display:none}
+
+/* Calentamiento y estiramiento plegados en una línea. */
+#vista-hoy details.pasos-tabla{padding:0 14px;margin:6px 0}
+#vista-hoy details.pasos-tabla > summary{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:48px;list-style:none;cursor:pointer}
+#vista-hoy details.pasos-tabla > summary::-webkit-details-marker{display:none}
+#vista-hoy details.pasos-tabla > summary h3{display:flex;align-items:center;gap:8px;margin:0;font-size:var(--hoy15,15px)}
+#vista-hoy details.pasos-tabla[open]{padding-bottom:12px}
+.icono-pasos{width:18px;height:18px;fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#vista-hoy .bienestar-caja > summary{justify-content:space-between;text-align:left}
+
+/* Controles de arriba, chicos: "¿Cómo estás hoy?" y "Ajustar hoy" en una línea cada uno. */
+#vista-hoy .bienestar-caja{margin:6px 0;padding:0}
+#vista-hoy .bienestar-caja > summary{padding:10px 14px;min-height:48px}
+#vista-hoy .bienestar-titulo{font-size:var(--hoy15,15px);font-weight:600}
+#vista-hoy .sesion-cab.compacta{margin:4px 0 8px}
+#vista-hoy .sesion-controles{justify-content:flex-end}
+
+/* ── Ejercicios sin tarjeta, como Hevy: miniatura redonda, nombre en color, ⋮ y la línea de descanso ── */
+#vista-hoy .ejercicios-hoy > li.ej.tarjeta{background:transparent;padding:0;margin:0 0 26px;border-radius:0;box-shadow:none}
+#vista-hoy .ej-cab{grid-template-columns:44px minmax(0,1fr) 40px;gap:10px}
+#vista-hoy .ej-cab .miniatura{width:44px;height:44px;border-radius:50%}
+#vista-hoy .ej-abrir{border-radius:50%}
+#vista-hoy .ej-textos .nombre{color:var(--accent)}
+#vista-hoy .menu-ej .icono{transform:rotate(90deg)}
+#vista-hoy .nota-ej,#vista-hoy textarea.nota-ej{display:block;width:100%;min-height:36px;margin:4px 0 0;padding:6px 0;font-size:var(--hoy15,15px);border:0;border-radius:0;background:transparent;box-shadow:none;resize:none;color:var(--ink)}
+#vista-hoy .nota-ej::placeholder{color:var(--ink-muted)}
+.linea-descanso{display:inline-flex;align-items:center;gap:6px;min-height:36px;margin:0 0 4px;padding:4px 0;border:0;background:none;color:var(--accent);font:600 15px/1.2 var(--f-texto);cursor:pointer}
+.linea-descanso .icono{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.linea-descanso.sin-toque{color:var(--ink-muted);cursor:default}
+#vista-hoy .ej-cab + .nota-fija,#vista-hoy .nota-fija{margin-top:4px}
+
+/* Superserie: barra de color a la izquierda de los ejercicios unidos. */
+#vista-hoy li.ej.en-superserie{position:relative;padding-left:12px!important}
+#vista-hoy li.ej.en-superserie::before{content:"";position:absolute;left:0;top:4px;bottom:4px;width:4px;border-radius:2px;background:var(--c-ss,var(--accent))}
+#vista-hoy li.ej.ss-A{--c-ss:#BF5AF2}#vista-hoy li.ej.ss-B{--c-ss:#32ADE6}#vista-hoy li.ej.ss-C{--c-ss:#FFB340}#vista-hoy li.ej.ss-D{--c-ss:#FF6482}
+#vista-hoy .chip-ss{background:var(--c-ss,var(--accent));color:#fff}
+
+/* ── Filas de series planas y alternadas ── */
+#vista-hoy .tabla-series{gap:0;margin-top:2px}
+#vista-hoy .cab-series,#vista-hoy .serie{grid-template-columns:40px minmax(0,1fr) 60px 50px 44px 42px;gap:4px}
+#vista-hoy .tabla-series.sin-esfuerzo .cab-series,#vista-hoy .serie.sin-esfuerzo{grid-template-columns:40px minmax(0,1fr) 66px 58px 42px}
+#vista-hoy .tabla-series.seg .cab-series,#vista-hoy .serie.seg{grid-template-columns:40px minmax(0,1fr) 72px 44px 42px}
+#vista-hoy .tabla-series.dist .cab-series,#vista-hoy .serie.dist{grid-template-columns:40px minmax(0,1fr) 60px 60px 42px}
+#vista-hoy .cab-series{min-height:30px;font-size:11px;letter-spacing:.02em;text-transform:uppercase}
+#vista-hoy .cab-series span,#vista-hoy .cab-rir{overflow:visible;text-overflow:clip;white-space:nowrap}
+#vista-hoy .serie-contenedor{border-radius:8px}
+#vista-hoy .serie{min-height:46px;padding:2px 0;background:transparent;border-radius:0}
+#vista-hoy .tabla-series > .serie-contenedor:nth-child(even of .serie-contenedor) .serie{background:var(--surface)}
+#vista-hoy .serie input{min-height:40px;padding:2px;border:0;border-radius:8px;background:transparent;box-shadow:none;font-weight:600}
+#vista-hoy .serie input:focus{background:var(--fill)}
+#vista-hoy .serie .tipo-serie{position:relative;background:transparent;font-weight:700}
+#vista-hoy .serie .caja-esfuerzo{background:transparent}
+#vista-hoy .serie .check{border:0;border-radius:8px;background:var(--fill);color:transparent;width:34px;height:34px;min-height:34px;justify-self:center}
+#vista-hoy .serie.hecha,#vista-hoy .tabla-series > .serie-contenedor .serie.hecha{background:color-mix(in srgb,var(--good) 22%,var(--bg))}
+#vista-hoy .serie.hecha .check{background:var(--good);color:#fff}
+#vista-hoy .serie.hecha .check .visto-serie{stroke:#fff}
+#vista-hoy .serie .antes{background:none;border:0;padding:0;color:var(--ink-muted);font:inherit;font-size:13px;cursor:default}
+#vista-hoy button.antes{cursor:pointer}
+#vista-hoy button.antes:active{color:var(--accent)}
+/* Tipos de serie con su color, como Hevy: C amarillo, F rojo, D morado. */
+#vista-hoy .tipo-calentamiento .tipo-serie{color:var(--warning)}
+#vista-hoy .tipo-fallo .tipo-serie{color:var(--critical)}
+#vista-hoy .tipo-drop .tipo-serie,.letra.tipo-drop{color:#AF52DE}
+/* Récord: un trofeo chico junto al número de la serie. */
+.trofeo-serie{position:absolute;top:2px;right:0;width:14px;height:14px;fill:none;stroke:#E8A400;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+/* El consejo del entrenador, una línea sin caja bajo la última serie hecha. */
+#vista-hoy .serie .consejo{grid-column:1 / -1;margin:0;padding:0 8px 6px 46px;background:none;font-size:var(--hoy13,13px);line-height:1.35}
+#vista-hoy .serie .consejo.bien{color:var(--good)}
+#vista-hoy .fila-agregar{margin-top:6px}
+#vista-hoy .agregar-serie{width:100%;min-height:40px;background:var(--fill);color:var(--ink);border-radius:8px;font-weight:600}
+
+/* ── Final de la sesión: agregar ejercicio, terminar, ajustes y descartar ── */
+.fin-sesion{display:flex;flex-direction:column;gap:10px;margin:8px 0 12px}
+.fin-sesion .agregar-ejercicio{width:100%;min-height:50px;background:var(--accent);color:var(--accent-ink);font-size:17px}
+.fin-sesion .agregar-ejercicio .icono{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+.fin-sesion #terminar{background:var(--good);color:var(--accent-ink)}
+.fila-fin-sesion{display:flex;gap:10px}
+.fila-fin-sesion .boton{flex:1;min-width:0;color:var(--ink)}
+.fila-fin-sesion .boton .icono{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.fila-fin-sesion .boton.peligro{color:var(--critical);background:color-mix(in srgb,var(--critical) 12%,transparent)}
+#vista-hoy .banco-acceso,#vista-hoy .despues-de-entrenar{display:none}
+
+/* Abajo, sin pestañas: Empezar fijo antes de empezar, y el descanso. */
+body.en-sesion .acciones-sesion{bottom:calc(env(safe-area-inset-bottom,0px) + 12px)}
+body.en-sesion main,body:has(#vista-hoy) main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 110px)}
+body.en-sesion.con-descanso main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 120px)}
+body.en-sesion #descanso,body:has(#vista-hoy) #descanso{bottom:calc(env(safe-area-inset-bottom,0px) + 12px)}
+body.en-sesion:has(.acciones-sesion) #descanso{bottom:calc(env(safe-area-inset-bottom,0px) + 84px)}
+body.en-sesion #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 20px)}
+body.en-sesion.con-descanso #aviso-flotante,body.en-sesion:has(.acciones-sesion) #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 100px)}
+body:has(#pantalla-pasos) #descanso{bottom:calc(env(safe-area-inset-bottom,0px) + 84px)}
+
+/* ── Descanso: barra oscura de vidrio, con −15, +15 y Saltar ── */
+#descanso{background:color-mix(in srgb,var(--surface) 88%,transparent);color:var(--ink);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);
+  box-shadow:inset 0 0 0 .5px var(--border),0 10px 30px rgba(0,0,0,.28);border-radius:18px}
+#descanso .boton{border:0;background:var(--fill);color:var(--ink)}
+#descanso [data-listo]{background:var(--accent);color:var(--accent-ink)}
+#descanso .tiempo{color:var(--ink)}
+#descanso.termino{background:var(--good);color:#fff}
+#descanso.termino .tiempo{color:#fff}
+
+/* ── Sesión minimizada, sobre el menú ── */
+#mini-sesion{position:fixed;left:20px;right:20px;bottom:calc(env(safe-area-inset-bottom,0px) + 76px);z-index:6;max-width:400px;margin:0 auto;display:flex;align-items:center;gap:4px;min-height:54px;padding:5px 5px 5px 6px;border-radius:999px;
+  background:var(--vidrio);-webkit-backdrop-filter:blur(14px) saturate(200%);backdrop-filter:blur(14px) saturate(200%);box-shadow:inset 0 1px 0 var(--vidrio-brillo),inset 0 0 0 .5px var(--vidrio-borde),0 8px 24px rgba(0,0,0,.18)}
+body:not(.con-mini-sesion) #mini-sesion{display:none}
+.mini-sesion-abrir{flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:0 4px;border:0;background:none;color:var(--ink);text-align:left;cursor:pointer}
+.mini-sesion-icono{display:grid;place-items:center;flex:0 0 40px;height:40px;border-radius:50%;background:var(--accent-soft);color:var(--accent)}
+.mini-sesion-icono .icono,.mini-sesion-descartar .icono{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.mini-sesion-textos{display:flex;flex-direction:column;min-width:0}
+.mini-sesion-textos strong{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini-sesion-textos small{font-size:12px;color:var(--ink-muted)}
+.mini-sesion-seguir{min-height:40px;padding:0 16px;border:0;border-radius:999px;background:var(--accent);color:var(--accent-ink);font-weight:600;cursor:pointer}
+.mini-sesion-descartar{display:grid;place-items:center;width:40px;height:40px;border:0;border-radius:50%;background:transparent;color:var(--critical);cursor:pointer}
+body.con-mini-sesion main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 150px)}
+body.con-mini-sesion #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 142px)}
+body.con-mini-sesion #descanso{display:none!important}
+
+/* ── Pestaña Entrenar ── */
+#vista-entrenar .titulo-seccion{font:700 20px/1.25 var(--f-titulo);margin:22px 0 8px}
+.hoy-entrenar{display:flex;flex-direction:column;gap:10px;padding:16px}
+.hoy-entrenar-abrir{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:0;border:0;background:none;color:inherit;text-align:left;cursor:pointer}
+.hoy-entrenar-titulo{font:700 24px/1.2 var(--f-titulo)}
+.hoy-entrenar-lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.hoy-entrenar-lista li{display:flex;align-items:center;gap:10px;min-width:0}
+.hoy-entrenar-lista .miniatura{width:36px;height:36px;flex:0 0 36px;border-radius:50%}
+.hoy-entrenar-lista li > span{display:flex;flex-direction:column;min-width:0}
+.hoy-entrenar-lista strong{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hoy-entrenar-lista small{font-size:13px;color:var(--ink-muted)}
+.hoy-entrenar-mas{padding-left:46px}
+.hoy-entrenar .enlace{align-self:center;min-height:40px}
+.inicio-rapido{display:flex;gap:10px}
+.inicio-rapido .boton{flex:1;min-width:0;justify-content:flex-start;background:var(--surface);color:var(--ink);min-height:52px}
+.inicio-rapido .boton .icono{width:20px;height:20px;fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.cab-rutinas{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.cab-rutinas .enlace{display:inline-flex;align-items:center;gap:6px;min-height:40px}
+.cab-rutinas .enlace .icono{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2}
+.carpeta-cab{display:flex;align-items:center;gap:8px;width:100%;min-height:44px;padding:0;border:0;background:none;color:var(--ink-muted);font:600 15px/1.2 var(--f-texto);cursor:pointer;text-align:left}
+.carpeta-flecha{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;transition:transform .2s}
+.carpeta-flecha.abierta{transform:rotate(90deg)}
+.rutinas{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.rutina{display:flex;flex-direction:column;gap:4px;padding:14px 16px;border-radius:14px;background:var(--surface)}
+.rutina.es-hoy{box-shadow:inset 0 0 0 1.5px var(--accent)}
+.rutina-cab{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.rutina-cab h3{margin:0;font-size:17px}
+.rutina-ejercicios{margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rutina-datos{margin:0 0 6px}
+.rutina .boton{width:100%}
+.chip.en-curso{background:var(--accent-soft);color:var(--accent)}
+.chip.hoy{background:var(--accent);color:var(--accent-ink)}
+
+/* ── Guardar sesión ── */
+.guardar-sesion{display:flex;flex-direction:column;gap:12px;margin:0 0 12px}
+.guardar-sesion label{display:flex;flex-direction:column;gap:4px}
+.guardar-sesion input,.guardar-sesion textarea{width:100%;padding:10px 12px;border:0;border-radius:10px;background:var(--fill)}
+.guardar-titulo input{font-size:20px;font-weight:700}
+.guardar-cifras{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.guardar-cifras span{display:flex;flex-direction:column}
+.guardar-cifras small{font-size:12px;color:var(--ink-muted)}
+.guardar-cifras strong{font-size:17px}
+.guardar-cuando{display:flex;align-items:center;gap:6px;margin:0}
+.guardar-cuando .icono{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2}
+.guardar-sesion .aviso{margin:0}
+
+/* ── Ajustes de la sesión: interruptores como los de iOS ── */
+.ajustes-sesion{display:flex;flex-direction:column;margin:0 0 8px;border-radius:12px;background:var(--fill);overflow:hidden}
+.ajuste-sesion{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;cursor:pointer}
+.ajuste-sesion + .ajuste-sesion{border-top:1px solid var(--line)}
+.ajuste-sesion span{display:flex;flex-direction:column;min-width:0}
+.ajuste-sesion strong{font-size:16px;font-weight:500}
+.ajuste-sesion small{font-size:13px;color:var(--ink-muted)}
+.interruptor{appearance:none;-webkit-appearance:none;position:relative;flex:0 0 51px;width:51px;height:31px;margin:0;border-radius:999px;background:color-mix(in srgb,var(--ink) 16%,transparent);cursor:pointer;transition:background-color .2s}
+.interruptor::before{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.2);transition:transform .2s}
+.interruptor:checked{background:var(--good)}
+.interruptor:checked::before{transform:translateX(20px)}
+/* En el Coach, el editor queda sobre la barra de la sesión minimizada. */
+body.con-mini-sesion #coach-redaccion{bottom:calc(var(--coach-menu-distancia,78px) + 64px)}
+body.con-mini-sesion main:has(#vista-coach){padding-bottom:calc(var(--coach-redaccion-alto,100px) + var(--coach-menu-distancia,78px) + 84px)}

@@ -3,6 +3,7 @@
 // corriendo aunque la vista se vuelva a dibujar o se cambie de pantalla.
 import { imagenAsistente, asistenteActual } from './cuestionario.js';
 import { entrarPose } from './movimiento.js';
+import { ajuste } from './ajustes-sesion.js';
 
 let fin = 0, reloj = null, audio = null, etiqueta = '', siguientes = [], textoFinal = '¡A la siguiente serie!';
 // Series por tiempo (plancha y parecidas): al terminar, o al tocar Listo antes, se avisa cuántos segundos se hicieron.
@@ -22,7 +23,7 @@ function caja() {
     el.innerHTML = `<div class="descanso-cab"><span class="descanso-anillo" aria-hidden="true"><svg viewBox="0 0 48 48"><circle class="pista" cx="24" cy="24" r="22"/><circle class="progreso" cx="24" cy="24" r="22" stroke-dasharray="${ANILLO.toFixed(2)}"/></svg><span class="descanso-asistente"></span></span><div class="texto"><span class="etiqueta pequeno"></span><strong class="tiempo num"></strong></div></div>
       <div class="descanso-controles"><button type="button" class="boton" data-menos aria-label="Restar 15 segundos">−15</button>
       <button type="button" class="boton" data-mas aria-label="Sumar 15 segundos">+15</button>
-      <button type="button" class="boton" data-listo>Listo</button></div>`;
+      <button type="button" class="boton" data-listo>Saltar</button></div>`;
     // Como en Hevy: 15 segundos menos o más. Restar no deja el término antes de ahora.
     el.querySelector('[data-menos]').onclick = () => { if (!reloj) return; fin = Math.max(Date.now(), fin - 15_000); pintar(); };
     el.querySelector('[data-mas]').onclick = () => { if (!reloj) inicioTramo = Date.now(); fin = Math.max(fin, Date.now()) + 15_000; if (!reloj) correr(); pintar(); };
@@ -40,7 +41,7 @@ function pintar() {
     const s = siguientes.shift();
     fin = Date.now() + s.seg * 1000; etiqueta = s.texto; resta = s.seg; inicioTramo = Date.now();
     navigator.vibrate?.(200);
-    if (audio) pitido();
+    if (audio && ajuste('sonido')) pitido();
   }
   resta = Math.max(0, resta);
   el.querySelector('.tiempo').textContent = formato(resta);
@@ -82,7 +83,7 @@ function terminar() {
   clearInterval(reloj);
   reloj = null;
   navigator.vibrate?.([200, 100, 200]);
-  if (audio) pitido();
+  if (audio && ajuste('sonido')) pitido();
   if (alFin) {
     // Normalmente anota la serie y parte el descanso; si no hay descanso, se cierra.
     const f = alFin; alFin = null; f(hechos());

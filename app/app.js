@@ -11,6 +11,8 @@ import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
 import { derivar } from '../nucleo/derivar.js';
 import { generarPlan } from '../nucleo/motor-plan.js';
 import { vistaHoy, irAlEjercicioEnCurso } from './hoy.js';
+import { vistaEntrenar } from './entrenar.js';
+import { pintarMiniSesion } from './mini-sesion.js';
 import { vistaFicha } from './ficha.js';
 import { vistaDiaPasado } from './dia-pasado.js';
 import { vistaSemana } from './semana.js';
@@ -28,7 +30,7 @@ import { vistaResumen } from './resumen.js';
 import { vistaBienvenida, vistaEleccion, eleccionPendiente } from './inicio.js';
 import { progresoNivel } from '../nucleo/nivel.js';
 import { programarAvisos } from './avisos.js';
-import { actualizarPantalla } from './pantalla.js';
+import { actualizarPantalla, sesionEnCurso } from './pantalla.js';
 import { dejarPendiente, subirPendientes } from './cola.js';
 import * as nube from './nube.js';
 import { CONFIG } from './config.js';
@@ -204,8 +206,9 @@ function vistaInicio() {
 }
 
 // ── Navegación ──────────────────────────────────────────────────────────────
-const VISTAS_CON_PLAN = ['hoy', 'semana', 'progreso', 'checkin', 'plan', 'resumen', 'eleccion'];
-const PESTANA = { eleccion: 'hoy', banco: 'mas', checkin: 'semana', plan: 'semana', perfil: 'mas', seccion: 'mas', pasado: 'progreso', 'tablero-original': 'mas' };
+const VISTAS_CON_PLAN = ['hoy', 'entrenar', 'semana', 'progreso', 'checkin', 'plan', 'resumen', 'eleccion'];
+// Cuatro pestañas, como Hevy: Entrenar (la sesión de hoy y el plan como rutinas), Coach, Progreso y Perfil (Más).
+const PESTANA = { eleccion: 'entrenar', hoy: 'entrenar', semana: 'entrenar', banco: 'mas', checkin: 'entrenar', plan: 'entrenar', perfil: 'mas', seccion: 'mas', pasado: 'progreso', 'tablero-original': 'mas' };
 let antesDeFicha = null, finEntrada = null, extraActual = null, primeraVista = true, retornoInicial = null;
 function ir(vista, extra) {
   if (VISTAS_CON_PLAN.includes(vista) && (!E.plan)) vista = 'inicio';
@@ -213,6 +216,10 @@ function ir(vista, extra) {
   if (vista === 'plan' && E.plan?.libre) vista = 'inicio'; // sin plan todavía: armarlo o seguir sin plan
   if (E.vista === 'eleccion' && vista !== 'eleccion') E.eleccionInicio = hoy(); // ya eligió (o se fue a otra pestaña)
   const anterior = E.vista;
+  // La sesión es una pantalla aparte: llegar a 'hoy' sin sesión en curso ni pedirla (al abrir la app, después de un
+  // cambio del Coach) muestra Entrenar. Volver de una ficha o del banco sí vuelve a la sesión.
+  if (vista === 'hoy' && !extra && !sesionEnCurso() && !['ejercicio', 'banco', 'hoy'].includes(anterior)) vista = 'entrenar';
+  document.body.classList.toggle('en-sesion', vista === 'hoy');
   // Al abrir una ficha se recuerda dónde estaba la persona; al volver, queda en el mismo ejercicio y a la misma altura.
   if (vista === 'ejercicio' && anterior !== 'ejercicio') antesDeFicha = { vista: anterior, y: scrollY, id: extra?.id };
   const volviendo = anterior === 'ejercicio' && antesDeFicha?.vista === vista ? antesDeFicha : null;
@@ -227,7 +234,7 @@ function ir(vista, extra) {
   abrirEnlacePerfiles(); // #perfiles=…: el enlace privado reemplaza pasar el archivo a cada teléfono
   const vistas = {
     inicio: vistaInicio, eleccion: () => vistaEleccion(ir), cuestionario: () => vistaRapido(ir, armarPlan), perfil: () => vistaPerfil(ir, armarPlan), seccion: () => vistaSeccion(ir),
-    plan: () => vistaPlan(ir, { armarPlan, nuevo: extra?.nuevo }), hoy: () => vistaHoy(ir, extra), ejercicio: () => vistaFicha(ir, extra || {}), semana: () => vistaSemana(ir),
+    plan: () => vistaPlan(ir, { armarPlan, nuevo: extra?.nuevo }), hoy: () => vistaHoy(ir, extra), entrenar: () => vistaEntrenar(ir), ejercicio: () => vistaFicha(ir, extra || {}), semana: () => vistaSemana(ir),
     banco: () => vistaBanco(ir, extra || {}), coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), resumen: () => vistaResumen(ir, extra || {}), progreso: () => vistaProgreso(ir), pasado: () => vistaDiaPasado(ir, extra || {}), mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel: extra?.panel }), 'tablero-original': () => vistaTableroOriginal(ir),
   };
   // Al volver atrás, la pantalla queda a la altura donde se dejó (la misma que se vio debajo al deslizar).
@@ -256,6 +263,7 @@ function ir(vista, extra) {
     clearTimeout(finEntrada); finEntrada = setTimeout(() => $('app').classList.remove('entrando'), 500);
   }
   if (vista !== anterior) dibujarGraficos(vuelta ? null : $('app')); // al volver, los gráficos ya están dibujados
+  pintarMiniSesion(E.vista, ir); // fuera de la sesión, la barra de la sesión en curso sobre el menú
   programarAvisos(); // recordatorios de hoy con lo último (sesión hecha, suplemento tomado)
   actualizarPantalla(); // con una sesión en curso, la pantalla no se apaga sola
 }
