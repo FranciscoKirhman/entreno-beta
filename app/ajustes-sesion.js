@@ -1,5 +1,5 @@
 // Ajustes de la sesión, como "Workout Settings" de Hevy: arriba las filas con su valor (descanso por defecto, valores
-// anteriores) y debajo los interruptores, cada uno con su explicación. Se guardan en E.ajustesSesion (este teléfono);
+// anteriores) y debajo los interruptores, cada uno con su explicación. Se guardan en E.ajustesSesion y en la cuenta;
 // unidades y tema siguen en Perfil.
 import { E, R, esc, guardar } from './comun.js';
 import { abrirHoja } from './hoja.js';
@@ -7,6 +7,7 @@ import { icono } from './iconos.js';
 import { actualizarPantalla, encendidaDisponible } from './pantalla.js';
 import { cambiarAvisoCerrada, avisoCerradaActivo, avisoCerradaDisponible } from './aviso-descanso.js';
 import { avisar } from './comun.js';
+import { datoCambiado } from './datos-nube.js';
 
 const DESCANSOS = [0, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300];
 const ANTERIOR = { rutina: 'Misma sesión del plan', cualquiera: 'Cualquier sesión' };
@@ -15,7 +16,7 @@ const largo = seg => (seg ? [Math.floor(seg / 60) && `${Math.floor(seg / 60)} mi
 
 /** Lo elegido, con sus valores por defecto (todo encendido, como viene Hevy; "anterior" de la misma sesión del plan). */
 export const ajuste = clave => ({ esquemaCal: 'auto', calentamientoStats: false, esfuerzo: true, avisoRecord: true, sonido: true, superserieSigue: true, discos: true, cronoFila: true, descanso: 90, anterior: 'rutina', ...(E.ajustesSesion || {}) })[clave];
-const poner = (clave, valor) => { (E.ajustesSesion ||= {})[clave] = valor; guardar(); };
+const poner = (clave, valor) => { (E.ajustesSesion ||= {})[clave] = valor; datoCambiado('ajustes_sesion'); };
 
 const fila = (id, texto, valor) => `<button type="button" class="ajuste-fila" data-ajuste-fila="${id}"><span>${texto}</span><span class="ajuste-valor">${esc(valor)}</span>${icono('flecha', 'icono ajuste-flecha')}</button>`;
 const interruptor = (id, texto, activo, ayuda) => `<label class="ajuste-sesion"><span class="ajuste-cab"><strong>${texto}</strong><input type="checkbox" role="switch" class="interruptor" data-ajuste="${id}"${activo ? ' checked' : ''}></span><small>${ayuda}</small></label>`;

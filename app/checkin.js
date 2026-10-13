@@ -1,9 +1,14 @@
-// Check-in semanal: cómo te fue en cada ejercicio y cuánto sube, se mantiene o baja la carga de la semana
-// siguiente (nucleo/semanal.js). Nada cambia hasta que la persona confirma.
-import { E, guardar, R, K, esc, $, hoy, indice, fechaCorta, cambiarPlan, peso, seriesTexto, mostrarSemana } from './comun.js';
+// Check-in semanal: unas preguntas opcionales de la semana, cómo te fue en cada ejercicio y cuánto sube, se mantiene
+// o baja la carga de la semana siguiente (nucleo/semanal.js). Antes de la descarga, si te estás recuperando bien,
+// ofrece alargar el bloque (nucleo/alargar-bloque.js). Nada cambia hasta que la persona confirma.
+import { E, guardar, R, K, esc, $, hoy, indice, fechaCorta, cambiarPlan, peso, seriesTexto, mostrarSemana, aKilos, enUnidad, unidadPeso, numero, coma, avisar } from './comun.js';
 import { semanaParaCheckin, proponerCheckin, aplicarCheckin } from '../nucleo/semanal.js';
 import * as nube from './nube.js';
 import { esAsistido } from '../nucleo/catalogo.js';
+import { criteriosAlargar, alargarBloque } from '../nucleo/alargar-bloque.js';
+import { nuevaMedida, agregarMedida } from '../nucleo/medidas.js';
+import { datoCambiado } from './datos-nube.js';
+import { abrirHoja } from './hoja.js';
 
 const kg = peso;
 const claveDe = semana => `${E.plan.inicio}|${semana}`;
@@ -59,6 +64,54 @@ const hechasTexto = hechas => seriesTexto(hechas) + (hechas.some(s => s.rir === 
 
 const ETIQUETA = { subir: 'Sube', mantener: 'Mantiene', bajar: 'Baja' };
 
+// Las preguntas de la semana (contenido/checkin.json): todas opcionales. Energía, sueño y estrés deciden si se ofrece
+// alargar el bloque; las faltas explican la adherencia. Peso y cintura solo con el permiso de las medidas, y van a
+// Medidas (no a la tabla de check-ins).
+const pregunta = id => K.semanal.preguntas.find(q => q.id === id);
+const borradores = {}; // respuestas sin confirmar, por semana (al alargar el bloque se vuelve a dibujar)
+
+function escalaHtml(id, valor) {
+  const q = pregunta(id);
+  const numeros = Array.from({ length: q.max - q.min + 1 }, (_, i) => q.min + i);
+  return `<fieldset class="pregunta-semana"><legend>${esc(q.texto)}</legend>
+    <div class="escala-semana">${numeros.map(n => `<label><input type="radio" name="${id}" value="${n}"${Number(valor) === n ? ' checked' : ''}><span>${n}</span></label>`).join('')}</div>
+    <div class="escala-extremos pequeno suave"><span>${q.min}: ${esc(q.extremos[0])}</span><span>${q.max}: ${esc(q.extremos[1])}</span></div></fieldset>`;
+}
+function unaHtml(id, valor, tipo = 'radio') {
+  const q = pregunta(id);
+  const elegido = v => (tipo === 'radio' ? valor === v : (valor || []).includes(v));
+  return `<fieldset class="pregunta-semana"><legend>${esc(q.texto)}</legend>
+    <div class="opciones-semana">${q.opciones.map(([v, t]) => `<label><input type="${tipo}" name="${id}" value="${esc(v)}"${elegido(v) ? ' checked' : ''}><span>${esc(t)}</span></label>`).join('')}</div></fieldset>`;
+}
+function preguntasHtml(r, { faltas }) {
+  const medir = E.consentimientos?.medidas_cuerpo === true;
+  const u = unidadPeso();
+  return `<section class="tarjeta preguntas-semana"><h3>Tu semana</h3><p class="pequeno suave">Opcional. Con energía, sueño y estrés la app decide si te conviene alargar el bloque o mantener la descarga.</p>
+    ${escalaHtml('energia', r.energia)}
+    ${unaHtml('sueno', r.sueno)}
+    ${escalaHtml('estres', r.estres)}
+    ${faltas ? unaHtml('obstaculos', r.obstaculos, 'checkbox') : ''}
+    ${medir ? `<fieldset class="pregunta-semana"><legend>Peso y cintura de esta semana</legend><p class="pequeno suave">Se guardan en Progreso, Medidas, para ver tu tendencia.</p>
+      <div class="medidas-semana"><label>Peso (${u})<input type="text" inputmode="decimal" name="peso" value="${esc(r.peso != null ? coma(enUnidad(r.peso)) : '')}" autocomplete="off"></label>
+      <label>Cintura (cm)<input type="text" inputmode="decimal" name="cintura" value="${esc(r.cintura != null ? coma(r.cintura) : '')}" autocomplete="off"></label></div></fieldset>` : ''}
+  </section>`;
+}
+function leerRespuestas(form) {
+  const d = new FormData(form), n = k => (d.get(k) ? Number(d.get(k)) : null);
+  const peso = numero(d.get('peso') || ''), cintura = numero(d.get('cintura') || '');
+  return { energia: n('energia'), sueno: d.get('sueno') || null, estres: n('estres'), obstaculos: d.getAll('obstaculos'),
+    peso: peso == null ? null : aKilos(peso), cintura };
+}
+function alargarHtml(c, marcado) {
+  if (!c.aplica) return '';
+  if (!c.ofrecer) return `<details class="tarjeta alargar-bloque"><summary class="pequeno">¿Alargar el bloque una semana? Por ahora no conviene</summary>
+    <ul class="criterios">${c.criterios.map(x => `<li class="${x.ok ? 'si' : 'no'}">${x.ok ? '✓' : '·'} ${esc(x.texto)}</li>`).join('')}</ul></details>`;
+  return `<section class="tarjeta destacada alargar-bloque"><h3>Te estás recuperando bien</h3>
+    <p class="pequeno">Puedes sumar una semana más de trabajo y dejar la descarga para la semana siguiente. Se cumple todo esto:</p>
+    <ul class="criterios">${c.criterios.map(x => `<li class="si">✓ ${esc(x.texto)}</li>`).join('')}</ul>
+    <label class="casilla"><input type="checkbox" name="alargar"${marcado ? ' checked' : ''}> Alargar el bloque una semana</label></section>`;
+}
+
 export function vistaCheckin(ir, semanaPedida) {
   if (!E.plan || E.plan.bloqueado) return ir('inicio');
   const estado = estadoCheckin();
@@ -72,6 +125,7 @@ export function vistaCheckin(ir, semanaPedida) {
   const porDia = [...new Set(conRegistro.map(i => i.plantilla))].map(pl => ({ foco: conRegistro.find(i => i.plantilla === pl).foco, items: conRegistro.filter(i => i.plantilla === pl) }));
   const sesionesHechas = p.dias.filter(d => d.series).length, firmes = p.dias.filter(d => d.firme);
   const fechas = E.plan.dias.filter(d => d.semana === semana).map(d => d.fecha).sort();
+  const respuestas = borradores[semana] || hecho?.respuestas || {};
 
   $('app').innerHTML = `<div id="vista-checkin">
     <h1>Check-in semanal</h1>
@@ -85,6 +139,8 @@ export function vistaCheckin(ir, semanaPedida) {
     ${p.descarga ? `<div class="aviso ojo">La semana ${p.siguiente} es de descarga: mismos ejercicios, la mitad de las series y más reserva. Las cargas no se cambian; lo de esta semana queda guardado para el próximo bloque.</div>` : ''}
     ${!p.series ? '<div class="aviso ojo">No anotaste series esta semana, así que las cargas se mantienen. Marca cada serie con ✓ en Entrenar para que la app pueda ajustarlas.</div>' : ''}
     <form id="form-checkin">
+      ${preguntasHtml(respuestas, { faltas: sesionesHechas < p.dias.length })}
+      <div id="oferta-alargar">${alargarHtml(criteriosAlargar(E.plan, p, respuestas), borradores[semana]?.alargar)}</div>
       ${porDia.map(g => `<section class="tarjeta"><h3>${esc(g.foco)}</h3><ul class="ajustes">${g.items.map(it => {
         const marca = it.cambia && !p.descarga;
         return `<li><label class="ajuste${marca ? '' : ' fijo'}">
@@ -110,21 +166,53 @@ export function vistaCheckin(ir, semanaPedida) {
   };
   if (cambian.length) actualizarBoton();
   $('form-checkin').addEventListener('change', actualizarBoton);
+  // La oferta de alargar se recalcula al contestar energía, sueño y estrés.
+  $('form-checkin').addEventListener('change', ev => {
+    if (!['energia', 'sueno', 'estres'].includes(ev.target.name)) return;
+    const marcado = $('form-checkin').querySelector('[name="alargar"]')?.checked;
+    $('oferta-alargar').innerHTML = alargarHtml(criteriosAlargar(E.plan, p, leerRespuestas($('form-checkin'))), marcado);
+  });
   $('ahora-no').onclick = () => ir('semana');
   $('form-checkin').onsubmit = async ev => {
     ev.preventDefault();
+    const respuestasForm = leerRespuestas(ev.target);
+    // Peso y cintura van a Medidas (con su permiso), como si se anotaran en Progreso.
+    if (E.consentimientos?.medidas_cuerpo === true && (respuestasForm.peso != null || respuestasForm.cintura != null)) {
+      const r = nuevaMedida({ peso_kg: respuestasForm.peso, cintura_cm: respuestasForm.cintura }, hoy());
+      if (r.error) { avisar(r.error); return; }
+      E.medidas = agregarMedida(E.medidas || [], r.medida); datoCambiado('medidas_cuerpo');
+    }
+    const { peso: _p, cintura: _c, ...respuestasSemana } = respuestasForm;
+    if (ev.target.querySelector('[name="alargar"]')?.checked) {
+      const plan = alargarBloque(E.plan, semana);
+      const desc = plan.dias.filter(d => d.semana === plan.semana_descarga).map(d => d.fecha).sort()[0];
+      abrirHoja({
+        titulo: 'Alargar el bloque', volver: $('aplicar-checkin'),
+        nota: `La semana ${p.siguiente} pasa a ser de trabajo, con los mismos días y ejercicios de esta semana. La descarga queda para la semana ${plan.semana_descarga}${desc ? `, desde el ${fechaCorta(desc)}` : ''}, y el plan pasa de ${E.plan.semanas} a ${plan.semanas} semanas. Después revisas cuánto sube cada carga.`,
+        opciones: [{ valor: 'si', clase: 'confirmar', nombre: 'Sí, alargar el bloque' }, { valor: 'no', nombre: 'No, mantener la descarga' }],
+        alElegir: async v => {
+          if (v !== 'si') return;
+          borradores[semana] = { ...respuestasSemana, alargar: false };
+          const aviso = await cambiarPlan(plan, `Bloque alargado: la descarga queda para la semana ${plan.semana_descarga}.`, nube);
+          if (aviso) avisar(aviso);
+          vistaCheckin(ir, semana);
+        },
+      });
+      return;
+    }
+    delete borradores[semana];
     const aceptar = [...document.querySelectorAll('input[name="aceptar"]:checked')].map(i => i.value);
     const aceptados = p.items.filter(i => aceptar.includes(i.clave));
     const cuenta = t => aceptados.filter(i => i.tipo === t).length;
     const partes = [cuenta('subir') && `${cuenta('subir')} sube${cuenta('subir') === 1 ? '' : 'n'}`, cuenta('bajar') && `${cuenta('bajar')} baja${cuenta('bajar') === 1 ? '' : 'n'}`, cuenta('mantener') && `${cuenta('mantener')} queda${cuenta('mantener') === 1 ? '' : 'n'} con el peso que anotaste`].filter(Boolean);
     const mensaje = aceptar.length ? `Semana ${p.siguiente} ajustada: ${partes.join(', ')}.` : `Check-in de la semana ${semana} listo. La semana ${p.siguiente} queda igual.`;
-    E.checkins = { ...(E.checkins || {}), [claveDe(semana)]: { fecha: hoy(), aplicados: aceptar } };
+    E.checkins = { ...(E.checkins || {}), [claveDe(semana)]: { fecha: hoy(), aplicados: aceptar, respuestas: respuestasSemana } };
     if (aceptar.length) {
       const { plan } = aplicarCheckin(entradaPara(semana), aceptar);
       await cambiarPlan(plan, mensaje, nube); // si el servidor no lo acepta, deja su aviso en E.mensaje
     } else { E.mensaje = mensaje; guardar(); }
     if (nube.conectado()) {
-      nube.guardarCheckin({ semana, plan_inicio: E.plan.inicio, banderas: p.banderas.map(b => b.id), series: p.series, sesiones: sesionesHechas,
+      nube.guardarCheckin({ semana, plan_inicio: E.plan.inicio, respuestas: respuestasSemana, banderas: p.banderas.map(b => b.id), series: p.series, sesiones: sesionesHechas,
         cambios: aceptados.map(i => ({ ejercicio_id: i.ejercicio_id, plantilla: i.plantilla, accion: i.accion, regla: i.regla, carga_kg: i.carga_kg, reps_min: i.reps_min, reps_max: i.reps_max })) })
         .catch(e => console.warn('Check-in no guardado en la cuenta', e));
     }

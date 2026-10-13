@@ -193,7 +193,7 @@ function constanciaHtml() {
   const c = constanciaEntreno(fechas, hoy(), { semanas: Math.max(12, Math.ceil((Date.parse(hoy()) - Date.parse([...fechas].sort()[0] || hoy())) / 604800000) + 1) });
   const cifra = (valor, texto) => `<div class="cifra"><strong class="num">${valor}</strong><span class="pequeno suave">${texto}</span></div>`;
   const desde = c.diasDesdeUltimo === 0 ? 'Hoy' : c.diasDesdeUltimo === 1 ? 'Ayer' : `${c.diasDesdeUltimo} días`;
-  const LETRAS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+  const LETRAS = ['L', 'M', 'Mi', 'J', 'V', 'S', 'D'];
   const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'];
   // Columnas: semanas; filas: de lunes a domingo. El mes va sobre la primera semana en que aparece.
   const meses = c.semanas.map((w, i) => { const m = Number(w.lunes.slice(5, 7)) - 1; return i === 0 || m !== Number(c.semanas[i - 1].lunes.slice(5, 7)) - 1 ? MES[m] : ''; });
@@ -459,7 +459,7 @@ export async function vistaProgreso(ir) {
     const v = numero($('meta-peso').value);
     if (v == null) delete E.metaPeso;
     else { const kg = aKilos(v); if (kg < 30 || kg > 300) { avisar('Escribe una meta entre 30 y 300 kg.'); return; } E.metaPeso = Math.round(kg * 10) / 10; }
-    guardar(); repintarMedidas(); avisar(E.metaPeso ? 'Meta guardada.' : 'Meta quitada.');
+    datoCambiado('meta_peso'); repintarMedidas(); avisar(E.metaPeso ? 'Meta guardada.' : 'Meta quitada.');
   });
   document.querySelectorAll('[data-borrar-medida]').forEach(b => b.onclick = () => { E.medidas = (E.medidas || []).filter(m => m.fecha !== b.dataset.borrarMedida); datoCambiado('medidas_cuerpo'); repintarMedidas(); });
   $('quitar-medidas')?.addEventListener('click', ev => {

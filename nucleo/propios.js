@@ -50,10 +50,10 @@ export function planSinPropios(plan) {
   return { ...plan, dias: plan.dias.map(d => ({ ...d, ejercicios: d.ejercicios.filter(e => !esPropio(e.ejercicio_id)).map((e, i) => ({ ...e, orden: i })) })) };
 }
 
-/** Al bajar el plan de la cuenta, vuelve a poner los ejercicios propios del plan del teléfono en sus días. */
-export function conPropios(planCuenta, planLocal) {
-  if (!planCuenta?.dias || !planLocal?.dias?.length) return planCuenta;
-  const propios = new Map(planLocal.dias.map(d => [d.fecha, d.ejercicios.map((e, i) => [e, i]).filter(([e]) => esPropio(e.ejercicio_id))]).filter(([, xs]) => xs.length));
+// Los ejercicios fuera del catálogo de cada día del plan, con su posición: fecha → [[ejercicio, índice], …].
+const propiosPorDia = plan => new Map((plan?.dias || []).map(d => [d.fecha, (d.ejercicios || []).map((e, i) => [e, i]).filter(([e]) => esPropio(e.ejercicio_id))]).filter(([, xs]) => xs.length));
+
+function juntar(planCuenta, propios) {
   if (!propios.size) return planCuenta;
   return { ...planCuenta, dias: planCuenta.dias.map(d => {
     const xs = propios.get(d.fecha);
@@ -62,6 +62,27 @@ export function conPropios(planCuenta, planLocal) {
     for (const [e, i] of xs) if (!ejercicios.some(x => x.ejercicio_id === e.ejercicio_id)) ejercicios.splice(Math.min(i, ejercicios.length), 0, e);
     return { ...d, ejercicios: ejercicios.map((e, i) => ({ ...e, orden: i })) };
   }) };
+}
+
+/** Al bajar el plan de la cuenta, vuelve a poner los ejercicios propios del plan del teléfono en sus días. */
+export function conPropios(planCuenta, planLocal) {
+  if (!planCuenta?.dias || !planLocal?.dias?.length) return planCuenta;
+  return juntar(planCuenta, propiosPorDia(planLocal));
+}
+
+/**
+ * Lo que el plan de la cuenta no guarda (ejercicios propios y del banco ampliado), para guardarlo aparte en la cuenta
+ * y que otro teléfono lo recupere: { inicio, dias: [{ fecha, ejercicios: [[ejercicio, índice], …] }] }, o {} sin ellos.
+ */
+export function propiosDelPlan(plan) {
+  const xs = propiosPorDia(plan);
+  return xs.size ? { inicio: plan.inicio || null, dias: [...xs].map(([fecha, ejercicios]) => ({ fecha, ejercicios })) } : {};
+}
+
+/** El plan con los propios guardados en la cuenta (solo si son de este mismo plan, por su fecha de inicio). */
+export function conPropiosGuardados(plan, guardado) {
+  if (!plan?.dias || !guardado?.dias?.length || (guardado.inicio || null) !== (plan.inicio || null)) return plan;
+  return juntar(plan, new Map(guardado.dias.map(d => [d.fecha, d.ejercicios])));
 }
 
 /** Series y notas para la cuenta: las de un ejercicio propio van sin id, con su nombre. */

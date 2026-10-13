@@ -83,7 +83,8 @@ export function vistaCoach(ir, mensajeInicial) {
   revisarEstadoChat(ir);
   const vigente = () => E === estadoVista && nube.usuarioId() === usuarioVista && $('vista-coach')?.isConnected;
   $('mensaje').value = borrador.texto;
-  $('mensaje').oninput = ev => { if (!vigente()) return; borrador.texto = ev.target.value; E.borradorChat = borrador.texto; guardar(); };
+  crecer($('mensaje'));
+  $('mensaje').oninput = ev => { crecer(ev.target); if (!vigente()) return; borrador.texto = ev.target.value; E.borradorChat = borrador.texto; guardar(); };
   $('adjunto-futuro').onclick = () => avisar('Todavía no lee fotos, PDF ni audio. Por ahora adjunta CSV o texto.', 'neutro');
   $('quitar-archivo').onclick = () => {
     if (!vigente()) return;
@@ -164,6 +165,12 @@ export function vistaCoach(ir, mensajeInicial) {
   if (!revisar && (mensajeInicial?.respuesta || E.chat.length && !mensajeInicial && !porRevisar.length)) mostrarUltimaRespuesta(estadoVista, usuarioVista, !redaccionActiva);
   if (typeof mensajeInicial === 'string') enviar(mensajeInicial, ir);
   else if (sobre) { const m = $('mensaje'); if (!borrador.texto) { m.value = `Sobre ${sobre.nombre}: `; borrador.texto = E.borradorChat = m.value; guardar(); } m.focus(); m.setSelectionRange(m.value.length, m.value.length); }
+}
+
+/** El campo crece con el texto hasta unas cinco líneas, como iMessage; recién ahí se desplaza por dentro (T24). */
+function crecer(t) {
+  t.style.height = 'auto';
+  t.style.height = `${Math.min(t.scrollHeight + 2, 140)}px`;
 }
 
 /** El documento es la única zona de desplazamiento. Reserva el alto real del editor y del menú. */

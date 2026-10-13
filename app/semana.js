@@ -70,7 +70,7 @@ export function vistaSemana(ir) {
   // La nota "elige un peso" se repite en cada ejercicio: en el plan se dice una vez, arriba.
   const eligePeso = dias.some(x => x.ejercicios.some(e => /^Elige un peso/.test(e.nota || '')));
   $('app').innerHTML = `<div id="vista-semana">
-    <h1>Tu plan</h1>
+    <h1>Semana</h1>
     <p class="resumen-plan">${p.semanas} semanas · ${resumen.sesiones} sesiones en ${diasSemana.length} días: ${esc(diasSemana.map(d => DIAS_CORTOS[d]).join(', '))}</p>
     <button type="button" class="enlace" id="ver-plan">Ver tu plan explicado&nbsp;›</button>
     ${calendarioHtml()}

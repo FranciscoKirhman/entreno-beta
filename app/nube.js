@@ -180,7 +180,8 @@ export async function cargarRespuestas() {
 
 // ── Plan ────────────────────────────────────────────────────────────────────
 export const generarPlan = () => funcion('generar-plan');
-// Los ejercicios propios viven en el teléfono: el servidor solo conoce el catálogo (nucleo/propios.js).
+// El plan de la cuenta solo guarda ejercicios del catálogo (nucleo/propios.js); los propios y los del banco ampliado van
+// aparte, en datos_telefono (plan_propios, app/datos-nube.js).
 export const guardarPlan = plan => funcion('guardar-plan', { cuerpo: { plan: planSinPropios(plan) } });
 export async function cargarPlan() {
   const p = ok(await supa.from('planes').select('*, plan_dias(*, plan_ejercicios(*), lugares(nombre))').eq('estado', 'activo').maybeSingle());
@@ -261,8 +262,8 @@ export async function verArchivoIndicacion(ruta) {
   return data.signedUrl;
 }
 /** Check-in semanal: lo propuesto y lo que la persona aceptó (tabla checkins). */
-export async function guardarCheckin({ semana, plan_inicio, banderas, series, sesiones, cambios }) {
-  ok(await supa.from('checkins').insert({ user_id: uid(), tipo: 'semanal', respuestas: { semana, plan_inicio },
+export async function guardarCheckin({ semana, plan_inicio, respuestas = {}, banderas, series, sesiones, cambios }) {
+  ok(await supa.from('checkins').insert({ user_id: uid(), tipo: 'semanal', respuestas: { ...respuestas, semana, plan_inicio },
     resumen_automatico: { series, sesiones }, banderas_rojas: banderas, cambios_aplicados: cambios }));
 }
 export const chat = (mensaje, historial, archivo) => funcion('coach', { cuerpo: { mensaje, historial, ...(archivo ? { archivo } : {}) } });

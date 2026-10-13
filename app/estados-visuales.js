@@ -3,7 +3,13 @@ import { esc, fechaCorta } from './comun.js';
 import { imagenAsistente } from './cuestionario.js';
 import { hayImagen } from './imagenes.js';
 
-export function descansoHtml(proxima) {
+export function descansoHtml(proxima, { compacta = false } = {}) {
+  // En Entrenar, como Hevy: una línea, así el inicio rápido y las rutinas se ven de inmediato.
+  if (compacta) return `<section class="tarjeta descanso-compacto">
+    ${imagenAsistente('descanso', 'descanso-cara')}
+    <div class="descanso-texto"><strong>Hoy descansas</strong>${proxima ? `<span class="pequeno suave">Próxima: ${esc(proxima.foco)}, ${esc(fechaCorta(proxima.fecha))}</span>` : ''}</div>
+    <button type="button" class="boton-chico" id="entrenar-igual">Entrenar igual</button>
+  </section>`;
   return `<section class="tarjeta descanso-ilustrado">
     <div class="estado-ilustrado">
       <div class="estado-texto"><h3>Hoy descansas</h3><p class="suave">Un espacio para recuperar energía.</p></div>

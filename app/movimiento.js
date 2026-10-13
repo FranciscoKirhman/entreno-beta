@@ -48,7 +48,7 @@ const ESTILO = ['backgroundColor', 'borderColor', 'boxShadow', 'color'];
 const estiloDe = el => { const c = getComputedStyle(el); return Object.fromEntries(ESTILO.map(k => [k, c[k]])); };
 
 /** Selector para reencontrar un control después de repintar: su id, su nombre y valor, o sus atributos data-*. */
-function selectorDe(el) {
+export function selectorDe(el) {
   if (!el || el === document.body || !el.tagName) return null;
   if (el.id) return `#${CSS.escape(el.id)}`;
   if (el.tagName === 'INPUT' && el.name) return `input[name="${CSS.escape(el.name)}"]${['radio', 'checkbox'].includes(el.type) ? `[value="${CSS.escape(el.value)}"]` : ''}`;

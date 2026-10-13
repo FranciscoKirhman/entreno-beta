@@ -274,6 +274,8 @@ export const ctxNucleo = () => ({
 
 /** Cambia el plan local y, con cuenta, lo guarda en el servidor (que lo valida). */
 /** Cambia el plan aquí y, con cuenta, en el servidor. Devuelve el aviso si el servidor no lo aceptó (o null). */
+/** Avisos de cambio del plan (app/datos-nube.js sube aparte sus ejercicios propios). Se llaman con (anterior, nuevo). */
+export const alCambiarPlan = new Set();
 export async function cambiarPlan(plan, mensaje, nube) {
   const estado = E, usuario = nube?.usuarioId?.();
   if (E.chatPorTraer) {
@@ -290,7 +292,9 @@ export async function cambiarPlan(plan, mensaje, nube) {
   if (E.plan && !E.plan.libre && plan !== E.plan && JSON.stringify(E.plan) !== JSON.stringify(plan)) {
     E.cambiosPlan = [{ cuando: new Date().toISOString(), mensaje: mensaje || 'Cambio del plan', plan: structuredClone(E.plan) }, ...(E.cambiosPlan || [])].slice(0, 3);
   }
+  const anterior = E.plan;
   E.plan = plan; E.mensaje = mensaje || null; guardar();
+  for (const fn of alCambiarPlan) fn(anterior, plan);
   // El plan libre (entrenar sin plan) queda en el teléfono; las sesiones sí se sincronizan.
   if (!remoto) return null;
   const firma = JSON.stringify(plan);

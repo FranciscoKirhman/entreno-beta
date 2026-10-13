@@ -4,7 +4,7 @@ import { calendarioAsistencia, cambiarAsistencia } from '../nucleo/calendario-as
 let mes = null;
 let elegida = null;
 const fechaLarga = f => new Intl.DateTimeFormat('es-CL', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${f}T12:00:00Z`));
-const tituloMes = m => new Intl.DateTimeFormat('es-CL', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${m}-01T12:00:00Z`));
+const tituloMes = m => new Intl.DateTimeFormat('es-CL', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${m}-01T12:00:00Z`)).replace(/^./, c => c.toUpperCase());
 export function calendarioHtml() {
   mes ||= hoy().slice(0, 7);
   const c = calendarioAsistencia(E.plan, E.sesiones, { hoy: hoy(), mes, marcas: E.marcasPlan || {} });
@@ -13,13 +13,13 @@ export function calendarioHtml() {
     <div class="cal-cab"><button type="button" class="boton-icono" data-cal-mes="-1" aria-label="Mes anterior">‹</button><h2 id="cal-titulo">${esc(tituloMes(mes))}</h2><button type="button" class="boton-icono" data-cal-mes="1" aria-label="Mes siguiente">›</button></div>
     <p class="pequeno suave">Toca un día naranjo para avisar que no irás. Los días rojos necesitan tu confirmación.</p>
     <div class="cal-grid" role="group" aria-label="Calendario de asistencia">
-      ${['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(d => `<span class="cal-letra" aria-hidden="true">${d}</span>`).join('')}
+      ${['L', 'M', 'Mi', 'J', 'V', 'S', 'D'].map(d => `<span class="cal-letra" aria-hidden="true">${d}</span>`).join('')}
       ${Array.from({ length: c.espacios }, () => '<span aria-hidden="true"></span>').join('')}
       ${c.dias.map(x => `<button type="button" class="cal-dia cal-${x.color}${x.fecha === elegida ? ' seleccionada' : ''}" data-cal-fecha="${x.fecha}" aria-pressed="${x.fecha === elegida}"${x.fecha === hoy() ? ' aria-current="date"' : ''} aria-label="${esc(`${fechaLarga(x.fecha)}: ${x.etiqueta}${x.dia ? `. ${x.dia.foco}` : ''}`)}"><span>${Number(x.fecha.slice(8))}</span><small aria-hidden="true">${x.color === 'verde' ? '✓' : x.color === 'rojo' ? '?' : x.color === 'naranjo' ? '●' : x.color === 'azul' ? 'Hoy' : x.etiqueta === 'Falta confirmada' ? '×' : ''}</small></button>`).join('')}
     </div>
     <div class="cal-leyenda"><span><i class="cal-naranjo"></i>Voy a ir</span><span><i class="cal-azul"></i>Hoy</span><span><i class="cal-rojo"></i>Por confirmar</span><span><i class="cal-verde"></i>Confirmado</span></div>
-    ${seleccionado ? detalle(seleccionado) : '<p class="pequeno suave">Elegí un día para ver o confirmar tu asistencia.</p>'}
-    <p class="pequeno suave">Tu confirmación se guarda en este dispositivo. Avisar una falta no mueve ni borra entrenamientos. Verde confirma asistencia, no todas las series.</p>
+    ${seleccionado ? detalle(seleccionado) : '<p class="pequeno suave">Elige un día para ver o confirmar tu asistencia.</p>'}
+    <p class="pequeno suave">Tu confirmación se guarda en este teléfono y en tu cuenta. Avisar una falta no mueve ni borra entrenamientos. Verde confirma asistencia, no todas las series.</p>
   </section>`;
 }
 function detalle(x) {

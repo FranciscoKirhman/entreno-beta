@@ -3,6 +3,7 @@
 import { E, R, esc } from './comun.js';
 import { imagenAvatar } from './avatares.js';
 import { icono } from './iconos.js';
+import { graficoSemanasHtml, tableroProgresoHtml, enlazarProgresoHevy } from './progreso-hevy.js';
 
 // Como el perfil de Hevy: el nombre y cuántos entrenamientos llevas (sin los del ejemplo, salvo en el ejemplo).
 const cuantas = () => { const n = (E.sesiones || []).length; return `${n.toLocaleString('es-CL')} entrenamiento${n === 1 ? '' : 's'}`; };
@@ -18,8 +19,11 @@ const BORRADORES = ['plan-texto', 'plan-semanas', 'respuesta'];
 const TITULOS = {
   cuenta: 'Cuenta', recordatorios: 'Recordatorios', pantalla: 'Pantalla y unidades',
   conexiones: 'Conexiones', respaldo: 'Respaldo', ia: 'Tu IA', importar: 'Importar un plan',
-  plan: 'Tu plan', instalar: 'Instalar en el teléfono', prueba: 'Versión de prueba', datos: 'Datos de este teléfono'
+  plan: 'Tu plan', instalar: 'Instalar en el teléfono', prueba: 'Versión de prueba', datos: 'Datos de este teléfono',
+  ajustes: 'Ajustes'
 };
+// Como Hevy, los ajustes van detrás del engranaje: estos paneles vuelven a Ajustes y no al perfil.
+const EN_AJUSTES = new Set(['recordatorios', 'pantalla', 'cuenta', 'conexiones', 'importar', 'instalar', 'prueba', 'datos', 'tablero']);
 const POR_ID = { cuenta: 'cuenta', recordatorios: 'recordatorios', pantalla: 'pantalla', conexiones: 'conexiones', 'tu-ia': 'ia', 'conectar-ia': 'ia' };
 
 function recogerBorradores(raiz, estado) {
@@ -60,7 +64,7 @@ function grupo(nombre, filas) {
   return '<section class="mas-grupo"><h2>' + nombre + '</h2><div class="mas-lista">' + filas + '</div></section>';
 }
 
-export function organizarMas({ estado: anterior = null } = {}) {
+export function organizarMas({ estado: anterior = null, ir = null, repintar = null } = {}) {
   const raiz = document.getElementById('vista-mas');
   if (!raiz) return;
   if (!document.getElementById('estilos-mas')) {
@@ -99,35 +103,41 @@ export function organizarMas({ estado: anterior = null } = {}) {
   if (borrar) { tarjetaDatos.append(borrar); borrar.classList.add('mas-peligro'); }
   datos.append(tarjetaDatos); grupos.set('datos', datos); paneles.append(datos);
 
-  const resumen = document.createElement('div');
-  resumen.className = 'mas-resumen';
-  resumen.innerHTML = '<button type="button" class="mas-perfil" id="mas-perfil">' + imagenAvatar() +
-    '<span class="mas-texto"><strong>' + esc(R()?.apodo || 'Tu perfil') + '</strong>' + cifrasPerfil() + '<small>Foto, equipo y preferencias</small></span>' + icono('flecha', 'icono mas-flecha') + '</button>' +
-    '<section class="mas-grupo"><h2>Entrenamiento</h2><div class="mas-atajos" aria-label="Atajos de entrenamiento">' +
-    '<span data-mas-banco></span>' + atajo('plan', 'Tu plan', 'calendario') + atajo('ia', 'IA', 'chat') + '</div></section>' +
-    grupo('Preferencias', fila('recordatorios', 'Recordatorios', 'reloj') + fila('pantalla', 'Pantalla y unidades', 'ajustes')) +
+  // Ajustes: las listas que antes estaban en el perfil, ahora en su propio panel.
+  const ajustes = document.createElement('div');
+  ajustes.dataset.masDetalle = 'ajustes'; ajustes.hidden = true;
+  ajustes.innerHTML = grupo('Preferencias', fila('recordatorios', 'Recordatorios', 'reloj') + fila('pantalla', 'Pantalla y unidades', 'ajustes')) +
     grupo('Datos y conexiones', fila('cuenta', 'Cuenta', 'persona') + fila('conexiones', 'Conexiones', 'cadena')) +
     grupo('Herramientas', fila('importar', 'Importar un plan', 'calendario') +
       (grupos.has('instalar') ? fila('instalar', 'Instalar en el teléfono', 'casa') : '') +
       (grupos.has('prueba') ? fila('prueba', 'Versión de prueba', 'ajustes') : '') +
       (grupos.has('tablero') ? '<button type="button" class="mas-fila" data-mas-tablero>' + icono('grafico') + '<span class="mas-texto">Tu tablero original</span>' + icono('flecha', 'icono mas-flecha') + '</button>' : '')) +
     '<div class="mas-datos-locales">' + fila('datos', 'Datos de este teléfono', 'ajustes') + '</div>';
-  if (banco) {
-    banco.className = 'mas-atajo'; banco.setAttribute('aria-label', 'Banco de ejercicios');
-    banco.innerHTML = icono('pesa') + '<span>Ejercicios</span>';
-    resumen.querySelector('[data-mas-banco]').replaceWith(banco);
-  }
+  grupos.set('ajustes', ajustes); paneles.append(ajustes);
+
+  // El perfil, como el de Hevy: quién eres y tus cifras, el gráfico de las últimas semanas, el panel que lleva a
+  // Progreso y los atajos de entrenamiento.
+  const resumen = document.createElement('div');
+  resumen.className = 'mas-resumen';
+  resumen.innerHTML = '<button type="button" class="mas-perfil" id="mas-perfil">' + imagenAvatar() +
+    '<span class="mas-texto"><strong>' + esc(R()?.apodo || 'Tu perfil') + '</strong>' + cifrasPerfil() + '<small>Foto, equipo y preferencias</small></span>' + icono('flecha', 'icono mas-flecha') + '</button>' +
+    (ir ? '<div class="mas-progreso">' + graficoSemanasHtml() + '<section class="mas-grupo"><h2>Panel</h2>' + tableroProgresoHtml() + '</section></div>' : '') +
+    '<section class="mas-grupo"><h2>Entrenamiento</h2><div class="mas-atajos" aria-label="Atajos de entrenamiento">' +
+    '<span data-mas-banco></span>' + atajo('plan', 'Tu plan', 'calendario') + atajo('ia', 'IA', 'chat') + '</div></section>';
   resumen.querySelector('#mas-perfil').onclick = () => perfil?.click();
-  resumen.querySelector('[data-mas-tablero]')?.addEventListener('click', () => raiz.querySelector('#ver-tablero-original')?.click());
+  ajustes.querySelector('[data-mas-tablero]')?.addEventListener('click', () => raiz.querySelector('#ver-tablero-original')?.click());
   const cabecera = document.createElement('header');
   cabecera.className = 'mas-cabecera';
-  cabecera.innerHTML = '<button type="button" class="mas-volver" id="mas-volver" data-atras hidden>' + icono('flecha') + '<span>Perfil</span></button>';
+  cabecera.innerHTML = '<button type="button" class="mas-volver" id="mas-volver" data-atras hidden>' + icono('flecha') + '<span>Perfil</span></button>' +
+    '<button type="button" class="mas-engranaje" id="mas-engranaje" data-mas-abrir="ajustes" aria-label="Ajustes">' + icono('engranaje') + '</button>';
   titulo.tabIndex = -1;
   cabecera.append(titulo);
+  const engranaje = cabecera.querySelector('#mas-engranaje');
   const notas = document.createElement('div');
   notas.className = 'mas-notas'; notas.setAttribute('aria-live', 'polite');
   raiz.replaceChildren(cabecera, notas, resumen, paneles);
-  if (version) { version.classList.add('mas-version'); resumen.append(version); }
+  if (version) { version.classList.add('mas-version'); ajustes.append(version); }
+  if (ir) enlazarProgresoHevy(() => repintar?.(), () => ir('progreso'));
   const volver = cabecera.querySelector('#mas-volver');
   const eventos = new AbortController();
   estado.eventos = eventos;
@@ -143,18 +153,26 @@ export function organizarMas({ estado: anterior = null } = {}) {
     if (!grupos.has(clave)) return;
     if (!restaurar) {
       if (estado.panel) estado.alturas[estado.panel] = scrollY; else estado.yResumen = scrollY;
-      estado.volver = origen?.id || estado.volver;
+      if (!ajustes.contains(origen)) estado.volver = origen?.id || estado.volver;
     }
     estado.panel = clave;
-    resumen.hidden = true; volver.hidden = false; titulo.textContent = TITULOS[clave] || 'Perfil';
+    resumen.hidden = true; volver.hidden = false; engranaje.hidden = true; titulo.textContent = TITULOS[clave] || 'Perfil';
+    volver.querySelector('span').textContent = EN_AJUSTES.has(clave) ? 'Ajustes' : 'Perfil';
     grupos.forEach((panel, nombre) => { panel.hidden = nombre !== clave; });
     if (enfocar) { scrollTo(0, estado.alturas[clave] || 0); titulo.focus({ preventScroll: true }); }
   }
   volver.onclick = () => {
     estado.alturas[estado.panel] = scrollY;
+    if (EN_AJUSTES.has(estado.panel)) {
+      const desde = estado.panel;
+      abrir('ajustes', { restaurar: true, enfocar: false });
+      scrollTo(0, estado.alturas.ajustes || 0);
+      ajustes.querySelector('#mas-abrir-' + CSS.escape(desde))?.focus({ preventScroll: true });
+      return;
+    }
     estado.panel = null; estado.foco = null;
     grupos.forEach(panel => { panel.hidden = true; });
-    resumen.hidden = false; volver.hidden = true; titulo.textContent = 'Perfil';
+    resumen.hidden = false; volver.hidden = true; engranaje.hidden = false; titulo.textContent = 'Perfil';
     scrollTo(0, estado.yResumen);
     const origen = estado.volver && raiz.querySelector('#' + CSS.escape(estado.volver));
     (origen || resumen.querySelector('#mas-perfil')).focus({ preventScroll: true });
@@ -165,7 +183,7 @@ export function organizarMas({ estado: anterior = null } = {}) {
     const enlaceIA = ev.target.closest('a[href="#tu-ia"]');
     if (enlaceIA) { ev.preventDefault(); abrir('ia', { origen: resumen.querySelector('#mas-atajo-ia') }); }
   });
-  raiz.addEventListener('abrir-ajuste-mas', ev => abrir(ev.detail, { origen: resumen.querySelector('#mas-abrir-' + ev.detail) }));
+  raiz.addEventListener('abrir-ajuste-mas', ev => abrir(ev.detail, { origen: raiz.querySelector('#mas-abrir-' + ev.detail) }));
   raiz.addEventListener('input', () => recogerBorradores(raiz, estado));
   for (const id of BORRADORES) {
     const campo = raiz.querySelector('#' + id);

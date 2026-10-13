@@ -225,7 +225,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel = null }) {
     if (!b.dataset.confirmar) { b.dataset.confirmar = '1'; b.textContent = 'Toca de nuevo para borrar todo de este teléfono'; return; }
     reiniciar(); ir('inicio');
   };
-  organizarMas({ estado: estadoMas });
+  organizarMas({ estado: estadoMas, ir, repintar: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar }) });
   if (panel) $('vista-mas')?.dispatchEvent(new CustomEvent('abrir-ajuste-mas', { detail: panel }));
   mostrarMensaje();
 }

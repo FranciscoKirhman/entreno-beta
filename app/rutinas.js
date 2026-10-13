@@ -1,6 +1,6 @@
 // Rutinas propias, como en Hevy: "Nueva rutina", la carpeta "Mis rutinas" en Entrenar con "Empezar rutina", el editor
-// (nombre, ejercicios, series, repeticiones y descanso) y "Guardar como rutina" desde una sesión pasada. Quedan en este
-// teléfono y en el respaldo (E.rutinas). Empezar una rutina deja la sesión de hoy como esa rutina, después de
+// (nombre, ejercicios, series, repeticiones y descanso) y "Guardar como rutina" desde una sesión pasada. Quedan en el
+// teléfono, en el respaldo y en la cuenta (E.rutinas). Empezar una rutina deja la sesión de hoy como esa rutina, después de
 // confirmar; las otras fechas del plan no cambian.
 import { E, esc, $, indice, guardar, avisar, ctxNucleo, cambiarPlan } from './comun.js';
 import { prepararSesionVacia } from '../nucleo/sesion-vacia.js';
@@ -10,6 +10,7 @@ import { abrirHoja } from './hoja.js';
 import { icono } from './iconos.js';
 import { miniatura } from './imagenes.js';
 import { arrastrable } from './editar-sesion-ui.js';
+import { datoCambiado } from './datos-nube.js';
 import * as nube from './nube.js';
 
 const DESCANSOS = [0, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300];
@@ -46,10 +47,10 @@ export function enlazarRutinas(ir, repintar) {
       { valor: 'borrar', icono: icono('basurero'), clase: 'quitar', nombre: 'Borrar rutina', peligro: true },
     ], alElegir: v => {
       if (v === 'editar') { borrador = structuredClone(r); ir('rutina'); }
-      else if (v === 'duplicar') { E.rutinas = [...rutinas(), { ...structuredClone(r), id: crypto.randomUUID(), nombre: `${r.nombre} (copia)` }]; guardar(); repintar(); }
+      else if (v === 'duplicar') { E.rutinas = [...rutinas(), { ...structuredClone(r), id: crypto.randomUUID(), nombre: `${r.nombre} (copia)` }]; datoCambiado('rutinas'); repintar(); }
       else if (v === 'borrar') abrirHoja({ titulo: `¿Borrar ${r.nombre}?`, volver: b, nota: 'Lo que ya registraste con ella no se borra.',
         opciones: [{ valor: 'si', icono: icono('basurero'), clase: 'quitar', nombre: 'Sí, borrar', peligro: true }, { valor: 'no', icono: icono('flecha'), nombre: 'No' }],
-        alElegir: x => { if (x === 'si') { E.rutinas = rutinas().filter(y => y.id !== r.id); guardar(); repintar(); } } });
+        alElegir: x => { if (x === 'si') { E.rutinas = rutinas().filter(y => y.id !== r.id); datoCambiado('rutinas'); repintar(); } } });
     } });
   });
 }
@@ -104,7 +105,7 @@ export function vistaRutina(ir) {
     limpia.nombre = nombre;
     E.rutinas = [...rutinas().filter(r => r.id !== b.id), limpia];
     borrador = null;
-    guardar();
+    datoCambiado('rutinas');
     avisar(`Rutina "${nombre}" guardada.`);
     ir('entrenar');
   };

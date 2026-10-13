@@ -65,7 +65,7 @@ function rutinaHtml(d, s) {
 /** La sesión de hoy, grande: sus ejercicios con miniatura y Empezar (o Seguir). */
 function hoyHtml(s) {
   const d = s.dia;
-  if (!d) return descansoHtml(s.proxima);
+  if (!d) return descansoHtml(s.proxima, { compacta: true });
   if (s.hechaEnHevy) return `${s.registradoHtml}<button type="button" class="boton" data-ir-sesion>Ver la sesión del plan</button>`;
   const a = s.avance;
   const estado = s.enCurso ? `En curso · ${a.hechas} de ${a.total} series` : s.guardada ? 'Guardada hoy' : `~${duracionSesion(d)} min · ${d.ejercicios.length} ejercicio${d.ejercicios.length === 1 ? '' : 's'}`;

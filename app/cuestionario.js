@@ -55,7 +55,8 @@ export const NIVEL_VISTA = {
 };
 const NIVEL_DE_TIEMPO = { nunca: 'principiante', menos_6m: 'principiante', '6_24m': 'intermedio', '2_5a': null, mas_5a: null };
 const PAUSAS = [[2, '1 a 3 meses'], [4, '3 a 6 meses'], [9, '6 meses a 1 año'], [18, 'Más de un año']];
-const DIAS = [[1, 'L', 'lunes'], [2, 'M', 'martes'], [3, 'M', 'miércoles'], [4, 'J', 'jueves'], [5, 'V', 'viernes'], [6, 'S', 'sábado'], [0, 'D', 'domingo']];
+// Martes y miércoles se distinguen también a la vista (M y Mi); cada día lleva su nombre completo para el lector.
+const DIAS = [[1, 'L', 'lunes'], [2, 'M', 'martes'], [3, 'Mi', 'miércoles'], [4, 'J', 'jueves'], [5, 'V', 'viernes'], [6, 'S', 'sábado'], [0, 'D', 'domingo']];
 
 const PASOS = ['asistente', 'objetivo', 'nivel', 'semana', 'lugar', 'musculos', 'favoritos', 'sobre_ti', 'salud', 'final'];
 /** Lo obligatorio de cada paso (los que no están, se pueden saltar). */
@@ -423,10 +424,10 @@ function campo(p) {
     case 'varias': return `<div class="chips">${p.opciones.map(([val, t]) => `<label><input type="checkbox" data-p="${p.id}" data-varias value="${esc(val)}"${chk((v || []).includes(val))}>${esc(t)}</label>`).join('')}</div>`;
     case 'si_no': return `<div class="opciones">${[[true, 'Sí'], [false, 'No']].map(([val, t]) => `<label><input type="radio" name="${p.id}" data-p="${p.id}" data-bool value="${val}"${chk(v === val)}>${t}</label>`).join('')}</div>`;
     case 'consentimiento': return `<div class="opciones"><label><input type="checkbox" data-p="${p.id}" data-consent${chk(v === true)}>${esc(p.texto)}</label></div>`;
-    case 'escala': return escalaQ(p.id, p.min, p.max, v, p.extremos, `data-p="${p.id}"`);
+    case 'escala': return escalaQ(p.id, p.min, p.max, v, p.extremos, `data-p="${p.id}"`, p.texto);
     case 'dias': {
       const max1 = p.maximo === 1;
-      return `<div class="escala">${DIAS.map(([d, t, nombre]) => `<label title="${nombre}"><input type="${max1 ? 'radio' : 'checkbox'}" name="${p.id}" data-p="${p.id}" data-dias${max1 ? ' data-uno' : ''} value="${d}"${chk(max1 ? v === d : (v || []).includes(d))}>${t}</label>`).join('')}</div>`;
+      return `<div class="escala" role="group" aria-label="${esc(p.texto || 'Días')}">${DIAS.map(([d, t, nombre]) => `<label title="${nombre}"><input type="${max1 ? 'radio' : 'checkbox'}" name="${p.id}" data-p="${p.id}" data-dias${max1 ? ' data-uno' : ''} value="${d}" aria-label="${nombre}"${chk(max1 ? v === d : (v || []).includes(d))}><span aria-hidden="true">${t}</span></label>`).join('')}</div>`;
     }
     case 'matriz': case 'matriz_si_no': {
       const ops = p.tipo === 'matriz' ? p.opciones : [[true, 'Sí'], [false, 'No']];
@@ -439,10 +440,13 @@ function campo(p) {
   }
 }
 
-function escalaQ(nombre, min, max, v, extremos, attrs) {
-  let s = '<div class="escala">';
-  for (let i = min; i <= max; i++) s += `<label><input type="radio" name="${nombre}" ${attrs} data-num value="${i}"${chk(v === i)}>${i}</label>`;
-  return s + `</div>${extremos ? `<div class="extremos"><span>${esc(extremos[0])}</span><span>${esc(extremos[1])}</span></div>` : ''}`;
+// Una escala agrupada con el nombre de su pregunta; los extremos dicen su número ("1: Muy mala") y cada opción se lee
+// completa ("1, Muy mala"; "3 de 5").
+function escalaQ(nombre, min, max, v, extremos, attrs, texto = '') {
+  const leer = i => (extremos && i === min ? `${i}, ${extremos[0]}` : extremos && i === max ? `${i}, ${extremos[1]}` : `${i} de ${max}`);
+  let s = `<div class="escala" role="radiogroup"${texto ? ` aria-label="${esc(texto)}"` : ''}>`;
+  for (let i = min; i <= max; i++) s += `<label><input type="radio" name="${nombre}" ${attrs} data-num value="${i}" aria-label="${esc(leer(i))}"${chk(v === i)}><span aria-hidden="true">${i}</span></label>`;
+  return s + `</div>${extremos ? `<div class="extremos" aria-hidden="true"><span>${min}: ${esc(extremos[0])}</span><span>${max}: ${esc(extremos[1])}</span></div>` : ''}`;
 }
 
 function mapa(p, v) {
@@ -457,7 +461,7 @@ function mapa(p, v) {
         const val = x[f.id];
         const a = `data-p="${p.id}" data-zona-campo="${f.id}" data-region="${x.region}"`;
         if (f.tipo === 'una') return `<label>${esc(f.texto)}<select ${a}><option value="">Elige</option>${f.opciones.map(([o, t]) => `<option value="${o}"${val === o ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`;
-        if (f.tipo === 'escala') return `<label>${esc(f.texto)}</label>${escalaQ(`${p.id}.${x.region}.${f.id}`, f.min, f.max, val, f.extremos, a)}`;
+        if (f.tipo === 'escala') return `<label>${esc(f.texto)}</label>${escalaQ(`${p.id}.${x.region}.${f.id}`, f.min, f.max, val, f.extremos, a, f.texto)}`;
         if (f.tipo === 'fecha') return `<label>${esc(f.texto)}<input type="date" ${a} value="${esc(val)}"></label>`;
         return `<label>${esc(f.texto)}<textarea ${a}>${esc(val)}</textarea></label>`;
       }).join('')}</div>`;

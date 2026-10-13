@@ -545,3 +545,55 @@ body:not(.en-sesion) .medalla-record{top:calc(env(safe-area-inset-top,0px) + 16p
 #vista-progreso[data-en-seccion="calendario"] [data-seccion-p]:not([data-seccion-p="calendario"]){display:none}
 .tablero-boton{position:relative}
 .tablero-flecha{position:absolute;right:12px;width:14px!important;height:14px!important;flex:0 0 14px!important;stroke:var(--ink-muted)!important}
+
+/* Barra "Siguiente" arriba del teclado numérico (app/teclado-series.js) */
+.barra-teclado{position:fixed;left:0;right:0;bottom:0;z-index:60;display:flex;justify-content:flex-end;padding:6px 12px;
+  background:color-mix(in srgb,var(--surface) 82%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);
+  border-top:1px solid var(--line)}
+.barra-teclado[hidden]{display:none}
+.barra-teclado button{min-height:36px;padding:0 18px;border-radius:999px;border:0;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:600}
+
+/* Entrenar en día de descanso: una línea (app/estados-visuales.js, descansoHtml compacta) */
+.descanso-compacto{display:flex;align-items:center;gap:12px;padding:10px 12px}
+.descanso-compacto .descanso-cara{width:44px;height:44px;flex:none;border-radius:50%;object-fit:cover;object-position:50% 12%;background:var(--fill)}
+.descanso-compacto .descanso-texto{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.descanso-compacto .descanso-texto span{line-height:1.25}
+.descanso-compacto .boton-chico{flex:none;min-height:36px;padding:0 14px;border-radius:999px;border:0;background:var(--accent-soft);color:var(--accent);font:inherit;font-weight:600;font-size:.9rem}
+
+/* Perfil como Hevy: engranaje arriba a la derecha, gráfico y panel debajo del encabezado (app/mas-paneles.js) */
+#vista-mas .mas-cabecera{position:relative}
+#vista-mas .mas-engranaje{position:absolute;right:-6px;bottom:-2px;width:44px;height:44px;display:grid;place-items:center;border:0;border-radius:50%;background:none;color:var(--ink);cursor:pointer}
+#vista-mas .mas-engranaje .icono{width:24px;height:24px}
+#vista-mas .mas-engranaje[hidden]{display:none}
+#vista-mas .mas-progreso{margin-top:12px}
+#vista-mas .mas-progreso .grafico-semanas{margin:0 0 4px}
+
+/* Semana legible (observación O11): el nombre del ejercicio usa todo el ancho y la prescripción va debajo */
+#vista-semana .ejercicios li.con-mini{grid-template-columns:minmax(0,1fr)}
+#vista-semana .ejercicios li.con-mini .presc{padding-left:46px;text-align:left;white-space:normal}
+#vista-semana .ej-semana .nombre{font-weight:600}
+
+/* Check-in semanal: preguntas de la semana y oferta de alargar el bloque (app/checkin.js) */
+.preguntas-semana .pregunta-semana{border:0;margin:14px 0 0;padding:0;min-width:0}
+.preguntas-semana legend{font-weight:600;margin-bottom:8px;padding:0}
+.escala-semana{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.escala-semana label,.opciones-semana label{position:relative;cursor:pointer}
+.escala-semana input,.opciones-semana input{position:absolute;opacity:0;pointer-events:none}
+.escala-semana span{display:grid;place-items:center;min-height:44px;border-radius:12px;background:var(--fill);font-weight:600;font-variant-numeric:tabular-nums}
+.escala-semana input:checked+span,.opciones-semana input:checked+span{background:var(--accent);color:var(--accent-ink)}
+.escala-semana input:focus-visible+span,.opciones-semana input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+.escala-extremos{display:flex;justify-content:space-between;gap:12px;margin-top:6px}
+.escala-extremos span:last-child{text-align:right}
+.opciones-semana{display:flex;flex-wrap:wrap;gap:6px}
+.opciones-semana span{display:inline-flex;align-items:center;min-height:40px;padding:6px 14px;border-radius:999px;background:var(--fill)}
+.medidas-semana{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.medidas-semana label{display:flex;flex-direction:column;gap:4px;font-size:.9rem}
+.alargar-bloque .criterios{list-style:none;padding:0;margin:8px 0;display:grid;gap:4px;font-size:.9rem}
+.alargar-bloque .criterios .no{color:var(--ink-muted)}
+.alargar-bloque summary{cursor:pointer}
+
+/* Coach: un solo marco (el de la tarjeta), el campo sin borde y sin barra de desplazamiento visible (T24) */
+#coach-redaccion textarea{border:0;background:var(--fill);border-radius:16px;padding:10px 12px;min-height:44px;max-height:140px;
+  overflow-x:hidden;overflow-wrap:anywhere;scrollbar-width:none;line-height:1.35}
+#coach-redaccion textarea::-webkit-scrollbar{display:none}
+#coach-redaccion textarea:focus{outline:none;box-shadow:0 0 0 2px var(--accent)}

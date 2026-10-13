@@ -14,7 +14,8 @@ import { miniatura } from './imagenes.js';
 import { cuentaNuevaHtml, enlazarCuentaNueva } from './cuenta-ui.js';
 import { grupos, etiquetaSuperserie } from '../nucleo/superseries.js';
 
-const LETRA = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+const LETRA = ['L', 'M', 'Mi', 'J', 'V', 'S', 'D'];
+const NOMBRE_DIA = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 const ESTADO = { si: ['✓', 'Cumple'], parcial: ['~', 'En parte'], no: ['✕', 'No se pudo'] };
 const CORTO = { cuerpo: 'Todo', torso: 'Torso', pierna: 'Pierna', empuje: 'Empuje', tiron: 'Tirón' };
 const corto = x => CORTO[String(x.plantilla || '').split('_')[0]] || String(x.foco || '').split(/[:,(]/)[0].trim();
@@ -54,8 +55,8 @@ export function vistaPlan(ir, { armarPlan, nuevo = false } = {}) {
 
     <h2>Tu semana</h2>
     <div class="tira-semana" role="list">${s.semana.map((x, i) => x
-      ? `<div class="dia-tira entrena" role="listitem" aria-label="${esc(x.nombre_dia)}: ${esc(x.foco)}, ${x.minutos} minutos"><b>${LETRA[i]}</b><span>${esc(corto(x))}</span><small class="num">${x.minutos}′</small></div>`
-      : `<div class="dia-tira" role="listitem" aria-label="Descanso"><b>${LETRA[i]}</b><span>Libre</span></div>`).join('')}</div>
+      ? `<div class="dia-tira entrena" role="listitem" aria-label="${esc(x.nombre_dia)}: ${esc(x.foco)}, ${x.minutos} minutos"><b aria-hidden="true">${LETRA[i]}</b><span>${esc(corto(x))}</span><small class="num">${x.minutos}′</small></div>`
+      : `<div class="dia-tira" role="listitem" aria-label="${NOMBRE_DIA[i]}: descanso"><b aria-hidden="true">${LETRA[i]}</b><span>Libre</span></div>`).join('')}</div>
 
     <h2>Lo que pediste</h2>
     <ul class="cumple">${s.cumple.map(c => `<li class="${c.estado}"><span class="marca-cumple" aria-label="${ESTADO[c.estado][1]}">${ESTADO[c.estado][0]}</span><div><strong>${esc(c.tema)}</strong><p>${esc(c.texto)}</p></div></li>`).join('')}</ul>

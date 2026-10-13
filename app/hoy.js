@@ -39,7 +39,8 @@ import { nombreAsistente } from './cuestionario.js';
 import * as nube from './nube.js';
 import { descansoHtml, sesionCompletaHtml } from './estados-visuales.js';
 import { srcArticulacion } from './articulaciones.js';
-import { repintarConservando, celebrar, sinMovimiento, entrarPaso } from './movimiento.js';
+import { repintarConservando, celebrar, sinMovimiento, entrarPaso, selectorDe } from './movimiento.js';
+import { activarTecladoSeries } from './teclado-series.js';
 import { mostrarMedalla } from './medalla.js';
 import { montarAnimaciones } from './animacion-ui.js';
 import { animacionDePaso } from '../nucleo/animaciones.js';
@@ -185,7 +186,7 @@ function registradoHoyHtml(reg, dia, f, proxima) {
 // "¿Cómo estás hoy?": opcional y plegado desde el inicio. Cada botón guarda al tocarlo (sin "Listo"); con sueño, ánimo
 // y energía respondidos se pliega solo y muestra el resumen. Un envío sin respuestas no cuenta.
 const PREGUNTAS_B = [
-  { campo: 'sueno_horas', texto: 'Dormí', opciones: [[5, '5 o menos'], [6, '6 h'], [7, '7 h'], [8, '8 h'], [9, '9 o más']] },
+  { campo: 'sueno_horas', texto: 'Dormí', aria: 'Horas que dormiste', opciones: [[5, '5 o menos'], [6, '6 h'], [7, '7 h'], [8, '8 h'], [9, '9 o más']] },
   { campo: 'animo', texto: 'Ánimo', opciones: [[1, 'Muy bajo'], [2, 'Bajo'], [3, 'Normal'], [4, 'Bien'], [5, 'Muy bien']] },
   { campo: 'cansancio', texto: 'Energía', opciones: [[5, 'Agotado'], [4, 'Cansado'], [3, 'Normal'], [2, 'Bien'], [1, 'Fresco']] },
 ];
@@ -227,8 +228,8 @@ function cicloHtml(f, b, dia) {
 function bienestarHtml(f, b, dia) {
   const hay = respondioAlgo(b);
   if (dia && !hay && cicloPreguntado !== f && estadoCiclo(R(), f)?.dificil) { bienestarAbierto = true; cicloPreguntado = f; }
-  const fila = p => `<div class="pregunta-b"><span class="pequeno suave">${p.texto}</span><div class="escala-b" role="group" aria-label="${p.texto}">${p.opciones.map(([v, t]) =>
-    `<button type="button" data-b-campo="${p.campo}" data-b-valor="${v}" aria-pressed="${b?.[p.campo] === v}">${t}</button>`).join('')}</div></div>`;
+  const fila = p => `<div class="pregunta-b"><span class="pequeno suave">${p.texto}</span><div class="escala-b" role="group" aria-label="${p.aria || p.texto}">${p.opciones.map(([v, t]) =>
+    `<button type="button" data-b-campo="${p.campo}" data-b-valor="${v}" aria-pressed="${b?.[p.campo] === v}"${p.campo === 'sueno_horas' ? ` aria-label="${t.replace(' h', ' horas').replace(' o ', ' horas o ')}"` : ''}>${t}</button>`).join('')}</div></div>`;
   const aviso = hay && dia && b.recomendacion && b.recomendacion !== 'normal' && !b.aviso_visto
     ? `<div class="aviso ojo">${esc(b.motivos?.length ? `Por lo que contaste (${b.motivos.join(', ')}): ` : '')}${esc(TEXTO_RECOMENDACION[b.recomendacion])}
         <div class="fila-botones"><button type="button" class="boton primario" id="aplicar-bienestar">Ajustar la sesión</button><button type="button" class="boton" id="normal-igual">Hacerla normal igual</button></div></div>` : '';
@@ -912,11 +913,18 @@ function enlazar(ir, dia) {
     const i = Number(t.dataset.i), r = lista[i];
     // Peso corporal sin peso en gris (ni del plan, ni de hoy, ni de la vez anterior): se marca sin escribir kilos.
     const sinCarga = sinCargaExterna(indice.porId.get(e.ejercicio_id)) && sugerencia(e, lista, i).kg == null;
-    if (!r.hecho && serieCompleta(r, e, { sinCarga })) marcarSerie(t.dataset.ej, i);
+    // Si el foco iba a otro campo (Siguiente, o las flechas del teclado del iPhone), sigue ahí después de dibujar.
+    const destino = ev.type === 'focusout' ? selectorDe(ev.relatedTarget) : null;
+    if (!r.hecho && serieCompleta(r, e, { sinCarga })) {
+      marcarSerie(t.dataset.ej, i);
+      const nuevo = destino && document.querySelector(destino);
+      if (nuevo && document.activeElement !== nuevo) nuevo.focus({ preventScroll: true });
+    }
     else if (t.dataset.c === 'rir') repintar();
   };
   raiz.addEventListener('change', completarAlSalir);
   raiz.addEventListener('focusout', completarAlSalir);
+  activarTecladoSeries(raiz);
   raiz.querySelectorAll('textarea.nota-ej').forEach(t => { if (t.value) { t.style.height = 'auto'; t.style.height = `${t.scrollHeight}px`; } });
   $('vista-hoy').querySelectorAll('[data-ayuda-rir]').forEach(b => b.onclick = () => abrirHoja({
     titulo: modoEsfuerzo(R()) === 'rir' ? 'RIR: repeticiones en reserva' : 'RPE: esfuerzo de la serie', volver: b,
@@ -1519,6 +1527,7 @@ function enlazar(ir, dia) {
     E.sesiones.push({ id, fecha: f, hora, titulo, duracion_min: minutos, series, notas, ...(comentario ? { comentario } : {}) });
     // Cómo se sintió (como OpenGym): aparte de la sesión, así no se pierde cuando la cuenta trae su copia.
     if (sensacion) (E.sensaciones ||= {})[id] = sensacion; else if (E.sensaciones) delete E.sensaciones[id];
+    if (sensacion || anteriorGuardada) datoCambiado('sensaciones');
     E.mensaje = `Sesión guardada: ${series.length} serie${series.length === 1 ? '' : 's'}.`;
     detenerDescanso();
     guardar();

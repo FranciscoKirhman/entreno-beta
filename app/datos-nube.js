@@ -1,15 +1,36 @@
 // Lo que antes quedaba solo en el teléfono ahora también va a la cuenta (si la persona entró): ejercicios propios,
-// medidas del cuerpo, notas fijas y las fechas de la regla. Cada cambio se sube al tiro; si no hay señal, queda
-// pendiente y se sube al sincronizar. Al entrar en otro teléfono, se baja lo de la cuenta. Las medidas y el ciclo
+// medidas del cuerpo, notas fijas, rutinas, ¿cómo se sintió?, meta de peso, ajustes de la sesión y las fechas de la
+// regla. Cada cambio se sube al tiro; si no hay señal, queda pendiente y se sube al sincronizar. Al entrar en otro teléfono, se baja lo de la cuenta. Las medidas y el ciclo
 // son datos de salud: solo se suben con su permiso.
-import { E, R, guardar, modoEjemplo, ambitoDatos, alinearPropios } from './comun.js';
+import { E, R, guardar, modoEjemplo, ambitoDatos, alinearPropios, asegurarExtras, alCambiarPlan } from './comun.js';
+import { propiosDelPlan, conPropiosGuardados } from '../nucleo/propios.js';
 import { unirInicios } from '../nucleo/ciclo-menstrual.js';
 import * as nube from './nube.js';
 
-// clave en la cuenta → [campo en E, valor vacío]
-const LOCAL = { ejercicios_propios: ['ejerciciosPropios', []], medidas_cuerpo: ['medidas', []], notas_fijas: ['notasFijas', {}], calendario_asistencia: ['marcasPlan', {}] };
-const permitido = clave => clave !== 'medidas_cuerpo' || E.consentimientos?.medidas_cuerpo === true;
-const valorLocal = clave => E[LOCAL[clave][0]] ?? LOCAL[clave][1];
+// clave en la cuenta → cómo leerla y ponerla en E. "Aviso con la pantalla bloqueada" es de cada teléfono (su
+// suscripción de avisos), así que no viaja con los ajustes de la sesión.
+const campo = (nombre, vacio) => ({ leer: () => E[nombre] ?? vacio, poner: v => { E[nombre] = v; } });
+const LOCAL = {
+  ejercicios_propios: campo('ejerciciosPropios', []), medidas_cuerpo: campo('medidas', []), notas_fijas: campo('notasFijas', {}),
+  calendario_asistencia: campo('marcasPlan', {}), rutinas: campo('rutinas', []), sensaciones: campo('sensaciones', {}),
+  ajustes_sesion: {
+    leer: () => { const { avisoCerrada, ...resto } = E.ajustesSesion || {}; return resto; },
+    poner: v => { const aviso = E.ajustesSesion?.avisoCerrada; E.ajustesSesion = { ...v, ...(aviso ? { avisoCerrada: aviso } : {}) }; },
+  },
+  meta_peso: { leer: () => (E.metaPeso ? { kg: E.metaPeso } : {}), poner: v => { if (v?.kg) E.metaPeso = v.kg; else delete E.metaPeso; } },
+  // El plan de la cuenta solo guarda ejercicios del catálogo: los propios y los del banco ampliado van aparte, con su
+  // día y posición, y se reponen en el plan de otro teléfono.
+  plan_propios: {
+    leer: () => (E.plan?.libre ? {} : propiosDelPlan(E.plan)),
+    poner: v => {
+      if (E.plan?.dias?.length) E.plan = conPropiosGuardados(E.plan, v);
+      if (JSON.stringify(v || {}).includes('"extra_')) asegurarExtras();
+    },
+  },
+};
+// Las medidas y la meta de peso son datos del cuerpo: solo con el permiso de las medidas.
+const permitido = clave => !['medidas_cuerpo', 'meta_peso'].includes(clave) || E.consentimientos?.medidas_cuerpo === true;
+const valorLocal = clave => LOCAL[clave].leer();
 const tieneDatos = clave => { const v = valorLocal(clave); return Array.isArray(v) ? v.length > 0 : Object.keys(v).length > 0; };
 const enLinea = () => !modoEjemplo && nube.hay() && nube.conectado() && ambitoDatos === nube.usuarioId();
 
@@ -54,7 +75,12 @@ async function subir(clave) {
   } catch { /* queda pendiente: se sube al sincronizar */ }
 }
 
-/** Llamar después de cambiar ejercicios propios, medidas o notas fijas. */
+// Un plan nuevo o editado con otros ejercicios propios: se suben al tiro.
+alCambiarPlan.add((anterior, nuevo) => {
+  if (!nuevo?.libre && JSON.stringify(propiosDelPlan(anterior)) !== JSON.stringify(propiosDelPlan(nuevo))) datoCambiado('plan_propios');
+});
+
+/** Llamar después de cambiar cualquiera de las claves de LOCAL. */
 export function datoCambiado(clave) {
   revisarEdicion(clave);
   (E.nubeDatos ||= {})[clave] = { pendiente: true };
@@ -81,7 +107,7 @@ export async function sincronizarDatosTelefono() {
     if (E.nubeDatos?.[clave]?.pendiente || (!fila && tieneDatos(clave))) {
       await guardarDato(clave, contexto);
       contexto.comprobar();
-    } else if (fila && revisionDe(clave) === alLeer[clave]) E[LOCAL[clave][0]] = fila.valor;
+    } else if (fila && revisionDe(clave) === alLeer[clave]) LOCAL[clave].poner(fila.valor);
   }
   if (R().seguimiento_ciclo === true) {
     const remotos = await contexto.consultar(() => nube.cargarIniciosRegla());
