@@ -46,7 +46,9 @@ export function recomendarEjercicios(ctx, { candidatos = ctx.indice.ejercicios, 
   const salida = [], elegidos = new Set(), movimientos = new Set();
   const agregar = candidato => {
     const propuesta = editarSesion({ tipo: 'agregar', ejercicio: candidato.ejercicio.id }, ctx);
-    if (propuesta.error) return; // No se recomienda algo que exceda tiempo, volumen o restricciones.
+    // No se recomienda algo que exceda tiempo, volumen o restricciones. Pasarse del tiempo ya no bloquea agregar a mano,
+    // pero una recomendación sí lo respeta.
+    if (propuesta.error || propuesta.advertencias?.some(a => a.codigo === 'duracion' && a.fecha === ctx.hoy)) return;
     salida.push({ ...candidato, prescripcion: propuesta.ejercicio, minutos: propuesta.minutos });
     elegidos.add(candidato.ejercicio.id); movimientos.add(candidato.ejercicio.patron);
   };

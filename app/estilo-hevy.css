@@ -318,3 +318,29 @@ button.publicacion-cab{cursor:pointer}
 .grafico-semanas-metricas{gap:8px;padding:0;background:none}
 .grafico-semanas-metricas button{flex:0 0 auto;min-height:40px;padding:0 18px;border:0;border-radius:999px;background:var(--fill);color:var(--ink);font-weight:500;box-shadow:none}
 .grafico-semanas-metricas button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+
+/* ── Ficha del ejercicio como Hevy: pestañas Resumen, Historial y Cómo se hace ── */
+.ficha-pestanas{position:sticky;top:0;z-index:4;display:grid;grid-template-columns:repeat(3,1fr);margin:0 -16px 8px;padding:0 8px;border-bottom:.5px solid var(--line);
+  background:color-mix(in srgb,var(--bg) 85%,transparent);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px)}
+body:has(.barra #modo:not([hidden])) .ficha-pestanas{top:calc(env(safe-area-inset-top,0px) + 38px)}
+.ficha-pestanas button{min-height:48px;border:0;border-bottom:3px solid transparent;background:none;color:var(--ink-muted);font:500 16px/1.2 var(--f-texto);cursor:pointer}
+.ficha-pestanas button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+.ficha-musculos-texto{margin:-2px 0 8px;line-height:1.6}
+.records-ficha h2{display:flex;align-items:center;gap:8px}
+.icono-records{width:24px;height:24px;fill:none;stroke:#E8A400;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.lista-records{list-style:none;margin:0;padding:0}
+.lista-records li{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:52px;border-top:.5px solid var(--line)}
+.lista-records li:first-child{border-top:0}
+.lista-records strong{color:var(--accent);font-weight:500;font-size:17px}
+.historial-ficha{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:18px}
+.historial-ficha-cab{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:0 8px;width:100%;padding:0;border:0;background:none;color:inherit;text-align:left;font:inherit}
+button.historial-ficha-cab{cursor:pointer}
+.historial-ficha-cab .pequeno{grid-column:1}
+.historial-ficha-cab .chevron{grid-column:2;grid-row:1 / span 2;width:18px;height:18px;fill:none;stroke:var(--ink-muted);stroke-width:2.2}
+.historial-ficha-titulo{font:700 18px/1.25 var(--f-titulo)}
+.historial-ficha-tabla{display:grid;grid-template-columns:56px minmax(0,1fr);margin:10px -16px 0}
+.historial-ficha-tabla > span{display:flex;align-items:center;min-height:48px;padding:0 16px;font-size:17px}
+.historial-ficha-tabla > span.cab{min-height:32px;font-size:12px;text-transform:uppercase;letter-spacing:.02em;color:var(--ink-muted)}
+.historial-ficha-tabla > span:nth-child(4n+5),.historial-ficha-tabla > span:nth-child(4n+6){background:var(--fill)}
+.historial-ficha-tabla .suave{margin-left:4px}
+.historial-ficha{padding-top:8px}
