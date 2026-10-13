@@ -1,11 +1,9 @@
 // Más: atajos y listas. Los controles originales se mueven, nunca se clonan.
 // Cada ajuste ocupa una vista de detalle; cambiar de grupo conserva lo escrito.
-import { E, R, esc } from './comun.js';
+import { E } from './comun.js';
 import { imagenAvatar } from './avatares.js';
 import { icono } from './iconos.js';
 
-// Como el perfil de Hevy: el nombre y cuántos entrenamientos llevas (sin los del ejemplo, salvo en el ejemplo).
-const cuantas = () => { const n = (E.sesiones || []).length; return `${n.toLocaleString('es-CL')} entrenamiento${n === 1 ? '' : 's'}`; };
 const vistas = new WeakMap(); // Borradores en memoria, separados por perfil y cuenta.
 const BORRADORES = ['plan-texto', 'plan-semanas', 'respuesta'];
 const TITULOS = {
@@ -88,18 +86,18 @@ export function organizarMas({ estado: anterior = null } = {}) {
   datos.dataset.masDetalle = 'datos'; datos.hidden = true;
   const tarjetaDatos = document.createElement('section');
   tarjetaDatos.className = 'tarjeta';
-  tarjetaDatos.innerHTML = '<h3>Borrar los datos locales</h3><p class="pequeno suave">Esta acción borra el perfil y los registros de este teléfono. El respaldo está en Más, Respaldo.</p>';
+  tarjetaDatos.innerHTML = '<h3>Borrar los datos locales</h3><p class="pequeno suave">Esta acción borra el perfil y los registros de este teléfono. La copia de datos está en Progreso, Mis datos.</p>';
   if (borrar) { tarjetaDatos.append(borrar); borrar.classList.add('mas-peligro'); }
   datos.append(tarjetaDatos); grupos.set('datos', datos); paneles.append(datos);
 
   const resumen = document.createElement('div');
   resumen.className = 'mas-resumen';
   resumen.innerHTML = '<button type="button" class="mas-perfil" id="mas-perfil">' + imagenAvatar() +
-    '<span class="mas-texto"><strong>' + esc(R()?.apodo || 'Tu perfil') + '</strong><small>' + cuantas() + ' · Foto, equipo y preferencias</small></span>' + icono('flecha', 'icono mas-flecha') + '</button>' +
+    '<span class="mas-texto"><strong>Tu perfil</strong><small>Foto, equipo y preferencias</small></span>' + icono('flecha', 'icono mas-flecha') + '</button>' +
     '<section class="mas-grupo"><h2>Entrenamiento</h2><div class="mas-atajos" aria-label="Atajos de entrenamiento">' +
     '<span data-mas-banco></span>' + atajo('plan', 'Tu plan', 'calendario') + atajo('ia', 'IA', 'chat') + '</div></section>' +
     grupo('Preferencias', fila('recordatorios', 'Recordatorios', 'reloj') + fila('pantalla', 'Pantalla y unidades', 'ajustes')) +
-    grupo('Datos y conexiones', fila('cuenta', 'Cuenta', 'persona') + fila('respaldo', 'Respaldo', 'libro') + fila('conexiones', 'Conexiones', 'cadena')) +
+    grupo('Datos y conexiones', fila('cuenta', 'Cuenta', 'persona') + fila('conexiones', 'Conexiones', 'cadena')) +
     grupo('Herramientas', fila('importar', 'Importar un plan', 'calendario') +
       (grupos.has('instalar') ? fila('instalar', 'Instalar en el teléfono', 'casa') : '') +
       (grupos.has('prueba') ? fila('prueba', 'Versión de prueba', 'ajustes') : '') +

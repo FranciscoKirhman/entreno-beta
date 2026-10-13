@@ -2,9 +2,6 @@ import { validarRespaldo } from '../nucleo/respaldo.js';
 // Vista Más: cuenta, ajustar con tu IA (copiar y pegar o conexión directa), importar un plan escrito y reiniciar.
 import { E, guardar, reiniciar, empezarDeNuevo, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje, unidadPeso, modoEjemplo, activarCuenta, resumenLocal, traerPerfilLocal, revisionTrasladoLocal, cuentaRecuperada, cuentaVaciaParaTraslado, avisar } from './comun.js';
 import { esExportacionHevy, importarParaTelefono } from '../nucleo/hevy-csv.js';
-import { importarOtraApp } from '../nucleo/otras-apps.js';
-import { lectorPesos, juntarPesos } from '../nucleo/salud-apple.js';
-import { datoCambiado } from './datos-nube.js';
 import { claveHevy, ultimaHevy, guardarClaveHevy, sincronizarHevy } from './hevy-auto.js';
 import { soporte, configAvisos, cambiarAvisos, activarAvisos, notificar, enlaceCalendario } from './avisos.js';
 import { CONFIG } from './config.js';
@@ -43,8 +40,9 @@ function pruebaHtml() {
 
 export function vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel = null }) {
   const estadoMas = estadoVistaMas();
+  if (!panel && estadoMas?.panel === 'respaldo') estadoMas.panel = null;
   $('app').innerHTML = `<div id="vista-mas">
-    <h1>Perfil</h1>
+    <h1>Más</h1>
     <section class="tarjeta" data-mas-panel="banco"><h3>Banco de ejercicios</h3><p class="pequeno suave">Busca por nombre, músculo o equipo, revisa la técnica y agrega ejercicios a hoy.</p><button type="button" class="boton" id="abrir-banco">Explorar ejercicios</button></section>
     ${CONFIG.modoPrueba ? pruebaHtml() : ''}
     ${E.tableroOrigen?.datos ? '<section class="tarjeta"><h3>Tu tablero original</h3><p class="pequeno suave">Consulta el calendario, las series y las indicaciones de tu copia del tablero.</p><button type="button" class="boton" id="ver-tablero-original">Abrir tablero original</button></section>' : ''}
@@ -305,20 +303,11 @@ function conexionesHtml() {
         <div id="estado-hevy"></div>
       </li>
       <li>
-        <div class="cab-conexion">${icono('hevy')}<strong>Strong o FitNotes</strong><label class="accion-conexion">Importar<input type="file" id="archivo-otra-app" accept=".csv,text/csv" hidden></label></div>
-        <p class="pequeno suave">Trae tu historial desde otra app. En Strong: Perfil → Ajustes → Exportar datos. En FitNotes: Ajustes → Copia de seguridad → Exportar CSV. Los ejercicios que no calzan con el banco quedan con su nombre.</p>
-        <div id="estado-otra-app"></div>
-      </li>
-      <li>
-        <div class="cab-conexion">${icono('salud')}<strong>Apple Salud: tu peso</strong><label class="accion-conexion">Importar<input type="file" id="archivo-salud" accept=".xml,text/xml,application/xml" hidden></label></div>
-        <p class="pequeno suave">Trae tu peso a Medidas del cuerpo. En el iPhone: app Salud → tu foto → Exportar todos los datos de salud; en Archivos, toca el .zip para abrirlo y elige export.xml. Se lee en el teléfono; solo se guarda el peso, un valor por día, sin reemplazar el que anotaste.</p>
-        <div id="estado-salud"></div>
-      </li>
-      <li>
         <div class="cab-conexion">${icono('ia')}<strong>ChatGPT y Claude</strong><a class="accion-conexion" href="#tu-ia">Usar ahora</a></div>
         <p class="pequeno suave">Tu IA arma o ajusta el plan y la app lo revisa con sus reglas antes de guardarlo. Copiando y pegando funciona sin cuenta; la conexión directa con ChatGPT requiere una cuenta.</p>
       </li>
       ${conexionFuturaHtml('strava', icono('strava'))}
+      ${conexionFuturaHtml('salud-apple', icono('salud'))}
       ${conexionFuturaHtml('health-connect', icono('salud'))}
     </ul>`;
 }
@@ -339,39 +328,6 @@ function enlazarConexiones(repintar) {
     E.mensaje = r.nuevas.length ? `Importé ${r.nuevas.length} ${r.nuevas.length === 1 ? 'sesión' : 'sesiones'} de Hevy${r.total > r.nuevas.length ? ` (las otras ${r.total - r.nuevas.length} ya estaban)` : ''}.` : 'Esas sesiones ya estaban importadas.';
     if (r.sinCatalogo.length) E.mensaje += ` ${r.sinCatalogo.length} ejercicio${r.sinCatalogo.length === 1 ? '' : 's'} no calza${r.sinCatalogo.length === 1 ? '' : 'n'} con el catálogo y no cuenta${r.sinCatalogo.length === 1 ? '' : 'n'} para "la vez anterior": ${r.sinCatalogo.slice(0, 4).join(', ')}${r.sinCatalogo.length > 4 ? '…' : ''}.`;
     guardar(); repintar();
-  };
-  // Strong o FitNotes por archivo (nucleo/otras-apps.js), como permite OpenGym.
-  $('archivo-otra-app').onchange = async ev => {
-    const archivo = ev.target.files[0];
-    if (!archivo) return;
-    const out = $('estado-otra-app');
-    let r;
-    try { r = importarOtraApp(await archivo.text(), indice, E.sesiones, { unidad: unidadPeso() }); }
-    catch (e) { out.innerHTML = `<div class="aviso alerta">${esc(e.message)}</div>`; return; }
-    E.sesiones.push(...r.nuevas);
-    E.sesiones.sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
-    E.mensaje = r.nuevas.length ? `Importé ${r.nuevas.length} ${r.nuevas.length === 1 ? 'sesión' : 'sesiones'} de ${r.nombre}${r.total > r.nuevas.length ? ` (las otras ${r.total - r.nuevas.length} ya estaban)` : ''}.` : `Esas sesiones de ${r.nombre} ya estaban importadas.`;
-    if (r.sinCatalogo.length) E.mensaje += ` ${r.sinCatalogo.length} ejercicio${r.sinCatalogo.length === 1 ? '' : 's'} no calza${r.sinCatalogo.length === 1 ? '' : 'n'} con el banco: ${r.sinCatalogo.slice(0, 4).join(', ')}${r.sinCatalogo.length > 4 ? '…' : ''}.`;
-    guardar(); repintar();
-  };
-  // Peso desde Apple Salud: el export.xml se lee por partes (puede pesar cientos de MB).
-  $('archivo-salud').onchange = async ev => {
-    const archivo = ev.target.files[0];
-    if (!archivo) return;
-    const out = $('estado-salud');
-    if (!E.consentimientos.medidas_cuerpo) { out.innerHTML = '<div class="aviso ojo">Primero acepta guardar tus medidas en Progreso → Medidas del cuerpo: el peso es un dato de salud.</div>'; return; }
-    out.innerHTML = '<p class="pequeno suave" role="status">Leyendo el archivo…</p>';
-    try {
-      const lector = lectorPesos(), leer = archivo.stream().pipeThrough(new TextDecoderStream()).getReader();
-      for (let x = await leer.read(); !x.done; x = await leer.read()) lector.agregar(x.value);
-      const pesos = lector.pesos();
-      if (!pesos.length) { out.innerHTML = '<div class="aviso ojo">No encontré registros de peso en ese archivo. Revisa que sea export.xml de Apple Salud.</div>'; return; }
-      const r = juntarPesos(E.medidas || [], pesos);
-      E.medidas = r.medidas;
-      datoCambiado('medidas_cuerpo');
-      E.mensaje = r.nuevos ? `Traje ${r.nuevos} ${r.nuevos === 1 ? 'día' : 'días'} de peso desde Apple Salud. Lo ves en Progreso → Medidas.` : 'Esos pesos ya estaban.';
-      guardar(); repintar();
-    } catch (e) { out.innerHTML = `<div class="aviso alerta">No pude leer el archivo: ${esc(e.message)}</div>`; }
   };
   // Hevy por la API: guardar la clave, traer ahora o quitarla.
   const traer = async (boton, { nueva = false } = {}) => {

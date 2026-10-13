@@ -71,7 +71,8 @@ export function editarSesion(accion, ctx) {
       return descarga ? comoDescarga(nuevoE) : nuevoE;
     };
     ejercicio = nuevoEj(dia, !fueraDelPlan && dia.semana === plan.semana_descarga);
-    dia.ejercicios.push(ejercicio);
+    const posicion = accion.despues ? dia.ejercicios.findIndex(e => e.ejercicio_id === accion.despues) : -1;
+    dia.ejercicios.splice(posicion < 0 ? dia.ejercicios.length : posicion + 1, 0, ejercicio);
     for (const x of siguientes(nuevo, dia, accion)) if (!x.ejercicios.some(e => e.ejercicio_id === ej.id)) { x.ejercicios.push(nuevoEj(x, x.semana === plan.semana_descarga)); afectados++; }
   } else if (accion.tipo === 'quitar') {
     const k = dia?.ejercicios.findIndex((e, i) => (e.ejercicio_id || `i${i}`) === accion.ejercicio) ?? -1;

@@ -1,4 +1,4 @@
-import { E, guardar, esc, ambitoDatos, EXTRAS } from './comun.js';
+import { E, guardar, esc, ambitoDatos } from './comun.js';
 import * as nube from './nube.js';
 import { conPropios, idsPropios } from '../nucleo/propios.js';
 import { unirSesiones } from '../nucleo/sincronizacion.js';
@@ -81,7 +81,7 @@ export async function actualizarChatConfirmado() {
   if (respuestasVigentes) E.respuestas = { ...respuestas, unidad: E.respuestas?.unidad, escala_esfuerzo: E.respuestas?.escala_esfuerzo };
   if (planVigente && respuestasVigentes) E.firmaPlan = firmaPerfil(E.respuestas);
   const anteriores = k => JSON.parse(pendiente.firmas[k] || (k === 'bienestar' ? '{}' : '[]'));
-  const unidas = unirSesiones(E.sesiones, idsPropios(sesiones, [...(E.ejerciciosPropios || []), ...EXTRAS]), E.pendientes || []);
+  const unidas = unirSesiones(E.sesiones, idsPropios(sesiones, E.ejerciciosPropios || []), E.pendientes || []);
   E.sesiones = unirEdicionesLista(unidas, E.sesiones, anteriores('sesiones'), s => s.id).sort((a, b) => a.fecha.localeCompare(b.fecha) || (a.hora || '').localeCompare(b.hora || ''));
   E.bienestar = unirEdicionesMapa({ ...bienestar, ...Object.fromEntries(Object.entries(E.bienestar).filter(([, b]) => !b.enCuenta)) }, E.bienestar, anteriores('bienestar'));
   E.suplementos = unirEdicionesLista(suplementos, E.suplementos, anteriores('suplementos'), s => s.id);

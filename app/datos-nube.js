@@ -7,7 +7,7 @@ import { unirInicios } from '../nucleo/ciclo-menstrual.js';
 import * as nube from './nube.js';
 
 // clave en la cuenta → [campo en E, valor vacío]
-const LOCAL = { ejercicios_propios: ['ejerciciosPropios', []], medidas_cuerpo: ['medidas', []], notas_fijas: ['notasFijas', {}] };
+const LOCAL = { ejercicios_propios: ['ejerciciosPropios', []], medidas_cuerpo: ['medidas', []], notas_fijas: ['notasFijas', {}], calendario_asistencia: ['marcasPlan', {}] };
 const permitido = clave => clave !== 'medidas_cuerpo' || E.consentimientos?.medidas_cuerpo === true;
 const valorLocal = clave => E[LOCAL[clave][0]] ?? LOCAL[clave][1];
 const tieneDatos = clave => { const v = valorLocal(clave); return Array.isArray(v) ? v.length > 0 : Object.keys(v).length > 0; };

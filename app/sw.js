@@ -1,22 +1,19 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
 // Los archivos de cada publicación se leen desde su copia; una versión nueva instala otra copia completa.
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-13 12:21 · 7c8a757";
+const VERSION = "2026-10-13 15:12 · 33659a5";
 const ARCHIVOS = [
  "./",
- "ajustes-sesion.js",
  "animacion-ui.js",
  "app.js",
  "articulaciones.js",
  "atras.js",
  "avatares.js",
- "aviso-descanso.js",
  "avisos.js",
  "banco.css",
  "banco.js",
  "calendario-asistencia.css",
  "calendario-asistencia.js",
- "cambios-plan.js",
  "cambios-ui.js",
  "cardio-ui.js",
  "checkin.js",
@@ -28,18 +25,14 @@ const ARCHIVOS = [
  "config.js",
  "copia-entreno.js",
  "cuenta-ui.js",
- "cuerpo-trazos.js",
- "cuerpo.js",
  "cuestionario.js",
  "datos-nube.js",
  "descanso.js",
  "deslizar-serie.js",
  "dia-pasado.js",
  "editar-sesion-ui.js",
- "entrenar.js",
  "estados-visuales.css",
  "estados-visuales.js",
- "estilo-hevy.css",
  "estilos.css",
  "ficha.js",
  "figura-frente.js",
@@ -619,21 +612,21 @@ const ARCHIVOS = [
  "mas.css",
  "mas.js",
  "medalla.js",
- "mini-sesion.js",
  "modal.js",
  "movimiento.js",
  "musculos.js",
  "nube.js",
  "oauth-ui.js",
  "oauth.html",
+ "ordenar-arrastre.js",
  "pantalla.js",
  "perfiles-prueba-ui.js",
  "plan.js",
  "progreso-ejercicio.js",
- "progreso-hevy.js",
  "progreso.js",
  "propuesta-chat.js",
  "recomendaciones-ui.js",
+ "recuperar-cuenta.js",
  "resumen.js",
  "semana.js",
  "sesion-libre-ui.js",
@@ -642,11 +635,9 @@ const ARCHIVOS = [
  "temporada.js",
  "../contenido/checkin.json",
  "../contenido/cuestionario.json",
- "../contenido/ejercicios-extra.json",
  "../contenido/ejercicios.json",
  "../contenido/evidencia.json",
  "../contenido/planes.json",
- "../contenido/tecnica-extra.json",
  "../contenido/tecnica.json",
  "../nucleo/agenda.js",
  "../nucleo/animacion-ejercicios.js",
@@ -692,7 +683,6 @@ const ARCHIVOS = [
  "../nucleo/nivel.js",
  "../nucleo/notas.js",
  "../nucleo/opcionales.js",
- "../nucleo/otras-apps.js",
  "../nucleo/perfiles-enlace.js",
  "../nucleo/perfiles-prueba.js",
  "../nucleo/plan-libre.js",
@@ -710,7 +700,6 @@ const ARCHIVOS = [
  "../nucleo/resumen-sesion.js",
  "../nucleo/retorno-app.js",
  "../nucleo/retorno-cuenta.js",
- "../nucleo/salud-apple.js",
  "../nucleo/semanal.js",
  "../nucleo/serie-completa.js",
  "../nucleo/series-retiradas.js",
@@ -801,22 +790,4 @@ self.addEventListener('notificationclick', e => {
   e.notification.close();
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     .then(ventanas => (ventanas.length ? ventanas[0].focus() : self.clients.openWindow('./'))));
-});
-
-// Aviso del descanso con la app cerrada (supabase/functions/aviso-descanso): el servidor manda el push y aquí se
-// muestra. Tocarlo vuelve a la app.
-self.addEventListener('push', e => {
-  let d = {};
-  try { d = e.data ? e.data.json() : {}; } catch { d = { texto: e.data && e.data.text() }; }
-  e.waitUntil(self.registration.showNotification(d.titulo || 'Entreno', {
-    body: d.texto || '¡A la siguiente serie!', tag: d.tag || 'descanso', renotify: true,
-    icon: 'iconos/icono-192.png', badge: 'iconos/icono-192.png', vibrate: [200, 100, 200],
-  }));
-});
-self.addEventListener('notificationclick', e => {
-  e.notification.close();
-  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
-    const abierta = cs.find(c => 'focus' in c);
-    return abierta ? abierta.focus() : self.clients.openWindow('./');
-  }));
 });

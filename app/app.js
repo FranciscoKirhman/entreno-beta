@@ -1,3 +1,4 @@
+import { recuperarCuentaPrincipal } from './recuperar-cuenta.js';
 // App Entreno. Funciona sin cuenta (todo en este navegador) y con cuenta (Supabase). Usa el mismo núcleo
 // que el servidor: nucleo/*.js.
 //
@@ -5,15 +6,12 @@
 import { sincronizarDatosTelefono } from './datos-nube.js';
 import { hevyAlAbrir } from './hevy-auto.js';
 import { conPropios, idsPropios } from '../nucleo/propios.js';
-import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo, entrarEjemplo, salirEjemplo, modoEjemplo, errorGuardado, errorRetornoCuenta, activarCuenta, perfilDePrueba, recuperarCopia, claveSesionCuenta, marcarCuentaRecuperada, EXTRAS } from './comun.js';
+import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo, entrarEjemplo, salirEjemplo, modoEjemplo, errorGuardado, errorRetornoCuenta, activarCuenta, perfilDePrueba, recuperarCopia, claveSesionCuenta, marcarCuentaRecuperada } from './comun.js';
 import { prepararSesion, unirSesiones } from '../nucleo/sincronizacion.js';
 import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
 import { derivar } from '../nucleo/derivar.js';
 import { generarPlan } from '../nucleo/motor-plan.js';
 import { vistaHoy, irAlEjercicioEnCurso } from './hoy.js';
-import { vistaEntrenar } from './entrenar.js';
-import { pintarMiniSesion } from './mini-sesion.js';
-import { observarCuerpos } from './cuerpo.js';
 import { vistaFicha } from './ficha.js';
 import { vistaDiaPasado } from './dia-pasado.js';
 import { vistaSemana } from './semana.js';
@@ -31,7 +29,7 @@ import { vistaResumen } from './resumen.js';
 import { vistaBienvenida, vistaEleccion, eleccionPendiente } from './inicio.js';
 import { progresoNivel } from '../nucleo/nivel.js';
 import { programarAvisos } from './avisos.js';
-import { actualizarPantalla, sesionEnCurso } from './pantalla.js';
+import { actualizarPantalla } from './pantalla.js';
 import { dejarPendiente, subirPendientes } from './cola.js';
 import * as nube from './nube.js';
 import { CONFIG } from './config.js';
@@ -89,6 +87,7 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
   const estadoInicial = E, usuarioInicial = nube.usuarioId();
   const recuperada = await recuperarCopia();
   if (nube.usuarioId() !== usuarioInicial || !recuperada && E !== estadoInicial) throw new Error('La cuenta cambió durante la sincronización.');
+  await recuperarCuentaPrincipal();
   const estado = E, usuario = nube.usuarioId();
   let respuestasAlEntrar = JSON.stringify(E.respuestas);
   let planAlEntrar = JSON.stringify(E.plan);
@@ -175,7 +174,7 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
   await consultar(() => subirPendientes({ forzar }));
   // Ejercicios propios, medidas, notas fijas y fechas del ciclo (antes solo en el teléfono).
   try { await consultar(() => sincronizarDatosTelefono()); } catch (e) { avisar('Datos del teléfono', e); }
-  E.sesiones = unirSesiones(E.sesiones, idsPropios(await consultar(() => nube.cargarSesiones()), [...(E.ejerciciosPropios || []), ...EXTRAS]), E.pendientes || []);
+  E.sesiones = unirSesiones(E.sesiones, idsPropios(await consultar(() => nube.cargarSesiones()), E.ejerciciosPropios || []), E.pendientes || []);
   E.bienestar = { ...await consultar(() => nube.cargarBienestar()), ...Object.fromEntries(Object.entries(E.bienestar).filter(([, b]) => !b.enCuenta)) };
   const pendientes = E.pendientes?.length || 0;
   const partes = avisos.map(x => `${x.parte}: ${x.mensaje}`);
@@ -207,20 +206,16 @@ function vistaInicio() {
 }
 
 // ── Navegación ──────────────────────────────────────────────────────────────
-const VISTAS_CON_PLAN = ['hoy', 'entrenar', 'semana', 'progreso', 'checkin', 'plan', 'resumen', 'eleccion'];
-// Cuatro pestañas, como Hevy: Entrenar (la sesión de hoy y el plan como rutinas), Coach, Progreso y Perfil (Más).
-const PESTANA = { eleccion: 'entrenar', hoy: 'entrenar', semana: 'entrenar', banco: 'mas', checkin: 'entrenar', plan: 'entrenar', perfil: 'mas', seccion: 'mas', pasado: 'progreso', 'tablero-original': 'mas' };
+const VISTAS_CON_PLAN = ['hoy', 'semana', 'progreso', 'checkin', 'plan', 'resumen', 'eleccion'];
+const PESTANA = { eleccion: 'hoy', banco: 'mas', checkin: 'semana', plan: 'semana', perfil: 'mas', seccion: 'mas', pasado: 'progreso', datos: 'progreso', 'tablero-original': 'mas' };
 let antesDeFicha = null, finEntrada = null, extraActual = null, primeraVista = true, retornoInicial = null;
 function ir(vista, extra) {
+  if (vista === 'hoy' && primeraVista && E.plan) vista = 'eleccion';
   if (VISTAS_CON_PLAN.includes(vista) && (!E.plan)) vista = 'inicio';
   if (VISTAS_CON_PLAN.includes(vista) && E.plan?.bloqueado) { vistaBloqueada(); return; }
   if (vista === 'plan' && E.plan?.libre) vista = 'inicio'; // sin plan todavía: armarlo o seguir sin plan
   if (E.vista === 'eleccion' && vista !== 'eleccion') E.eleccionInicio = hoy(); // ya eligió (o se fue a otra pestaña)
   const anterior = E.vista;
-  // La sesión es una pantalla aparte: llegar a 'hoy' sin sesión en curso ni pedirla (al abrir la app, después de un
-  // cambio del Coach) muestra Entrenar. Volver de una ficha o del banco sí vuelve a la sesión.
-  if (vista === 'hoy' && !extra && !sesionEnCurso() && !['ejercicio', 'banco', 'hoy'].includes(anterior)) vista = 'entrenar';
-  document.body.classList.toggle('en-sesion', vista === 'hoy');
   // Al abrir una ficha se recuerda dónde estaba la persona; al volver, queda en el mismo ejercicio y a la misma altura.
   if (vista === 'ejercicio' && anterior !== 'ejercicio') antesDeFicha = { vista: anterior, y: scrollY, id: extra?.id };
   const volviendo = anterior === 'ejercicio' && antesDeFicha?.vista === vista ? antesDeFicha : null;
@@ -235,8 +230,8 @@ function ir(vista, extra) {
   abrirEnlacePerfiles(); // #perfiles=…: el enlace privado reemplaza pasar el archivo a cada teléfono
   const vistas = {
     inicio: vistaInicio, eleccion: () => vistaEleccion(ir), cuestionario: () => vistaRapido(ir, armarPlan), perfil: () => vistaPerfil(ir, armarPlan), seccion: () => vistaSeccion(ir),
-    plan: () => vistaPlan(ir, { armarPlan, nuevo: extra?.nuevo }), hoy: () => vistaHoy(ir, extra), entrenar: () => vistaEntrenar(ir), ejercicio: () => vistaFicha(ir, extra || {}), semana: () => vistaSemana(ir),
-    banco: () => vistaBanco(ir, extra || {}), coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), resumen: () => vistaResumen(ir, extra || {}), progreso: () => vistaProgreso(ir), pasado: () => vistaDiaPasado(ir, extra || {}), mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel: extra?.panel }), 'tablero-original': () => vistaTableroOriginal(ir),
+    plan: () => vistaPlan(ir, { armarPlan, nuevo: extra?.nuevo }), hoy: () => vistaHoy(ir, extra), ejercicio: () => vistaFicha(ir, extra || {}), semana: () => vistaSemana(ir),
+    banco: () => vistaBanco(ir, extra || {}), coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), resumen: () => vistaResumen(ir, extra || {}), progreso: () => vistaProgreso(ir), pasado: () => vistaDiaPasado(ir, extra || {}), datos: () => { vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel: 'respaldo' }); const titulo=document.querySelector('#vista-mas h1');if(titulo)titulo.textContent='Mis datos'; const b=document.getElementById('mas-volver'); if(b){b.querySelector('span').textContent='Progreso';b.onclick=()=>ir('progreso');} }, mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel: extra?.panel }), 'tablero-original': () => vistaTableroOriginal(ir),
   };
   // Al volver atrás, la pantalla queda a la altura donde se dejó (la misma que se vio debajo al deslizar).
   const vuelta = vista !== anterior && (esVuelta(anterior, vista) || volviendoConGesto());
@@ -264,18 +259,17 @@ function ir(vista, extra) {
     clearTimeout(finEntrada); finEntrada = setTimeout(() => $('app').classList.remove('entrando'), 500);
   }
   if (vista !== anterior) dibujarGraficos(vuelta ? null : $('app')); // al volver, los gráficos ya están dibujados
-  pintarMiniSesion(E.vista, ir); // fuera de la sesión, la barra de la sesión en curso sobre el menú
   programarAvisos(); // recordatorios de hoy con lo último (sesión hecha, suplemento tomado)
   actualizarPantalla(); // con una sesión en curso, la pantalla no se apaga sola
 }
-$('nav').addEventListener('click', e => { const b = e.target.closest('[data-ir]'); if (b) ir(b.dataset.ir); });
+$('nav').addEventListener('click', e => { const b = e.target.closest('[data-ir]'); if (b) ir(b.dataset.ir === 'hoy' && E.plan ? 'eleccion' : b.dataset.ir); });
 // El enlace de los perfiles también sirve si la app ya estaba abierta (solo cambia lo que va después del #).
 addEventListener('hashchange', () => abrirEnlacePerfiles());
 
 /** Encabezado: sin señal (lo anotado se guarda igual) o, con cuenta, el correo. En la versión de prueba, nada. */
 function pintarModo() {
   const m = $('modo');
-  const texto = modoEjemplo ? 'Ejemplo ficticio · Volver a mis datos' : errorGuardado ? 'Hay cambios sin guardar' : !navigator.onLine ? 'Sin señal · se guarda igual' : nube.conectado() ? (R().demo_privada ? 'Demo privada · Perfil ficticio' : nube.correo() || 'Cuenta') : nube.hay() ? 'Sin cuenta' : '';
+  const texto = modoEjemplo ? 'Ejemplo ficticio · Volver a mis datos' : !navigator.onLine ? 'Sin señal · se guarda igual' : nube.conectado() ? (R().demo_privada ? 'Demo privada · Perfil ficticio' : nube.correo() || 'Cuenta') : nube.hay() ? 'Sin cuenta' : '';
   const aviso = perfilDePrueba && !modoEjemplo ? `${perfilDePrueba.nombre}${texto ? ' · ' + texto : ''}` : texto;
   const html = !navigator.onLine ? sinSenalHtml(aviso) : esc(aviso);
   if (m.dataset.html !== html) { m.innerHTML = html; m.dataset.html = html; } // sin parpadeo al cambiar de pantalla
@@ -319,7 +313,6 @@ retornoInicial = retornoGuardado(E.pantallaGuardada, E, hoy());
 ir(!retornoInicial && !['cuestionario', 'perfil', 'seccion'].includes(E.vista) && eleccionPendiente() ? 'eleccion'
   : retornoInicial?.vista || (['cuestionario', 'hoy', 'semana', 'coach', 'progreso', 'mas', 'checkin', 'plan', 'perfil', 'seccion', 'tablero-original'].includes(E.vista) ? E.vista : (E.plan ? 'hoy' : 'inicio')), retornoInicial?.extra);
 requestAnimationFrame(() => requestAnimationFrame(() => { $('app').dataset.cargaMs = String(Math.round(performance.now())); }));
-observarCuerpos(); // figuras del cuerpo (app/cuerpo.js): se dibujan solas al aparecer
 // Atrás: deslizar desde el borde izquierdo o el botón atrás del teléfono (app/atras.js).
 instalarAtras(() => accionAtras({ vista: E.vista, extra: extraActual, ir, conPlan: Boolean(E.plan) }));
 // Con la clave de Hevy Pro, lo nuevo de Hevy entra solo; si llega algo, se redibuja la vista (sin mover la pantalla).

@@ -22,7 +22,7 @@ const texto = obj => ({ content: [{ type: 'text', text: typeof obj === 'string' 
 export function permitidos({ indice, respuestas: r, derivados: d, hoy }) {
   const lugar = (r.lugares || []).find(l => l.principal) || (r.lugares || [])[0] || { equipamiento: [] };
   const bloqueadas = articulacionesBloqueadas(r.lesiones || [], hoy);
-  return indice.ejercicios.filter(e => !e.extra && tieneEquipo(e, lugar.equipamiento || []) && nivelAlcanza(d.nivel, e.nivel_minimo) && !cargaZonaBloqueada(e, bloqueadas));
+  return indice.ejercicios.filter(e => tieneEquipo(e, lugar.equipamiento || []) && nivelAlcanza(d.nivel, e.nivel_minimo) && !cargaZonaBloqueada(e, bloqueadas));
 }
 
 /**

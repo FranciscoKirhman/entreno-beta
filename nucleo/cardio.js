@@ -29,6 +29,7 @@ export function registroCardio(texto, marca) {
   const c = cardioDeTexto(texto);
   return { ejercicio_id: ['bicicleta', 'remoergometro'].includes(c?.id) ? null : c?.id || null,
     ejercicio_nombre: c?.nombre || 'Cardio', tipo: 'efectiva', carga_kg: null, reps: null, duracion_seg: seg, rir: null, rpe: null,
+    ...(Number.isInteger(Number(marca.pisos)) && Number(marca.pisos)>0 ? {pisos:Number(marca.pisos)} : {}),
     ...(km > 0 ? { distancia_m: Math.round(km * 1000) } : {}) };
 }
 

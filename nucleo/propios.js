@@ -5,10 +5,7 @@
 import { normalizar } from './catalogo.js';
 
 export const PREFIJO = 'propio_';
-// "Propio" aquí es "no está en el catálogo del servidor": los creados por la persona y los del banco ampliado
-// (extra_…), que suben sin id y con su nombre, y al bajar recuperan su id por el nombre (idsPropios).
-export const PREFIJO_EXTRA = 'extra_';
-export const esPropio = id => typeof id === 'string' && (id.startsWith(PREFIJO) || id.startsWith(PREFIJO_EXTRA));
+export const esPropio = id => typeof id === 'string' && id.startsWith(PREFIJO);
 
 // Qué tipo de ejercicio es: decide cómo se prescribe y se anota.
 export const TIPOS_PROPIO = {

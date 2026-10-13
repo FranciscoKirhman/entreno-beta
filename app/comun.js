@@ -15,13 +15,7 @@ import { revisarTrasladoCuenta } from '../nucleo/consentimiento-nube.js';
 const cargar = u => fetch(u).then(r => { if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.json(); });
 export const [C, catalogo, K, EVIDENCIA, PLANES, TECNICA] = await Promise.all(
   ['cuestionario', 'ejercicios', 'checkin', 'evidencia', 'planes', 'tecnica'].map(n => cargar(`../contenido/${n}.json`)));
-// Banco ampliado (contenido/ejercicios-extra.json, datos MIT de hasaneyldrm/exercises-dataset, sin imágenes): se
-// pueden buscar, agregar a mano y reconocer al importar, pero no tienen revisión profesional ni entran al plan
-// automático (su patrón es 'otro', que el motor no usa) ni a las recomendaciones.
-const EXTRA = await cargar('../contenido/ejercicios-extra.json').catch(() => null);
-export const EXTRAS = (EXTRA?.ejercicios || []).map(x => ({ id: x.id, nombre: x.n, nombre_hevy: null, alias: [x.en], patron: 'otro',
-  musculos_primarios: x.p, musculos_secundarios: x.s, equipamiento: x.q, carga_articular: [], nivel_minimo: 'principiante', tipo: x.t, preferencia: 9, extra: true }));
-export const indice = crearIndice({ ...catalogo, ejercicios: [...catalogo.ejercicios, ...EXTRAS] });
+export const indice = crearIndice(catalogo);
 /** Imágenes que hay en app/img (las genera herramientas/imagenes.mjs): así no se piden las que todavía no existen. */
 export const IMAGENES = new Set(await fetch('img/disponibles.json').then(r => (r.ok ? r.json() : [])).catch(() => []));
 
@@ -126,12 +120,8 @@ export function guardar() {
     return true;
   } catch {
     errorGuardado = 'No se guardaron los últimos cambios en este teléfono. Descarga un respaldo antes de cerrar o recargar.';
-    let aviso = document.getElementById('error-guardado');
-    if (!aviso) { aviso = document.createElement('section'); aviso.id = 'error-guardado'; aviso.className = 'aviso alerta'; aviso.setAttribute('role', 'alert'); document.body.prepend(aviso); }
-    aviso.textContent = errorGuardado + ' Este respaldo de emergencia no incluye las fotos. ';
-    const boton = document.createElement('button'); boton.className = 'boton'; boton.textContent = 'Respaldar perfil y registros';
-    boton.onclick = () => { const enlace = document.createElement('a'); const url = URL.createObjectURL(new Blob([JSON.stringify(respaldo())], { type: 'application/json' })); enlace.href = url; enlace.download = 'entreno-respaldo-emergencia.json'; enlace.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); };
-    aviso.append(boton);
+    // El estado interno conserva el fallo; no se interrumpe el entrenamiento con un aviso persistente.
+    document.getElementById('error-guardado')?.remove();
     return false;
   }
 }
@@ -274,11 +264,6 @@ export async function cambiarPlan(plan, mensaje, nube) {
   // escritura sigue en curso, y permite recuperarla si se cierra la app.
   if (remoto) E.planPendiente = structuredClone(plan);
   else if (plan.libre) delete E.planPendiente;
-  // Antes de cambiar, una copia del plan anterior para poder deshacerlo (como los cambios del Coach de OpenGym). Solo las
-  // últimas tres: un plan pesa, y el teléfono tiene poco espacio. Lo registrado nunca está en la copia ni se toca.
-  if (E.plan && !E.plan.libre && plan !== E.plan && JSON.stringify(E.plan) !== JSON.stringify(plan)) {
-    E.cambiosPlan = [{ cuando: new Date().toISOString(), mensaje: mensaje || 'Cambio del plan', plan: structuredClone(E.plan) }, ...(E.cambiosPlan || [])].slice(0, 3);
-  }
   E.plan = plan; E.mensaje = mensaje || null; guardar();
   // El plan libre (entrenar sin plan) queda en el teléfono; las sesiones sí se sincronizan.
   if (!remoto) return null;

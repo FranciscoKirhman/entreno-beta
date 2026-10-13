@@ -99,9 +99,7 @@ const claveError = e => [e.codigo, e.fecha || '', e.ejercicio || '', e.musculo |
 export function validarCambio(antes, despues, ctx) {
   const previos = new Map(validarPlan(antes, ctx).errores.map(e => [claveError(e), e.valor ?? 0]));
   const v = validarPlan(despues, ctx);
-  // Pasarse del tiempo disponible no bloquea un cambio que pide la persona (Francisco, 13 de octubre de 2026): la vista
-  // previa ya dice cuánto dura la sesión, así que queda como advertencia.
-  const esNuevo = e => (!previos.has(claveError(e)) || (e.valor ?? 0) > previos.get(claveError(e))) && e.codigo !== 'duracion';
+  const esNuevo = e => !previos.has(claveError(e)) || (e.valor ?? 0) > previos.get(claveError(e));
   const errores = v.errores.filter(esNuevo);
   return { ok: errores.length === 0, errores, advertencias: [...v.advertencias, ...v.errores.filter(e => !esNuevo(e))] };
 }

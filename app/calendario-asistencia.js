@@ -1,3 +1,4 @@
+import { datoCambiado } from './datos-nube.js';
 import { E, guardar, esc, hoy, avisar } from './comun.js';
 import { calendarioAsistencia, cambiarAsistencia } from '../nucleo/calendario-asistencia.js';
 let mes = null;
@@ -25,6 +26,7 @@ function detalle(x) {
   const futuro = x.fecha >= hoy();
   const boton = (a, texto) => `<button type="button" class="boton${a === 'hice' ? ' primario' : ''}" data-cal-accion="${a}" data-cal-dia="${x.fecha}">${texto}</button>`;
   return `<div class="cal-detalle" aria-live="polite"><strong>${esc(fechaLarga(x.fecha))}</strong><p>${esc(x.dia?.foco || x.registrado?.sesion?.titulo || 'Sin entrenamiento planificado')}</p><p class="pequeno">${esc(x.etiqueta)}${x.registrado?.el ? `. Registrado el ${esc(fechaLarga(x.registrado.el))}` : ''}</p>
+    ${x.registrado?.sesion ? `<p class="pequeno">${x.registrado.sesion.series?.filter(s=>s.tipo!=='calentamiento').length || 0} series registradas${x.registrado.sesion.duracion_min ? ` · ${x.registrado.sesion.duracion_min} min` : ''}</p><ul class="pequeno">${[...new Set((x.registrado.sesion.series||[]).map(s=>s.ejercicio_nombre||s.ejercicio_id).filter(Boolean))].map(n=>`<li>${esc(n)}</li>`).join('')}</ul>` : ''}
     ${x.confirmado ? `<p class="pequeno suave">${x.registrado?.t === 'hecha_sin_registro' ? 'Confirmaste que entrenaste, sin inventar series.' : 'Las series registradas se conservan.'}</p>${x.registrado?.t === 'hecha_sin_registro' ? boton('pendiente', 'Corregir mi confirmación') : ''}` : !x.dia ? '' : `<div class="cal-acciones">${futuro ? boton(x.color === 'gris' ? 'voy' : 'no_voy', x.color === 'gris' ? 'Sí voy a ir' : 'No voy a ir') : x.color === 'gris' ? boton('hice', 'Sí entrené') + boton('pendiente', 'Volver a revisar') : boton('hice', 'Sí entrené') + boton('falte', 'Falté') + boton('pendiente', 'Revisar después')}</div>`}
   </div>`;
 }
@@ -37,7 +39,7 @@ export function enlazarCalendario(repintar) {
     const x = c.dias.find(d => d.fecha === fecha);
     const r = cambiarAsistencia(E.marcasPlan || {}, fecha, b.dataset.calAccion, { hoy: hoy(), confirmado: x?.confirmado && x.registrado?.t !== 'hecha_sin_registro', tienePlan: Boolean(x?.dia) });
     if (r.error) return avisar(r.error);
-    E.marcasPlan = r.marcas; guardar(); repintar();
+    E.marcasPlan = r.marcas; datoCambiado('calendario_asistencia'); repintar();
     document.querySelector(`[data-cal-fecha="${fecha}"]`)?.focus();
   });
 }

@@ -78,7 +78,7 @@ function graficoHtml(id, filas, medida, periodo) {
   return lineaSimple({ puntos, desde, hasta, min, max, marcas, titulo: `${NOMBRE[medida]}, ${puntos.length} ${puntos.length === 1 ? 'sesión' : 'sesiones'}`, unir: 400, izquierda: medida === 'volumen' ? 46 : 50 });
 }
 
-export function progresoEjercicioHtml(id, { asistido = false, conHistorial = false } = {}) {
+export function progresoEjercicioHtml(id, { asistido = false } = {}) {
   const series = seriesAnotadas(E.sesiones, E.registro);
   const filas = porSesion(series, id, { asistido });
   if (!filas.length) return '';
@@ -97,12 +97,12 @@ export function progresoEjercicioHtml(id, { asistido = false, conHistorial = fal
     ${medidas.length > 1 ? `<div class="chips-botones chips-medida" role="group" aria-label="Qué medir">${medidas.map(m => `<button type="button" class="chip-opcion" data-medida="${m}" aria-pressed="${m === sel.medida}">${esc(nombre(m))}</button>`).join('')}</div>` : `<p class="sobretitulo">${esc(nombre(medidas[0]))}</p>`}
     <div id="grafico-ejercicio">${graficoHtml(id, filas, sel.medida, sel.periodo)}</div>
     <div class="segmentos periodo" role="group" aria-label="Período">${PERIODOS.map(([v, t]) => `<button type="button" data-periodo="${v}" aria-pressed="${v === sel.periodo}">${t}</button>`).join('')}</div>
-    ${porReps.length ? `<details class="extra"><summary>Récords por repeticiones</summary>
+    ${porReps.length ? `<details class="extra"><summary>Tu mejor peso para cada número de repeticiones</summary>
       <ul class="pequeno lista-simple por-reps">${porReps.map(x => `<li><span>${x.reps} ${x.reps === 1 ? 'repetición' : 'repeticiones'}</span><span><strong class="num">${esc(`${num(enUnidad(x.carga_kg))} ${u}`)}</strong> <span class="suave">${esc(fechaCorta(x.fecha))}</span></span></li>`).join('')}</ul></details>` : ''}
-    ${conHistorial ? '' : '<!-- el historial está en la pestaña Historial de la ficha -->'}${!conHistorial ? '' : `<details class="extra"${historialCompleto ? ' open' : ''}><summary>Historial: ${sesiones.length} ${sesiones.length === 1 ? 'sesión' : 'sesiones'}</summary>
+    <details class="extra"${historialCompleto ? ' open' : ''}><summary>Historial: ${sesiones.length} ${sesiones.length === 1 ? 'sesión' : 'sesiones'}</summary>
       <ul class="pequeno detalle-h historial-ejercicio">${(historialCompleto ? sesiones : sesiones.slice(0, 8)).map(f => `<li><strong>${esc(fechaCorta(f.fecha))}</strong>: <span class="num">${esc(textoSesion(f))}</span></li>`).join('')}</ul>
       ${sesiones.length > 8 ? `<button type="button" class="enlace pequeno" id="historial-ejercicio-todo">${historialCompleto ? 'Ver menos' : `Ver las ${sesiones.length}`}</button>` : ''}
-    </details>`}
+    </details>
   </section>`;
 }
 

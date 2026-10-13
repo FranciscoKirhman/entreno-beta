@@ -154,7 +154,7 @@ function sugerencias(r) {
   const equipo = lugarPrincipal()?.equipamiento || [];
   const niv = nivelDeclarado(r);
   const vistos = new Set();
-  return indice.ejercicios.filter(e => !e.extra && e.tipo !== 'movilidad' && tieneEquipo(e, equipo) && nivelAlcanza(niv, e.nivel_minimo))
+  return indice.ejercicios.filter(e => e.tipo !== 'movilidad' && tieneEquipo(e, equipo) && nivelAlcanza(niv, e.nivel_minimo))
     .sort((a, b) => (ORDEN_TIPO[a.tipo] ?? 4) - (ORDEN_TIPO[b.tipo] ?? 4) || a.preferencia - b.preferencia || a.nombre.localeCompare(b.nombre))
     .filter(e => (vistos.has(e.patron) ? false : vistos.add(e.patron)))
     .slice(0, 14);
@@ -354,7 +354,7 @@ function enlazarRapido(ir, armarPlan) {
     if (el.dataset.buscarFav !== undefined) {
       const n = el.value.trim().toLowerCase();
       const v = r.favoritos || [];
-      $('res-fav').innerHTML = n.length < 2 ? '' : indice.ejercicios.filter(e => !e.extra && !v.includes(e.id) && `${e.nombre} ${e.nombre_hevy || ''}`.toLowerCase().includes(n)).slice(0, 8)
+      $('res-fav').innerHTML = n.length < 2 ? '' : indice.ejercicios.filter(e => !v.includes(e.id) && `${e.nombre} ${e.nombre_hevy || ''}`.toLowerCase().includes(n)).slice(0, 8)
         .map(e => `<button type="button" class="chip-opcion" data-fav="${e.id}" aria-pressed="false">${esc(e.nombre)}</button>`).join('') || '<span class="suave pequeno">Sin resultados</span>';
     }
   });
@@ -481,7 +481,7 @@ function resultadosBusqueda(pid, q) {
   if (!caja) return;
   const n = q.trim().toLowerCase();
   if (n.length < 2) { caja.innerHTML = ''; return; }
-  const lista = indice.ejercicios.filter(e => !e.extra && `${e.nombre} ${e.nombre_hevy}`.toLowerCase().includes(n)).slice(0, 8);
+  const lista = indice.ejercicios.filter(e => `${e.nombre} ${e.nombre_hevy}`.toLowerCase().includes(n)).slice(0, 8);
   caja.innerHTML = lista.map(e => `<label><input type="checkbox" data-p="${pid}" data-agregar="${e.id}">${esc(e.nombre)}</label>`).join('') || '<span class="suave pequeno">Sin resultados</span>';
 }
 

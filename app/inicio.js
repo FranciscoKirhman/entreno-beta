@@ -67,7 +67,7 @@ export const eleccionPendiente = () => (modoEjemplo ? null
 
 /** Para quien ya tiene plan: la sesión planificada o una vacía (o, con plan libre, armar el plan). */
 export function vistaEleccion(ir) {
-  const x = eleccionDeHoy({ plan: E.plan, hoy: hoy(), registro: E.registro, sesiones: E.sesiones });
+  const x = eleccionDeHoy({ plan: E.plan, hoy: hoy(), registro: {}, sesiones: [] });
   if (!x) return ir('hoy');
   const dia = x.dia, ejercicios = dia?.ejercicios || [];
   const series = ejercicios.reduce((n, e) => n + (Number(e.series) || 0), 0);
@@ -79,10 +79,10 @@ export function vistaEleccion(ir) {
     <h1>¿Cómo entrenas hoy?</h1>
     <div class="opciones-inicio">
       ${x.libre ? opcion('eleccion-cuestionario', respondio() ? 'Seguir armando mi plan' : 'Armar mi plan', 'Unas preguntas cortas y te armo un plan para tu semana.', respondio() ? 'Seguir con el cuestionario' : 'Empezar el cuestionario')
-        : dia ? opcion('eleccion-plan', esc(dia.foco), `Sesión planificada: ${ejercicios.length} ${ejercicios.length === 1 ? 'ejercicio' : 'ejercicios'}, ${series} series${minutos ? `, unos ${minutos} minutos` : ''}.`, 'Empezar la sesión planificada', minis ? `<span class="opcion-minis" aria-hidden="true">${minis}</span>` : '')
+        : dia ? opcion('eleccion-plan', 'Entrenamiento planificado', `${esc(dia.foco)}. Sesión planificada: ${ejercicios.length} ${ejercicios.length === 1 ? 'ejercicio' : 'ejercicios'}, ${series} series${minutos ? `, unos ${minutos} minutos` : ''}.`, 'Empezar la sesión planificada', minis ? `<span class="opcion-minis" aria-hidden="true">${minis}</span>` : '')
         : opcion('eleccion-plan', 'Hoy toca descanso', x.proxima ? `La próxima sesión planificada es ${esc(x.proxima.foco)}, el ${esc(fechaCorta(x.proxima.fecha))}.` : 'Hoy no tienes una sesión planificada.', 'Ir a Hoy')}
       ${x.libre ? opcion('eleccion-vacia', 'Entrenar sin plan', 'Una sesión vacía: eliges tus ejercicios desde el banco.', 'Empezar sesión vacía')
-        : opcion('eleccion-vacia', 'Sesión vacía', 'Empiezas sin ejercicios y eliges desde el banco. Antes te muestro cómo queda hoy y lo confirmas.', 'Empezar sesión vacía')}
+        : opcion('eleccion-vacia', 'Empezar entrenamiento vacío', 'Empiezas sin ejercicios y eliges desde el banco. Antes te muestro cómo queda hoy y lo confirmas.', 'Empezar sesión vacía')}
     </div>
     ${cuentaNuevaHtml()}
   </div>`;
