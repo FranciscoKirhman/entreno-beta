@@ -26,6 +26,8 @@ const EQUIPO = Object.fromEntries(C.secciones.flatMap(s => s.preguntas || []).fi
 const NIVEL = { principiante: 'Para todos los niveles', intermedio: 'Desde nivel intermedio', avanzado: 'Para nivel avanzado' };
 const musculos = xs => lista(xs.map(m => NOMBRE_MUSCULO[m] || m));
 
+let tecnicaExtraCache = null;
+const tecnicaExtra = () => (tecnicaExtraCache ||= fetch('../contenido/tecnica-extra.json').then(r => (r.ok ? r.json() : { tecnica: {} })).then(d => d.tecnica || {}));
 const PESTANAS = [['resumen', 'Resumen'], ['historial', 'Historial'], ['como', 'Cómo se hace']];
 let pestanaFicha = 'resumen', fichaAnterior = null; // la pestaña elegida sigue al volver a la misma ficha
 
@@ -162,7 +164,8 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
     ${anim && dibujo ? `<details class="extra ficha-ilustracion"><summary>Ver la ilustración de las dos posiciones</summary><img class="ficha-dibujo" src="${dibujo}" alt="Cómo se hace: ${esc(ej.nombre)}" width="960" height="640" loading="lazy"></details>` : ''}
     <h1>${esc(ej.nombre)}</h1>
     <p class="ficha-musculos-texto suave">Principal: ${esc(mayuscula(musculos(ej.musculos_primarios)))}${ej.musculos_secundarios.length ? `<br>Secundarios: ${esc(mayuscula(musculos(ej.musculos_secundarios)))}` : ''}</p>
-    <p class="ficha-sub suave">${esc(ej.propio ? ['Creado por ti', ...ej.equipamiento.map(q => EQUIPO[q]).filter(Boolean).slice(0, 2)].join(' · ') : [...ej.equipamiento.map(q => EQUIPO[q]).filter(Boolean).slice(0, 2), NIVEL[ej.nivel_minimo]].filter(Boolean).join(' · '))}</p>
+    ${ej.extra ? '<p><span class="chip chip-sin-revision">Banco ampliado · sin revisión profesional</span></p>' : ''}
+    <p class="ficha-sub suave">${esc(ej.propio ? ['Creado por ti', ...ej.equipamiento.map(q => EQUIPO[q]).filter(Boolean).slice(0, 2)].join(' · ') : [...ej.equipamiento.map(q => EQUIPO[q]).filter(Boolean).slice(0, 2), ej.extra ? null : NIVEL[ej.nivel_minimo]].filter(Boolean).join(' · '))}</p>
     ${E.notasFijas?.[id] ? `<p class="nota-fija">${icono('lapiz', 'icono icono-chico')}<span>Tu nota fija: ${esc(E.notasFijas[id])}</span></p>` : ''}
 
 
@@ -214,7 +217,8 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
       <div class="fila-botones"><a class="boton video" href="${esc(enlaceVideo(ej))}" target="_blank" rel="noopener">${icono('video')} Ver videos de técnica</a><button type="button" class="boton" id="borrar-propio">Borrar este ejercicio</button></div></section>` : ''}
     <section class="tarjeta"${ej.propio ? ' hidden' : ''}>
       <h2>Cómo se hace</h2>
-      <ol class="pasos">${t.pasos.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
+      ${ej.extra ? '<p class="aviso ojo pequeno">Del banco ampliado: estas instrucciones vienen de un banco abierto y todavía no las revisa un profesional. Por eso no entra a tu plan automático.</p>' : ''}
+      <ol class="pasos" id="ficha-pasos">${t.pasos.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
       ${t.ojo.length ? `<p class="sobretitulo ojo-titulo">Ojo con</p><ul class="ojo">${t.ojo.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
       <a class="boton video" href="${esc(enlaceVideo(ej))}" target="_blank" rel="noopener">${icono('video')} Ver videos de técnica</a>
       <div class="futura-en-ficha">${botonFuturo('revisionTecnica', { simbolo: 'camara' })}${avisoFuturo('revisionTecnica')}</div>
@@ -226,6 +230,8 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
   </div>`;
 
   if (anim) montarAnimacion($('ficha-animacion'), anim, { nombre: ej.nombre });
+  // Banco ampliado: las instrucciones en español se cargan aparte, solo al abrir una de sus fichas.
+  if (ej.extra) tecnicaExtra().then(t => { const ol = $('ficha-pasos'); if (ol && t[id]) ol.innerHTML = t[id].map(x => `<li>${esc(x)}</li>`).join(''); }).catch(() => {});
   enlazarFuturos($('vista-ficha'));
   const atras = () => (antes ? vistaFicha(ir, antes) : ir(desde, desde === 'hoy' ? { ej: id } : undefined));
   $('volver').onclick = atras;

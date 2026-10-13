@@ -398,3 +398,4 @@ button.historial-ficha-cab{cursor:pointer}
 .cab-sesion .cuerpo path{stroke:var(--bg)}
 .mapa-musculos .segmentos{display:flex;margin:6px 0 4px}
 .mapa-musculos .segmentos button{flex:1}
+.chip-sin-revision{background:var(--warning-soft);color:var(--warning)}

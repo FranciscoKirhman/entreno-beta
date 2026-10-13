@@ -7,6 +7,7 @@ const COMPLEMENTOS = { empuje_horizontal: 'tiron_horizontal', tiron_horizontal: 
 const OBJETIVOS = { ganar_musculo: 'ganar músculo', ganar_fuerza: 'ganar fuerza', salud: 'mejorar tu condición física', bajar_grasa: 'bajar grasa', recomposicion: 'tu recomposición', volver: 'retomar el entrenamiento', deporte: 'tu deporte' };
 
 export function recomendarEjercicios(ctx, { candidatos = ctx.indice.ejercicios, limite = 3 } = {}) {
+  candidatos = candidatos.filter(e => !e.extra); // el banco ampliado no tiene revisión profesional: no se recomienda
   const { indice, hoy, derivados: d, respuestas: r, sesiones = [] } = ctx;
   if (!ctx.plan?.dias?.length || ctx.plan.bloqueado || d.alerta === 'bloqueo') return [];
   const dia = ctx.plan.dias.find(x => x.fecha === hoy);

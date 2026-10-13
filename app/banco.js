@@ -23,7 +23,7 @@ export function vistaBanco(ir, { desde = ultimoDesde } = {}) {
   const opciones = (xs, nombres, valor) => xs.map(x => `<option value="${esc(x)}"${x === valor ? ' selected' : ''}>${esc(nombres[x] || mayuscula(x.replaceAll('_', ' ')))}</option>`).join('');
   const musculos = [...new Set(indice.ejercicios.flatMap(e => [...e.musculos_primarios, ...e.musculos_secundarios]))].sort();
   const equipos = [...new Set(indice.ejercicios.flatMap(e => e.equipamiento))].sort();
-  const propios = E.ejerciciosPropios?.length || 0, conTecnica = indice.ejercicios.filter(e => !e.propio).length;
+  const propios = E.ejerciciosPropios?.length || 0, conTecnica = indice.ejercicios.filter(e => !e.propio && !e.extra).length;
   // Como en la app de Apple: título, buscador, filtros en píldoras, accesos en una lista agrupada y el banco en filas
   // ordenadas por letra, cada una con su miniatura y un + para sumarla a hoy (con vista previa antes de cambiar).
   $('app').innerHTML = `<div id="vista-banco">
@@ -65,7 +65,7 @@ export function vistaBanco(ir, { desde = ultimoDesde } = {}) {
   const fila = e => {
     const motivo = motivoNoAgregar(e, ctxNucleo());
     const detalle = [e.musculos_primarios.map(m => mayuscula(NOMBRE_MUSCULO[m] || m)).slice(0, 2).join(', '), e.equipamiento.map(q => EQUIPO[q] || q.replaceAll('_', ' ')).slice(0, 2).join(', ') || 'Peso del cuerpo'].filter(Boolean).join(' · ');
-    const texto = `${miniatura(e.id).replace('<img ', '<img loading="lazy" ')}<span class="banco-item-texto"><strong>${esc(e.nombre)}${e.propio ? ' <span class="chip">Tuyo</span>' : ''}</strong><small>${esc(detalle)}</small>${motivo ? `<small class="banco-motivo">${esc(motivo)}</small>` : ''}</span>`;
+    const texto = `${miniatura(e.id).replace('<img ', '<img loading="lazy" ')}<span class="banco-item-texto"><strong>${esc(e.nombre)}${e.propio ? ' <span class="chip">Tuyo</span>' : e.extra ? ' <span class="chip chip-sin-revision">Sin revisión</span>' : ''}</strong><small>${esc(detalle)}</small>${motivo ? `<small class="banco-motivo">${esc(motivo)}</small>` : ''}</span>`;
     // En la sesión, tocar la fila la elige (como Hevy) y la ficha queda en el botón de información.
     if (sesion) return `<li class="banco-item${elegidos.has(e.id) ? ' elegido' : ''}">
       <button type="button" class="banco-item-ficha" data-banco-elegir="${e.id}" aria-pressed="${elegidos.has(e.id)}"${motivo ? ' disabled' : ''} aria-label="${esc(motivo ? `${e.nombre}: ${motivo}` : `Elegir ${e.nombre}`)}">${texto}</button>

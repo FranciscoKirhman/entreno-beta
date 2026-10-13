@@ -15,7 +15,13 @@ import { revisarTrasladoCuenta } from '../nucleo/consentimiento-nube.js';
 const cargar = u => fetch(u).then(r => { if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.json(); });
 export const [C, catalogo, K, EVIDENCIA, PLANES, TECNICA] = await Promise.all(
   ['cuestionario', 'ejercicios', 'checkin', 'evidencia', 'planes', 'tecnica'].map(n => cargar(`../contenido/${n}.json`)));
-export const indice = crearIndice(catalogo);
+// Banco ampliado (contenido/ejercicios-extra.json, datos MIT de hasaneyldrm/exercises-dataset, sin imágenes): se
+// pueden buscar, agregar a mano y reconocer al importar, pero no tienen revisión profesional ni entran al plan
+// automático (su patrón es 'otro', que el motor no usa) ni a las recomendaciones.
+const EXTRA = await cargar('../contenido/ejercicios-extra.json').catch(() => null);
+export const EXTRAS = (EXTRA?.ejercicios || []).map(x => ({ id: x.id, nombre: x.n, nombre_hevy: null, alias: [x.en], patron: 'otro',
+  musculos_primarios: x.p, musculos_secundarios: x.s, equipamiento: x.q, carga_articular: [], nivel_minimo: 'principiante', tipo: x.t, preferencia: 9, extra: true }));
+export const indice = crearIndice({ ...catalogo, ejercicios: [...catalogo.ejercicios, ...EXTRAS] });
 /** Imágenes que hay en app/img (las genera herramientas/imagenes.mjs): así no se piden las que todavía no existen. */
 export const IMAGENES = new Set(await fetch('img/disponibles.json').then(r => (r.ok ? r.json() : [])).catch(() => []));
 
