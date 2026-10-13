@@ -57,6 +57,7 @@ export function ajustarEjercicio({ objetivo: o, hechas, semanas = [], subioRecie
   // Calidad: con técnica rota, rango parcial o dolor, no se sube aunque se hayan completado las repeticiones.
   if (hechas.some(s => reserva(s) == null || !Number.isFinite(reserva(s)))) return mantener('sin_esfuerzo', 'Falta el esfuerzo de alguna serie: confirma RPE o RIR antes de aumentar carga o repeticiones.');
   if (!completas) return mantener('series_incompletas', 'Faltan series del plan: completa la sesión antes de aumentar carga o repeticiones.');
+  if (o.carga_kg > 0 && hechas.some(s => s.carga_kg == null || (asistido ? s.carga_kg > o.carga_kg : s.carga_kg < o.carga_kg))) return mantener('carga_no_consolidada', 'La carga pedida no se completó en todas las series: consolídala antes de aumentar.');
   if (!conReserva) return mantener('esfuerzo_alto', 'Las series salieron más difíciles que la reserva pedida: consolida el mismo peso y las mismas repeticiones.');
   const cal = calidadPermiteSubir(calidad || {});
   if (!cal.ok && ((todasAlTope && conReserva) || sobrabanMuchas)) return mantener('calidad', cal.motivo);
@@ -101,6 +102,7 @@ function ajustarAsistido({ objetivo: o, hechas, subioRecien, incremento, calidad
   }
   if (hechas.some(s => reserva(s) == null || !Number.isFinite(reserva(s)))) return mantener('sin_esfuerzo', 'Falta el esfuerzo de alguna serie: confirma RPE o RIR antes de aumentar carga o repeticiones.');
   if (!completas) return mantener('series_incompletas', 'Faltan series del plan: completa la sesión antes de aumentar carga o repeticiones.');
+  if (o.carga_kg > 0 && hechas.some(s => s.carga_kg == null || s.carga_kg > o.carga_kg)) return mantener('carga_no_consolidada', 'Necesitaste más ayuda que la indicada: consolida la sesión antes de bajar la ayuda.');
   if (!conReserva) return mantener('esfuerzo_alto', 'Las series salieron más difíciles que la reserva pedida: consolida el mismo peso y las mismas repeticiones.');
   const cal = calidadPermiteSubir(calidad || {});
   if (!cal.ok && ((todasAlTope && conReserva) || sobrabanMuchas)) return mantener('calidad', cal.motivo);

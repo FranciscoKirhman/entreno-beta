@@ -1,6 +1,7 @@
 // Check-in semanal (contenido/checkin.json → semanal): junta las series y las notas de una semana del plan,
 // propone subir, mantener o bajar cada carga (nucleo/progresion.js → ajustarSemana) y, cuando la persona
 // confirma, lo aplica a la semana siguiente. Funciona igual sin cuenta y con cuenta.
+import { estadoDelPlan } from './registrado.js';
 import { ajustarSemana } from './progresion.js';
 import { e1rm } from './motor-plan.js';
 import { conReservaReportada, doloresDeNotas } from './notas.js';
@@ -58,9 +59,11 @@ export function semanaParaCheckin(plan, hoy, { hechos = {}, entrenadas = new Set
  */
 export function datosDeLaSemana({ plan, semana, sesiones = [], registro = {}, notas = {} }) {
   const registros = [], notasSemana = [], dias = [];
+  const hasta = plan.dias.map(d => d.fecha).sort().at(-1);
+  const asignadas = estadoDelPlan(plan, sesiones, { hoy: sumarDias(hasta, 1) }).porDia;
   for (const dia of plan.dias.filter(d => d.semana === semana)) {
     // La sesión de la app manda; si ese día solo hay una importada (Hevy), se usa esa.
-    const ses = sesiones.find(s => s.fecha === dia.fecha && !s.origen) || sesiones.find(s => s.fecha === dia.fecha);
+    const ses = asignadas.get(dia.fecha)?.sesion;
     let series = [];
     if (ses) {
       series = (ses.series || []).filter(s => s.ejercicio_id && esDeTrabajoGuardada(s))

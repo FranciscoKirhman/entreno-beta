@@ -211,3 +211,7 @@ body:has(#pantalla-pasos) .acciones-sesion{visibility:hidden}
 #vista-hoy .bienestar-caja>summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px}
 #vista-hoy .bienestar-titulo{max-width:60vw}
 body:has(#vista-hoy) .medalla-record{bottom:calc(env(safe-area-inset-bottom,0px) + 224px)}
+
+/* Calentamiento y estiramiento se registran junto a las series. */
+.pasos-tabla-cab,.pasos-tabla-fila{display:grid;grid-template-columns:minmax(0,1fr) 86px 44px;gap:8px;align-items:center}.pasos-tabla-cab{font-size:11px;color:var(--suave);margin:12px 0 4px}.pasos-tabla-fila{border-top:1px solid var(--borde,#ccc);padding:12px 0}.pasos-tabla-fila strong{display:block;font-size:14px;overflow-wrap:anywhere}.pasos-tabla-fila small{display:block;font-size:12px;margin:4px 0}.pasos-tabla-fila input{min-width:0;width:100%;box-sizing:border-box;font-size:13px;padding:8px 4px;min-height:44px}.pasos-tabla-fila details summary{font-size:12px;cursor:pointer}.pasos-tabla-fila.completa strong{color:var(--verde,#24754b)}.paso-tabla-hecho{width:44px;min-height:44px}.paso-tabla-hecho[aria-pressed="true"]{background:#c6ebd4;color:#145332;border-radius:10px}
+[data-tema="oscuro"] .pasos-tabla-fila.completa strong{color:#83d5a2}

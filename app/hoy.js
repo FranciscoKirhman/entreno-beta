@@ -90,7 +90,7 @@ export function vistaHoy(ir, extra) {
       ${avisoSinRegistro(f)}
       ${sups.length ? `<section class="tarjeta"><h3>Suplementos</h3><ul class="lista-check">${sups.map(s => `<li class="${s.estado}"><button type="button" class="check" data-toma="${s.suplemento_id}" ${s.estado === 'tomada' ? 'disabled aria-pressed="true"' : 'aria-pressed="false"'} aria-label="Marcar ${esc(s.nombre)} como tomado">${s.estado === 'tomada' ? '✓' : ''}</button><span>${esc(s.nombre)}${s.dosis ? ` · ${esc(s.dosis)}` : ''}</span><span class="suave pequeno">${s.hora || ''}${s.estado === 'atrasada' ? ' · atrasado' : ''}</span></li>`).join('')}</ul></section>` : ''}
     </div>
-    ${dia && !hechaEnHevy ? accesorioHtml(dia, f) : ''}
+
   </div>`;
   aplicarTamanoTexto();
   enlazar(ir, dia);
@@ -414,13 +414,19 @@ function filaPasosHtml(dia, f, tipo) {
     </div>`;
   }
   const s = estadoPasos(pasos, tipo, f);
-  const estado = s.completo ? 'Hecho' : s.saltado ? 'Saltado · tócalo para hacerlo igual' : s.n ? `${s.n} de ${pasos.length} pasos` : `${pasos.length} pasos · ~${minutosCalentamiento(pasos)} min${tipo === 'est' ? ' · opcional' : ''}`;
-  return `<button type="button" class="fila-pasos${s.completo ? ' completa' : ''}" data-abrir-pasos="${tipo}" aria-label="${esc(`${NOMBRE_PASOS[tipo]}: ${estado}. Abrir paso a paso`)}">
-    <span class="fila-pasos-icono" aria-hidden="true">${s.completo ? icono('visto') : dibujo}</span>
-    <span class="fila-pasos-texto" aria-hidden="true"><strong>${NOMBRE_PASOS[tipo]}</strong><small>${esc(estado)}</small></span>
-    ${s.n && !s.completo ? `<span class="fila-pasos-avance" aria-hidden="true"><i style="width:${Math.round((s.n / pasos.length) * 100)}%"></i></span>` : ''}
-    ${icono('flecha', 'icono fila-pasos-flecha')}
-  </button>`;
+  const medidas = E.pasosMedidas?.[f]?.[tipo] || {};
+  return `<section class="tarjeta pasos-tabla" aria-label="${NOMBRE_PASOS[tipo]}">
+    <div class="cab-tarjeta"><h3>${NOMBRE_PASOS[tipo]}</h3><span class="pequeno suave">${s.n} de ${pasos.length} hechos</span></div>
+    <p class="pequeno suave">${tipo === 'cal' ? 'Las aproximaciones están como filas C en cada ejercicio.' : 'Opcional al terminar. Anota segundos, repeticiones o minutos según lo previsto.'}</p>
+    <div class="pasos-tabla-cab" aria-hidden="true"><span>Movimiento y previsto</span><span>Realizado</span><span>Hecho</span></div>
+    ${pasos.map((p, i) => { const parte = partePaso(p.name), clave = p.clave || `${i}|${p.name}`;
+      return `<div class="pasos-tabla-fila${s.hechos[i] ? ' completa' : ''}">
+        <div><strong>${esc(parte.nombre)}</strong><small>${esc(parte.dosis || p.name)}</small><details><summary>Cómo hacerlo</summary><p class="pequeno">${esc(p.how || 'Sigue la dosis indicada en el plan.')}</p></details></div>
+        <input type="text" inputmode="text" maxlength="60" data-paso-real="${tipo}" data-paso-indice="${i}" value="${esc(medidas[clave] || '')}" placeholder="Sin anotar" aria-label="${esc(`Realizado: ${parte.nombre}, indica minutos, segundos o repeticiones`)}">
+        <button type="button" class="boton-icono paso-tabla-hecho" data-paso-tabla="${tipo}" data-paso-indice="${i}" aria-pressed="${s.hechos[i]}" aria-label="${esc(`${s.hechos[i] ? 'Desmarcar' : 'Marcar'} ${parte.nombre} como hecho`)}">${s.hechos[i] ? icono('visto') : '○'}</button>
+      </div>`; }).join('')}
+    <p class="pequeno suave">Marcar hecho confirma el movimiento. El valor realizado queda sin medir si no lo anotas.</p>
+  </section>`;
 }
 
 /** La pantalla paso a paso: arriba Minimizar, el título y Saltar; el avance (cada paso se puede tocar); el paso con su
@@ -760,6 +766,19 @@ function enlazar(ir, dia) {
     opciones: [{ valor: 'cerrar', icono: icono('visto'), nombre: 'Listo' }], alElegir: () => {},
   }));
   const raiz = $('vista-hoy');
+  raiz.querySelectorAll('[data-paso-real]').forEach(input => input.oninput = () => {
+    const tipo = input.dataset.pasoReal, i = Number(input.dataset.pasoIndice), p = pasosDe(dia, f, tipo)[i];
+    if (!p) return;
+    const clave = p.clave || `${i}|${p.name}`;
+    (((E.pasosMedidas ||= {})[f] ||= {})[tipo] ||= {})[clave] = input.value.slice(0, 60);
+    guardar();
+  });
+  raiz.querySelectorAll('[data-paso-tabla]').forEach(b => b.onclick = () => {
+    const tipo = b.dataset.pasoTabla, i = Number(b.dataset.pasoIndice), pasos = pasosDe(dia, f, tipo), p = pasos[i];
+    if (!p) return;
+    marcarPaso(f, tipo, p, i, !estadoPasos(pasos, tipo, f).hechos[i]);
+    guardar(); vistaHoyMantener(ir);
+  });
   const repintar = () => vistaHoyMantener(ir);
   $('cardio-hecho')?.addEventListener('click', () => {
     const antes = E.cardioHecho?.[f];
@@ -983,12 +1002,11 @@ function enlazar(ir, dia) {
   // Empezar: parte el tiempo de la solapa y, si hay calentamiento pendiente, abre su pantalla.
   $('empezar')?.addEventListener('click', () => {
     empezarSesion(f);
-    const pasos = pasosDe(dia, f, 'cal'), s = estadoPasos(pasos, 'cal', f);
-    if (pasos.length && !s.completo && !s.saltado && !avance(dia).hechas) pasosAbierta = { fecha: f, tipo: 'cal', i: null, nueva: true };
+    pasosAbierta = null;
     guardar(); repintar();
     actualizarPantalla();
     if (pasosAbierta) $('pasos-titulo')?.focus({ preventScroll: true });
-    else document.querySelector('#vista-hoy .ej [data-hecho]')?.closest('.ej')?.scrollIntoView({ block: 'start', behavior: sinMovimiento() ? 'auto' : 'smooth' });
+    else document.querySelector('.pasos-tabla, #vista-hoy .ej [data-hecho]')?.closest('.ej')?.scrollIntoView({ block: 'start', behavior: sinMovimiento() ? 'auto' : 'smooth' });
   });
 
   // Calentamiento y estiramiento: su fila (o la barra de abajo) abre la pantalla paso a paso.

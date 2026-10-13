@@ -41,11 +41,13 @@ export function estadoDelPlan(plan, sesiones = [], { hoy, marcas = {} } = {}) {
   const regs = sesiones.filter(s => s?.fecha && s.fecha >= sumar(inicio, -ATRAS)).sort((a, b) => (clave(a) < clave(b) ? -1 : 1));
   const hecha = new Map();
   // 1. Las de la app, a su día; las importadas, a la del plan que más se parece.
+  const porAsignar = [];
   for (const s of regs.filter(x => !x.origen)) {
     const d = dias.find(x => x.fecha === s.fecha);
-    if (d && !hecha.has(d.fecha)) hecha.set(d.fecha, s);
+    if (d && !hecha.has(d.fecha) && (!s.id_externo || parecido(d, s) >= PARECIDO)) hecha.set(d.fecha, s);
+    else porAsignar.push(s);
   }
-  for (const s of regs.filter(x => x.origen)) {
+  for (const s of [...regs.filter(x => x.origen), ...porAsignar].sort((a, b) => clave(a).localeCompare(clave(b)))) {
     let mejor = null, mp = 0;
     for (const d of dias) {
       if (hecha.has(d.fecha) || d.fecha < sumar(s.fecha, -ATRAS) || d.fecha > sumar(s.fecha, ADELANTE)) continue;
