@@ -3,6 +3,7 @@
 import { E, esc, $, hoy, indice, volumenTexto } from './comun.js';
 import { sumarDias, diaSemana } from '../nucleo/agenda.js';
 import { esAsistido } from '../nucleo/catalogo.js';
+import { seriesAnotadas } from '../nucleo/semanal.js';
 import { icono } from './iconos.js';
 
 const SEMANAS = 8;
@@ -58,3 +59,75 @@ export function enlazarProgresoHevy(repintar) {
     (destino.closest('section, details') || destino).scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   });
 }
+
+// ── Esfuerzo, como la tarjeta de OpenGym: lo que anotaste en cada serie, leído de vuelta ──
+const PERIODOS_ESF = [[30, '30 días'], [90, '90 días'], [365, '1 año'], [0, 'Todo']];
+let diasEsfuerzo = 90;
+
+/** RPE promedio (o RIR), cuántas series fueron cerca del fallo y cuántas tienen el esfuerzo anotado, por semana. */
+export function esfuerzoHtml(modo = 'rpe') {
+  const todas = seriesAnotadas(E.sesiones, E.registro);
+  if (!todas.length) return '';
+  const desde = diasEsfuerzo ? sumarDias(hoy(), -diasEsfuerzo) : '';
+  const xs = todas.filter(x => x.fecha >= desde);
+  const rpe = x => x.rpe ?? (x.rir != null ? 10 - x.rir : null);
+  const con = xs.filter(x => rpe(x) != null);
+  const fmt = v => String(Math.round(v * 10) / 10).replace('.', ',');
+  const prom = con.length ? con.reduce((a, x) => a + rpe(x), 0) / con.length : null;
+  const cerca = con.filter(x => rpe(x) >= 9).length;
+  const lunes = sumarDias(hoy(), -((diaSemana(hoy()) + 6) % 7));
+  const semanas = Array.from({ length: 8 }, (_, i) => sumarDias(lunes, -7 * (7 - i))).map(d => {
+    const s = todas.filter(x => x.fecha >= d && x.fecha <= sumarDias(d, 6) && rpe(x) != null);
+    return { d, n: s.length, v: s.length ? s.reduce((a, x) => a + rpe(x), 0) / s.length : null };
+  });
+  const valor = v => (modo === 'rir' ? 10 - v : v);
+  return `<section class="tarjeta esfuerzo-progreso" aria-label="Esfuerzo">
+    <h3>Esfuerzo</h3>
+    <div class="segmentos" role="group" aria-label="Período">${PERIODOS_ESF.map(([d, t]) => `<button type="button" data-dias-esfuerzo="${d}" aria-pressed="${d === diasEsfuerzo}">${t}</button>`).join('')}</div>
+    ${con.length ? `<div class="cifras-esfuerzo">
+      <span><strong class="num">${fmt(valor(prom))}</strong><small>${modo === 'rir' ? 'RIR' : 'RPE'} promedio</small></span>
+      <span><strong class="num">${Math.round((cerca / con.length) * 100)}%</strong><small>cerca del fallo (${modo === 'rir' ? 'RIR 1 o menos' : 'RPE 9 o más'})</small></span>
+      <span><strong class="num">${con.length} de ${xs.length}</strong><small>series con esfuerzo anotado</small></span>
+    </div>
+    <div class="barras-esfuerzo" role="img" aria-label="${esc(semanas.map(w => `semana del ${corta(w.d)}: ${w.v == null ? 'sin datos' : `${fmt(valor(w.v))}, ${w.n} series`}`).join('; '))}">
+      ${semanas.map((w, i) => `<div class="barra-semana${i === 7 ? ' actual' : ''}"><i style="height:${w.v == null ? 0 : Math.round(Math.max(0, (w.v - 5) / 5) * 100)}%"></i><span>${i % 2 ? esc(corta(w.d)) : ''}</span></div>`).join('')}
+    </div>
+    <p class="pequeno suave">Cada barra es el RPE promedio de la semana (de 5 a 10). El promedio solo cuenta las series donde anotaste el esfuerzo.</p>`
+      : `<p class="pequeno suave">No anotaste el esfuerzo en este período (${xs.length} series). Tócalo en la columna ${modo === 'rir' ? 'RIR' : 'RPE'} de cada serie y aquí vas a ver tu promedio.</p>`}
+  </section>`;
+}
+export function enlazarEsfuerzo(repintar) {
+  document.querySelectorAll('[data-dias-esfuerzo]').forEach(b => b.onclick = () => { diasEsfuerzo = Number(b.dataset.diasEsfuerzo); repintar(); });
+}
+
+// ── Tu año, como el mapa de actividad de OpenGym: un cuadro por día, más oscuro cuanto más rato entrenaste ──
+export function anioHtml() {
+  if (!E.sesiones.length) return '';
+  const minutos = new Map();
+  for (const s of E.sesiones) minutos.set(s.fecha, (minutos.get(s.fecha) || 0) + (Number(s.duracion_min) || 30));
+  const lunesHoy = sumarDias(hoy(), -((diaSemana(hoy()) + 6) % 7));
+  const inicio = sumarDias(lunesHoy, -7 * 52);
+  const nivel = m => (!m ? 0 : m < 30 ? 1 : m < 60 ? 2 : m < 90 ? 3 : 4);
+  const columnas = [], meses = [];
+  let dias = 0, total = 0;
+  for (let w = 0; w <= 52; w++) {
+    const lunes = sumarDias(inicio, 7 * w);
+    if (w === 0 || lunes.slice(5, 7) !== sumarDias(lunes, -7).slice(5, 7)) meses.push({ w, texto: MESES[Number(lunes.slice(5, 7)) - 1] });
+    columnas.push(Array.from({ length: 7 }, (_, d) => {
+      const f = sumarDias(lunes, d);
+      if (f > hoy()) return '<i class="vacio"></i>';
+      const m = minutos.get(f) || 0;
+      if (m) { dias++; total += m; }
+      return `<i class="n${nivel(m)}" title="${esc(`${corta(f)}${m ? `: ${m} min` : ''}`)}"></i>`;
+    }).join(''));
+  }
+  return `<section class="tarjeta anio-actividad" aria-label="Tu año">
+    <h3>Tu año</h3>
+    <p class="pequeno suave">${dias} ${dias === 1 ? 'día' : 'días'} entrenados y ${Math.round(total / 60)} horas en las últimas 53 semanas. Cada cuadro es un día; más oscuro, más rato.</p>
+    <div class="anio-desliza" id="anio-desliza"><div class="anio-meses" style="grid-template-columns:repeat(53,12px)">${meses.map(m => `<span style="grid-column:${m.w + 1}">${m.texto}</span>`).join('')}</div>
+      <div class="anio-cuadros" role="img" aria-label="${esc(`${dias} días entrenados en el último año`)}">${columnas.map(c => `<div>${c}</div>`).join('')}</div></div>
+    <div class="anio-leyenda pequeno suave">Menos <i class="n0"></i><i class="n1"></i><i class="n2"></i><i class="n3"></i><i class="n4"></i> Más</div>
+  </section>`;
+}
+/** El año parte mostrando las semanas recientes (a la derecha). */
+export function enlazarAnio() { const d = $('anio-desliza'); if (d) d.scrollLeft = d.scrollWidth; }

@@ -268,6 +268,11 @@ export async function cambiarPlan(plan, mensaje, nube) {
   // escritura sigue en curso, y permite recuperarla si se cierra la app.
   if (remoto) E.planPendiente = structuredClone(plan);
   else if (plan.libre) delete E.planPendiente;
+  // Antes de cambiar, una copia del plan anterior para poder deshacerlo (como los cambios del Coach de OpenGym). Solo las
+  // últimas tres: un plan pesa, y el teléfono tiene poco espacio. Lo registrado nunca está en la copia ni se toca.
+  if (E.plan && !E.plan.libre && plan !== E.plan && JSON.stringify(E.plan) !== JSON.stringify(plan)) {
+    E.cambiosPlan = [{ cuando: new Date().toISOString(), mensaje: mensaje || 'Cambio del plan', plan: structuredClone(E.plan) }, ...(E.cambiosPlan || [])].slice(0, 3);
+  }
   E.plan = plan; E.mensaje = mensaje || null; guardar();
   // El plan libre (entrenar sin plan) queda en el teléfono; las sesiones sí se sincronizan.
   if (!remoto) return null;

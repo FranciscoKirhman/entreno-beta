@@ -15,6 +15,7 @@ import { duracionSesion } from '../nucleo/motor-plan.js';
 import { miniatura } from './imagenes.js';
 import { icono } from './iconos.js';
 import * as nube from './nube.js';
+import { abrirCambiosPlan, hayCambiosPlan } from './cambios-plan.js';
 
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const nombreDia = iso => DIAS[new Date(iso + 'T12:00:00Z').getUTCDay()];
@@ -106,6 +107,7 @@ export function vistaEntrenar(ir) {
     <section class="carpeta-rutinas">
       <button type="button" class="carpeta-cab" id="carpeta-plan" aria-expanded="${planAbierto}">${icono('flecha', `icono carpeta-flecha${planAbierto ? ' abierta' : ''}`)}<span>Tu plan, ${cual} (${semana.length})</span></button>
       ${planAbierto ? `<ul class="rutinas">${semana.map(d => rutinaHtml(d, s)).join('') || '<li class="pequeno suave">Esta semana no tiene sesiones.</li>'}</ul>` : ''}
+      ${hayCambiosPlan() ? `<button type="button" class="enlace deshacer-plan" id="deshacer-plan">${icono('cambiar', 'icono icono-chico')} Deshacer un cambio del plan</button>` : ''}
     </section>
     ${sups.length ? `<section class="tarjeta"><h3>Suplementos</h3><ul class="lista-check">${sups.map(x => `<li class="${x.estado}"><button type="button" class="check" data-toma="${x.suplemento_id}" ${x.estado === 'tomada' ? 'disabled aria-pressed="true"' : 'aria-pressed="false"'} aria-label="Marcar ${esc(x.nombre)} como tomado">${x.estado === 'tomada' ? '✓' : ''}</button><span>${esc(x.nombre)}${x.dosis ? ` · ${esc(x.dosis)}` : ''}</span><span class="suave pequeno">${x.hora || ''}${x.estado === 'atrasada' ? ' · atrasado' : ''}</span></li>`).join('')}</ul></section>` : ''}
   </div>`;
@@ -117,6 +119,7 @@ export function vistaEntrenar(ir) {
   raiz.querySelectorAll('[data-elegir-cardio]').forEach(b => b.onclick = () => elegirCardio({ volver: b, alCambiar: () => ir('hoy', { sesion: true }) }));
   $('ver-semana').onclick = () => ir('semana');
   $('ver-plan').onclick = () => ir('plan');
+  $('deshacer-plan')?.addEventListener('click', ev => abrirCambiosPlan(ev.currentTarget, { alCambiar: () => vistaEntrenar(ir) }));
   $('abrir-revision')?.addEventListener('click', () => ir('coach', { revisar: true }));
   raiz.querySelectorAll('[data-ir-checkin]').forEach(b => b.onclick = () => ir('checkin', b.dataset.irCheckin));
   raiz.querySelectorAll('[data-ir-semana]').forEach(b => b.onclick = () => ir('semana'));

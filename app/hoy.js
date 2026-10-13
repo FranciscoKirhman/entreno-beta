@@ -342,6 +342,7 @@ const guardadaHoy = f => E.sesiones.some(s => s.fecha === f && !s.origen);
 const enCurso = f => Boolean(inicioDe(f)) && !guardadaHoy(f);
 const sugeridoDe = (f, tipo) => E.sugeridos?.[f]?.[tipo] ?? null; // 'agregado' o 'descartado'
 const NOMBRE_PASOS = { cal: 'Calentamiento', est: 'Estiramiento' };
+export const SENSACIONES = [['facil', 'Muy fácil'], ['justo', 'Justo'], ['brutal', 'Brutal']];
 let liberarDialogo = null;
 let pasosAbierta = null; // { fecha, tipo, i }: la pantalla paso a paso abierta (sigue abierta al repintar Hoy)
 
@@ -1430,7 +1431,7 @@ function enlazar(ir, dia) {
 
   // Terminar sesión (abajo o en la solapa): queda en el historial local y, con cuenta, en el servidor.
   let terminando = false;
-  const terminarSesion = async ({ titulo = dia.foco, comentario = '' } = {}) => {
+  const terminarSesion = async ({ titulo = dia.foco, comentario = '', sensacion = null } = {}) => {
     if (terminando) return;
     const series = [], notas = [];
     let orden = 0;
@@ -1467,6 +1468,8 @@ function enlazar(ir, dia) {
     // Lo que duró: desde "Empezar" (o la primera serie) hasta ahora.
     const minutos = anteriorGuardada ? anteriorGuardada.duracion_min : inicioDe(f) ? Math.max(1, Math.round((Date.now() - inicioDe(f)) / 6e4)) : avance(dia).cifras.minutos ?? (cardio ? Math.round(cardio.duracion_seg / 60) : null);
     E.sesiones.push({ id, fecha: f, hora, titulo, duracion_min: minutos, series, notas, ...(comentario ? { comentario } : {}) });
+    // Cómo se sintió (como OpenGym): aparte de la sesión, así no se pierde cuando la cuenta trae su copia.
+    if (sensacion) (E.sensaciones ||= {})[id] = sensacion; else if (E.sensaciones) delete E.sensaciones[id];
     E.mensaje = `Sesión guardada: ${series.length} serie${series.length === 1 ? '' : 's'}.`;
     detenerDescanso();
     guardar();
@@ -1486,7 +1489,7 @@ function enlazar(ir, dia) {
     if (!a.hechas && !cardioHecho) { avisar('Marca al menos una serie como hecha.'); return; }
     const minutos = anterior ? anterior.duracion_min : inicioDe(f) ? Math.max(1, Math.round((Date.now() - inicioDe(f)) / 6e4)) : null;
     const cuando = new Date(f + 'T12:00:00Z').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
-    let titulo = anterior?.titulo || dia.foco, comentario = anterior?.comentario || '';
+    let titulo = anterior?.titulo || dia.foco, comentario = anterior?.comentario || '', sensacion = (anterior && E.sensaciones?.[anterior.id]) || null;
     abrirHoja({
       titulo: anterior ? 'Guardar de nuevo' : 'Guardar sesión', volver: b,
       contenido: `<div class="guardar-sesion">
@@ -1497,6 +1500,7 @@ function enlazar(ir, dia) {
           <span><small>Series</small><strong class="num">${a.hechas}</strong></span>
         </div>
         <p class="pequeno suave guardar-cuando">${icono('calendario', 'icono icono-chico')} ${esc(mayuscula(cuando))}${inicioDe(f) ? `, desde las ${esc(new Date(inicioDe(f)).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }))}` : ''}</p>
+        <div class="guardar-sensacion"><span class="pequeno suave">¿Cómo se sintió?</span><div class="segmentos" role="radiogroup" aria-label="¿Cómo se sintió?">${SENSACIONES.map(([v, t]) => `<button type="button" role="radio" data-sensacion="${v}" aria-checked="${v === sensacion}">${t}</button>`).join('')}</div></div>
         <label class="guardar-nota"><span class="pequeno suave">¿Cómo te fue?</span><textarea id="guardar-comentario" rows="3" maxlength="500" placeholder="Deja una nota de la sesión">${esc(comentario)}</textarea></label>
         ${sinMarcar > 0 ? `<p class="aviso ojo pequeno">${sinMarcar === 1 ? 'Queda 1 serie sin marcar: no se guarda.' : `Quedan ${sinMarcar} series sin marcar: no se guardan.`} Si las hiciste, vuelve y márcalas.</p>` : ''}
       </div>`,
@@ -1506,12 +1510,16 @@ function enlazar(ir, dia) {
         ...(anterior ? [] : [{ valor: 'descartar', icono: icono('basurero'), clase: 'quitar', nombre: 'Descartar sesión', peligro: true }]),
       ],
       alElegir: v => {
-        if (v === 'guardar') terminarSesion({ titulo: titulo.trim() || dia.foco, comentario: comentario.trim() });
+        if (v === 'guardar') terminarSesion({ titulo: titulo.trim() || dia.foco, comentario: comentario.trim(), sensacion });
         else if (v === 'descartar') descartarSesion({ volver: b, alDescartar: () => ir('entrenar') });
       },
     });
     $('guardar-titulo')?.addEventListener('input', ev => { titulo = ev.target.value; });
     $('guardar-comentario')?.addEventListener('input', ev => { comentario = ev.target.value; });
+    document.querySelectorAll('#hoja [data-sensacion]').forEach(x => x.onclick = () => {
+      sensacion = sensacion === x.dataset.sensacion ? null : x.dataset.sensacion;
+      document.querySelectorAll('#hoja [data-sensacion]').forEach(y => y.setAttribute('aria-checked', String(y.dataset.sensacion === sensacion)));
+    });
   });
 }
 

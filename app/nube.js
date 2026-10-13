@@ -212,7 +212,7 @@ export async function guardarBienestar(fecha, b) {
 export async function registrarSesion({ id, fecha, hora, titulo, duracion_min, series = [], notas = [], origen, id_externo, comentario }) {
   if (origen === 'ejemplo') throw new Error('El historial ficticio no se sube a una cuenta.');
   const cuerpo = { sesion: { id, inicio: aIso(`${fecha}T${hora || '12:00'}`), titulo, duracion_min: duracion_min ?? null,
-    origen: origen === 'hevy' ? 'hevy_csv' : origen || 'app', id_externo: id_externo || null, comentario: comentario || null }, filas: sinIdPropio(series), notas: sinIdPropio(notas) };
+    origen: origen === 'hevy' ? 'hevy_csv' : ['strong', 'fitnotes'].includes(origen) ? 'manual' : origen || 'app', id_externo: id_externo || null, comentario: comentario || null }, filas: sinIdPropio(series), notas: sinIdPropio(notas) };
   const token = sesion.access_token;
   const r = await fetch(`${CONFIG.supabaseUrl}/rest/v1/rpc/guardar_sesion_completa`, { method: 'POST', headers: { apikey: CONFIG.supabaseAnonKey, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
   const d = await r.json().catch(() => ({}));

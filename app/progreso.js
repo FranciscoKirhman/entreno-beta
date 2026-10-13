@@ -3,7 +3,7 @@
 // fotos de progreso privadas, suplementos, indicaciones de tu médico o kinesiólogo, y lo que anotaste para el
 // entrenador.
 import { datoCambiado, sincronizarDatosTelefono } from './datos-nube.js';
-import { E, D, guardar, C, esc, $, fechaCorta, hoy, indice, cambiarPlan, opcionesRadio, chk, mostrarMensaje, seriesTexto, volumenTexto, peso, unidadPeso, enUnidad, aKilos, numero, IMAGENES, avisar } from './comun.js';
+import { E, D, R, guardar, C, esc, $, fechaCorta, hoy, indice, cambiarPlan, opcionesRadio, chk, mostrarMensaje, seriesTexto, volumenTexto, peso, unidadPeso, enUnidad, aKilos, numero, IMAGENES, avisar } from './comun.js';
 import { tipoParaGuardar } from '../nucleo/registro.js';
 import { sesionDe, sumarDias, diaSemana } from '../nucleo/agenda.js';
 import { constancia } from '../nucleo/suplementos.js';
@@ -16,6 +16,7 @@ import { seriesAnotadas } from '../nucleo/semanal.js';
 import { semanaPorMusculo, musculosContraFranja } from '../nucleo/volumen-semana.js';
 import { resumenPeriodo, periodo } from '../nucleo/resumen-periodo.js';
 import { CAMPOS_MEDIDA, nuevaMedida, agregarMedida, camposConDatos, cambioMedida } from '../nucleo/medidas.js';
+import { direccionMeta } from '../nucleo/salud-apple.js';
 import { NOMBRE_MUSCULO, mayuscula, imagenMusculo } from './musculos.js';
 import * as nube from './nube.js';
 import { esAsistido } from '../nucleo/catalogo.js';
@@ -28,7 +29,7 @@ import { normalizar } from '../nucleo/catalogo.js';
 import { ritmoDe, textoRitmo } from './progreso-ejercicio.js';
 import { miniatura } from './imagenes.js';
 import { icono } from './iconos.js';
-import { graficoSemanasHtml, tableroProgresoHtml, enlazarProgresoHevy } from './progreso-hevy.js';
+import { graficoSemanasHtml, tableroProgresoHtml, enlazarProgresoHevy, esfuerzoHtml, enlazarEsfuerzo, anioHtml, enlazarAnio } from './progreso-hevy.js';
 
 const DIAS = [[1, 'L'], [2, 'M'], [3, 'M'], [4, 'J'], [5, 'V'], [6, 'S'], [0, 'D']];
 const nombreEj = id => indice.porId.get(id)?.nombre || id;
@@ -155,13 +156,17 @@ function medidasHtml() {
     let grafico = '';
     if (c) {
       const puntos = lista.filter(m => m[c] != null).map(m => ({ fecha: m.fecha, valor: valor(c, m[c]), texto: `${n(valor(c, m[c]))} ${unidad(c)}` }));
-      const vs = puntos.map(p => p.valor), lo = Math.min(...vs), hi = Math.max(...vs), margen = Math.max(1, (hi - lo) * 0.2);
+      // Meta de peso, como OpenGym: una línea en el gráfico y el cambio en verde si te acerca, en rojo si te aleja.
+      const meta = c === 'peso_kg' && E.metaPeso ? enUnidad(E.metaPeso) : null;
+      const vs = [...puntos.map(p => p.valor), ...(meta != null ? [meta] : [])], lo = Math.min(...vs), hi = Math.max(...vs), margen = Math.max(1, (hi - lo) * 0.2);
       const desde = puntos[0].fecha < sumar(hoy(), -6) ? puntos[0].fecha : sumar(hoy(), -6);
       const cambio = cambioMedida(lista, c, hoy());
       const diferencia = cambio ? valor(c, cambio.hasta) - valor(c, cambio.desde) : 0;
+      const rumbo = meta != null && cambio ? direccionMeta(cambio.desde, cambio.hasta, E.metaPeso) : null;
       grafico = `${campos.length > 1 ? `<div class="chips-botones chips-medida" role="group" aria-label="Qué medida">${campos.map(x => `<button type="button" class="chip-opcion" data-medida-cuerpo="${x}" aria-pressed="${x === c}">${esc(campo(x)[1])}</button>`).join('')}</div>` : ''}
-        <div class="cifra-grafico"><span>${esc(campo(c)[1])}</span><strong class="num">${esc(`${n(puntos.at(-1).valor)} ${unidad(c)}`)}${cambio ? ` <span class="pequeno suave">(${diferencia > 0 ? '+' : diferencia < 0 ? '−' : ''}${n(Math.abs(diferencia))} en el último mes)</span>` : ''}</strong></div>
-        ${lineaSimple({ puntos, desde, hasta: hoy(), min: Math.max(0, lo - margen), max: hi + margen, marcas: [{ valor: lo, texto: n(lo) }, { valor: hi, texto: n(hi) }], titulo: `${campo(c)[1]}, ${puntos.length} ${puntos.length === 1 ? 'medición' : 'mediciones'}`, unir: 400, izquierda: 44 })}`;
+        <div class="cifra-grafico"><span>${esc(campo(c)[1])}</span><strong class="num">${esc(`${n(puntos.at(-1).valor)} ${unidad(c)}`)}${cambio ? ` <span class="pequeno ${rumbo ? `rumbo-${rumbo}` : 'suave'}">(${diferencia > 0 ? '+' : diferencia < 0 ? '−' : ''}${n(Math.abs(diferencia))} en el último mes${rumbo === 'hacia' ? ', hacia tu meta' : rumbo === 'lejos' ? ', lejos de tu meta' : ''})</span>` : ''}</strong></div>
+        ${lineaSimple({ puntos, desde, hasta: hoy(), min: Math.max(0, lo - margen), max: hi + margen, marcas: [{ valor: lo, texto: n(lo) }, { valor: hi, texto: n(hi) }, ...(meta != null ? [{ valor: meta, texto: `Meta ${n(meta)}` }] : [])], titulo: `${campo(c)[1]}, ${puntos.length} ${puntos.length === 1 ? 'medición' : 'mediciones'}`, unir: 400, izquierda: 44 })}
+        ${c === 'peso_kg' ? `<form id="form-meta-peso" class="meta-peso"><label class="pequeno">Meta de peso (${u}) <input type="text" inputmode="decimal" id="meta-peso" value="${meta != null ? esc(n(meta)) : ''}" placeholder="Sin meta" autocomplete="off"></label><button type="submit" class="boton chico">Guardar meta</button></form>` : ''}`;
     }
     const imagen = x => { const src = `img/medidas/${x.replace(/_(kg|pct|cm)$/, '')}.webp`; return IMAGENES.has(src) ? `<img class="img-medida" src="${src}" alt="" width="40" height="40" decoding="async">` : ''; };
     cuerpo = `${grafico}
@@ -342,7 +347,9 @@ export async function vistaProgreso(ir) {
     <h2 class="titulo-seccion" id="p-detalle">Tus estadísticas</h2>
     ${semanaHtml()}
     ${franjaHtml()}
+    ${esfuerzoHtml(R().escala_esfuerzo === 'rir' ? 'rir' : 'rpe')}
     ${constanciaHtml()}
+    ${anioHtml()}
     ${resumenPeriodoHtml()}
     ${ejerciciosHtml()}
     ${suenoAnimoHtml()}
@@ -400,6 +407,8 @@ export async function vistaProgreso(ir) {
   document.querySelector('[data-ir-mas]')?.addEventListener('click', () => ir('mas'));
   enlazarHistorial(ir);
   enlazarProgresoHevy(() => { const y = scrollY; vistaProgreso(ir); scrollTo(0, y); });
+  enlazarAnio();
+  enlazarEsfuerzo(() => { const y = scrollY; vistaProgreso(ir); scrollTo(0, y); });
   $('anotar-pasado')?.addEventListener('click', () => ir('pasado'));
   // El buscador repinta solo la lista, para no perder el teclado.
   $('buscar-historial')?.addEventListener('input', ev => { buscar = ev.target.value; verTodo = false; $('lista-historial').innerHTML = listaHistorialHtml(); enlazarHistorial(ir); });
@@ -428,6 +437,13 @@ export async function vistaProgreso(ir) {
     if (r.error) return avisar(r.error);
     E.medidas = agregarMedida(E.medidas || [], r.medida);
     datoCambiado('medidas_cuerpo'); repintarMedidas(); avisar('Medidas guardadas.');
+  });
+  $('form-meta-peso')?.addEventListener('submit', ev => {
+    ev.preventDefault();
+    const v = numero($('meta-peso').value);
+    if (v == null) delete E.metaPeso;
+    else { const kg = aKilos(v); if (kg < 30 || kg > 300) { avisar('Escribe una meta entre 30 y 300 kg.'); return; } E.metaPeso = Math.round(kg * 10) / 10; }
+    guardar(); repintarMedidas(); avisar(E.metaPeso ? 'Meta guardada.' : 'Meta quitada.');
   });
   document.querySelectorAll('[data-borrar-medida]').forEach(b => b.onclick = () => { E.medidas = (E.medidas || []).filter(m => m.fecha !== b.dataset.borrarMedida); datoCambiado('medidas_cuerpo'); repintarMedidas(); });
   $('quitar-medidas')?.addEventListener('click', ev => {
