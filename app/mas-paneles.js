@@ -6,6 +6,13 @@ import { icono } from './iconos.js';
 
 // Como el perfil de Hevy: el nombre y cuántos entrenamientos llevas (sin los del ejemplo, salvo en el ejemplo).
 const cuantas = () => { const n = (E.sesiones || []).length; return `${n.toLocaleString('es-CL')} entrenamiento${n === 1 ? '' : 's'}`; };
+// Como el encabezado del perfil de Hevy (Workouts, Followers, Following): tus entrenamientos, los de este mes y las horas.
+function cifrasPerfil() {
+  const xs = E.sesiones || [], mes = new Date().toISOString().slice(0, 7);
+  const horas = Math.round(xs.reduce((a, s) => a + (Number(s.duracion_min) || 0), 0) / 60);
+  const c = (n, t) => '<span class="perfil-cifra"><small>' + t + '</small><b class="num">' + n.toLocaleString('es-CL') + '</b></span>';
+  return '<span class="perfil-cifras">' + c(xs.length, 'Entrenamientos') + c(xs.filter(s => s.fecha?.startsWith(mes)).length, 'Este mes') + c(horas, 'Horas') + '</span>';
+}
 const vistas = new WeakMap(); // Borradores en memoria, separados por perfil y cuenta.
 const BORRADORES = ['plan-texto', 'plan-semanas', 'respuesta'];
 const TITULOS = {
@@ -95,7 +102,7 @@ export function organizarMas({ estado: anterior = null } = {}) {
   const resumen = document.createElement('div');
   resumen.className = 'mas-resumen';
   resumen.innerHTML = '<button type="button" class="mas-perfil" id="mas-perfil">' + imagenAvatar() +
-    '<span class="mas-texto"><strong>' + esc(R()?.apodo || 'Tu perfil') + '</strong><small>' + cuantas() + ' · Foto, equipo y preferencias</small></span>' + icono('flecha', 'icono mas-flecha') + '</button>' +
+    '<span class="mas-texto"><strong>' + esc(R()?.apodo || 'Tu perfil') + '</strong>' + cifrasPerfil() + '<small>Foto, equipo y preferencias</small></span>' + icono('flecha', 'icono mas-flecha') + '</button>' +
     '<section class="mas-grupo"><h2>Entrenamiento</h2><div class="mas-atajos" aria-label="Atajos de entrenamiento">' +
     '<span data-mas-banco></span>' + atajo('plan', 'Tu plan', 'calendario') + atajo('ia', 'IA', 'chat') + '</div></section>' +
     grupo('Preferencias', fila('recordatorios', 'Recordatorios', 'reloj') + fila('pantalla', 'Pantalla y unidades', 'ajustes')) +
@@ -114,7 +121,7 @@ export function organizarMas({ estado: anterior = null } = {}) {
   resumen.querySelector('[data-mas-tablero]')?.addEventListener('click', () => raiz.querySelector('#ver-tablero-original')?.click());
   const cabecera = document.createElement('header');
   cabecera.className = 'mas-cabecera';
-  cabecera.innerHTML = '<button type="button" class="mas-volver" id="mas-volver" data-atras hidden>' + icono('flecha') + '<span>Más</span></button>';
+  cabecera.innerHTML = '<button type="button" class="mas-volver" id="mas-volver" data-atras hidden>' + icono('flecha') + '<span>Perfil</span></button>';
   titulo.tabIndex = -1;
   cabecera.append(titulo);
   const notas = document.createElement('div');
@@ -139,7 +146,7 @@ export function organizarMas({ estado: anterior = null } = {}) {
       estado.volver = origen?.id || estado.volver;
     }
     estado.panel = clave;
-    resumen.hidden = true; volver.hidden = false; titulo.textContent = TITULOS[clave] || 'Más';
+    resumen.hidden = true; volver.hidden = false; titulo.textContent = TITULOS[clave] || 'Perfil';
     grupos.forEach((panel, nombre) => { panel.hidden = nombre !== clave; });
     if (enfocar) { scrollTo(0, estado.alturas[clave] || 0); titulo.focus({ preventScroll: true }); }
   }
@@ -147,7 +154,7 @@ export function organizarMas({ estado: anterior = null } = {}) {
     estado.alturas[estado.panel] = scrollY;
     estado.panel = null; estado.foco = null;
     grupos.forEach(panel => { panel.hidden = true; });
-    resumen.hidden = false; volver.hidden = true; titulo.textContent = 'Más';
+    resumen.hidden = false; volver.hidden = true; titulo.textContent = 'Perfil';
     scrollTo(0, estado.yResumen);
     const origen = estado.volver && raiz.querySelector('#' + CSS.escape(estado.volver));
     (origen || resumen.querySelector('#mas-perfil')).focus({ preventScroll: true });

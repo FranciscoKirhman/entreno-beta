@@ -13,6 +13,7 @@ import { derivar } from '../nucleo/derivar.js';
 import { generarPlan } from '../nucleo/motor-plan.js';
 import { vistaHoy, irAlEjercicioEnCurso } from './hoy.js';
 import { vistaEntrenar } from './entrenar.js';
+import { vistaRutina } from './rutinas.js';
 import { pintarMiniSesion } from './mini-sesion.js';
 import { observarCuerpos } from './cuerpo.js';
 import { vistaFicha } from './ficha.js';
@@ -187,7 +188,7 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
   if (Object.entries(E.nubeDatos || {}).some(([k, v]) => v.pendiente && (k !== 'medidas_cuerpo' || E.consentimientos?.medidas_cuerpo === true)) && !avisos.some(x => x.parte === 'Datos del teléfono')) partes.push('datos del teléfono pendientes');
   const completa = !partes.length;
   const mensaje = completa ? `Sincronización completa. ${E.sesiones.length} sesiones disponibles en esta cuenta.`
-    : `Sincronización incompleta. ${partes.join('. ')}. La copia del teléfono se conserva. Reintenta en Más.`;
+    : `Sincronización incompleta. ${partes.join('. ')}. La copia del teléfono se conserva. Reintenta en Perfil.`;
   if (!completa || E.mensaje === E.sincronizacionCuenta?.mensaje) E.mensaje = completa ? null : mensaje;
   E.sincronizacionCuenta = { completa, pendientes, avisos, mensaje };
   comprobar();
@@ -209,9 +210,9 @@ function vistaInicio() {
 }
 
 // ── Navegación ──────────────────────────────────────────────────────────────
-const VISTAS_CON_PLAN = ['hoy', 'entrenar', 'semana', 'progreso', 'checkin', 'plan', 'resumen', 'eleccion'];
+const VISTAS_CON_PLAN = ['hoy', 'entrenar', 'rutina', 'semana', 'progreso', 'checkin', 'plan', 'resumen', 'eleccion'];
 // Cuatro pestañas, como Hevy: Entrenar (la sesión de hoy y el plan como rutinas), Coach, Progreso y Perfil (Más).
-const PESTANA = { eleccion: 'entrenar', hoy: 'entrenar', semana: 'entrenar', banco: 'mas', checkin: 'entrenar', plan: 'entrenar', perfil: 'mas', seccion: 'mas', pasado: 'progreso', datos: 'progreso', 'tablero-original': 'mas' };
+const PESTANA = { eleccion: 'entrenar', hoy: 'entrenar', rutina: 'entrenar', semana: 'entrenar', banco: 'mas', checkin: 'entrenar', plan: 'entrenar', perfil: 'mas', seccion: 'mas', pasado: 'progreso', datos: 'progreso', 'tablero-original': 'mas' };
 let antesDeFicha = null, finEntrada = null, extraActual = null, primeraVista = true, retornoInicial = null;
 function ir(vista, extra) {
   if (vista === 'hoy' && primeraVista && E.plan) vista = 'eleccion';
@@ -238,7 +239,7 @@ function ir(vista, extra) {
   abrirEnlacePerfiles(); // #perfiles=…: el enlace privado reemplaza pasar el archivo a cada teléfono
   const vistas = {
     inicio: vistaInicio, eleccion: () => vistaEleccion(ir), cuestionario: () => vistaRapido(ir, armarPlan), perfil: () => vistaPerfil(ir, armarPlan), seccion: () => vistaSeccion(ir),
-    plan: () => vistaPlan(ir, { armarPlan, nuevo: extra?.nuevo }), hoy: () => vistaHoy(ir, extra), entrenar: () => vistaEntrenar(ir), ejercicio: () => vistaFicha(ir, extra || {}), semana: () => vistaSemana(ir),
+    plan: () => vistaPlan(ir, { armarPlan, nuevo: extra?.nuevo }), hoy: () => vistaHoy(ir, extra), entrenar: () => vistaEntrenar(ir), rutina: () => vistaRutina(ir), ejercicio: () => vistaFicha(ir, extra || {}), semana: () => vistaSemana(ir),
     banco: () => vistaBanco(ir, extra || {}), coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), resumen: () => vistaResumen(ir, extra || {}), progreso: () => vistaProgreso(ir), pasado: () => vistaDiaPasado(ir, extra || {}), datos: () => { vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel: 'respaldo' }); const titulo=document.querySelector('#vista-mas h1');if(titulo)titulo.textContent='Mis datos'; const b=document.getElementById('mas-volver'); if(b){b.querySelector('span').textContent='Progreso';b.onclick=()=>ir('progreso');} }, mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel: extra?.panel }), 'tablero-original': () => vistaTableroOriginal(ir),
   };
   // Al volver atrás, la pantalla queda a la altura donde se dejó (la misma que se vio debajo al deslizar).
@@ -344,7 +345,7 @@ async function iniciarEnSegundoPlano() {
   try { iniciado = await nube.iniciar({ claveSesion: claveSesionCuenta(), vigente: () => E === alIniciar }); }
   catch (e) {
     if (E !== alIniciar || nube.usuarioId() !== usuarioAlIniciar) return;
-    E.mensaje = errorRetornoCuenta || (e.code === 'acceso_retornado_fallido' ? e.message : 'No pude abrir tu cuenta. Pide otro acceso desde Más, Cuenta. Tus datos del teléfono se conservan.');
+    E.mensaje = errorRetornoCuenta || (e.code === 'acceso_retornado_fallido' ? e.message : 'No pude abrir tu cuenta. Pide otro acceso desde Perfil, Cuenta. Tus datos del teléfono se conservan.');
     E.errorAccesoCuenta = E.mensaje;
     E.vista = 'mas'; extraActual = { panel: 'cuenta' };
     guardar(); repintarSinMover(); return;
@@ -356,7 +357,7 @@ async function iniciarEnSegundoPlano() {
     const estado = E, usuario = nube.usuarioId(), vigente = () => E === estado && nube.usuarioId() === usuario;
     let resultado;
     try { resultado = await sincronizarAlEntrar(); }
-    catch { if (vigente()) E.mensaje = 'No pude sincronizar ahora. Puedes seguir con la copia de esta cuenta en el teléfono y reintentar en Más.'; }
+    catch { if (vigente()) E.mensaje = 'No pude sincronizar ahora. Puedes seguir con la copia de esta cuenta en el teléfono y reintentar en Perfil.'; }
     if (!vigente()) return;
     if (nube.entroPorEnlace()) {
       if (resultado?.completa) E.mensaje = `Entraste como ${nube.correo()}.`;

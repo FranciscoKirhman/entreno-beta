@@ -7,7 +7,7 @@ import { icono } from './iconos.js';
 import { sinMovimiento } from './movimiento.js';
 
 // Pantallas sin botón propio de volver, y a dónde vuelven.
-const PADRE = { perfil: 'mas', seccion: 'perfil', plan: 'semana', checkin: 'semana', pasado: 'progreso', 'tablero-original': 'mas', resumen: 'entrenar', banco: 'hoy', hoy: 'entrenar', semana: 'entrenar' };
+const PADRE = { perfil: 'mas', seccion: 'perfil', plan: 'semana', checkin: 'semana', pasado: 'progreso', 'tablero-original': 'mas', resumen: 'entrenar', banco: 'hoy', hoy: 'entrenar', semana: 'entrenar', rutina: 'entrenar' };
 // Basta un deslizamiento corto desde el borde (Francisco, 3 de octubre): empezar pegado al borde ya evita los accidentes.
 const BORDE = 28, UMBRAL = 44; // px: dónde empieza el gesto y cuánto hay que arrastrar
 

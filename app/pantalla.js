@@ -26,7 +26,7 @@ async function pedir() {
   } catch { bloqueo = null; } // sin batería, sin permiso o no soportada: se sigue sin ella
 }
 
-/** Pide o suelta la pantalla encendida según la preferencia (Más → Pantalla) y si hay una sesión en curso. */
+/** Pide o suelta la pantalla encendida según la preferencia (Perfil → Pantalla) y si hay una sesión en curso. */
 export function actualizarPantalla() {
   querer = E.pantallaEncendida !== false && sesionEnCurso();
   if (querer) pedir();

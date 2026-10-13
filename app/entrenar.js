@@ -17,6 +17,10 @@ import { icono } from './iconos.js';
 import * as nube from './nube.js';
 import { abrirCambiosPlan, hayCambiosPlan } from './cambios-plan.js';
 import { cuerpoHtml, intensidadEjercicios } from './cuerpo.js';
+import { misRutinasHtml, enlazarRutinas } from './rutinas.js';
+import { recordsPorSesion } from '../nucleo/records.js';
+import { esAsistido } from '../nucleo/catalogo.js';
+import { volumenTexto } from './comun.js';
 
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const nombreDia = iso => DIAS[new Date(iso + 'T12:00:00Z').getUTCDay()];
@@ -80,6 +84,26 @@ function hoyHtml(s) {
   </section>`;
 }
 
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+/** Al empezar un mes, la celebración del anterior, como los logros mensuales de Hevy (julio de 2026). Una vez por mes. */
+function mesHtml(f) {
+  const d = new Date(f.slice(0, 8) + '01T12:00:00Z'); d.setUTCDate(0);
+  const mes = d.toISOString().slice(0, 7);
+  if (Number(f.slice(8)) > 7 || E.mesCelebrado === mes) return '';
+  const xs = E.sesiones.filter(x => x.fecha.startsWith(mes));
+  if (!xs.length) return '';
+  const horas = Math.round(xs.reduce((a, x) => a + (Number(x.duracion_min) || 0), 0) / 6) / 10;
+  const vol = xs.flatMap(x => x.series || []).filter(x => x.tipo !== 'calentamiento' && !esAsistido(indice.porId.get(x.ejercicio_id))).reduce((a, x) => a + (Number(x.carga_kg) || 0) * (Number(x.reps) || 0), 0);
+  const recs = recordsPorSesion(E.sesiones, { asistidos: new Set(indice.ejercicios.filter(esAsistido).map(e => e.id)) });
+  const nRec = xs.reduce((a, x) => a + ((x.id && recs.get(x.id)) || []).length, 0);
+  const cifra = (v, t) => `<span><strong class="num">${v}</strong><small>${t}</small></span>`;
+  return `<section class="tarjeta mes-cerrado" aria-label="${esc(`Tu ${MESES[d.getUTCMonth()]}`)}">
+    <p class="sobretitulo">¡Cerraste ${MESES[d.getUTCMonth()]}!</p>
+    <div class="mes-cifras">${cifra(xs.length, xs.length === 1 ? 'sesión' : 'sesiones')}${cifra(String(horas).replace('.', ','), 'horas')}${cifra(esc(volumenTexto(vol)), 'levantados')}${cifra(nRec, nRec === 1 ? 'récord' : 'récords')}</div>
+    <div class="fila-botones"><button type="button" class="boton" id="mes-ver">Ver el resumen</button><button type="button" class="boton primario" id="mes-listo">Listo</button></div>
+  </section>`;
+}
+
 export function vistaEntrenar(ir) {
   const s = estadoHoy();
   const plan = E.plan;
@@ -95,6 +119,7 @@ export function vistaEntrenar(ir) {
   $('app').innerHTML = `<div id="vista-entrenar">
     <span class="sobretitulo">${esc(fecha)}</span>
     <h1>Entrenar</h1>
+    ${mesHtml(s.f)}
     ${hoyHtml(s)}
     <button type="button" class="boton fila-boton boton-vacia" id="sesion-vacia">${icono('mas')} Empezar entrenamiento vacío</button>
     ${s.avisoSinRegistro}
@@ -103,14 +128,16 @@ export function vistaEntrenar(ir) {
     ${avisoDescargaCorto()}
     <h2 class="titulo-seccion">Rutinas</h2>
     <div class="botones-rutinas">
+      <button type="button" class="boton fila-boton" data-rutina-nueva>${icono('mas')} Nueva rutina</button>
       <button type="button" class="boton fila-boton" id="ver-plan">${icono('libro')} Tu plan</button>
-      <button type="button" class="boton fila-boton" id="ver-semana">${icono('calendario')} La semana</button>
+      <button type="button" class="boton fila-boton" id="ver-semana">${icono('calendario')} Semana</button>
     </div>
     <section class="carpeta-rutinas">
       <button type="button" class="carpeta-cab" id="carpeta-plan" aria-expanded="${planAbierto}">${icono('flecha', `icono carpeta-flecha${planAbierto ? ' abierta' : ''}`)}<span>Tu plan, ${cual} (${semana.length})</span></button>
       ${planAbierto ? `<ul class="rutinas">${semana.map(d => rutinaHtml(d, s)).join('') || '<li class="pequeno suave">Esta semana no tiene sesiones.</li>'}</ul>` : ''}
       ${hayCambiosPlan() ? `<button type="button" class="enlace deshacer-plan" id="deshacer-plan">${icono('cambiar', 'icono icono-chico')} Deshacer un cambio del plan</button>` : ''}
     </section>
+    ${misRutinasHtml()}
     ${sups.length ? `<section class="tarjeta"><h3>Suplementos</h3><ul class="lista-check">${sups.map(x => `<li class="${x.estado}"><button type="button" class="check" data-toma="${x.suplemento_id}" ${x.estado === 'tomada' ? 'disabled aria-pressed="true"' : 'aria-pressed="false"'} aria-label="Marcar ${esc(x.nombre)} como tomado">${x.estado === 'tomada' ? '✓' : ''}</button><span>${esc(x.nombre)}${x.dosis ? ` · ${esc(x.dosis)}` : ''}</span><span class="suave pequeno">${x.hora || ''}${x.estado === 'atrasada' ? ' · atrasado' : ''}</span></li>`).join('')}</ul></section>` : ''}
   </div>`;
   const raiz = $('vista-entrenar');
@@ -121,6 +148,10 @@ export function vistaEntrenar(ir) {
   raiz.querySelectorAll('[data-elegir-cardio]').forEach(b => b.onclick = () => elegirCardio({ volver: b, alCambiar: () => ir('hoy', { sesion: true }) }));
   $('ver-semana').onclick = () => ir('semana');
   $('ver-plan').onclick = () => ir('plan');
+  const cerrarMes = () => { const d = new Date(s.f.slice(0, 8) + '01T12:00:00Z'); d.setUTCDate(0); E.mesCelebrado = d.toISOString().slice(0, 7); guardar(); };
+  $('mes-listo')?.addEventListener('click', () => { cerrarMes(); vistaEntrenar(ir); });
+  $('mes-ver')?.addEventListener('click', () => { cerrarMes(); ir('progreso'); });
+  enlazarRutinas(ir, () => vistaEntrenar(ir));
   $('deshacer-plan')?.addEventListener('click', ev => abrirCambiosPlan(ev.currentTarget, { alCambiar: () => vistaEntrenar(ir) }));
   $('abrir-revision')?.addEventListener('click', () => ir('coach', { revisar: true }));
   raiz.querySelectorAll('[data-ir-checkin]').forEach(b => b.onclick = () => ir('checkin', b.dataset.irCheckin));

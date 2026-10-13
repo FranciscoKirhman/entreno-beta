@@ -5,6 +5,7 @@ import { sumarDias, diaSemana } from '../nucleo/agenda.js';
 import { esAsistido } from '../nucleo/catalogo.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { cuerpoHtml, intensidades, sinTrabajar } from './cuerpo.js';
+import { ajuste } from './ajustes-sesion.js';
 import { icono } from './iconos.js';
 
 const SEMANAS = 8;
@@ -22,7 +23,7 @@ function porSemana() {
     if (!w || s.fecha > sumarDias(w.desde, 6)) continue;
     w.duracion += Number(s.duracion_min) || 0;
     for (const x of s.series || []) {
-      if (x.tipo === 'calentamiento') continue;
+      if (x.tipo === 'calentamiento' && !ajuste('calentamientoStats')) continue;
       const reps = Number(x.reps) || 0;
       w.reps += reps;
       if (!esAsistido(indice.porId.get(x.ejercicio_id))) w.volumen += (Number(x.carga_kg) || 0) * reps;

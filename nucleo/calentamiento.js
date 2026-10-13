@@ -51,9 +51,16 @@ export function tramosDeCardio(texto) {
  * @param incremento  lo mínimo que se puede subir con ese equipo (motor-plan.incrementoPara)
  * @param barra       peso de la barra sola, si el ejercicio usa barra
  */
-export function seriesDeCalentamiento(kgTrabajo, { incremento = 2.5, barra = 0 } = {}) {
+/** Esquemas de la calculadora de calentamiento (como la de Hevy): [porcentaje del peso de trabajo, repeticiones]. */
+export const ESQUEMAS_CALENTAMIENTO = {
+  auto: null, // el de siempre: 2 o 3 series según el peso
+  corto: [[0.5, 10], [0.75, 5]],
+  largo: [[0.4, 10], [0.6, 6], [0.8, 3], [0.9, 1]],
+  uno: [[0.6, 8]],
+};
+export function seriesDeCalentamiento(kgTrabajo, { incremento = 2.5, barra = 0, esquema = 'auto' } = {}) {
   if (!(kgTrabajo > 0)) return [{ tipo: 'calentamiento' }];
-  const pasos = kgTrabajo >= 60 ? [[0.5, 8], [0.75, 5], [0.85, 2]] : [[0.5, 10], [0.75, 5]];
+  const pasos = ESQUEMAS_CALENTAMIENTO[esquema] || (kgTrabajo >= 60 ? [[0.5, 8], [0.75, 5], [0.85, 2]] : [[0.5, 10], [0.75, 5]]);
   const redondo = x => Math.max(barra, Math.round(x / incremento) * incremento);
   const out = [];
   for (const [p, reps] of pasos) {

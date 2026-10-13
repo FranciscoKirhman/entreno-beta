@@ -31,10 +31,24 @@ function recuperarConsultaInterrumpida() {
   for (const m of E.chat) if (m.pendiente && !(consultaActual?.estado === E && consultaActual.usuario === nube.usuarioId() && consultaActual.mensaje === m)) {
     delete m.pendiente;
     m.texto = 'La consulta se interrumpió. Revisa si llegó una propuesta antes de volver a enviarla.';
-    m.opciones = [{ etiqueta: 'Revisar propuestas en Más', accion: { tipo: 'ir', vista: 'mas' } }];
+    m.opciones = [{ etiqueta: 'Revisar propuestas en Perfil', accion: { tipo: 'ir', vista: 'mas' } }];
     cambio = true;
   }
   if (cambio) guardar();
+}
+
+/** Lo que respondiste en "¿Cómo se sintió?" al guardar (E.sensaciones): con dos de las últimas tres sesiones brutales,
+ *  el Coach propone bajar la carga de hoy; con dos muy fáciles, pide anotar el esfuerzo para que el plan sepa subir. */
+function sensacionHtml() {
+  const ultimas = [...E.sesiones].filter(s => !s.origen && E.sensaciones?.[s.id]).sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 3);
+  const n = t => ultimas.filter(s => E.sensaciones[s.id] === t).length;
+  if (ultimas.length < 2) return '';
+  if (n('brutal') >= 2) return `<section class="tarjeta aviso-sensacion"><h3>Tus últimas sesiones se sintieron brutales</h3>
+    <p class="pequeno">Si se repite, conviene bajar un poco la carga o las series de hoy y dormir bien. Te muestro cómo quedaría antes de cambiar algo.</p>
+    <div class="chips"><button type="button" class="sugerencia">Dormí mal y estoy cansado</button></div></section>`;
+  if (n('facil') >= 2) return `<section class="tarjeta aviso-sensacion"><h3>Tus últimas sesiones se sintieron muy fáciles</h3>
+    <p class="pequeno">El plan sube el peso cuando completas el rango con la reserva que pide. Anota el esfuerzo (RPE o RIR) de cada serie: así sabe cuándo subir antes.</p></section>`;
+  return '';
 }
 
 export function vistaCoach(ir, mensajeInicial) {
@@ -53,6 +67,7 @@ export function vistaCoach(ir, mensajeInicial) {
   $('app').innerHTML = `<div id="vista-coach">
     <h1>Coach</h1>
     ${revisionHtml(porRevisar)}
+    ${sensacionHtml()}
     ${!E.plan ? '<p>Cuéntame qué quieres entrenar. Para preparar el primer plan, completa tu edad y acepta los términos en tu perfil.</p><button class="boton" id="perfil-chat">Completar mi perfil</button>' : ''}
     <div class="chat" id="chat" aria-live="polite">${E.chat.length ? E.chat.map(burbuja).join('') : '<p class="suave">Cuéntame qué pasa: si faltaste, si no quieres hacer algo hoy, si una máquina está ocupada, si dormiste mal o si te duele algo. También puedo explicarte el porqué de cada ejercicio.</p>'}</div>
     <section id="permisos-chat" class="tarjeta" hidden></section>
@@ -255,7 +270,7 @@ const confirmarIA = id => [{ etiqueta: 'Aceptar estos cambios', accion: { tipo: 
 function opcionesMensaje(m) {
   const pendiente = m.propuesta?.id && E.chatPorTraer?.id === m.propuesta.id;
   if (pendiente || m.estadoPropuesta === 'por_comprobar') return [
-    { etiqueta: 'Revisar y sincronizar en Más', accion: { tipo: 'ir', vista: 'mas' } },
+    { etiqueta: 'Revisar y sincronizar en Perfil', accion: { tipo: 'ir', vista: 'mas' } },
     ...(!pendiente || !E.chatPorTraer.confirmado ? [{ etiqueta: 'Descartar', accion: { tipo: 'descartar_ia', id: m.propuesta.id } }] : []),
   ];
   if (['aplicada', 'descartada', 'no_disponible'].includes(m.estadoPropuesta)) return null;
@@ -273,7 +288,7 @@ function burbuja(m, i) {
 async function enviar(texto, ir, archivo = null) {
   recuperarConsultaInterrumpida();
   if (E.chat.some(m => m.pendiente)) { avisar('Hay una consulta en curso. Puedes seguir escribiendo mientras termina.'); return false; }
-  if (archivo && !nube.conectado()) { avisar('Entra a tu cuenta en Más para revisar este archivo. Se conserva aquí mientras mantengas la app abierta.'); return false; }
+  if (archivo && !nube.conectado()) { avisar('Entra a tu cuenta en Perfil para revisar este archivo. Se conserva aquí mientras mantengas la app abierta.'); return false; }
   const estado = E, usuario = nube.usuarioId();
   const borrador = borradorChat();
   let completada = true, consulta;

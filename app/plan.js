@@ -90,7 +90,7 @@ export function vistaPlan(ir, { armarPlan, nuevo = false } = {}) {
       <p class="pequeno">${nv.sube ? `Con lo que has entrenado ya corresponde ${NIVEL_VISTA[nv.alcanzado].nombre.toLowerCase()}: se aplica al armar tu próximo bloque.` : esc(nv.falta || 'Estás en el nivel más alto. El plan sigue ajustando cargas y volumen con lo que anotas.')}</p>
     </section>
 
-    ${nuevo ? cuentaNuevaHtml({ titulo: 'Guarda tu plan en una cuenta', texto: 'Así no lo pierdes si cambias de teléfono, y tus sesiones quedan respaldadas. Puedes hacerlo ahora o después en Más.' }) : ''}
+    ${nuevo ? cuentaNuevaHtml({ titulo: 'Guarda tu plan en una cuenta', texto: 'Así no lo pierdes si cambias de teléfono, y tus sesiones quedan respaldadas. Puedes hacerlo ahora o después en Perfil.' }) : ''}
     <div class="pie-plan">
       <button type="button" class="boton primario grande" id="empezar-plan">${nuevo ? 'Empezar' : 'Ir a Hoy'}</button>
       <button type="button" class="boton" id="a-perfil">Completar mi perfil</button>

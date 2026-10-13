@@ -30,6 +30,7 @@ import { normalizar } from '../nucleo/catalogo.js';
 import { ritmoDe, textoRitmo } from './progreso-ejercicio.js';
 import { miniatura } from './imagenes.js';
 import { icono } from './iconos.js';
+import { ajuste } from './ajustes-sesion.js';
 import { graficoSemanasHtml, tableroProgresoHtml, enlazarProgresoHevy, esfuerzoHtml, enlazarEsfuerzo, anioHtml, enlazarAnio, musculosMapaHtml, enlazarMusculosMapa } from './progreso-hevy.js';
 
 const DIAS = [[1, 'L'], [2, 'M'], [3, 'M'], [4, 'J'], [5, 'V'], [6, 'S'], [0, 'D']];
@@ -55,7 +56,7 @@ function historial() {
 const series = n => `${n} serie${n === 1 ? '' : 's'}`;
 const deTrabajo = x => !['calentamiento', 'drop', 'descarga'].includes(x.tipo);
 // La ayuda de la máquina (asistidos) no es peso levantado: no suma al volumen.
-const volumen = series => series.filter(x => x.tipo !== 'calentamiento' && !x.asistido).reduce((a, x) => a + (Number(x.carga_kg) || 0) * (Number(x.reps) || 0), 0);
+const volumen = series => series.filter(x => (x.tipo !== 'calentamiento' || ajuste('calentamientoStats')) && !x.asistido).reduce((a, x) => a + (Number(x.carga_kg) || 0) * (Number(x.reps) || 0), 0);
 
 /** Esta semana por músculo: series hechas de las que tocan, con la imagen de cada músculo cuando llega. */
 function semanaHtml() {
@@ -249,7 +250,7 @@ function suenoAnimoHtml() {
   const sueno = dias.filter(([, b]) => b.sueno_horas != null).map(([fecha, b]) => ({ fecha, valor: b.sueno_horas, texto: horas(b.sueno_horas) }));
   const animo = dias.filter(([, b]) => b.animo != null).map(([fecha, b]) => ({ fecha, valor: b.animo, texto: ANIMO[b.animo].toLowerCase() }));
   const cabeza = '<h3>Sueño y ánimo</h3><p class="pequeno suave">Lo que respondes en "¿Cómo estás hoy?", las últimas 4 semanas. Toca un punto para ver el día.</p>';
-  if (sueno.length + animo.length < 2) return `<section class="tarjeta">${cabeza}<p class="pequeno">Todavía hay pocos días. Responde "¿Cómo estás hoy?" en Hoy (toma 10 segundos) y aquí vas a ver cómo duermes y cómo andas de ánimo.</p></section>`;
+  if (sueno.length + animo.length < 2) return `<section class="tarjeta">${cabeza}<p class="pequeno">Todavía hay pocos días. Responde "¿Cómo estás hoy?" en Entrenar (toma 10 segundos) y aquí vas a ver cómo duermes y cómo andas de ánimo.</p></section>`;
   const semana = xs => xs.filter(p => p.fecha >= sumar(hasta, -6));
   const prom = xs => (xs.length ? xs.reduce((a, p) => a + p.valor, 0) / xs.length : null);
   const pS = prom(semana(sueno)), pA = prom(semana(animo));

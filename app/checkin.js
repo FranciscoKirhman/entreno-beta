@@ -83,7 +83,7 @@ export function vistaCheckin(ir, semanaPedida) {
       ${hecho ? `<p class="pequeno suave">Ya lo hiciste el ${esc(fechaCorta(hecho.fecha))}. Si cambiaste algo de la semana, puedes revisarlo de nuevo.</p>` : ''}
     </section>
     ${p.descarga ? `<div class="aviso ojo">La semana ${p.siguiente} es de descarga: mismos ejercicios, la mitad de las series y más reserva. Las cargas no se cambian; lo de esta semana queda guardado para el próximo bloque.</div>` : ''}
-    ${!p.series ? '<div class="aviso ojo">No anotaste series esta semana, así que las cargas se mantienen. Marca cada serie con ✓ en Hoy para que la app pueda ajustarlas.</div>' : ''}
+    ${!p.series ? '<div class="aviso ojo">No anotaste series esta semana, así que las cargas se mantienen. Marca cada serie con ✓ en Entrenar para que la app pueda ajustarlas.</div>' : ''}
     <form id="form-checkin">
       ${porDia.map(g => `<section class="tarjeta"><h3>${esc(g.foco)}</h3><ul class="ajustes">${g.items.map(it => {
         const marca = it.cambia && !p.descarga;

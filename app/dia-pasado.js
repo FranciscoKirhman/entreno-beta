@@ -32,7 +32,7 @@ export function vistaDiaPasado(ir, { id = null } = {}) {
   const planDia = E.plan && sesionDe(E.plan, b.fecha);
   const n = x => coma(enUnidad(x));
 
-  const modo = modoEsfuerzo(R()); // RPE por defecto o RIR, como en Hoy (se guarda como RIR)
+  const modo = modoEsfuerzo(R()); // RPE por defecto o RIR, como en Entrenar (se guarda como RIR)
   const tarjeta = (e, k) => {
     const seg = e.unidad === 'seg', dist = e.unidad === 'm';
     const p = e.plan;

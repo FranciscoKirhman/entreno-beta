@@ -10,6 +10,7 @@ import { esAsistido } from '../nucleo/catalogo.js';
 import { imagenSesion } from './imagen-sesion.js';
 import { cuentaNuevaHtml, enlazarCuentaNueva } from './cuenta-ui.js';
 import { cuerpoHtml, intensidades } from './cuerpo.js';
+import { guardarComoRutina } from './rutinas.js';
 
 const nombreEj = (id, respaldo) => indice.porId.get(id)?.nombre || respaldo || 'Ejercicio';
 // Insignia de cada récord (hoja RS01 del banco de imágenes). Mientras no esté cortada, se muestra la etiqueta "Récord".
@@ -138,6 +139,7 @@ export function vistaResumen(ir, { id, desde = null } = {}) {
       ? `<ul class="lista-resumen mal">${r.mal.map(m => `<li>${esc(textoMal(m))}</li>`).join('')}</ul>`
       : `<p class="pequeno suave">${dia ? 'Nada que corregir: hiciste lo que pedía el plan.' : 'Nada que corregir comparado con la vez anterior. Esta sesión no corresponde a un día de tu plan.'}</p>`}</section>
     <section class="tarjeta"><h3>Cada ejercicio</h3><ul class="pequeno detalle-h">${r.porEjercicio.map(g => `<li><strong>${esc(nombreEj(g.ejercicio_id, g.nombre))}</strong>: ${esc(textoSeries(g.series))}${g.anterior.length ? `<br><span class="suave">La vez anterior: ${esc(textoSeries(g.anterior))}</span>` : ''}</li>`).join('')}</ul></section>
+    <button type="button" class="boton fila-boton guardar-rutina" id="guardar-como-rutina">Guardar como rutina</button>
     <details class="extra" id="resumen-ia"><summary>Preguntarle a tu IA por esta sesión</summary>
       <p class="pequeno">Copia la sesión (ejercicios, series, lo que pedía el plan y los récords; sin tu nombre ni datos de salud) y pégala en ChatGPT, Claude o Gemini para que te diga qué ajustar.</p>
       <div class="fila-botones"><button type="button" class="boton" id="copiar-ia">Copiar para mi IA</button></div>
@@ -146,7 +148,7 @@ export function vistaResumen(ir, { id, desde = null } = {}) {
     </details>
     <div class="fila-botones"><button type="button" class="boton" id="compartir-resumen">Compartir</button><button type="button" class="boton" id="imagen-resumen">Imagen para compartir</button></div>
     <div id="imagen-compartir"></div>
-    ${desde ? '' : cuentaNuevaHtml({ titulo: 'Guarda tus sesiones en una cuenta', texto: 'Así no las pierdes si cambias de teléfono. Puedes hacerlo ahora o después en Más.' })}
+    ${desde ? '' : cuentaNuevaHtml({ titulo: 'Guarda tus sesiones en una cuenta', texto: 'Así no las pierdes si cambias de teléfono. Puedes hacerlo ahora o después en Perfil.' })}
     <div class="fila-botones"><button type="button" class="boton primario" id="volver-hoy">Listo</button></div>
   </div>`;
   $('volver-hoy').onclick = () => ir('hoy');
@@ -175,6 +177,7 @@ export function vistaResumen(ir, { id, desde = null } = {}) {
     finally { b.disabled = false; }
   };
   // Como el botón de Hevy para ChatGPT y Claude: el texto se copia y la persona lo pega en su IA (la app no lo envía).
+  $('guardar-como-rutina').onclick = () => guardarComoRutina(sesion, ir);
   $('copiar-ia').onclick = async () => {
     const texto = textoParaIA({ sesion, r, dia, foco });
     try { await navigator.clipboard.writeText(texto); $('copiado-ia').textContent = 'Copiado. Abre tu IA y pégalo.'; }

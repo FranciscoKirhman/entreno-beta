@@ -276,7 +276,7 @@ function aproximacionesHoy(dia, e, lista, f) {
   const ej = indice.porId.get(e.ejercicio_id);
   const prev = e.ejercicio_id ? anterior(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f)?.series[0] : null;
   const kgTrabajo = (lista || []).find(x => deTrabajoFila(x) && x.kg != null)?.kg ?? e.carga_kg ?? prev?.carga_kg ?? null;
-  return seriesDeCalentamiento(kgTrabajo, { incremento: (ej && incrementoPara(ej, lugarDe(dia))) || 2.5, barra: ej?.equipamiento.includes('barra_rack') ? 20 : 0 });
+  return seriesDeCalentamiento(kgTrabajo, { incremento: (ej && incrementoPara(ej, lugarDe(dia))) || 2.5, barra: ej?.equipamiento.includes('barra_rack') ? 20 : 0, esquema: ajuste('esquemaCal') });
 }
 /**
  * Pone las series de calentamiento al comienzo de los ejercicios que las llevan (una vez por día y ejercicio: si la
@@ -369,7 +369,7 @@ function calentamientoCompleto(dia, f) {
   const ejs = dia.ejercicios.map(e => indice.porId.get(e.ejercicio_id)).filter(Boolean);
   const lugar = lugarDe(dia);
   const cargas = Object.fromEntries(dia.ejercicios.map((e, k) => [e.ejercicio_id, filasDe(f, e, k).find(x => deTrabajo(tipoDe(x)) && x.kg != null)?.kg ?? e.carga_kg ?? anterior(todas, e.ejercicio_id, f)?.series[0]?.carga_kg]));
-  const opcionesCarga = Object.fromEntries(ejs.map(ej => [ej.id, { incremento: incrementoPara(ej, lugar) || 2.5, barra: ej.equipamiento.includes('barra_rack') ? 20 : 0 }]));
+  const opcionesCarga = Object.fromEntries(ejs.map(ej => [ej.id, { incremento: incrementoPara(ej, lugar) || 2.5, barra: ej.equipamiento.includes('barra_rack') ? 20 : 0, esquema: ajuste('esquemaCal') }]));
   return calentamientoDeSesion({ dia, porId: indice.porId, equipo: lugar?.equipamiento || [], bloqueadas: articulacionesBloqueadas(R().lesiones, f), cargas, opcionesCarga });
 }
 // Las series de aproximación van en la tabla de cada ejercicio (filas C): en la pantalla del calentamiento no se repiten.
@@ -401,7 +401,7 @@ function marcarPaso(f, tipo, p, i, valor) {
   else (((E.pasos ||= {})[f] ||= {})[tipo] ||= [])[i] = valor;
 }
 
-/** La fila del calentamiento o del estiramiento en Hoy, que abre su pantalla; o la sugerencia para agregarlo. */
+/** La fila del calentamiento o del estiramiento en Entrenar, que abre su pantalla; o la sugerencia para agregarlo. */
 function filaPasosHtml(dia, f, tipo) {
   const pasos = pasosDe(dia, f, tipo);
   const dibujo = icono(tipo === 'cal' ? 'fuego' : 'persona');
@@ -526,6 +526,8 @@ function siguienteSerieHtml(dia, f) {
  *  volumen y series, y una línea que se llena con las series hechas. */
 function cabSesionHtml(dia) {
   const f = dia.fecha, a = avance(dia), corriendo = enCurso(f), guardada = guardadaHoy(f);
+  // Con el ajuste, el volumen de arriba suma también las series de calentamiento hechas (como Hevy).
+  const volCal = ajuste('calentamientoStats') ? dia.ejercicios.flatMap((e, k) => filasDe(f, e, k)).filter(x => x.hecho && tipoDe(x) === 'calentamiento').reduce((s, x) => s + (Number(x.kg) || 0) * (Number(x.reps) || 0), 0) : 0;
   const accion = corriendo ? '<button type="button" class="cab-sesion-principal" data-terminar>Terminar</button>'
     : guardada ? '<button type="button" class="cab-sesion-principal" data-terminar>Guardar</button>'
     : '<button type="button" class="cab-sesion-principal" data-empezar>Empezar</button>';
@@ -538,7 +540,7 @@ function cabSesionHtml(dia) {
     </div>
     <div class="cab-sesion-cifras">
       <span><small>Duración</small><strong class="num"${corriendo ? ` role="timer" id="solapa-tiempo" data-fecha="${f}"` : ''}>${corriendo ? transcurrido(f) : guardada ? `${E.sesiones.find(s => s.fecha === f && !s.origen)?.duracion_min ?? 0} min` : '0:00'}</strong></span>
-      <span><small>Volumen</small><strong class="num">${esc(volumenTexto(a.cifras.volumen))}</strong></span>
+      <span><small>Volumen</small><strong class="num">${esc(volumenTexto(a.cifras.volumen + volCal))}</strong></span>
       <span><small>Series</small><strong class="num">${a.hechas} de ${a.total}</strong></span>
       ${cuerpoHtml(intensidades(dia.ejercicios.flatMap((e, k) => filasDe(f, e, k).filter(x => x.hecho && deTrabajo(tipoDe(x))).map(() => ({ ejercicio_id: e.ejercicio_id })))).intensidad, { tamano: 'mini', etiqueta: 'Músculos trabajados hoy' })}
     </div>
@@ -899,8 +901,8 @@ function enlazar(ir, dia) {
   $('vista-hoy').querySelectorAll('[data-ayuda-rir]').forEach(b => b.onclick = () => abrirHoja({
     titulo: modoEsfuerzo(R()) === 'rir' ? 'RIR: repeticiones en reserva' : 'RPE: esfuerzo de la serie', volver: b,
     nota: modoEsfuerzo(R()) === 'rir'
-      ? 'Cuántas repeticiones más te salían con buena técnica. 0 es al fallo, 2 es que te quedaban 2. En gris está la reserva que pide el plan; anota la real. Puedes cambiar a RPE en Más, Unidades.'
-      : 'Qué tan duro fue, de 6 a 10. 10 es al fallo; 9 es que salía 1 más; 8,5 es que quizás salían 2 más. En gris está lo que pide el plan; anota lo real. Puedes cambiar a RIR en Más, Unidades.',
+      ? 'Cuántas repeticiones más te salían con buena técnica. 0 es al fallo, 2 es que te quedaban 2. En gris está la reserva que pide el plan; anota la real. Puedes cambiar a RPE en Perfil, Unidades.'
+      : 'Qué tan duro fue, de 6 a 10. 10 es al fallo; 9 es que salía 1 más; 8,5 es que quizás salían 2 más. En gris está lo que pide el plan; anota lo real. Puedes cambiar a RIR en Perfil, Unidades.',
     opciones: [{ valor: 'ok', icono: icono('visto'), clase: 'confirmar', nombre: 'Entendido' }], alElegir: () => {},
   }));
 
@@ -1399,7 +1401,7 @@ function enlazar(ir, dia) {
     const nombre = nombreDe(e);
     abrirHoja({
       titulo: `¿No volver a hacer ${nombre}?`, volver: b,
-      nota: 'Lo cambio por otro parecido desde hoy en adelante y no vuelve a aparecer en tus planes nuevos. Puedes volver a permitirlo en Más, Completar mi perfil.',
+      nota: 'Lo cambio por otro parecido desde hoy en adelante y no vuelve a aparecer en tus planes nuevos. Puedes volver a permitirlo en Perfil, Completar mi perfil.',
       opciones: [{ valor: 'si', icono: icono('cerrar'), clase: 'quitar', nombre: 'Sí, no volver a hacerlo', peligro: true }, { valor: 'no', icono: icono('flecha'), nombre: 'No, dejarlo' }],
       alElegir: v => {
         if (v !== 'si') return;

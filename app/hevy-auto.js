@@ -40,5 +40,5 @@ export async function hevyAlAbrir(alLlegar) {
   try {
     const r = await sincronizarHevy();
     if (r.nuevas.length) { avisar(`Llegaron ${r.nuevas.length === 1 ? '1 sesión' : `${r.nuevas.length} sesiones`} de Hevy.`); alLlegar?.(); }
-  } catch { /* se reintenta la próxima vez; en Más se ve el error */ }
+  } catch { /* se reintenta la próxima vez; en Perfil se ve el error */ }
 }

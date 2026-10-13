@@ -41,6 +41,6 @@ export function bienvenidaProgreso() {
 export function historialVacio() {
   const src = 'img/pantallas/sin_historial.webp';
   return `<div class="historial-vacio">${hayImagen(src) ? `<img src="${src}" alt="" width="144" height="144" loading="lazy" decoding="async">` : ''}
-    <p class="pequeno suave">Todavía no hay sesiones. Marca tus series en Hoy, o importa tu historial de Hevy en Más.</p>
+    <p class="pequeno suave">Todavía no hay sesiones. Marca tus series en Entrenar, o importa tu historial de Hevy en Perfil.</p>
   </div>`;
 }

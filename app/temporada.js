@@ -18,7 +18,7 @@ export function macroActual() {
   return m;
 }
 
-/** Días en que se entrenó: series marcadas en Hoy y sesiones guardadas o importadas. Para el nivel (nucleo/nivel.js). */
+/** Días en que se entrenó: series marcadas en Entrenar y sesiones guardadas o importadas. Para el nivel (nucleo/nivel.js). */
 export const fechasEntrenadas = () => [...new Set([
   ...Object.entries(E.registro || {}).filter(([, ejs]) => Object.values(ejs || {}).some(l => (l || []).some(x => x?.hecho))).map(([f]) => f),
   ...(E.sesiones || []).map(x => x.fecha).filter(Boolean),

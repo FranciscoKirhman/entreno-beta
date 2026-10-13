@@ -13,6 +13,7 @@
 <script>
 // Tema elegido en Más (claro u oscuro); sin elegir, sigue al teléfono. Va antes de pintar para que no parpadee.
 try { const t = localStorage.getItem('entreno-tema'); if (t === 'claro' || t === 'oscuro') document.documentElement.dataset.tema = t; } catch {}
+try { const a = localStorage.getItem('entreno-acento'); if (a && /^[a-z]+$/.test(a) && a !== 'naranjo') document.documentElement.dataset.acento = a; } catch {}
 </script>
 <link rel="stylesheet" href="estilos.css">
 <link rel="stylesheet" href="imagenes-perfil.css">

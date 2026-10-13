@@ -57,7 +57,7 @@ export function ordenarSesion({ volver, alCambiar }) {
   const estado = E;
   let orden = dia.ejercicios.map((e, i) => ({ id: e.ejercicio_id || `i${i}`, nombre: e.nombre || 'Ejercicio', ss: e.superserie }));
   const n = cuantasSiguen();
-  const lista = () => orden.map((x, i) => `<li><span class="num suave">${i + 1}</span><span class="nombre-orden">${esc(x.nombre)}${x.ss ? ` <span class="chip">${esc(x.ss)}</span>` : ''}</span>
+  const lista = () => orden.map((x, i) => `<li data-i="${i}"><span class="asa-orden" aria-hidden="true">${icono('ajustes', 'icono')}</span><span class="num suave">${i + 1}</span><span class="nombre-orden">${esc(x.nombre)}${x.ss ? ` <span class="chip">${esc(x.ss)}</span>` : ''}</span>
     <button type="button" class="boton-icono" data-subir="${i}" aria-label="Subir ${esc(x.nombre)}"${i === 0 ? ' disabled' : ''}>${icono('flecha', 'icono flecha-arriba')}</button>
     <button type="button" class="boton-icono" data-bajar="${i}" aria-label="Bajar ${esc(x.nombre)}"${i === orden.length - 1 ? ' disabled' : ''}>${icono('flecha', 'icono flecha-abajo')}</button></li>`).join('');
   abrirHoja({
@@ -86,6 +86,35 @@ export function ordenarSesion({ volver, alCambiar }) {
     ol.innerHTML = lista();
     ol.querySelector(`[data-${b.dataset.subir != null ? 'subir' : 'bajar'}="${j}"]`)?.focus();
   });
+  // Arrastrar desde el asa, como Hevy: la fila sigue al dedo y al soltar queda el orden nuevo.
+  arrastrable(ol, indices => { orden = indices.map(i => orden[i]); ol.innerHTML = lista(); });
+}
+
+/** Ordenar arrastrando las filas de una lista por su asa (.asa-orden). alSoltar recibe los índices en el orden nuevo. */
+export function arrastrable(ol, alSoltar) {
+  let fila = null;
+  ol.addEventListener('pointerdown', ev => {
+    const asa = ev.target.closest('.asa-orden');
+    if (!asa) return;
+    fila = asa.closest('li');
+    fila.classList.add('arrastrando');
+    asa.setPointerCapture?.(ev.pointerId);
+    ev.preventDefault();
+  });
+  ol.addEventListener('pointermove', ev => {
+    if (!fila) return;
+    const otra = [...ol.children].find(li => li !== fila && (() => { const r = li.getBoundingClientRect(); return ev.clientY > r.top && ev.clientY < r.bottom; })());
+    if (!otra) return;
+    const r = otra.getBoundingClientRect();
+    ol.insertBefore(fila, ev.clientY < r.top + r.height / 2 ? otra : otra.nextSibling);
+  });
+  const soltar = () => {
+    if (!fila) return;
+    fila.classList.remove('arrastrando'); fila = null;
+    alSoltar([...ol.children].map(li => Number(li.dataset.i)));
+  };
+  ol.addEventListener('pointerup', soltar);
+  ol.addEventListener('pointercancel', soltar);
 }
 
 /** Agregar varios ejercicios a hoy de una vez, como "Agregar 3 ejercicios" de Hevy (solo hoy). Con superserie, quedan

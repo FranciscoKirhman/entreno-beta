@@ -22,6 +22,13 @@ import { estadoVistaMas, organizarMas } from './mas-paneles.js';
 import { conexionFuturaHtml, enlazarConexionesFuturas } from './conexiones-futuras.js';
 
 /** Tema elegido en este teléfono: 'auto' (como el teléfono), 'claro' u 'oscuro'. index.html lo aplica al abrir. */
+// Color de acento, como los 8 de OpenGym: se guarda en este teléfono y se aplica antes de pintar (index.html).
+const ACENTOS = [['naranjo', 'Naranjo'], ['azul', 'Azul'], ['verde', 'Verde'], ['turquesa', 'Turquesa'], ['morado', 'Morado'], ['rosado', 'Rosado'], ['rojo', 'Rojo'], ['amarillo', 'Amarillo']];
+function acentoElegido() { try { return localStorage.getItem('entreno-acento') || 'naranjo'; } catch { return 'naranjo'; } }
+function elegirAcento(a) {
+  try { localStorage.setItem('entreno-acento', a); } catch { /* sin almacenamiento: dura hasta cerrar */ }
+  if (a === 'naranjo') delete document.documentElement.dataset.acento; else document.documentElement.dataset.acento = a;
+}
 function temaElegido() {
   try { const t = localStorage.getItem('entreno-tema'); return t === 'claro' || t === 'oscuro' ? t : 'auto'; } catch { return 'auto'; }
 }
@@ -66,6 +73,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel = null }) {
     <section class="tarjeta" id="pantalla">
       <h3>Pantalla</h3>
       <div class="fila-unidad"><span>Tema</span><div class="segmentos" role="group" aria-label="Tema">${[['auto', 'Auto'], ['claro', 'Claro'], ['oscuro', 'Oscuro']].map(([v, t]) => `<button type="button" data-elegir-tema="${v}" aria-pressed="${temaElegido() === v}">${t}</button>`).join('')}</div></div>
+      <div class="fila-unidad fila-acento"><span>Color</span><div class="acentos" role="group" aria-label="Color de la app">${ACENTOS.map(([v, t]) => `<button type="button" class="acento acento-${v}" data-elegir-acento="${v}" aria-pressed="${acentoElegido() === v}" aria-label="${t}"></button>`).join('')}</div></div>
       <label class="pequeno casilla"><input type="checkbox" id="pantalla-encendida"${chk(E.pantallaEncendida !== false)}> Mantener la pantalla encendida mientras entrenas</label>
       <p class="pequeno suave">Auto sigue al teléfono. La pantalla queda encendida desde la primera serie marcada hasta guardar la sesión${encendidaDisponible() ? '' : ' (este navegador no lo permite)'}.</p>
     </section>
@@ -119,6 +127,10 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel = null }) {
   document.querySelectorAll('[data-escala-esfuerzo]').forEach(b => b.onclick = () => { R().escala_esfuerzo = b.dataset.escalaEsfuerzo; E.mensaje = `Esfuerzo en ${b.dataset.escalaEsfuerzo === 'rir' ? 'RIR (repeticiones en reserva)' : 'RPE (de 6 a 10)'}.`; guardar(); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); }, ir);
   document.querySelectorAll('[data-unidad]').forEach(b => b.onclick = () => { R().unidad = b.dataset.unidad; E.mensaje = `Peso en ${b.dataset.unidad === 'lb' ? 'libras' : 'kilos'}.`; guardar(); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); }, ir);
   enlazarConexiones(() => vistaMas(ir, { armarPlan, sincronizarAlEntrar }));
+  document.querySelectorAll("[data-elegir-acento]").forEach(b => b.onclick = () => {
+    elegirAcento(b.dataset.elegirAcento);
+    document.querySelectorAll("[data-elegir-acento]").forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  });
   // data-elegir-tema y no data-tema: <html data-tema> es el que pinta el tema.
   document.querySelectorAll('[data-elegir-tema]').forEach(b => b.onclick = () => {
     elegirTema(b.dataset.elegirTema);
@@ -132,7 +144,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel = null }) {
     const texto = planATexto(E.plan, { semana: semanaDe(E.plan, hoy()) || 1 });
     try { if (navigator.share) { await navigator.share({ title: 'Mi plan de Entreno', text: texto }); return; } } catch { return; }
     $('plan-compartido').innerHTML = `<pre class="prompt" id="texto-plan">${esc(texto)}</pre><p class="pequeno" id="plan-copiado"></p>`;
-    try { await navigator.clipboard.writeText(texto); $('plan-copiado').textContent = 'Copiado. Mándalo a quien quieras: lo pega en Más, Importar un plan que ya tengo.'; }
+    try { await navigator.clipboard.writeText(texto); $('plan-copiado').textContent = 'Copiado. Mándalo a quien quieras: lo pega en Perfil, Importar un plan que ya tengo.'; }
     catch { $('plan-copiado').textContent = 'Selecciona el texto y cópialo.'; }
   });
   $('importar').onclick = () => {
@@ -506,7 +518,7 @@ function enlazarCuenta(ir, sincronizarAlEntrar) {
     activarCuenta(nube.usuarioId());
     const estado = E, usuario = nube.usuarioId(), vigente = () => E === estado && nube.usuarioId() === usuario;
     try { const resultado = await sincronizarAlEntrar(); if (!vigente()) return; E.mensaje = resultado.completa ? `Entraste como ${nube.correo()}.` : resultado.mensaje; }
-    catch (e) { if (!vigente()) return; E.mensaje = `Entraste, pero no pude sincronizar: ${e.message}. Reintenta en Más.`; }
+    catch (e) { if (!vigente()) return; E.mensaje = `Entraste, pero no pude sincronizar: ${e.message}. Reintenta en Perfil.`; }
     guardar(); ir(E.plan ? 'hoy' : 'mas', E.plan ? undefined : { panel: 'cuenta' });
   });
   $('salir')?.addEventListener('click', async () => { await nube.salir(); activarCuenta(); E.mensaje = 'Saliste de tu cuenta. Volviste al perfil local. La copia de la cuenta se conserva por separado.'; guardar(); ir('mas'); });

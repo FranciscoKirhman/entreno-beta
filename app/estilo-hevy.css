@@ -399,3 +399,124 @@ button.historial-ficha-cab{cursor:pointer}
 .mapa-musculos .segmentos{display:flex;margin:6px 0 4px}
 .mapa-musculos .segmentos button{flex:1}
 .chip-sin-revision{background:var(--warning-soft);color:var(--warning)}
+
+/* ── Perfil como Hevy: foto grande, nombre y cifras ── */
+#vista-mas .mas-perfil{align-items:center;gap:16px;padding:18px 16px;min-height:120px}
+#vista-mas .mas-perfil .avatar-retrato{width:84px;height:84px;flex:0 0 84px}
+#vista-mas .mas-perfil .avatar-retrato>.icono{width:40px;height:40px}
+#vista-mas .mas-perfil .mas-texto strong{font:700 22px/1.2 var(--f-titulo)}
+.perfil-cifras{display:flex;gap:16px;margin:6px 0 4px}
+.perfil-cifra{display:flex;flex-direction:column}
+.perfil-cifra small{font-size:12px;color:var(--ink-muted)}
+.perfil-cifra b{font-size:18px;font-weight:600;color:var(--ink)}
+/* Hoja de filtros del selector, como la de Hevy */
+#vista-banco .banco-filtro{border:0;font:600 16px/1.2 var(--f-texto);color:var(--ink);cursor:pointer}
+#vista-banco .banco-filtro.activo{background:var(--accent-soft);color:var(--accent)}
+.filtro-cuadricula{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;max-height:56vh;overflow-y:auto;padding:2px}
+.filtro-opcion{display:flex;align-items:center;gap:10px;min-height:64px;padding:8px;border:0;border-radius:14px;background:var(--surface);color:var(--ink);font:500 15px/1.2 var(--f-texto);text-align:left;cursor:pointer;box-shadow:inset 0 0 0 1px var(--line)}
+.filtro-opcion img,.filtro-letra{flex:0 0 48px;width:48px;height:48px;border-radius:50%;object-fit:contain;background:var(--fondo-icono)}
+.filtro-letra{display:grid;place-items:center;font-weight:700;color:var(--ink)}
+.filtro-opcion[aria-checked="true"]{box-shadow:inset 0 0 0 2px var(--accent);color:var(--accent)}
+.filtro-pie{display:flex;gap:10px;margin:12px 0 4px}
+.filtro-pie .boton{flex:1;min-height:50px}
+.filtro-pie .boton:not(.primario){color:var(--ink)}
+/* Crear ejercicio, como la pantalla de Hevy */
+.crear-ejercicio{display:flex;flex-direction:column;margin-bottom:10px;border-radius:12px;background:var(--fill);overflow:hidden}
+.crear-nombre{border:0;border-bottom:.5px solid var(--line);border-radius:0;background:transparent;padding:16px 14px;font-size:18px}
+.crear-fila{display:flex;align-items:center;gap:8px;min-height:64px;padding:8px 14px;border:0;border-bottom:.5px solid var(--line);background:none;color:var(--ink);text-align:left;cursor:pointer}
+.crear-fila > span{flex:1;display:flex;flex-direction:column;gap:2px}
+.crear-fila strong{font-weight:500;font-size:16px}
+.crear-fila small{font-size:15px;color:var(--ink-muted)}
+.crear-fila small.crear-elegir{color:var(--accent)}
+.crear-flecha{width:16px;height:16px;fill:none;stroke:var(--ink-muted);stroke-width:2.2}
+.crear-ejercicio > p{margin:10px 14px}
+.elegir-varios{display:flex;flex-direction:column;max-height:55vh;overflow-y:auto;border-radius:12px;background:var(--fill);margin-bottom:10px}
+.elegir-varios .ajuste-sesion + .ajuste-sesion{border-top:.5px solid var(--line)}
+/* Reloj grande del descanso (tocar el tiempo), como Hevy */
+#descanso .texto{cursor:pointer}
+#descanso.visible.grande{position:fixed;inset:0;max-width:none;border-radius:0;z-index:30;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:auto auto;align-content:center;gap:28px 12px;padding:24px 20px calc(env(safe-area-inset-bottom,0px) + 24px);background:var(--bg)}
+#descanso.grande .descanso-cab{display:grid;grid-column:1 / -1;grid-row:1;justify-items:center;align-items:center}
+#descanso.grande .descanso-anillo{display:block!important;grid-area:1 / 1;width:min(72vw,280px);height:min(72vw,280px)}
+#descanso.grande .descanso-anillo svg{width:100%;height:100%}
+#descanso.grande .descanso-anillo .pista{fill:none;stroke:var(--fill);stroke-width:2.5}
+#descanso.grande .descanso-anillo .progreso{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linecap:round}
+#descanso.grande .texto{grid-area:1 / 1;align-items:center;z-index:1}
+#descanso.grande .etiqueta{display:block!important;font-size:15px;color:var(--ink-muted);max-width:60vw;text-align:center}
+#descanso.grande .tiempo{font-size:64px;font-weight:300}
+#descanso.grande [data-menos]{grid-row:2;grid-column:1}
+#descanso.grande [data-mas]{grid-row:2;grid-column:2}
+#descanso.grande [data-listo]{grid-row:2;grid-column:3}
+#descanso.grande .descanso-linea{display:none}
+/* Ordenar arrastrando */
+.lista-orden li{touch-action:pan-y;grid-template-columns:32px 22px minmax(0,1fr) 44px 44px}
+.asa-orden{display:grid;place-items:center;width:32px;height:40px;cursor:grab;color:var(--ink-muted);touch-action:none}
+.asa-orden .icono{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;transform:rotate(90deg)}
+.lista-orden li.arrastrando{background:var(--accent-soft);border-radius:10px;box-shadow:0 6px 16px rgba(0,0,0,.15)}
+
+/* ── Rutinas propias ── */
+.botones-rutinas{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.botones-rutinas .boton{flex-direction:column;justify-content:center;gap:4px;min-height:64px;padding:8px 4px;font-size:14px;text-align:center}
+.rutina-nueva-vacia{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:64px;border:1.5px dashed var(--border);border-radius:14px;background:none;color:var(--accent);font:600 16px/1.2 var(--f-texto);cursor:pointer}
+.rutina-nueva-vacia .icono{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.2}
+.rutina-cab .boton-icono .icono{transform:none}
+.rutina-nombre{width:100%;margin:6px 0 12px;padding:12px 14px;border:0;border-radius:12px;background:var(--surface);font:700 20px/1.2 var(--f-titulo)}
+.rutina-guardar{background:var(--accent)!important;color:var(--accent-ink)!important}
+.rutina-editor{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-direction:column;gap:10px}
+.rutina-editor li.rutina-ej{display:grid;grid-template-columns:32px minmax(0,1fr);align-items:start;gap:6px;padding:10px 10px 12px 4px;border:0;border-radius:14px;background:var(--surface)}
+.rutina-ej-cab{display:grid;grid-template-columns:40px minmax(0,1fr) 40px;align-items:center;gap:10px}
+.rutina-ej-cab .miniatura{width:40px;height:40px;border-radius:10px}
+.rutina-ej-cab strong{color:var(--accent);font-size:16px}
+.rutina-ej-campos{display:grid;grid-template-columns:64px minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:8px}
+.rutina-ej-campos label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink-muted)}
+.rutina-ej-campos label > span{display:flex;align-items:center;gap:4px}
+.rutina-ej-campos input,.rutina-ej-campos select{width:100%;min-width:0;min-height:40px;padding:4px;text-align:center;border-radius:10px;box-shadow:inset 0 0 0 1px var(--border);border:0;background:var(--bg);font-weight:600}
+.fin-rutina{width:100%;min-height:50px;background:var(--accent);color:var(--accent-ink);margin-bottom:24px}
+.guardar-rutina{width:100%;margin:10px 0;color:var(--ink)}
+body.en-sesion main:has(#vista-rutina){padding-bottom:calc(env(safe-area-inset-bottom,0px) + 40px)}
+.aviso-sensacion{background:var(--accent-soft)}.aviso-sensacion h3{margin-top:0}
+/* Celebración del mes cerrado */
+.mes-cerrado{position:relative;overflow:hidden;background:linear-gradient(135deg,var(--accent) 0%,color-mix(in srgb,var(--accent) 60%,#7A4FB5) 100%);color:#fff}
+.mes-cerrado .sobretitulo{color:#fff;opacity:.9;font-size:15px}
+.mes-cifras{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:8px 0 12px}
+.mes-cifras span{display:flex;flex-direction:column}
+.mes-cifras strong{font:800 28px/1.1 var(--f-titulo)}
+.mes-cifras small{opacity:.85}
+.mes-cerrado .boton{background:rgba(255,255,255,.2);color:#fff}
+.mes-cerrado .boton.primario{background:#fff;color:var(--accent)}
+.mes-cerrado::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 15% 20%,rgba(255,255,255,.5) 2px,transparent 3px),radial-gradient(circle at 80% 30%,rgba(255,255,255,.45) 2px,transparent 3px),radial-gradient(circle at 60% 75%,rgba(255,255,255,.4) 2px,transparent 3px),radial-gradient(circle at 30% 85%,rgba(255,255,255,.4) 2px,transparent 3px),radial-gradient(circle at 90% 85%,rgba(255,255,255,.35) 2px,transparent 3px)}
+@media (prefers-reduced-motion:no-preference){.mes-cerrado{animation:entrar-mes .6s cubic-bezier(.2,.8,.3,1.25) both}.mes-cerrado::before{animation:brillo-mes 2.4s ease-in-out infinite alternate}@keyframes entrar-mes{from{opacity:0;transform:translateY(12px) scale(.96)}to{opacity:1;transform:none}}@keyframes brillo-mes{from{opacity:.4;transform:translateY(0)}to{opacity:1;transform:translateY(-6px)}}}
+
+/* ── Colores de acento a elección (Perfil → Pantalla), como OpenGym. El naranjo es el de siempre. ── */
+:root[data-acento="azul"]{--accent:#0A6CDB;--accent-soft:#DCEBFC;--accent-ink:#FFFFFF}
+@media (prefers-color-scheme: dark){:root[data-acento="azul"]:not([data-tema="claro"]){--accent:#4C9AFF;--accent-soft:#13284A;--accent-ink:#061226}}
+:root[data-tema="oscuro"][data-acento="azul"]{--accent:#4C9AFF;--accent-soft:#13284A;--accent-ink:#061226}
+:root[data-acento="verde"]{--accent:#1E8E3E;--accent-soft:#DDF3E3;--accent-ink:#FFFFFF}
+@media (prefers-color-scheme: dark){:root[data-acento="verde"]:not([data-tema="claro"]){--accent:#34C759;--accent-soft:#0F2E19;--accent-ink:#04140A}}
+:root[data-tema="oscuro"][data-acento="verde"]{--accent:#34C759;--accent-soft:#0F2E19;--accent-ink:#04140A}
+:root[data-acento="turquesa"]{--accent:#0F7F81;--accent-soft:#DDF3F3;--accent-ink:#FFFFFF}
+@media (prefers-color-scheme: dark){:root[data-acento="turquesa"]:not([data-tema="claro"]){--accent:#3FD0D2;--accent-soft:#0E2C2D;--accent-ink:#041718}}
+:root[data-tema="oscuro"][data-acento="turquesa"]{--accent:#3FD0D2;--accent-soft:#0E2C2D;--accent-ink:#041718}
+:root[data-acento="morado"]{--accent:#7A4FB5;--accent-soft:#EEE6F9;--accent-ink:#FFFFFF}
+@media (prefers-color-scheme: dark){:root[data-acento="morado"]:not([data-tema="claro"]){--accent:#B596E6;--accent-soft:#2A1E3D;--accent-ink:#140A22}}
+:root[data-tema="oscuro"][data-acento="morado"]{--accent:#B596E6;--accent-soft:#2A1E3D;--accent-ink:#140A22}
+:root[data-acento="rosado"]{--accent:#C2347A;--accent-soft:#FBE3EF;--accent-ink:#FFFFFF}
+@media (prefers-color-scheme: dark){:root[data-acento="rosado"]:not([data-tema="claro"]){--accent:#FF6FAE;--accent-soft:#3A1426;--accent-ink:#22050F}}
+:root[data-tema="oscuro"][data-acento="rosado"]{--accent:#FF6FAE;--accent-soft:#3A1426;--accent-ink:#22050F}
+:root[data-acento="rojo"]{--accent:#C62828;--accent-soft:#FBE2E1;--accent-ink:#FFFFFF}
+@media (prefers-color-scheme: dark){:root[data-acento="rojo"]:not([data-tema="claro"]){--accent:#FF6961;--accent-soft:#3A1416;--accent-ink:#240405}}
+:root[data-tema="oscuro"][data-acento="rojo"]{--accent:#FF6961;--accent-soft:#3A1416;--accent-ink:#240405}
+:root[data-acento="amarillo"]{--accent:#9A6510;--accent-soft:#FFF0D6;--accent-ink:#FFFFFF}
+@media (prefers-color-scheme: dark){:root[data-acento="amarillo"]:not([data-tema="claro"]){--accent:#FFC233;--accent-soft:#33270A;--accent-ink:#1A1202}}
+:root[data-tema="oscuro"][data-acento="amarillo"]{--accent:#FFC233;--accent-soft:#33270A;--accent-ink:#1A1202}
+.acentos{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0}
+.acento{width:36px;height:36px;border-radius:50%;border:0;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(0,0,0,.1)}
+.acento[aria-pressed="true"]{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--ink)}
+.acento-naranjo{background:#D0571F}
+.acento-azul{background:#0A6CDB}
+.acento-verde{background:#1E8E3E}
+.acento-turquesa{background:#0F7F81}
+.acento-morado{background:#7A4FB5}
+.acento-rosado{background:#C2347A}
+.acento-rojo{background:#C62828}
+.acento-amarillo{background:#9A6510}
+.fila-acento{flex-wrap:wrap}

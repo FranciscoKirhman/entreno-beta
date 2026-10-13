@@ -10,10 +10,11 @@ import { avisar } from './comun.js';
 
 const DESCANSOS = [0, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300];
 const ANTERIOR = { rutina: 'Misma sesión del plan', cualquiera: 'Cualquier sesión' };
+const ESQUEMAS = { auto: 'Automática (2 o 3 series)', corto: '2 series: 50% y 75%', largo: '4 series: 40%, 60%, 80% y 90%', uno: '1 serie al 60%' };
 const largo = seg => (seg ? [Math.floor(seg / 60) && `${Math.floor(seg / 60)} min`, seg % 60 && `${seg % 60} s`].filter(Boolean).join(' ') : 'Apagado');
 
 /** Lo elegido, con sus valores por defecto (todo encendido, como viene Hevy; "anterior" de la misma sesión del plan). */
-export const ajuste = clave => ({ esfuerzo: true, avisoRecord: true, sonido: true, superserieSigue: true, discos: true, cronoFila: true, descanso: 90, anterior: 'rutina', ...(E.ajustesSesion || {}) })[clave];
+export const ajuste = clave => ({ esquemaCal: 'auto', calentamientoStats: false, esfuerzo: true, avisoRecord: true, sonido: true, superserieSigue: true, discos: true, cronoFila: true, descanso: 90, anterior: 'rutina', ...(E.ajustesSesion || {}) })[clave];
 const poner = (clave, valor) => { (E.ajustesSesion ||= {})[clave] = valor; guardar(); };
 
 const fila = (id, texto, valor) => `<button type="button" class="ajuste-fila" data-ajuste-fila="${id}"><span>${texto}</span><span class="ajuste-valor">${esc(valor)}</span>${icono('flecha', 'icono ajuste-flecha')}</button>`;
@@ -28,12 +29,14 @@ export function abrirAjustesSesion(volver, { ir, alCambiar }) {
       <div class="ajustes-grupo">
         ${fila('descanso', 'Descanso por defecto', largo(ajuste('descanso')))}
         ${fila('anterior', 'Valores anteriores', ANTERIOR[ajuste('anterior')])}
+        ${fila('esquemaCal', 'Calculadora de calentamiento', ESQUEMAS[ajuste('esquemaCal')].split(' (')[0].split(':')[0])}
         ${fila('unidades', 'Unidades, esfuerzo y tema', `kg o lb, ${modo}`)}
       </div>
       <div class="ajustes-grupo">
         ${interruptor('pantalla', 'Pantalla encendida', E.pantallaEncendida !== false, encendidaDisponible() ? 'Actívalo si no quieres que el teléfono se apague mientras entrenas.' : 'Este navegador no lo permite.')}
         ${interruptor('discos', 'Calculadora de discos', ajuste('discos'), 'Calcula los discos que van en cada lado de la barra. Aparece en el menú de los ejercicios con barra.')}
         ${interruptor('esfuerzo', `Esfuerzo (${modo})`, ajuste('esfuerzo'), `El ${modo} mide qué tan dura fue cada serie. Activado, lo anotas en cada serie de la sesión.`)}
+        ${interruptor('calentamientoStats', 'Calentamiento en las estadísticas', ajuste('calentamientoStats'), 'Suma las series de calentamiento al volumen de la sesión y de Progreso. Apagado, cuentan solo las de trabajo.')}
         ${interruptor('superserieSigue', 'Superserie: ir al siguiente', ajuste('superserieSigue'), 'Al marcar una serie, la pantalla baja sola al ejercicio que sigue en la superserie.')}
         ${interruptor('cronoFila', 'Cronómetro en la fila', ajuste('cronoFila'), 'Los ejercicios por tiempo traen su cronómetro en cada serie.')}
         ${interruptor('avisoRecord', 'Aviso de récord', ajuste('avisoRecord'), 'Te avisa cuando logras un récord al marcar la serie.')}
@@ -58,6 +61,12 @@ export function abrirAjustesSesion(volver, { ir, alCambiar }) {
       nota: 'Para los ejercicios que no traen descanso en el plan. Cada ejercicio puede tener el suyo desde su línea "Descanso".',
       opciones: DESCANSOS.map(x => ({ valor: String(x), icono: x === ajuste('descanso') ? icono('visto') : '', clase: 'confirmar', nombre: largo(x) })),
       alElegir: x => { poner('descanso', Number(x)); alCambiar?.(); reabrir(); },
+    });
+    if (que === 'esquemaCal') abrirHoja({
+      titulo: 'Calculadora de calentamiento', volver,
+      nota: 'Las series C que la app pone antes de cada ejercicio, según tu peso de trabajo. Se redondean a tus discos o mancuernas. Las que indica tu plan no cambian.',
+      opciones: Object.entries(ESQUEMAS).map(([v, t]) => ({ valor: v, icono: v === ajuste('esquemaCal') ? icono('visto') : '', clase: 'confirmar', nombre: t })),
+      alElegir: x => { poner('esquemaCal', x); alCambiar?.(); reabrir(); },
     });
     if (que === 'anterior') abrirHoja({
       titulo: 'Valores anteriores', volver,

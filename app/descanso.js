@@ -29,6 +29,12 @@ function caja() {
     el.querySelector('[data-menos]').onclick = () => { if (!reloj) return; fin = Math.max(Date.now(), fin - 15_000); pintar(); reprogramar(); };
     el.querySelector('[data-mas]').onclick = () => { if (!reloj) inicioTramo = Date.now(); fin = Math.max(fin, Date.now()) + 15_000; if (!reloj) correr(); pintar(); reprogramar(); };
     el.querySelector('[data-listo]').onclick = detenerDescanso;
+    // Tocar el tiempo abre el reloj grande, como Hevy; tocarlo de nuevo lo achica.
+    const texto = el.querySelector('.texto');
+    texto.setAttribute('role', 'button'); texto.tabIndex = 0; texto.setAttribute('aria-label', 'Agrandar o achicar el reloj');
+    const alternar = () => el.classList.toggle('grande');
+    texto.onclick = alternar;
+    texto.onkeydown = ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); alternar(); } };
     document.body.append(el);
   }
   return el;
@@ -131,7 +137,7 @@ export function detenerDescanso() {
   reloj = null;
   siguientes = [];
   alFin = null;
-  document.getElementById('descanso')?.classList.remove('visible', 'termino', 'ultimos');
+  document.getElementById('descanso')?.classList.remove('visible', 'termino', 'ultimos', 'grande');
   document.body.classList.remove('con-descanso');
   if (f && corriendo) f(hechos()); // Listo antes de tiempo: cuenta lo hecho hasta ahí
 }
