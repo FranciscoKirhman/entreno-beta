@@ -19,7 +19,7 @@ export function crearIndice(catalogo) {
   const porNombre = new Map();
   for (const e of ejercicios) {
     porId.set(e.id, e);
-    for (const n of [e.nombre_hevy, e.nombre, ...(e.alias || [])]) {
+    for (const n of [e.nombre_hevy, e.nombre, ...(e.alias || [])].filter(Boolean)) { // sin nombre de Hevy (banco ampliado), se salta
       const clave = normalizar(n);
       if (porNombre.has(clave) && porNombre.get(clave).id !== e.id) {
         throw new Error(`"${n}" apunta a dos ejercicios: ${porNombre.get(clave).id} y ${e.id}`);

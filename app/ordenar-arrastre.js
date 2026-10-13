@@ -22,7 +22,7 @@ export function enlazarOrdenArrastre(raiz, alGuardar) {
     cab.addEventListener('pointerdown', e => {
       if (e.button !== 0 || e.target.closest('button')) return;
       inicioY = e.clientY; ordenAntes = [...lista.querySelectorAll(':scope > .ej')].map(x => x.dataset.ordenId);
-      const activar=()=>{modoOrden=true;cerrar.hidden=false;activa=card;suprimir=true;lista.classList.add('orden-compacto');card.classList.add('arrastrada');cab.setPointerCapture(e.pointerId);};
+      const activar=()=>{modoOrden=true;cerrar.hidden=false;activa=card;suprimir=true;lista.classList.add('orden-compacto');card.classList.add('arrastrada');cab.setPointerCapture(e.pointerId);window.addEventListener('pointerup',()=>terminar(false),{once:true,capture:true});};
       if(modoOrden)activar();else reloj=setTimeout(activar,450);
     });
     cab.addEventListener('pointermove', e => {
@@ -31,9 +31,9 @@ export function enlazarOrdenArrastre(raiz, alGuardar) {
       const otras = [...lista.querySelectorAll(':scope > .ej')].filter(x => x !== activa);
       const siguiente = otras.find(x => e.clientY < x.getBoundingClientRect().top + x.getBoundingClientRect().height / 2);
       if (siguiente) lista.insertBefore(activa, siguiente); else lista.append(activa);
+      cab.setPointerCapture(e.pointerId);
       if (e.clientY < 100) window.scrollBy(0, -12); else if (e.clientY > innerHeight - 110) window.scrollBy(0, 12);
     });
-    cab.addEventListener('pointerup', () => terminar(false));
     cab.addEventListener('pointercancel', () => terminar(true));
   });
 }

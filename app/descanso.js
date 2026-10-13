@@ -3,6 +3,8 @@
 // corriendo aunque la vista se vuelva a dibujar o se cambie de pantalla.
 import { imagenAsistente, asistenteActual } from './cuestionario.js';
 import { entrarPose } from './movimiento.js';
+import { ajuste } from './ajustes-sesion.js';
+import { programarAvisoDescanso, cancelarAvisoDescanso } from './aviso-descanso.js';
 
 let fin = 0, reloj = null, audio = null, etiqueta = '', siguientes = [], textoFinal = '¡A la siguiente serie!';
 // Series por tiempo (plancha y parecidas): al terminar, o al tocar Listo antes, se avisa cuántos segundos se hicieron.
@@ -11,7 +13,7 @@ let alFin = null, inicio = 0;
 let inicioTramo = 0;
 const ANILLO = 2 * Math.PI * 22;
 const hechos = () => Math.round((Date.now() - inicio) / 1000);
-const formato = seg => `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')}`;
+const formato = seg => `${String(Math.floor(seg / 60)).padStart(2, '0')}:${String(seg % 60).padStart(2, '0')}`; // 02:29, como Hevy
 
 function caja() {
   let el = document.getElementById('descanso');
@@ -19,13 +21,13 @@ function caja() {
     el = document.createElement('div');
     el.id = 'descanso';
     el.setAttribute('role', 'timer');
-    el.innerHTML = `<div class="descanso-cab"><span class="descanso-anillo" aria-hidden="true"><svg viewBox="0 0 48 48"><circle class="pista" cx="24" cy="24" r="22"/><circle class="progreso" cx="24" cy="24" r="22" stroke-dasharray="${ANILLO.toFixed(2)}"/></svg><span class="descanso-asistente"></span></span><div class="texto"><span class="etiqueta pequeno"></span><strong class="tiempo num"></strong></div></div>
+    el.innerHTML = `<i class="descanso-linea" aria-hidden="true"><b></b></i><div class="descanso-cab"><span class="descanso-anillo" aria-hidden="true"><svg viewBox="0 0 48 48"><circle class="pista" cx="24" cy="24" r="22"/><circle class="progreso" cx="24" cy="24" r="22" stroke-dasharray="${ANILLO.toFixed(2)}"/></svg><span class="descanso-asistente"></span></span><div class="texto"><span class="etiqueta pequeno"></span><strong class="tiempo num"></strong></div></div>
       <div class="descanso-controles"><button type="button" class="boton" data-menos aria-label="Restar 15 segundos">−15</button>
       <button type="button" class="boton" data-mas aria-label="Sumar 15 segundos">+15</button>
-      <button type="button" class="boton" data-listo>Listo</button></div>`;
+      <button type="button" class="boton" data-listo>Saltar</button></div>`;
     // Como en Hevy: 15 segundos menos o más. Restar no deja el término antes de ahora.
-    el.querySelector('[data-menos]').onclick = () => { if (!reloj) return; fin = Math.max(Date.now(), fin - 15_000); pintar(); };
-    el.querySelector('[data-mas]').onclick = () => { if (!reloj) inicioTramo = Date.now(); fin = Math.max(fin, Date.now()) + 15_000; if (!reloj) correr(); pintar(); };
+    el.querySelector('[data-menos]').onclick = () => { if (!reloj) return; fin = Math.max(Date.now(), fin - 15_000); pintar(); reprogramar(); };
+    el.querySelector('[data-mas]').onclick = () => { if (!reloj) inicioTramo = Date.now(); fin = Math.max(fin, Date.now()) + 15_000; if (!reloj) correr(); pintar(); reprogramar(); };
     el.querySelector('[data-listo]').onclick = detenerDescanso;
     document.body.append(el);
   }
@@ -40,7 +42,7 @@ function pintar() {
     const s = siguientes.shift();
     fin = Date.now() + s.seg * 1000; etiqueta = s.texto; resta = s.seg; inicioTramo = Date.now();
     navigator.vibrate?.(200);
-    if (audio) pitido();
+    if (audio && ajuste('sonido')) pitido();
   }
   resta = Math.max(0, resta);
   el.querySelector('.tiempo').textContent = formato(resta);
@@ -48,6 +50,7 @@ function pintar() {
   // Cuatro veces por segundo, con una transición lineal de 250 ms: se vacía de forma continua. Solo cambia el trazo.
   const queda = Math.max(0, fin - Date.now()), total = Math.max(1, fin - inicioTramo);
   el.querySelector('.descanso-anillo .progreso').style.strokeDashoffset = (ANILLO * (1 - queda / total)).toFixed(2);
+  el.querySelector('.descanso-linea b').style.width = `${((queda / total) * 100).toFixed(1)}%`; // la línea de arriba, como Hevy
   el.classList.toggle('ultimos', queda > 0 && queda <= 3000);
   const personaje = el.querySelector('.descanso-asistente');
   const pose = resta ? 'cronometro' : 'animo', asistente = asistenteActual();
@@ -57,8 +60,12 @@ function pintar() {
     personaje.dataset.pose = pose; personaje.dataset.asistente = asistente;
     entrarPose(personaje.firstElementChild); // una entrada corta, solo cuando cambia
   }
+  // A la vista al terminar: el aviso del servidor sobra (la barra ya avisa), se cancela unos segundos antes.
+  if (resta <= 3 && document.visibilityState === 'visible') cancelarAvisoDescanso();
   if (!resta && reloj) terminar();
 }
+// El aviso con la app cerrada sigue al descanso (app/aviso-descanso.js): solo el de entre series, sin tramos ni series por tiempo.
+const reprogramar = () => { if (reloj && !alFin && !siguientes.length) programarAvisoDescanso(Math.round((fin - Date.now()) / 1000), etiqueta.startsWith('Temporizador') ? 'Terminó el temporizador' : '¡A la siguiente serie!'); };
 
 function correr() {
   clearInterval(reloj);
@@ -82,7 +89,7 @@ function terminar() {
   clearInterval(reloj);
   reloj = null;
   navigator.vibrate?.([200, 100, 200]);
-  if (audio) pitido();
+  if (audio && ajuste('sonido')) pitido();
   if (alFin) {
     // Normalmente anota la serie y parte el descanso; si no hay descanso, se cierra.
     const f = alFin; alFin = null; f(hechos());
@@ -96,6 +103,7 @@ function terminar() {
 /** Parte el descanso. Hay que llamarla desde un toque: en iPhone el sonido solo se habilita así. */
 export function iniciarDescanso(segundos, texto = 'Descanso') {
   iniciarTramos([{ seg: segundos, texto }], '¡A la siguiente serie!');
+  reprogramar();
 }
 
 /** Cronómetro por tramos [{seg, texto}] (calentamiento, estiramiento, cardio): avisa en cada cambio y al terminar.
@@ -117,6 +125,7 @@ export function iniciarTramos(tramos, final = '¡Listo!', { alTerminar = null } 
 }
 
 export function detenerDescanso() {
+  cancelarAvisoDescanso();
   const corriendo = Boolean(reloj), f = alFin;
   clearInterval(reloj);
   reloj = null;

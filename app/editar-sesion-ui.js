@@ -1,6 +1,7 @@
-import { E, ctxNucleo, cambiarPlan, avisar, presc, esc, hoy } from './comun.js';
+import { E, ctxNucleo, cambiarPlan, avisar, presc, esc, hoy, indice } from './comun.js';
 import { editarSesion, siguientes } from '../nucleo/editar-sesion.js';
 import { sesionDe } from '../nucleo/agenda.js';
+import { unir } from '../nucleo/superseries.js';
 import { abrirHoja } from './hoja.js';
 import { icono } from './iconos.js';
 import * as nube from './nube.js';
@@ -85,4 +86,30 @@ export function ordenarSesion({ volver, alCambiar }) {
     ol.innerHTML = lista();
     ol.querySelector(`[data-${b.dataset.subir != null ? 'subir' : 'bajar'}="${j}"]`)?.focus();
   });
+}
+
+/** Agregar varios ejercicios a hoy de una vez, como "Agregar 3 ejercicios" de Hevy (solo hoy). Con superserie, quedan
+ *  unidos en una. Elegirlos y tocar el botón es la confirmación; el plan de las otras fechas no cambia. */
+export async function agregarVarios(ids, { superserie = false, alCambiar, despues = null } = {}) {
+  const ctx = contexto();
+  let plan = null;
+  const nombres = [];
+  for (const id of ids) {
+    const r = editarSesion({ tipo: 'agregar', ejercicio: id, despues, alcance: 'hoy' }, plan ? { ...ctx, plan } : ctx);
+    if (r.error) { avisar(`No agregué ${indice.porId.get(id)?.nombre || 'un ejercicio'}: ${sinGuiones(r.error).replace(/^\d{4}-\d{2}-\d{2}: /, '')}`); continue; }
+    plan = r.plan; despues = id; nombres.push(r.ejercicio.nombre);
+  }
+  if (!plan) return null;
+  const agregados = ids.filter(id => sesionDe(plan, ctx.hoy)?.ejercicios.some(e => e.ejercicio_id === id));
+  if (superserie && agregados.length > 1) {
+    const d = sesionDe(plan, ctx.hoy);
+    let ejs = d.ejercicios;
+    for (const id of agregados.slice(1)) ejs = unir(ejs, ejs.findIndex(e => e.ejercicio_id === agregados[0]), ejs.findIndex(e => e.ejercicio_id === id));
+    d.ejercicios = ejs.map((e, i) => ({ ...e, orden: i }));
+  }
+  const lista = nombres.length === 1 ? nombres[0] : `${nombres.slice(0, -1).join(', ')} y ${nombres.at(-1)}`;
+  const aviso = await cambiarPlan(plan, `Agregado${nombres.length === 1 ? '' : 's'} a hoy${superserie && agregados.length > 1 ? ', en superserie' : ''}: ${lista}.`, nube);
+  if (aviso) avisar(aviso);
+  alCambiar?.(agregados);
+  return agregados;
 }

@@ -9,6 +9,7 @@ import { dice } from './cuestionario.js';
 import { esAsistido } from '../nucleo/catalogo.js';
 import { imagenSesion } from './imagen-sesion.js';
 import { cuentaNuevaHtml, enlazarCuentaNueva } from './cuenta-ui.js';
+import { cuerpoHtml, intensidades } from './cuerpo.js';
 
 const nombreEj = (id, respaldo) => indice.porId.get(id)?.nombre || respaldo || 'Ejercicio';
 // Insignia de cada récord (hoja RS01 del banco de imágenes). Mientras no esté cortada, se muestra la etiqueta "Récord".
@@ -87,6 +88,14 @@ function historialAntes(sesion) {
   return seriesAnotadas(otras, {});
 }
 
+/** "Es tu sesión número 25", como la felicitación de Hevy: cuenta las sesiones guardadas hasta esta. */
+function numeroSesionHtml(sesion) {
+  const propias = [...E.sesiones]
+    .sort((a, b) => a.fecha.localeCompare(b.fecha) || String(a.hora || '').localeCompare(String(b.hora || '')));
+  const n = propias.indexOf(sesion) + 1;
+  return n > 0 ? `<p class="numero-sesion"><strong class="num">${n}</strong><span>${n === 1 ? '¡Tu primera sesión!' : `Es tu sesión número ${n.toLocaleString('es-CL')}`}</span></p>` : '';
+}
+
 export function vistaResumen(ir, { id, desde = null } = {}) {
   const sesion = E.sesiones.find(s => s.id === id) || E.sesiones.filter(s => !s.origen).at(-1);
   if (!sesion) return ir('hoy');
@@ -108,7 +117,10 @@ export function vistaResumen(ir, { id, desde = null } = {}) {
   const cifra = (valor, texto) => `<div class="cifra"><strong class="num">${valor}</strong><span class="pequeno suave">${texto}</span></div>`;
   $('app').innerHTML = `<div id="vista-resumen">
     <span class="sobretitulo">${esc(fechaCorta(sesion.fecha))}${sesion.hora ? ` · ${esc(sesion.hora)}` : ''}${sesion.origen === 'hevy' ? ' · Hevy' : ''}</span>
-    <h1>${esc(foco)}</h1>
+    <h1>${esc(sesion.titulo && !sesion.origen ? sesion.titulo : foco)}</h1>
+    ${numeroSesionHtml(sesion)}
+    ${E.sensaciones?.[sesion.id] ? `<p class="sensacion-resumen">Se sintió: <strong>${esc({ facil: 'muy fácil', justo: 'justo', brutal: 'brutal' }[E.sensaciones[sesion.id]])}</strong></p>` : ''}
+    ${sesion.comentario ? `<p class="comentario-resumen">${esc(sesion.comentario)}</p>` : ''}
     ${dice('celebra', n ? `¡${n} ${n === 1 ? 'récord' : 'récords'} hoy! Mira abajo cuáles.` : r.mal.length ? '¡Sesión terminada! Abajo ves qué salió bien y qué cuidar la próxima.' : dia ? '¡Sesión terminada! Hiciste lo que pedía el plan.' : '¡Sesión registrada! Abajo está cada ejercicio.')}
     ${dia && !r.mal.length && IMAGENES.has('img/resumen/completa.webp') ? '<img class="medalla-completa" src="img/resumen/completa.webp" alt="Sesión completa" width="64" height="64" decoding="async">' : ''}
     <div class="cifras-resumen">
@@ -117,6 +129,7 @@ export function vistaResumen(ir, { id, desde = null } = {}) {
       ${cifra(r.seriesTrabajo, 'series de trabajo')}
       ${cifra(r.ejercicios, r.ejercicios === 1 ? 'ejercicio' : 'ejercicios')}
     </div>
+    ${(() => { const t = intensidades((sesion.series || []).filter(x => x.tipo !== 'calentamiento' && x.ejercicio_id)); return Object.keys(t.porMusculo).length ? `<section class="tarjeta cuerpo-resumen"><h3>Lo que entrenaste</h3>${cuerpoHtml(t.intensidad, { tamano: 'grande', etiqueta: 'Lo que entrenaste' })}</section>` : ''; })()}
     ${n ? `<section class="tarjeta"><h3>Récords</h3><ul class="lista-resumen record">${r.records.map(x => `<li>${insignia(x.tipo)} ${esc(nombreEj(x.ejercicio_id))}: ${esc(textoRecord(x))}</li>`).join('')}</ul></section>` : ''}
     <section class="tarjeta"><h3>Qué salió bien</h3>${r.bien.filter(b => b.tipo !== 'record').length || n
       ? `<ul class="lista-resumen bien">${r.bien.filter(b => b.tipo !== 'record').map(b => `<li>${esc(textoBien(b))}</li>`).join('') || '<li>Los récords de arriba.</li>'}</ul>`

@@ -217,3 +217,4 @@ body:has(#vista-hoy) .medalla-record{bottom:calc(env(safe-area-inset-bottom,0px)
 [data-tema="oscuro"] .pasos-tabla-fila.completa strong{color:#83d5a2}
 
 .cardio-atajos,.progreso-accesos{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.cardio-atajos>span{width:100%}.cardio-atajos button{min-height:44px}.paso-dosis{font-size:12px;padding:8px 4px;min-height:44px;overflow-wrap:anywhere}.orden-compacto>.ej>*:not(.ej-cab){display:none}.orden-compacto .ej-sub,.orden-compacto .nota-fija,.orden-compacto [data-mas]{display:none}.orden-compacto>.ej{padding:12px;margin:6px 0;cursor:grabbing}.orden-compacto>.ej.arrastrada{outline:2px solid #ca6c32;background:var(--tarjeta,#f5e9df)}.ej-textos{user-select:none;-webkit-user-select:none}.fila-agregar{flex-wrap:wrap;gap:8px}
+.orden-compacto .nota-ej{display:none}

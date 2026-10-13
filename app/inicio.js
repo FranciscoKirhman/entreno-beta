@@ -21,7 +21,7 @@ const opcion = (id, titulo, texto, accion, extra = '') => `<button type="button"
 
 /** Entrenar sin plan: la sesión vacía de hoy en un plan libre. Con un plan de verdad, se pregunta antes (sesión vacía). */
 function entrenarSinPlan(ir, volver) {
-  if (E.plan && !E.plan.libre) return proponerSesionVacia({ volver, alCambiar: () => { E.eleccionInicio = hoy(); guardar(); ir('hoy'); } });
+  if (E.plan && !E.plan.libre) return proponerSesionVacia({ volver, alCambiar: () => { E.eleccionInicio = hoy(); guardar(); ir('hoy', { sesion: true }); } });
   const r = R();
   // Sin lugar elegido se supone un gimnasio completo, igual que al armar el plan; el cuestionario lo pregunta después.
   if (!r.lugares?.length) {
@@ -33,7 +33,7 @@ function entrenarSinPlan(ir, volver) {
   E.eleccionInicio = hoy();
   E.mensaje = 'Sesión vacía lista. Agrega tus ejercicios desde el banco.';
   guardar();
-  ir('hoy');
+  ir('hoy', { sesion: true });
 }
 
 /** Para quien llega: armar el plan o entrenar sin plan; después, la cuenta. */
@@ -68,12 +68,12 @@ export const eleccionPendiente = () => (modoEjemplo ? null
 /** Para quien ya tiene plan: la sesión planificada o una vacía (o, con plan libre, armar el plan). */
 export function vistaEleccion(ir) {
   const x = eleccionDeHoy({ plan: E.plan, hoy: hoy(), registro: {}, sesiones: [] });
-  if (!x) return ir('hoy');
+  if (!x) return ir('hoy', { sesion: true });
   const dia = x.dia, ejercicios = dia?.ejercicios || [];
   const series = ejercicios.reduce((n, e) => n + (Number(e.series) || 0), 0);
   const minutos = dia && !x.libre ? duracionSesion(dia) : null;
   const minis = ejercicios.slice(0, 3).map(e => miniatura(e.ejercicio_id, 'miniatura chica')).join('');
-  const elegirPlan = () => { E.eleccionInicio = hoy(); guardar(); ir('hoy'); };
+  const elegirPlan = () => { E.eleccionInicio = hoy(); guardar(); ir('hoy', { sesion: true }); };
   $('app').innerHTML = `<div id="vista-eleccion">
     <span class="sobretitulo">${esc(fechaLarga(hoy()))}</span>
     <h1>¿Cómo entrenas hoy?</h1>
