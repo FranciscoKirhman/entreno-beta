@@ -53,6 +53,7 @@ function pintar() {
   resta = Math.max(0, resta);
   el.querySelector('.tiempo').textContent = formato(resta);
   el.querySelector('.etiqueta').textContent = resta ? etiqueta : textoFinal;
+  el.classList.toggle('calentando', Boolean(resta) && etiqueta.startsWith('Calentamiento')); // el descanso variable se explica
   // Cuatro veces por segundo, con una transición lineal de 250 ms: se vacía de forma continua. Solo cambia el trazo.
   const queda = Math.max(0, fin - Date.now()), total = Math.max(1, fin - inicioTramo);
   el.querySelector('.descanso-anillo .progreso').style.strokeDashoffset = (ANILLO * (1 - queda / total)).toFixed(2);

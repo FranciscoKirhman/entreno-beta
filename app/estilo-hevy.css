@@ -597,3 +597,48 @@ body:not(.en-sesion) .medalla-record{top:calc(env(safe-area-inset-top,0px) + 16p
   overflow-x:hidden;overflow-wrap:anywhere;scrollbar-width:none;line-height:1.35}
 #coach-redaccion textarea::-webkit-scrollbar{display:none}
 #coach-redaccion textarea:focus{outline:none;box-shadow:0 0 0 2px var(--accent)}
+
+/* Tocar la duración para ajustar la hora de inicio (app/hoy.js) */
+.cab-duracion{cursor:pointer;border-radius:10px}
+.cab-duracion:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ajustar-duracion{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:8px 0}
+.ajustar-duracion label{display:flex;flex-direction:column;gap:6px;font-size:.9rem;color:var(--ink-muted)}
+.ajustar-duracion input{font-size:1.4rem;font-variant-numeric:tabular-nums;min-height:48px}
+
+/* Mantener apretado el nombre para ordenar: el iPhone no selecciona el texto ni abre su menú (app/ordenar-arrastre.js) */
+#vista-hoy .ej-textos{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#vista-hoy .ej.arrastrada{position:relative;z-index:3;box-shadow:0 10px 28px rgba(0,0,0,.22);transform:scale(1.02)}
+.orden-compacto>.ej.arrastrada{background:color-mix(in srgb,var(--accent) 14%,var(--surface));outline-color:var(--accent)}
+
+/* Descanso de calentamiento: variable, así que la barra compacta dice por qué dura lo que dura (app/hoy.js) */
+#descanso.calentando .etiqueta{display:block!important;font-size:12px;line-height:1.25;color:var(--ink-muted);white-space:normal;text-align:center}
+
+/* Cardio en la tabla (escaladora: pisos y tiempo; trotadora: km y tiempo) y campo de tiempo como reloj (app/hoy.js) */
+#vista-hoy .tabla-series.cardio .cab-series,#vista-hoy .serie.cardio{grid-template-columns:44px minmax(0,1fr) 64px 84px 44px}
+#vista-hoy input[data-tiempo]{font-variant-numeric:tabular-nums;letter-spacing:.01em}
+
+/* Gráfico como Hevy: valor grande arriba, línea del color de la app, cursor al tocar y medidas que se deslizan (app/grafico.js) */
+.grafico-hevy{margin:4px 0 8px}
+.grafico-hevy .gh-cab{margin:0 0 6px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.grafico-hevy .gh-valor{font-size:24px;font-weight:700;color:var(--ink)}
+.grafico-hevy .gh-fecha{font-size:16px;color:var(--accent)}
+.grafico-hevy svg{width:100%;height:auto;display:block;touch-action:pan-y;cursor:crosshair;overflow:visible}
+.grafico-hevy svg{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.grafico-hevy svg:focus{outline:none}
+.grafico-hevy svg:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:8px}
+.grafico-hevy .gh-linea{fill:none;stroke:var(--accent);stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round}
+.grafico-hevy .gh-area{fill:color-mix(in srgb,var(--accent) 10%,transparent);stroke:none}
+.grafico-hevy .gh-punto{fill:var(--accent);stroke:var(--surface);stroke-width:1.5}
+.grafico-hevy .gh-punto.elegido{r:6;fill:var(--accent);stroke:color-mix(in srgb,var(--accent) 35%,var(--surface));stroke-width:4}
+.grafico-hevy .gh-cursor{stroke:color-mix(in srgb,var(--accent) 55%,transparent);stroke-width:1.5}
+.grafico-hevy .g-base{stroke:var(--line);stroke-width:1}
+.gh-titulo{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.gh-titulo h2{margin:0}
+.gh-periodo select{appearance:none;-webkit-appearance:none;border:0;background:transparent;color:var(--accent);font:inherit;font-weight:600;font-size:16px;padding:8px 22px 8px 8px;min-height:44px;
+  background-image:linear-gradient(45deg,transparent 50%,var(--accent) 50%),linear-gradient(135deg,var(--accent) 50%,transparent 50%);background-position:right 8px center,right 3px center;background-size:5px 5px;background-repeat:no-repeat}
+.chips-medida-hevy{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:4px -16px 8px;padding:2px 16px;scroll-snap-type:x proximity}
+.chips-medida-hevy::-webkit-scrollbar{display:none}
+.chips-medida-hevy .chip-opcion{flex:none;scroll-snap-align:center;min-height:40px;padding:0 16px;border-radius:999px;border:0;background:var(--fill);color:var(--ink);font:inherit;font-size:15px;white-space:nowrap}
+.chips-medida-hevy .chip-opcion[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.gh-ritmo{margin-top:4px}
+.grafico-hevy .g-eje{font-size:10.5px;fill:var(--ink-muted)}

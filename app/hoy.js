@@ -8,7 +8,7 @@ import { estadoDelPlan } from '../nucleo/registrado.js';
 import { sesionesPorRevisar } from '../nucleo/sin-registro.js';
 import { recordsDeSerie } from '../nucleo/records.js';
 import { esAsistido, conLastre, sinCargaExterna } from '../nucleo/catalogo.js';
-import { sufijo, porReps, camposGuardados } from '../nucleo/unidades.js';
+import { sufijo, porReps, camposGuardados, modoCardio, relojTexto, leerReloj } from '../nucleo/unidades.js';
 import { evaluarDia, ajustarSesion, TEXTO_RECOMENDACION } from '../nucleo/bienestar.js';
 import { cicloActivo, estadoCiclo, registrarInicio, NOMBRE_FASE, SINTOMAS } from '../nucleo/ciclo-menstrual.js';
 import { discosPorLado, discosDisponibles, BARRAS_KG, BARRAS_LB } from '../nucleo/discos.js';
@@ -23,7 +23,7 @@ import { avisoCheckin } from './checkin.js';
 import { avisoDescargaCorto } from './temporada.js';
 import { subirACuenta } from './cola.js';
 import { iniciarDescanso, detenerDescanso, iniciarTramos } from './descanso.js';
-import { tramosDePaso, tramosDeCardio, seriesDeCalentamiento } from '../nucleo/calentamiento.js';
+import { tramosDePaso, tramosDeCardio, seriesDeCalentamiento, descansoCalentamiento, rangoDescansoCalentamiento } from '../nucleo/calentamiento.js';
 import { calentamientoDeSesion, minutosCalentamiento, partePaso, aproximacionesDelPlan, conAproximaciones, zonasDeSesion } from '../nucleo/calentamiento-sesion.js';
 import { estiramientoDeSesion } from '../nucleo/estiramiento-sesion.js';
 import { articulacionesBloqueadas } from '../nucleo/catalogo.js';
@@ -540,7 +540,7 @@ function cabSesionHtml(dia) {
       ${accion}
     </div>
     <div class="cab-sesion-cifras">
-      <span><small>Duración</small><strong class="num"${corriendo ? ` role="timer" id="solapa-tiempo" data-fecha="${f}"` : ''}>${corriendo ? transcurrido(f) : guardada ? `${E.sesiones.find(s => s.fecha === f && !s.origen)?.duracion_min ?? 0} min` : '0:00'}</strong></span>
+      <span${corriendo ? ' class="cab-duracion" role="button" tabindex="0" data-ajustar-duracion aria-label="Duración: ajustar la hora de inicio"' : ''}><small>Duración</small><strong class="num"${corriendo ? ` role="timer" id="solapa-tiempo" data-fecha="${f}"` : ''}>${corriendo ? transcurrido(f) : guardada ? `${E.sesiones.find(s => s.fecha === f && !s.origen)?.duracion_min ?? 0} min` : '0:00'}</strong></span>
       <span><small>Volumen</small><strong class="num">${esc(volumenTexto(a.cifras.volumen + volCal))}</strong></span>
       <span><small>Series</small><strong class="num">${a.hechas} de ${a.total}</strong></span>
       ${cuerpoHtml(intensidades(dia.ejercicios.flatMap((e, k) => filasDe(f, e, k).filter(x => x.hecho && deTrabajo(tipoDe(x))).map(() => ({ ejercicio_id: e.ejercicio_id })))).intensidad, { tamano: 'mini', etiqueta: 'Músculos trabajados hoy' })}
@@ -667,6 +667,22 @@ function respuestasEjercicioHtml(e, id, nota) {
 `;
 }
 
+/** Los minutos de un cardio del plan (los agregados antes de pisos y km venían en segundos). */
+const minCardio = (e, x) => (x == null ? null : e.unidad === 'seg' ? Math.round(x / 60) : x);
+/** Una serie de cardio, como Hevy: pisos (o km) y tiempo. Lo anterior va como "34 en 10:00". */
+function filaCardio({ id, i, r, t, prev, e, cardio, etiq, nombre }) {
+  const pisos = cardio === 'pisos';
+  const distPrev = prev ? (pisos ? prev.reps : prev.distancia_m != null ? prev.distancia_m / 1000 : null) : null;
+  const antes = prev ? [distPrev != null ? (pisos ? `${distPrev}` : `${coma(distPrev)} km`) : '', relojTexto(prev.duracion_seg)].filter(Boolean).join(' en ') : '';
+  return `<div class="serie-contenedor"><button type="button" class="quitar-serie" data-quitar-serie="${id}" data-i="${i}" aria-label="Quitar la serie ${etiq[i]} de ${esc(nombre)}" tabindex="-1" hidden>Quitar</button><div class="serie tipo-${t}${r.hecho ? ' hecha' : ''} cardio">
+      <button type="button" class="tipo-serie" data-tipo-serie="${id}" data-i="${i}" aria-label="Serie ${etiq[i]}, ${TIPOS_SERIE[t].nombre.toLowerCase()}. Cambiar el tipo">${etiq[i]}</button>
+      <span class="antes num">${esc(antes)}</span>
+      <input type="text" inputmode="${pisos ? 'numeric' : 'decimal'}" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="dist" value="${esc(r.dist != null ? coma(r.dist) : '')}" placeholder="${esc(distPrev != null ? coma(distPrev) : '')}" aria-label="${pisos ? 'Pisos' : 'Kilómetros'}, serie ${etiq[i]}">
+      <input type="text" inputmode="numeric" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="seg" data-tiempo value="${esc(relojTexto(r.seg))}" placeholder="${esc(relojTexto(prev?.duracion_seg ?? (e.reps_max ? minCardio(e, e.reps_max) * 60 : null)))}" aria-label="Tiempo, en minutos y segundos, serie ${etiq[i]}">
+      <button type="button" class="check" data-hecho="${id}" data-i="${i}" aria-pressed="${Boolean(r.hecho)}" aria-label="Serie ${etiq[i]} hecha">${r.hecho ? icono('visto', 'visto-serie') : ''}</button>
+    </div></div>`;
+}
+
 function ejercicioHoy(e, k, f, previas, nota, dia) {
   const id = idDe(e, k);
   const aprox = filasDe(f, e, k).some(x => x?.aprox != null) ? aproximacionesHoy(dia, e, E.registro[f]?.[id], f) : [];
@@ -677,6 +693,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
   const u = unidadPeso();
   const seg = e.unidad === 'seg';
   const dist = e.unidad === 'm'; // peso y distancia, como la caminata del granjero
+  const cardio = modoCardio(e); // escaladora en pisos y tiempo; trotadora, caminata y trote en km y tiempo
   const conEsfuerzo = ajuste('esfuerzo'); // la columna RPE o RIR se puede ocultar en Ajustes de la sesión
   // Qué es el peso anotado: la ayuda de la máquina (asistidos) o lo que se agrega al cuerpo (lastre).
   const ejCat = indice.porId.get(e.ejercicio_id);
@@ -689,6 +706,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     const t = tipoDe(r);
     const trabajo = deTrabajo(t);
     const prev = trabajo ? previas?.series[iTrabajo++] : null;
+    if (cardio) return filaCardio({ id, i, r, t, prev, e, cardio, etiq, nombre: e.nombre || ej?.nombre || id });
     // En gris va lo que se guarda si marcas sin escribir: lo que ya levantaste hoy, el plan o la vez anterior.
     // Las de calentamiento puestas por la app traen su peso y repeticiones en gris (aproximacionesHoy).
     const sug = r.aprox != null ? aprox[r.aprox] : null;
@@ -708,28 +726,31 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
       <button type="button" class="tipo-serie" data-tipo-serie="${id}" data-i="${i}" aria-label="Serie ${etiq[i]}, ${TIPOS_SERIE[t].nombre.toLowerCase()}${r.record?.length && r.hecho ? ', récord' : ''}. Cambiar el tipo">${etiq[i]}${r.record?.length && r.hecho ? icono('trofeo', 'icono trofeo-serie') : ''}</button>
       ${copiar ? `<button type="button" class="antes num"${copiar} aria-label="${esc(`La vez anterior: ${antes} ${esfPrev}. Copiar a la serie ${etiq[i]}`)}">${antesHtml}</button>` : `<span class="antes num">${antesHtml}</span>`}
       ${seg ? '' : `<input type="text" inputmode="decimal" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="kg" value="${esc(coma(enUnidad(r.kg)))}" placeholder="${esc(coma(enUnidad(kgGris)))}" aria-label="${u === 'lb' ? 'Libras' : 'Kilos'}${queEs ? ` de ${queEs}` : ''}, serie ${etiq[i]}">`}
-      <input type="text" inputmode="numeric" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="reps" value="${esc(r.reps ?? '')}" placeholder="${esc(repsGris ?? '')}" aria-label="${seg ? 'Segundos' : dist ? 'Metros' : 'Repeticiones'}, serie ${etiq[i]}">
+      <input type="text" inputmode="numeric" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="reps"${seg ? ' data-tiempo' : ''} value="${esc(seg ? relojTexto(r.reps) : r.reps ?? '')}" placeholder="${esc(seg ? relojTexto(repsGris) : repsGris ?? '')}" aria-label="${seg ? 'Tiempo, en minutos y segundos' : dist ? 'Metros' : 'Repeticiones'}, serie ${etiq[i]}">
       ${seg ? (r.hecho || !ajuste('cronoFila') ? '<span aria-hidden="true"></span>' : `<button type="button" class="crono-serie" data-crono="${id}" data-i="${i}" aria-label="Contar los segundos de la serie ${etiq[i]}">${icono('reloj', 'icono')}</button>`) : dist || !conEsfuerzo ? '' : trabajo ? cajaEsfuerzo(id, i, r, e, etiq[i]) : '<span aria-hidden="true"></span>'}
       <button type="button" class="check" data-hecho="${id}" data-i="${i}" aria-pressed="${Boolean(r.hecho)}" aria-label="Serie ${etiq[i]} hecha">${r.hecho ? icono('visto', 'visto-serie') : ''}</button>
       ${r.consejo?.texto && trabajo && i === ultimaHecha ? `<p class="consejo ${r.consejo?.tipo || 'bien'}">${esc(r.consejo.texto)}</p>` : ''}</div></div>`;
   }).join('');
   // En una superserie, el descanso va al terminar la vuelta (se elige en el último ejercicio).
   const desc = g ? descansoVuelta(dia.ejercicios, g) : descansoDe(e, k);
-  const descTexto = g && g.pos < g.total ? 'Sin descanso, sigue la superserie' : `Descanso: ${desc ? largo(desc) : 'apagado'}`;
+  // Con calentamientos, su descanso es variable y se dice aparte (nucleo/calentamiento.js).
+  const nCal = filas.filter(x => tipoDe(x) === 'calentamiento').length, rCal = rangoDescansoCalentamiento(nCal, desc);
+  const descTexto = g && g.pos < g.total ? 'Sin descanso, sigue la superserie'
+    : `Descanso: ${desc ? largo(desc) : 'apagado'}${rCal && rCal[1] ? ` · calentamiento ${rCal[0] === rCal[1] ? largo(rCal[0]) : `${largo(rCal[0])} a ${largo(rCal[1])}`}` : ''}`;
   const nombre = e.nombre || ej?.nombre || id;
   return `<li class="ej tarjeta${g ? ` en-superserie ss-${g.letra}${g.pos === 1 ? ' ss-inicio' : ''}${g.pos === g.total ? ' ss-fin' : ''}` : ''}" id="ej-${id}" data-orden-id="${e.ejercicio_id || `i${k}`}"${g ? ` aria-label="${esc(nombre)}, superserie ${g.letra}, ejercicio ${g.pos} de ${g.total}"` : ''}>
     <div class="ej-cab">
       ${ej ? `<button type="button" class="ej-abrir" data-ficha="${e.ejercicio_id}" aria-label="${esc(nombre)}: cómo se hace y por qué">${miniatura(e.ejercicio_id)}</button>` : `<span class="miniatura vacia"></span>`}
       <div class="ej-textos"><span class="nombre">${g ? `<span class="chip-ss">${etiquetaSuperserie(g)}</span>` : ''}${esc(nombre)}</span>
-        <span class="ej-sub num">${esc(`${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${sufijo(e)}${dist ? '' : ` · RIR ${e.rir}`}${queEs && e.carga_kg ? ` · ${peso(e.carga_kg)} de ${queEs}` : ''}`)}</span>
+        <span class="ej-sub num">${esc(cardio ? `${e.series} × ${minCardio(e, e.reps_min)}${e.reps_max !== e.reps_min ? ` a ${minCardio(e, e.reps_max)}` : ''} min` : `${e.series} × ${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${sufijo(e)}${dist ? '' : ` · RIR ${e.rir}`}${queEs && e.carga_kg ? ` · ${peso(e.carga_kg)} de ${queEs}` : ''}`)}</span>
         ${ej ? '' : '<span class="chip">Indicado por tu profesional</span>'}
         ${ej && E.notasFijas?.[e.ejercicio_id] ? `<button type="button" class="nota-fija" data-nota-fija="${id}" aria-label="Nota fija: ${esc(E.notasFijas[e.ejercicio_id])}. Editar">${icono('lapiz', 'icono icono-chico')}<span>${esc(E.notasFijas[e.ejercicio_id])}</span></button>` : ''}</div>
       <button type="button" class="boton-icono menu-ej" data-mas="${id}" aria-label="Más opciones de ${esc(nombre)}">${icono('puntos')}</button>
     </div>
     <textarea class="nota-ej" rows="1" data-nota="${id}" data-p="nota" data-visible placeholder="Nota para tu entrenador" aria-label="Nota para tu entrenador sobre ${esc(nombre)}">${esc(nota.nota || '')}</textarea>
     ${g && g.pos < g.total ? `<p class="linea-descanso sin-toque">${icono('reloj')} ${esc(descTexto)}</p>` : `<button type="button" class="linea-descanso" data-descanso-ej="${id}">${icono('reloj')} ${esc(descTexto)}</button>`}
-    <div class="tabla-series${seg ? ' seg' : dist ? ' dist' : !conEsfuerzo ? ' sin-esfuerzo' : ''}">
-      <div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${queEs || u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : dist ? 'Metros' : 'Reps'}</span>${seg ? '<span aria-hidden="true"></span>' : dist || !conEsfuerzo ? '' : `<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el ${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}">${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}</button>`}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>
+    <div class="tabla-series${cardio ? ' cardio' : seg ? ' seg' : dist ? ' dist' : !conEsfuerzo ? ' sin-esfuerzo' : ''}">
+      ${cardio ? `<div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span><span aria-hidden="true">${cardio === 'pisos' ? 'Pisos' : 'Km'}</span><span aria-hidden="true">Tiempo</span><span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>` : `<div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${queEs || u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : dist ? 'Metros' : 'Reps'}</span>${seg ? '<span aria-hidden="true"></span>' : dist || !conEsfuerzo ? '' : `<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el ${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}">${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}</button>`}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>`}
       ${filasHtml}
     </div>
     <div class="fila-agregar"><button type="button" class="boton agregar-serie" data-agregar="${id}">+ Agregar serie</button><button type="button" class="boton" data-agregar-despues="${e.ejercicio_id}">+ Agregar ejercicio aquí</button></div>
@@ -807,6 +828,37 @@ function enlazar(ir, dia) {
     opciones: [{ valor: 'cerrar', icono: icono('visto'), nombre: 'Listo' }], alElegir: () => {},
   }));
   const raiz = $('vista-hoy');
+  // Tocar la duración: corregir la hora en que empezaste o los minutos que llevas (si apretaste Empezar tarde o temprano).
+  const ajustarDuracion = ev => {
+    if (ev.type === 'keydown' && !['Enter', ' '].includes(ev.key)) return;
+    ev.preventDefault();
+    const hhmm = t => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+    let inicio = inicioDe(f) || Date.now();
+    const minutos = t => Math.max(0, Math.round((Date.now() - t) / 6e4));
+    abrirHoja({
+      titulo: 'Duración de la sesión', volver: ev.currentTarget,
+      nota: 'Cambia la hora en que empezaste o los minutos que llevas: el otro se ajusta solo.',
+      contenido: `<div class="ajustar-duracion"><label>Empezaste a las<input type="time" id="duracion-inicio" value="${hhmm(inicio)}"></label>
+        <label>Llevas (minutos)<input type="text" inputmode="numeric" id="duracion-minutos" value="${minutos(inicio)}" autocomplete="off"></label></div>`,
+      opciones: [{ valor: 'guardar', icono: icono('visto'), clase: 'confirmar', nombre: 'Guardar' }],
+      alElegir: v => {
+        if (v !== 'guardar') return;
+        if (inicio > Date.now() || Date.now() - inicio > 12 * 3600e3) { avisar('Elige una hora de inicio de las últimas 12 horas.'); return; }
+        (E.inicioSesion ||= {})[f] = inicio; guardar(); repintar();
+      },
+    });
+    const hora = $('duracion-inicio'), mins = $('duracion-minutos');
+    hora.oninput = () => {
+      const [h, m] = hora.value.split(':').map(Number);
+      if (!Number.isFinite(h) || !Number.isFinite(m)) return;
+      const d = new Date(); d.setHours(h, m, 0, 0);
+      if (d.getTime() > Date.now()) d.setDate(d.getDate() - 1); // 23:30 escrito a las 00:20 es de ayer
+      inicio = d.getTime(); mins.value = minutos(inicio);
+    };
+    mins.oninput = () => { const n = numero(mins.value); if (n == null || n < 0 || n > 720) return; inicio = Date.now() - n * 6e4; hora.value = hhmm(inicio); };
+  };
+  raiz.querySelector('[data-ajustar-duracion]')?.addEventListener('click', ajustarDuracion);
+  raiz.querySelector('[data-ajustar-duracion]')?.addEventListener('keydown', ajustarDuracion);
   raiz.querySelector('[data-menu-sesion]')?.addEventListener('click', ev => {
     const b = ev.currentTarget, corriendo = enCurso(f);
     abrirHoja({
@@ -882,10 +934,13 @@ function enlazar(ir, dia) {
   // Escribir kilos (o libras) y repeticiones: se guarda en kilos, sin volver a dibujar.
   raiz.addEventListener('input', ev => {
     const t = ev.target;
-    if (t.dataset.ej && ['kg', 'reps', 'rir'].includes(t.dataset.c)) {
+    if (t.dataset.ej && ['kg', 'reps', 'rir', 'dist', 'seg'].includes(t.dataset.c)) {
       const { e, k } = ejercicioDe(t.dataset.ej);
       const { lista } = materializar(f, e, k);
-      const v = numero(t.value);
+      // El campo de tiempo, como Hevy: los números entran desde la derecha y se ve como reloj (15:00).
+      let v;
+      if (t.dataset.tiempo !== undefined) { const reloj = leerReloj(t.value); if (t.value !== reloj.texto) t.value = reloj.texto; v = reloj.seg; }
+      else v = numero(t.value);
       const r = { ...lista[t.dataset.i] };
       if (t.dataset.c === 'rir') {
         // La reserva se escribe como RIR (0 a 5) y se guarda también como RPE, que usa el resto de la app.
@@ -908,7 +963,7 @@ function enlazar(ir, dia) {
   const completarAlSalir = ev => {
     const t = ev.target;
     if (ev.type === 'focusout' && t.dataset.c === 'rir') return;
-    if (!t.dataset.ej || !['kg', 'reps', 'rir'].includes(t.dataset.c)) return;
+    if (!t.dataset.ej || !['kg', 'reps', 'rir', 'dist', 'seg'].includes(t.dataset.c)) return;
     const { e, k } = ejercicioDe(t.dataset.ej), { lista } = materializar(f, e, k);
     const i = Number(t.dataset.i), r = lista[i];
     // Peso corporal sin peso en gris (ni del plan, ni de hoy, ni de la vez anterior): se marca sin escribir kilos.
@@ -1215,7 +1270,13 @@ function enlazar(ir, dia) {
     const { lista, n } = materializar(f, e, k);
     const r = { ...lista[i] };
     const t = tipoDe(r);
-    if (!r.hecho && deTrabajo(t)) {
+    const cardio = modoCardio(e);
+    if (cardio && !r.hecho && r.seg == null && r.dist == null) {
+      // Cardio marcado sin escribir: lo de la vez anterior o el tiempo del plan.
+      const { prev } = sugerencia(e, lista, i);
+      r.seg = prev?.duracion_seg ?? (e.reps_max ? minCardio(e, e.reps_max) * 60 : null);
+      r.dist = cardio === 'pisos' ? prev?.reps ?? null : prev?.distancia_m != null ? prev.distancia_m / 1000 : null;
+    } else if (!r.hecho && deTrabajo(t) && !cardio) {
       const { kg, prev } = sugerencia(e, lista, i);
       if (r.kg == null && e.unidad !== 'seg') r.kg = kg;
       if (r.reps == null) r.reps = (e.unidad === 'seg' ? e.reps_min : e.reps_max) ?? prev?.reps ?? null;
@@ -1227,10 +1288,10 @@ function enlazar(ir, dia) {
     }
     if (!r.hecho) { r.t ||= Date.now(); empezarSesion(f); } // marcar la primera serie también empieza la sesión
     r.hecho = !r.hecho;
-    r.consejo = r.hecho ? consejo(e, r) : null;
+    r.consejo = r.hecho && !cardio ? consejo(e, r) : null;
     // Récord, como en Hevy: contra todo lo anterior de ese ejercicio y las series previas de hoy.
     let recs = [];
-    if (r.hecho && deTrabajo(t) && e.ejercicio_id) {
+    if (r.hecho && deTrabajo(t) && e.ejercicio_id && !cardio) {
       const comoSerie = x => ({ ...camposGuardados(e, x), rir: x.rir ?? (x.rpe != null ? 10 - x.rpe : null) });
       // Lo anterior incluye otra sesión de hoy ya guardada (por ejemplo, una de Hevy en la mañana).
       const previas = [...seriesAnotadas(E.sesiones, {}).filter(x => x.ejercicio_id === e.ejercicio_id && x.fecha <= f),
@@ -1246,7 +1307,10 @@ function enlazar(ir, dia) {
     if (r.hecho && a.hechas === a.total) { detenerDescanso(); avisar('¡Sesión completa! Toca "Terminar sesión" para guardarla.'); }
     else if (r.hecho) {
       const quedan = lista.slice(0, n).filter(x => !x.hecho).length;
-      const seg = t === 'calentamiento' ? Math.min(60, descansoDe(e, k)) : descansoDe(e, k);
+      // Calentamiento: descanso variable (corto entre calentamientos, más largo antes de la primera de trabajo).
+      const cals = lista.slice(0, n).map((x, j) => [x, j]).filter(([x]) => tipoDe(x) === 'calentamiento').map(([, j]) => j);
+      const jCal = cals.indexOf(i), ultimoCal = jCal === cals.length - 1;
+      const seg = t === 'calentamiento' ? descansoCalentamiento(jCal, cals.length, descansoDe(e, k)) : descansoDe(e, k);
       const g = grupos(dia.ejercicios);
       if (i + 1 < n && tipoDe(lista[i + 1]) === 'drop') detenerDescanso();
       else if (g[k] && t !== 'calentamiento') {
@@ -1260,7 +1324,8 @@ function enlazar(ir, dia) {
           document.getElementById('aviso-flotante')?.classList.remove('visible');
           iniciarDescanso(vuelta, sig.siguiente != null ? `Descanso · vuelve a ${etiquetaSuperserie(g[sig.siguiente])}` : 'Descanso · sigue otro ejercicio');
         }
-      } else if (seg) iniciarDescanso(seg, quedan ? `Descanso · falta${quedan === 1 ? '' : 'n'} ${quedan} serie${quedan === 1 ? '' : 's'}` : 'Descanso · sigue otro ejercicio');
+      } else if (seg && t === 'calentamiento') iniciarDescanso(seg, ultimoCal ? 'Calentamiento listo: descanso largo' : `Calentamiento ${jCal + 1} de ${cals.length}: descanso corto`);
+      else if (seg) iniciarDescanso(seg, quedan ? `Descanso · falta${quedan === 1 ? '' : 'n'} ${quedan} serie${quedan === 1 ? '' : 's'}` : 'Descanso · sigue otro ejercicio');
     } else detenerDescanso();
     const anchoAntes = document.querySelector('#avance .medidor i')?.style.width || '0%';
     repintar();

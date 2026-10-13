@@ -69,3 +69,20 @@ export function seriesDeCalentamiento(kgTrabajo, { incremento = 2.5, barra = 0, 
   }
   return out.length ? out : [{ tipo: 'calentamiento' }];
 }
+
+/**
+ * Descanso después de una serie de calentamiento: variable, como se calienta de verdad. Entre calentamientos livianos,
+ * corto y creciente (30 s, 45 s, 1 min); después del último, más largo porque sigue la primera serie de trabajo
+ * (60 % del descanso del ejercicio, entre 1 y 2 min). Con el descanso apagado, 0.
+ * @param j posición del calentamiento (0 el primero), n cuántos hay, trabajo el descanso de las series de trabajo
+ */
+export function descansoCalentamiento(j, n, trabajo) {
+  if (!trabajo) return 0;
+  if (j < n - 1) return Math.min(60, 30 + 15 * j);
+  return Math.max(60, Math.min(120, Math.round((trabajo * 0.6) / 15) * 15));
+}
+/** "30 s a 1 min 30 s": lo que dura el descanso de los calentamientos de un ejercicio, para mostrarlo. */
+export const rangoDescansoCalentamiento = (n, trabajo) => {
+  const xs = Array.from({ length: n }, (_, j) => descansoCalentamiento(j, n, trabajo));
+  return xs.length ? [Math.min(...xs), Math.max(...xs)] : null;
+};

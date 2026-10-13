@@ -1,7 +1,7 @@
 // Anotar sin cerrar el teclado, como Hevy: "Siguiente" pasa de kilos a repeticiones y de ahí a la serie siguiente.
 // En Android es la tecla de acción del teclado (enterkeyhint); el teclado numérico del iPhone no la trae, así que ahí
 // aparece una barra con "Siguiente" pegada arriba del teclado mientras se escribe en una serie.
-const CAMPOS = 'input[data-ej][data-c="kg"], input[data-ej][data-c="reps"]';
+const CAMPOS = 'input[data-ej]:is([data-c="kg"], [data-c="reps"], [data-c="dist"], [data-c="seg"])';
 let barra = null, raizActual = null;
 
 const campos = raiz => [...raiz.querySelectorAll(CAMPOS)].filter(c => !c.disabled && c.offsetParent !== null);
@@ -71,4 +71,15 @@ export function activarTecladoSeries(raiz) {
   raiz.addEventListener('focusout', () => setTimeout(() => {
     if (barra && !document.activeElement?.matches?.(CAMPOS)) barra.hidden = true;
   }, 0));
+}
+
+// Al cerrar el teclado, el iPhone a veces deja corridos los elementos fijos de abajo (la barra del descanso queda
+// flotando sobre el borde) hasta que la página se mueve. Un desplazamiento de un píxel, ida y vuelta, los reubica.
+if (typeof visualViewport !== 'undefined' && typeof addEventListener === 'function') {
+  let abierto = false;
+  visualViewport.addEventListener('resize', () => {
+    const ahora = innerHeight - visualViewport.height > 120;
+    if (abierto && !ahora) requestAnimationFrame(() => { const y = scrollY; scrollTo(scrollX, y + 1); scrollTo(scrollX, y); });
+    abierto = ahora;
+  });
 }

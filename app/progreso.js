@@ -22,7 +22,7 @@ import { NOMBRE_MUSCULO, mayuscula, imagenMusculo } from './musculos.js';
 import * as nube from './nube.js';
 import { esAsistido } from '../nucleo/catalogo.js';
 import { bienvenidaProgreso, historialVacio } from './estados-visuales.js';
-import { lineaSimple } from './grafico.js';
+import { lineaSimple, lineaHevy } from './grafico.js';
 import { sumarDias as sumar } from '../nucleo/agenda.js';
 import { constanciaEntreno } from '../nucleo/constancia.js';
 import { recordsPorSesion } from '../nucleo/records.js';
@@ -167,7 +167,7 @@ function medidasHtml() {
       const rumbo = meta != null && cambio ? direccionMeta(cambio.desde, cambio.hasta, E.metaPeso) : null;
       grafico = `${campos.length > 1 ? `<div class="chips-botones chips-medida" role="group" aria-label="Qué medida">${campos.map(x => `<button type="button" class="chip-opcion" data-medida-cuerpo="${x}" aria-pressed="${x === c}">${esc(campo(x)[1])}</button>`).join('')}</div>` : ''}
         <div class="cifra-grafico"><span>${esc(campo(c)[1])}</span><strong class="num">${esc(`${n(puntos.at(-1).valor)} ${unidad(c)}`)}${cambio ? ` <span class="pequeno ${rumbo ? `rumbo-${rumbo}` : 'suave'}">(${diferencia > 0 ? '+' : diferencia < 0 ? '−' : ''}${n(Math.abs(diferencia))} en el último mes${rumbo === 'hacia' ? ', hacia tu meta' : rumbo === 'lejos' ? ', lejos de tu meta' : ''})</span>` : ''}</strong></div>
-        ${lineaSimple({ puntos, desde, hasta: hoy(), min: Math.max(0, lo - margen), max: hi + margen, marcas: [{ valor: lo, texto: n(lo) }, { valor: hi, texto: n(hi) }, ...(meta != null ? [{ valor: meta, texto: `Meta ${n(meta)}` }] : [])], titulo: `${campo(c)[1]}, ${puntos.length} ${puntos.length === 1 ? 'medición' : 'mediciones'}`, unir: 400, izquierda: 44 })}
+        ${lineaHevy({ puntos, desde, hasta: hoy(), min: Math.max(0, lo - margen), max: hi + margen, marcas: [{ valor: lo, texto: n(lo) }, { valor: hi, texto: n(hi) }, ...(meta != null ? [{ valor: meta, texto: `Meta ${n(meta)}` }] : [])], titulo: `${campo(c)[1]}, ${puntos.length} ${puntos.length === 1 ? 'medición' : 'mediciones'}`, unir: 400, izquierda: 44 })}
         ${c === 'peso_kg' ? `<form id="form-meta-peso" class="meta-peso"><label class="pequeno">Meta de peso (${u}) <input type="text" inputmode="decimal" id="meta-peso" value="${meta != null ? esc(n(meta)) : ''}" placeholder="Sin meta" autocomplete="off"></label><button type="submit" class="boton chico">Guardar meta</button></form>` : ''}`;
     }
     const imagen = x => { const src = `img/medidas/${x.replace(/_(kg|pct|cm)$/, '')}.webp`; return IMAGENES.has(src) ? `<img class="img-medida" src="${src}" alt="" width="40" height="40" decoding="async">` : ''; };

@@ -1,5 +1,6 @@
 // Edición manual de hoy: agregar, quitar y ordenar ejercicios, solo hoy o desde hoy en adelante (las sesiones que
 // vienen con la misma plantilla). Prepara una copia, no toca lo demás y valida antes de guardar.
+import { modoCardio } from './unidades.js';
 import { normalizar, tieneEquipo, nivelAlcanza, articulacionesBloqueadas, cargaZonaBloqueada } from './catalogo.js';
 import { prescripcion, comoDescarga, duracionSesion } from './motor-plan.js';
 import { validarCambio } from './validador.js';
@@ -64,10 +65,14 @@ export function editarSesion(accion, ctx) {
     }
     const nuevoEj = (x, descarga) => {
       const p = prescripcion(ej, 2, d);
-      if (ej.tipo === 'cardio') Object.assign(p, { series: 1, reps_min: 120, reps_max: 180, unidad: 'seg', descanso_seg: 0 });
+      // Escaladora y trotadora se anotan como Hevy (pisos o km, y tiempo): una serie de 10 a 20 minutos. Los otros
+      // cardios (saltos) siguen por segundos.
+      const cardio = modoCardio({ ejercicio_id: ej.id });
+      if (cardio) Object.assign(p, { series: 1, reps_min: 10, reps_max: 20, unidad: 'reps', descanso_seg: 0 });
+      else if (ej.tipo === 'cardio') Object.assign(p, { series: 1, reps_min: 120, reps_max: 180, unidad: 'seg', descanso_seg: 0 });
       if (ej.tipo === 'movilidad') Object.assign(p, { series: 1, reps_min: 30, reps_max: 45, unidad: 'seg', descanso_seg: 0 });
       const nuevoE = { ejercicio_id: ej.id, nombre: ej.nombre, ...p, prioridad: 2, orden: x.ejercicios.length, carga_kg: null,
-        nota: p.unidad === 'seg' ? 'Agregado por ti. Registra los segundos de cada serie.' : p.unidad === 'm' ? 'Agregado por ti. Anota el peso y los metros de cada serie.' : 'Agregado por ti. Elige un peso con la reserva indicada.' };
+        nota: cardio ? `Agregado por ti. Anota ${cardio === 'pisos' ? 'los pisos' : 'los km'} y el tiempo.` : p.unidad === 'seg' ? 'Agregado por ti. Registra los segundos de cada serie.' : p.unidad === 'm' ? 'Agregado por ti. Anota el peso y los metros de cada serie.' : 'Agregado por ti. Elige un peso con la reserva indicada.' };
       return descarga ? comoDescarga(nuevoE) : nuevoE;
     };
     ejercicio = nuevoEj(dia, !fueraDelPlan && dia.semana === plan.semana_descarga);

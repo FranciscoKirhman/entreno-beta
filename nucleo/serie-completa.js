@@ -1,9 +1,12 @@
 import { tipoDe } from './registro.js';
+import { modoCardio } from './unidades.js';
 
 // Solo cuentan cifras realmente anotadas, nunca las sugerencias de los campos. sinCarga: peso corporal sin un peso
 // sugerido (dominadas, fondos, flexiones): ahí los kilos son opcionales y basta con repeticiones y RIR.
 export function serieCompleta(serie, ejercicio, { sinCarga = false } = {}) {
   const positiva = x => typeof x === 'number' && Number.isFinite(x) && x > 0;
+  // Cardio (escaladora, trotadora): basta el tiempo o los pisos o km.
+  if (modoCardio(ejercicio)) return positiva(serie.seg) || positiva(serie.dist);
   if (!positiva(serie.reps) || !Number.isInteger(serie.reps)) return false;
   if (ejercicio.unidad === 'seg') return true;
   // Peso y distancia (caminata del granjero): kilos y metros, sin RIR.
