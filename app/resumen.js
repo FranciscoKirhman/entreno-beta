@@ -9,6 +9,7 @@ import { dice } from './cuestionario.js';
 import { esAsistido } from '../nucleo/catalogo.js';
 import { imagenSesion } from './imagen-sesion.js';
 import { cuentaNuevaHtml, enlazarCuentaNueva } from './cuenta-ui.js';
+import { cuerpoHtml, intensidades } from './cuerpo.js';
 
 const nombreEj = (id, respaldo) => indice.porId.get(id)?.nombre || respaldo || 'Ejercicio';
 // Insignia de cada récord (hoja RS01 del banco de imágenes). Mientras no esté cortada, se muestra la etiqueta "Récord".
@@ -128,6 +129,7 @@ export function vistaResumen(ir, { id, desde = null } = {}) {
       ${cifra(r.seriesTrabajo, 'series de trabajo')}
       ${cifra(r.ejercicios, r.ejercicios === 1 ? 'ejercicio' : 'ejercicios')}
     </div>
+    ${(() => { const t = intensidades((sesion.series || []).filter(x => x.tipo !== 'calentamiento' && x.ejercicio_id)); return Object.keys(t.porMusculo).length ? `<section class="tarjeta cuerpo-resumen"><h3>Lo que entrenaste</h3>${cuerpoHtml(t.intensidad, { tamano: 'grande', etiqueta: 'Lo que entrenaste' })}</section>` : ''; })()}
     ${n ? `<section class="tarjeta"><h3>Récords</h3><ul class="lista-resumen record">${r.records.map(x => `<li>${insignia(x.tipo)} ${esc(nombreEj(x.ejercicio_id))}: ${esc(textoRecord(x))}</li>`).join('')}</ul></section>` : ''}
     <section class="tarjeta"><h3>Qué salió bien</h3>${r.bien.filter(b => b.tipo !== 'record').length || n
       ? `<ul class="lista-resumen bien">${r.bien.filter(b => b.tipo !== 'record').map(b => `<li>${esc(textoBien(b))}</li>`).join('') || '<li>Los récords de arriba.</li>'}</ul>`

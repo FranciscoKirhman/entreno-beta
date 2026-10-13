@@ -58,6 +58,7 @@ import { elegirCardio } from './cardio-ui.js';
 import { CARDIOS, registroCardio } from '../nucleo/cardio.js';
 import { hayImagen, srcMiniatura } from './imagenes.js';
 import { abrirAjustesSesion, ajuste } from './ajustes-sesion.js';
+import { cuerpoHtml, intensidades } from './cuerpo.js';
 
 
 const app = () => $('app');
@@ -537,6 +538,7 @@ function cabSesionHtml(dia) {
       <span><small>Duración</small><strong class="num"${corriendo ? ` role="timer" id="solapa-tiempo" data-fecha="${f}"` : ''}>${corriendo ? transcurrido(f) : guardada ? `${E.sesiones.find(s => s.fecha === f && !s.origen)?.duracion_min ?? 0} min` : '0:00'}</strong></span>
       <span><small>Volumen</small><strong class="num">${esc(volumenTexto(a.cifras.volumen))}</strong></span>
       <span><small>Series</small><strong class="num">${a.hechas} de ${a.total}</strong></span>
+      ${cuerpoHtml(intensidades(dia.ejercicios.flatMap((e, k) => filasDe(f, e, k).filter(x => x.hecho && deTrabajo(tipoDe(x))).map(() => ({ ejercicio_id: e.ejercicio_id })))).intensidad, { tamano: 'mini', etiqueta: 'Músculos trabajados hoy' })}
     </div>
     <div class="avance cab-avance" id="avance" aria-hidden="true"><div class="medidor"><i style="width:${a.total ? Math.round((a.hechas / a.total) * 100) : 0}%"></i></div></div>
   </header>`;

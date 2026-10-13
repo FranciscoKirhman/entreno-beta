@@ -29,7 +29,7 @@ import { normalizar } from '../nucleo/catalogo.js';
 import { ritmoDe, textoRitmo } from './progreso-ejercicio.js';
 import { miniatura } from './imagenes.js';
 import { icono } from './iconos.js';
-import { graficoSemanasHtml, tableroProgresoHtml, enlazarProgresoHevy, esfuerzoHtml, enlazarEsfuerzo, anioHtml, enlazarAnio } from './progreso-hevy.js';
+import { graficoSemanasHtml, tableroProgresoHtml, enlazarProgresoHevy, esfuerzoHtml, enlazarEsfuerzo, anioHtml, enlazarAnio, musculosMapaHtml, enlazarMusculosMapa } from './progreso-hevy.js';
 
 const DIAS = [[1, 'L'], [2, 'M'], [3, 'M'], [4, 'J'], [5, 'V'], [6, 'S'], [0, 'D']];
 const nombreEj = id => indice.porId.get(id)?.nombre || id;
@@ -345,6 +345,7 @@ export async function vistaProgreso(ir) {
         <div class="fila-botones"><button type="button" class="boton" id="reintentar">Reintentar ahora</button></div></div>` : ''}
     </section>
     <h2 class="titulo-seccion" id="p-detalle">Tus estadísticas</h2>
+    ${musculosMapaHtml()}
     ${semanaHtml()}
     ${franjaHtml()}
     ${esfuerzoHtml(R().escala_esfuerzo === 'rir' ? 'rir' : 'rpe')}
@@ -408,6 +409,7 @@ export async function vistaProgreso(ir) {
   enlazarHistorial(ir);
   enlazarProgresoHevy(() => { const y = scrollY; vistaProgreso(ir); scrollTo(0, y); });
   enlazarAnio();
+  enlazarMusculosMapa(() => { const y = scrollY; vistaProgreso(ir); scrollTo(0, y); });
   enlazarEsfuerzo(() => { const y = scrollY; vistaProgreso(ir); scrollTo(0, y); });
   $('anotar-pasado')?.addEventListener('click', () => ir('pasado'));
   // El buscador repinta solo la lista, para no perder el teclado.

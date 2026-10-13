@@ -13,6 +13,7 @@ import { generarPlan } from '../nucleo/motor-plan.js';
 import { vistaHoy, irAlEjercicioEnCurso } from './hoy.js';
 import { vistaEntrenar } from './entrenar.js';
 import { pintarMiniSesion } from './mini-sesion.js';
+import { observarCuerpos } from './cuerpo.js';
 import { vistaFicha } from './ficha.js';
 import { vistaDiaPasado } from './dia-pasado.js';
 import { vistaSemana } from './semana.js';
@@ -318,6 +319,7 @@ retornoInicial = retornoGuardado(E.pantallaGuardada, E, hoy());
 ir(!retornoInicial && !['cuestionario', 'perfil', 'seccion'].includes(E.vista) && eleccionPendiente() ? 'eleccion'
   : retornoInicial?.vista || (['cuestionario', 'hoy', 'semana', 'coach', 'progreso', 'mas', 'checkin', 'plan', 'perfil', 'seccion', 'tablero-original'].includes(E.vista) ? E.vista : (E.plan ? 'hoy' : 'inicio')), retornoInicial?.extra);
 requestAnimationFrame(() => requestAnimationFrame(() => { $('app').dataset.cargaMs = String(Math.round(performance.now())); }));
+observarCuerpos(); // figuras del cuerpo (app/cuerpo.js): se dibujan solas al aparecer
 // Atrás: deslizar desde el borde izquierdo o el botón atrás del teléfono (app/atras.js).
 instalarAtras(() => accionAtras({ vista: E.vista, extra: extraActual, ir, conPlan: Boolean(E.plan) }));
 // Con la clave de Hevy Pro, lo nuevo de Hevy entra solo; si llega algo, se redibuja la vista (sin mover la pantalla).

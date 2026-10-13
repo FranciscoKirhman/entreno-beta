@@ -4,6 +4,7 @@ import { E, esc, $, hoy, indice, volumenTexto } from './comun.js';
 import { sumarDias, diaSemana } from '../nucleo/agenda.js';
 import { esAsistido } from '../nucleo/catalogo.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
+import { cuerpoHtml, intensidades, sinTrabajar } from './cuerpo.js';
 import { icono } from './iconos.js';
 
 const SEMANAS = 8;
@@ -46,7 +47,7 @@ export function graficoSemanasHtml() {
 
 /** Panel de cuatro botones, como el "Dashboard" del perfil de Hevy. */
 export function tableroProgresoHtml() {
-  const botones = [['p-estadisticas', 'grafico', 'Estadísticas'], ['p-ejercicios', 'pesa', 'Ejercicios'], ['medidas-cuerpo', 'persona', 'Medidas'], ['p-calendario', 'calendario', 'Calendario']];
+  const botones = [['p-musculos', 'grafico', 'Estadísticas'], ['p-ejercicios', 'pesa', 'Ejercicios'], ['medidas-cuerpo', 'persona', 'Medidas'], ['p-calendario', 'calendario', 'Calendario']];
   return `<div class="tablero-progreso">${botones.map(([id, ic, t]) => `<button type="button" class="tablero-boton" data-ir-seccion="${id}">${icono(ic)}<span>${t}</span></button>`).join('')}</div>`;
 }
 
@@ -131,3 +132,23 @@ export function anioHtml() {
 }
 /** El año parte mostrando las semanas recientes (a la derecha). */
 export function enlazarAnio() { const d = $('anio-desliza'); if (d) d.scrollLeft = d.scrollWidth; }
+
+// ── Mapa de músculos, como OpenGym y Hevy: frente y espalda coloreados por cuánto trabajó cada músculo ──
+const PERIODOS_MUSC = [[7, 'Semana'], [30, 'Mes'], [0, 'Todo']];
+let diasMusculos = 7;
+export function musculosMapaHtml() {
+  if (!E.sesiones.length) return '';
+  const desde = diasMusculos ? sumarDias(hoy(), -(diasMusculos - 1)) : '';
+  const series = seriesAnotadas(E.sesiones, E.registro).filter(x => x.fecha >= desde);
+  const t = intensidades(series), faltan = sinTrabajar(t.intensidad);
+  return `<section class="tarjeta mapa-musculos" aria-label="Músculos">
+    <h3 id="p-musculos">Músculos</h3>
+    <div class="segmentos" role="group" aria-label="Período">${PERIODOS_MUSC.map(([d, txt]) => `<button type="button" data-dias-musculos="${d}" aria-pressed="${d === diasMusculos}">${txt}</button>`).join('')}</div>
+    ${cuerpoHtml(t.intensidad, { tamano: 'grande', etiqueta: 'Músculos trabajados en el período' })}
+    <p class="pequeno ${faltan.length ? '' : 'suave'}">${faltan.length ? `<strong>Sin entrenar ${diasMusculos ? (diasMusculos === 7 ? 'esta semana' : 'este mes') : 'nunca'}:</strong> ${esc(faltan.join(', '))}.` : 'Entrenaste todos los músculos en este período.'}</p>
+    <p class="pequeno suave">Más oscuro, más series (la principal de cada ejercicio cuenta entera; la secundaria, media).</p>
+  </section>`;
+}
+export function enlazarMusculosMapa(repintar) {
+  document.querySelectorAll('[data-dias-musculos]').forEach(b => b.onclick = () => { diasMusculos = Number(b.dataset.diasMusculos); repintar(); });
+}

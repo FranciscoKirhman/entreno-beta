@@ -16,6 +16,7 @@ import { miniatura } from './imagenes.js';
 import { icono } from './iconos.js';
 import * as nube from './nube.js';
 import { abrirCambiosPlan, hayCambiosPlan } from './cambios-plan.js';
+import { cuerpoHtml, intensidadEjercicios } from './cuerpo.js';
 
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const nombreDia = iso => DIAS[new Date(iso + 'T12:00:00Z').getUTCDay()];
@@ -70,6 +71,7 @@ function hoyHtml(s) {
       <span class="hoy-entrenar-titulo">${esc(d.foco)}</span>
       <span class="pequeno suave">${esc(estado)}</span>
     </button>
+    ${cuerpoHtml(intensidadEjercicios(d.ejercicios.map(e => e.ejercicio_id).filter(Boolean)), { tamano: 'mediano', etiqueta: `Lo que trabaja ${d.foco}` })}
     <ul class="hoy-entrenar-lista">${d.ejercicios.slice(0, 5).map(e => `<li>${e.ejercicio_id ? miniatura(e.ejercicio_id) : '<span class="miniatura vacia"></span>'}<span><strong>${esc(nombreEj(e))}</strong><small>${esc(`${e.series} serie${e.series === 1 ? '' : 's'}`)}</small></span></li>`).join('')}
       ${d.ejercicios.length > 5 ? `<li class="hoy-entrenar-mas pequeno suave">y ${d.ejercicios.length - 5} más</li>` : ''}</ul>
     ${s.enCurso ? '<button type="button" class="boton primario grande" data-ir-sesion>Seguir la sesión</button>'

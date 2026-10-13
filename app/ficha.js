@@ -19,6 +19,7 @@ import { progresoEjercicioHtml, enlazarProgresoEjercicio } from './progreso-ejer
 import { montarAnimacion } from './animacion-ui.js';
 import { animacionDe } from '../nucleo/animaciones.js';
 import { botonFuturo, avisoFuturo, enlazarFuturos } from './funciones-futuras.js';
+import { cuerpoHtml } from './cuerpo.js';
 
 const VOLVER = { hoy: 'Hoy', semana: 'Semana', plan: 'Tu plan', progreso: 'Progreso', banco: 'Banco de ejercicios', ejercicio: 'Atrás' };
 const EQUIPO = Object.fromEntries(C.secciones.flatMap(s => s.preguntas || []).find(p => p.equipamiento)?.equipamiento || []);
@@ -199,6 +200,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
     ${historialFichaHtml(id, seg)}
     </div>
     <div class="panel-ficha" id="panel-como" role="tabpanel" aria-labelledby="pestana-como" data-panel-ficha="como"${pestanaFicha === 'como' ? '' : ' hidden'}>
+    <section class="tarjeta ficha-cuerpo">${cuerpoHtml(Object.fromEntries([...ej.musculos_secundarios.map(m => [m, 0.45]), ...ej.musculos_primarios.map(m => [m, 1])]), { tamano: 'grande', etiqueta: 'Músculos que trabaja' })}<p class="pequeno suave">Más oscuro, el principal; más claro, los secundarios.</p></section>
     <section class="tarjeta ficha-musculos">
       ${imagenesMusculos(ej.musculos_primarios.slice(0, 2))}
       <div>
