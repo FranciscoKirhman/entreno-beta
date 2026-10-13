@@ -4,6 +4,7 @@
 import { imagenAsistente, asistenteActual } from './cuestionario.js';
 import { entrarPose } from './movimiento.js';
 import { ajuste } from './ajustes-sesion.js';
+import { programarAvisoDescanso, cancelarAvisoDescanso } from './aviso-descanso.js';
 
 let fin = 0, reloj = null, audio = null, etiqueta = '', siguientes = [], textoFinal = '¡A la siguiente serie!';
 // Series por tiempo (plancha y parecidas): al terminar, o al tocar Listo antes, se avisa cuántos segundos se hicieron.
@@ -25,8 +26,8 @@ function caja() {
       <button type="button" class="boton" data-mas aria-label="Sumar 15 segundos">+15</button>
       <button type="button" class="boton" data-listo>Saltar</button></div>`;
     // Como en Hevy: 15 segundos menos o más. Restar no deja el término antes de ahora.
-    el.querySelector('[data-menos]').onclick = () => { if (!reloj) return; fin = Math.max(Date.now(), fin - 15_000); pintar(); };
-    el.querySelector('[data-mas]').onclick = () => { if (!reloj) inicioTramo = Date.now(); fin = Math.max(fin, Date.now()) + 15_000; if (!reloj) correr(); pintar(); };
+    el.querySelector('[data-menos]').onclick = () => { if (!reloj) return; fin = Math.max(Date.now(), fin - 15_000); pintar(); reprogramar(); };
+    el.querySelector('[data-mas]').onclick = () => { if (!reloj) inicioTramo = Date.now(); fin = Math.max(fin, Date.now()) + 15_000; if (!reloj) correr(); pintar(); reprogramar(); };
     el.querySelector('[data-listo]').onclick = detenerDescanso;
     document.body.append(el);
   }
@@ -59,8 +60,12 @@ function pintar() {
     personaje.dataset.pose = pose; personaje.dataset.asistente = asistente;
     entrarPose(personaje.firstElementChild); // una entrada corta, solo cuando cambia
   }
+  // A la vista al terminar: el aviso del servidor sobra (la barra ya avisa), se cancela unos segundos antes.
+  if (resta <= 3 && document.visibilityState === 'visible') cancelarAvisoDescanso();
   if (!resta && reloj) terminar();
 }
+// El aviso con la app cerrada sigue al descanso (app/aviso-descanso.js): solo el de entre series, sin tramos ni series por tiempo.
+const reprogramar = () => { if (reloj && !alFin && !siguientes.length) programarAvisoDescanso(Math.round((fin - Date.now()) / 1000), etiqueta.startsWith('Temporizador') ? 'Terminó el temporizador' : '¡A la siguiente serie!'); };
 
 function correr() {
   clearInterval(reloj);
@@ -98,6 +103,7 @@ function terminar() {
 /** Parte el descanso. Hay que llamarla desde un toque: en iPhone el sonido solo se habilita así. */
 export function iniciarDescanso(segundos, texto = 'Descanso') {
   iniciarTramos([{ seg: segundos, texto }], '¡A la siguiente serie!');
+  reprogramar();
 }
 
 /** Cronómetro por tramos [{seg, texto}] (calentamiento, estiramiento, cardio): avisa en cada cambio y al terminar.
@@ -119,6 +125,7 @@ export function iniciarTramos(tramos, final = '¡Listo!', { alTerminar = null } 
 }
 
 export function detenerDescanso() {
+  cancelarAvisoDescanso();
   const corriendo = Boolean(reloj), f = alFin;
   clearInterval(reloj);
   reloj = null;

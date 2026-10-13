@@ -1,7 +1,7 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
 // Los archivos de cada publicación se leen desde su copia; una versión nueva instala otra copia completa.
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-13 12:17 · 8ba9137";
+const VERSION = "2026-10-13 12:21 · 7c8a757";
 const ARCHIVOS = [
  "./",
  "ajustes-sesion.js",
@@ -10,6 +10,7 @@ const ARCHIVOS = [
  "articulaciones.js",
  "atras.js",
  "avatares.js",
+ "aviso-descanso.js",
  "avisos.js",
  "banco.css",
  "banco.js",
@@ -800,4 +801,22 @@ self.addEventListener('notificationclick', e => {
   e.notification.close();
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     .then(ventanas => (ventanas.length ? ventanas[0].focus() : self.clients.openWindow('./'))));
+});
+
+// Aviso del descanso con la app cerrada (supabase/functions/aviso-descanso): el servidor manda el push y aquí se
+// muestra. Tocarlo vuelve a la app.
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { texto: e.data && e.data.text() }; }
+  e.waitUntil(self.registration.showNotification(d.titulo || 'Entreno', {
+    body: d.texto || '¡A la siguiente serie!', tag: d.tag || 'descanso', renotify: true,
+    icon: 'iconos/icono-192.png', badge: 'iconos/icono-192.png', vibrate: [200, 100, 200],
+  }));
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
+    const abierta = cs.find(c => 'focus' in c);
+    return abierta ? abierta.focus() : self.clients.openWindow('./');
+  }));
 });

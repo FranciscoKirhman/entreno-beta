@@ -5,6 +5,8 @@ import { E, R, esc, guardar } from './comun.js';
 import { abrirHoja } from './hoja.js';
 import { icono } from './iconos.js';
 import { actualizarPantalla, encendidaDisponible } from './pantalla.js';
+import { cambiarAvisoCerrada, avisoCerradaActivo, avisoCerradaDisponible } from './aviso-descanso.js';
+import { avisar } from './comun.js';
 
 const DESCANSOS = [0, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300];
 const ANTERIOR = { rutina: 'Misma sesión del plan', cualquiera: 'Cualquier sesión' };
@@ -36,6 +38,7 @@ export function abrirAjustesSesion(volver, { ir, alCambiar }) {
         ${interruptor('cronoFila', 'Cronómetro en la fila', ajuste('cronoFila'), 'Los ejercicios por tiempo traen su cronómetro en cada serie.')}
         ${interruptor('avisoRecord', 'Aviso de récord', ajuste('avisoRecord'), 'Te avisa cuando logras un récord al marcar la serie.')}
         ${interruptor('sonido', 'Sonido del descanso', ajuste('sonido'), 'Un pitido corto al terminar el descanso. La vibración sigue.')}
+        ${interruptor('avisoCerrada', 'Aviso con la pantalla bloqueada', avisoCerradaActivo(), avisoCerradaDisponible() ? 'Una notificación cuando termina el descanso, aunque la app esté cerrada.' : 'Una notificación cuando termina el descanso. En iPhone, con la app instalada en la pantalla de inicio.')}
       </div>
     </div>`,
     opciones: [{ valor: 'listo', icono: icono('visto'), clase: 'confirmar', nombre: 'Listo' }],
@@ -44,6 +47,7 @@ export function abrirAjustesSesion(volver, { ir, alCambiar }) {
   const hoja = document.getElementById('hoja');
   hoja.querySelectorAll('[data-ajuste]').forEach(c => c.onchange = () => {
     if (c.dataset.ajuste === 'pantalla') { E.pantallaEncendida = c.checked; guardar(); actualizarPantalla(); }
+    else if (c.dataset.ajuste === 'avisoCerrada') cambiarAvisoCerrada(c.checked).then(error => { if (error) { c.checked = false; avisar(error); } else if (c.checked) avisar('Listo: te aviso cuando termine el descanso, aunque la pantalla esté bloqueada.'); });
     else poner(c.dataset.ajuste, c.checked);
   });
   hoja.querySelectorAll('[data-ajuste-fila]').forEach(b => b.onclick = () => {
