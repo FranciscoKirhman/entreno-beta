@@ -443,7 +443,7 @@ function filaPasosHtml(dia, f, tipo) {
       return `<div class="pasos-tabla-fila${s.hechos[i] ? ' completa' : ''}">
         <div><strong>${esc(parte.nombre)}</strong><small>${esc(parte.dosis || p.name)}</small><details><summary>Cómo hacerlo</summary><p class="pequeno">${esc(p.how || 'Sigue la dosis indicada en el plan.')}</p></details></div>
         <button type="button" class="boton paso-dosis" data-paso-dosis="${tipo}" data-paso-indice="${i}" aria-label="${esc(`Registrar dosis de ${parte.nombre}`)}">${esc(medidas[clave] || 'Registrar')}</button>
-        <button type="button" class="boton-icono paso-tabla-hecho" data-paso-tabla="${tipo}" data-paso-indice="${i}" aria-pressed="${s.hechos[i]}" aria-label="${esc(`Confirmar si hiciste ${parte.nombre}`)}">${s.hechos[i] ? icono('visto') : E.pasosOmitidos?.[f]?.[tipo]?.[clave] ? '×' : '○'}</button>
+        <button type="button" class="boton-icono paso-tabla-hecho" data-paso-tabla="${tipo}" data-paso-indice="${i}" aria-pressed="${s.hechos[i]}" aria-label="${esc(`${parte.nombre} hecho`)}">${s.hechos[i] ? icono('visto') : E.pasosOmitidos?.[f]?.[tipo]?.[clave] ? '×' : '○'}</button>
       </div>`; }).join('')}
     <p class="pequeno suave">Marcar hecho confirma el movimiento. El valor realizado queda sin medir si no lo anotas.</p>
   </details>`;
@@ -913,11 +913,13 @@ function enlazar(ir, dia) {
         document.getElementById('paso-otro').oninput=e=>{otro=Number(e.target.value);};
       }});
   });
+  // Como las series: un toque marca el movimiento como hecho y otro lo desmarca, sin preguntar.
   raiz.querySelectorAll('[data-paso-tabla]').forEach(b => b.onclick = () => {
-    const tipo=b.dataset.pasoTabla,i=Number(b.dataset.pasoIndice),p=pasosDe(dia,f,tipo)[i],clave=p.clave||`${i}|${p.name}`;
-    abrirHoja({titulo:partePaso(p.name).nombre,volver:b,opciones:[{valor:'si',nombre:'Lo hice'},{valor:'no',nombre:'No lo hice'},{valor:'pendiente',nombre:'Todavía no'}],alElegir:v=>{
-      marcarPaso(f,tipo,p,i,v==='si');(((E.pasosOmitidos ||= {})[f] ||= {})[tipo] ||= {})[clave]=v==='no';guardar();repintar();
-    }});
+    const tipo = b.dataset.pasoTabla, i = Number(b.dataset.pasoIndice), p = pasosDe(dia, f, tipo)[i], clave = p.clave || `${i}|${p.name}`;
+    const hecho = b.getAttribute('aria-pressed') === 'true';
+    marcarPaso(f, tipo, p, i, !hecho);
+    (((E.pasosOmitidos ||= {})[f] ||= {})[tipo] ||= {})[clave] = false;
+    guardar(); repintarConservando(() => vistaHoy(ir), b);
   });
   raiz.querySelectorAll('[data-agregar-despues]').forEach(b=>b.onclick=()=>ir('banco',{desde:'hoy',despues:b.dataset.agregarDespues}));
   enlazarOrdenArrastre(raiz, async orden => {
