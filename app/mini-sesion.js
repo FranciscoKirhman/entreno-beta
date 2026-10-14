@@ -1,14 +1,14 @@
 // Sesión minimizada, como en Hevy: fuera de la pantalla de la sesión, una barra sobre el menú con el nombre, el tiempo
 // que lleva, "Seguir" y "Descartar". Se dibuja fuera de la vista, así no se pierde al cambiar de pantalla.
 import { E, esc } from './comun.js';
-import { estadoHoy, descartarSesion, transcurrido } from './hoy.js';
+import { estadoHoy, descartarSesion, transcurrido, enPausa } from './hoy.js';
 import { icono } from './iconos.js';
 
 let reloj = null;
 // Con el descanso corriendo, la barra muestra el descanso (como Hevy) y la barra del descanso se esconde.
 const detalle = s => {
   const resta = document.body.classList.contains('con-descanso') && document.querySelector('#descanso .tiempo')?.textContent;
-  return resta ? `Descanso ${resta}` : `${transcurrido(s.f)} · ${s.avance.hechas} de ${s.avance.total} series`;
+  return resta ? `Descanso ${resta}` : `${enPausa(s.f) ? 'En pausa, ' : ''}${transcurrido(s.f)} · ${s.avance.hechas} de ${s.avance.total} series`;
 };
 
 export function pintarMiniSesion(vista, ir) {

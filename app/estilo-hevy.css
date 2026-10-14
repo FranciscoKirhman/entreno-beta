@@ -678,3 +678,6 @@ body:not(.en-sesion) .medalla-record{top:calc(env(safe-area-inset-top,0px) + 16p
 .grafico-semanas .gh-pie{display:flex;align-items:center;gap:8px;margin:22px 0 0}
 .grafico-semanas .gh-pie-linea{width:18px;border-top:1.6px dashed var(--ink-muted)}
 .gh-par{white-space:nowrap}
+/* Sesión en pausa: la duración se ve detenida (app/hoy.js) */
+.cab-duracion.en-pausa strong{color:var(--ink-muted)!important}
+.cab-duracion.en-pausa small{color:var(--accent);font-weight:600}

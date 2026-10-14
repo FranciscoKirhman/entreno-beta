@@ -41,6 +41,7 @@ import { descansoHtml, sesionCompletaHtml } from './estados-visuales.js';
 import { srcArticulacion } from './articulaciones.js';
 import { repintarConservando, celebrar, sinMovimiento, entrarPaso, selectorDe } from './movimiento.js';
 import { activarTecladoSeries } from './teclado-series.js';
+import { msActivos, msPausa, minutosAlGuardar, alternarPausa } from '../nucleo/duracion-sesion.js';
 import { editarDuracionGuardada, camposDuracionHtml, enlazarCamposDuracion, errorDuracion } from './duracion-sesion.js';
 import { mostrarMedalla } from './medalla.js';
 import { montarAnimaciones } from './animacion-ui.js';
@@ -343,6 +344,17 @@ const abiertos = new Set();
 const reloj = seg => `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')}`;
 const esDesdeCero = dia => Boolean(dia?.libre) || dia?.foco === 'Sesión libre';
 const inicioDe = f => E.inicioSesion?.[f] ?? null;
+// Pausa de la sesión: { total, desde } (nucleo/duracion-sesion.js). En pausa, el reloj de la sesión se detiene.
+const pausaDe = f => E.pausas?.[f] || null;
+const enPausa = f => Boolean(pausaDe(f)?.desde);
+function cambiarPausa(f) {
+  (E.pausas ||= {})[f] = alternarPausa(pausaDe(f), Date.now());
+  guardar();
+  avisar(enPausa(f) ? 'Sesión en pausa: el reloj está detenido. Marcar una serie la reanuda.' : 'Sesión reanudada.');
+}
+/** Cuándo se marcó la última serie del día (para que guardar tarde no alargue la sesión). */
+const ultimaSerieDe = f => Math.max(0, ...Object.values(E.registro[f] || {}).flatMap(l => (l || []).filter(x => x?.hecho && x.t).map(x => x.t))) || null;
+const minutosDe = f => minutosAlGuardar({ inicio: inicioDe(f), pausa: pausaDe(f), ultimaSerie: ultimaSerieDe(f), ahora: Date.now() });
 const guardadaHoy = f => E.sesiones.some(s => s.fecha === f && !s.origen);
 const enCurso = f => Boolean(inicioDe(f)) && !guardadaHoy(f);
 const sugeridoDe = (f, tipo) => E.sugeridos?.[f]?.[tipo] ?? null; // 'agregado' o 'descartado'
@@ -541,7 +553,7 @@ function cabSesionHtml(dia) {
       ${accion}
     </div>
     <div class="cab-sesion-cifras">
-      <span${corriendo || guardada ? ' class="cab-duracion" role="button" tabindex="0" data-ajustar-duracion aria-label="Duración: corregir la hora de inicio y los minutos"' : ''}><small>Duración</small><strong class="num"${corriendo ? ` role="timer" id="solapa-tiempo" data-fecha="${f}"` : ''}>${corriendo ? transcurrido(f) : guardada ? `${E.sesiones.find(s => s.fecha === f && !s.origen)?.duracion_min ?? 0} min` : '0:00'}</strong></span>
+      <span${corriendo || guardada ? ` class="cab-duracion${corriendo && enPausa(f) ? ' en-pausa' : ''}" role="button" tabindex="0" data-ajustar-duracion aria-label="Duración${corriendo && enPausa(f) ? ', en pausa' : ''}: pausar o corregir la hora de inicio y los minutos"` : ''}><small>${corriendo && enPausa(f) ? 'En pausa' : 'Duración'}</small><strong class="num"${corriendo ? ` role="timer" id="solapa-tiempo" data-fecha="${f}"` : ''}>${corriendo ? transcurrido(f) : guardada ? `${E.sesiones.find(s => s.fecha === f && !s.origen)?.duracion_min ?? 0} min` : '0:00'}</strong></span>
       <span><small>Volumen</small><strong class="num">${esc(volumenTexto(a.cifras.volumen + volCal))}</strong></span>
       <span><small>Series</small><strong class="num">${a.hechas} de ${a.total}</strong></span>
       ${cuerpoHtml(intensidades(dia.ejercicios.flatMap((e, k) => filasDe(f, e, k).filter(x => x.hecho && deTrabajo(tipoDe(x))).map(() => ({ ejercicio_id: e.ejercicio_id })))).intensidad, { tamano: 'mini', etiqueta: 'Músculos trabajados hoy' })}
@@ -550,7 +562,7 @@ function cabSesionHtml(dia) {
   </header>`;
 }
 function transcurrido(f) {
-  const seg = Math.max(0, Math.floor((Date.now() - (inicioDe(f) || Date.now())) / 1000));
+  const seg = Math.floor(msActivos({ inicio: inicioDe(f) || Date.now(), pausa: pausaDe(f), ahora: Date.now() }) / 1000);
   const h = Math.floor(seg / 3600), m = Math.floor((seg % 3600) / 60), s = seg % 60;
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
 }
@@ -838,14 +850,17 @@ function enlazar(ir, dia) {
     if (guardadaYa) return editarDuracionGuardada(guardadaYa, { volver: ev.currentTarget, alCambiar: repintar });
     const hhmm = t => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
     let inicio = inicioDe(f) || Date.now();
-    const minutos = t => Math.max(0, Math.round((Date.now() - t) / 6e4));
+    const pausado = msPausa(pausaDe(f), Date.now()); // las pausas no cuentan en los minutos
+    const minutos = t => Math.max(0, Math.round((Date.now() - t - pausado) / 6e4));
     abrirHoja({
       titulo: 'Duración de la sesión', volver: ev.currentTarget,
-      nota: 'Cambia la hora en que empezaste o los minutos que llevas: el otro se ajusta solo.',
+      nota: `Cambia la hora en que empezaste o los minutos que llevas: el otro se ajusta solo.${pausado ? ` Las pausas (${Math.round(pausado / 6e4)} min) no cuentan.` : ''}`,
       contenido: `<div class="ajustar-duracion"><label>Empezaste a las<input type="time" id="duracion-inicio" value="${hhmm(inicio)}"></label>
         <label>Llevas (minutos)<input type="text" inputmode="numeric" id="duracion-minutos" value="${minutos(inicio)}" autocomplete="off"></label></div>`,
-      opciones: [{ valor: 'guardar', icono: icono('visto'), clase: 'confirmar', nombre: 'Guardar' }],
+      opciones: [{ valor: 'guardar', icono: icono('visto'), clase: 'confirmar', nombre: 'Guardar' },
+        { valor: 'pausa', icono: icono('reloj'), nombre: enPausa(f) ? 'Reanudar la sesión' : 'Pausar la sesión' }],
       alElegir: v => {
+        if (v === 'pausa') { cambiarPausa(f); repintar(); return; }
         if (v !== 'guardar') return;
         if (inicio > Date.now() || Date.now() - inicio > 12 * 3600e3) { avisar('Elige una hora de inicio de las últimas 12 horas.'); return; }
         (E.inicioSesion ||= {})[f] = inicio; guardar(); repintar();
@@ -859,7 +874,7 @@ function enlazar(ir, dia) {
       if (d.getTime() > Date.now()) d.setDate(d.getDate() - 1); // 23:30 escrito a las 00:20 es de ayer
       inicio = d.getTime(); mins.value = minutos(inicio);
     };
-    mins.oninput = () => { const n = numero(mins.value); if (n == null || n < 0 || n > 720) return; inicio = Date.now() - n * 6e4; hora.value = hhmm(inicio); };
+    mins.oninput = () => { const n = numero(mins.value); if (n == null || n < 0 || n > 720) return; inicio = Date.now() - n * 6e4 - pausado; hora.value = hhmm(inicio); };
   };
   raiz.querySelector('[data-ajustar-duracion]')?.addEventListener('click', ajustarDuracion);
   raiz.querySelector('[data-ajustar-duracion]')?.addEventListener('keydown', ajustarDuracion);
@@ -872,9 +887,11 @@ function enlazar(ir, dia) {
         { valor: 'detalles', icono: icono('info'), nombre: 'Detalles de la sesión' },
         ...(dia.ejercicios.length > 1 ? [{ valor: 'ordenar', icono: icono('cambiar'), nombre: 'Ordenar ejercicios' }] : []),
         { valor: 'ajustes', icono: icono('ajustes'), nombre: 'Ajustes de la sesión' },
+        ...(corriendo ? [{ valor: 'pausa', icono: icono('reloj'), nombre: enPausa(f) ? 'Reanudar la sesión' : 'Pausar la sesión' }] : []),
         ...(corriendo ? [{ valor: 'descartar', icono: icono('basurero'), clase: 'quitar', nombre: 'Descartar sesión', peligro: true }] : []),
       ],
       alElegir: v => {
+        if (v === 'pausa') { cambiarPausa(f); return repintar(); }
         if (v === 'ordenar') return ordenarSesion({ volver: b, alCambiar: repintar });
         const boton = { ajustar: 'ajustar-hoy', detalles: 'ver-detalles-sesion', ajustes: 'ajustes-sesion', descartar: 'descartar-sesion' }[v];
         if (boton) $(boton)?.click();
@@ -1291,6 +1308,7 @@ function enlazar(ir, dia) {
       if (r.reps == null && s?.reps != null) r.reps = s.reps;
     }
     if (!r.hecho) { r.t ||= Date.now(); empezarSesion(f); } // marcar la primera serie también empieza la sesión
+    if (!r.hecho && enPausa(f)) (E.pausas ||= {})[f] = alternarPausa(pausaDe(f), Date.now()); // marcar una serie reanuda
     r.hecho = !r.hecho;
     r.consejo = r.hecho && !cardio ? consejo(e, r) : null;
     // Récord, como en Hevy: contra todo lo anterior de ese ejercicio y las series previas de hoy.
@@ -1593,7 +1611,7 @@ function enlazar(ir, dia) {
     // La hora es la de inicio (como Hevy); sin ella, la de ahora.
     const hora = horaInicio || anteriorGuardada?.hora || ahora().slice(11);
     // Lo que duró: lo escrito al guardar o, si no, desde "Empezar" (o la primera serie) hasta ahora.
-    const minutos = minutosElegidos != null ? minutosElegidos : anteriorGuardada ? anteriorGuardada.duracion_min : inicioDe(f) ? Math.max(1, Math.round((Date.now() - inicioDe(f)) / 6e4)) : avance(dia).cifras.minutos ?? (cardio ? Math.round(cardio.duracion_seg / 60) : null);
+    const minutos = minutosElegidos != null ? minutosElegidos : anteriorGuardada ? anteriorGuardada.duracion_min : inicioDe(f) ? minutosDe(f) : avance(dia).cifras.minutos ?? (cardio ? Math.round(cardio.duracion_seg / 60) : null);
     E.sesiones.push({ id, fecha: f, hora, titulo, duracion_min: minutos, series, notas, ...(comentario ? { comentario } : {}) });
     // Cómo se sintió (como OpenGym): aparte de la sesión, así no se pierde cuando la cuenta trae su copia.
     if (sensacion) (E.sensaciones ||= {})[id] = sensacion; else if (E.sensaciones) delete E.sensaciones[id];
@@ -1615,7 +1633,8 @@ function enlazar(ir, dia) {
     const a = avance(dia), anterior = E.sesiones.find(s => s.fecha === f && !s.origen);
     const sinMarcar = a.total - a.hechas, cardioHecho = Boolean(registroCardio(dia.cardio, E.cardioHecho?.[f]));
     if (!a.hechas && !cardioHecho) { avisar('Marca al menos una serie como hecha.'); return; }
-    const minutos = anterior ? anterior.duracion_min : inicioDe(f) ? Math.max(1, Math.round((Date.now() - inicioDe(f)) / 6e4)) : null;
+    // Sin pausas y, si guardas mucho después de la última serie, hasta poco después de ella (nucleo/duracion-sesion.js).
+    const minutos = anterior ? anterior.duracion_min : inicioDe(f) ? minutosDe(f) : null;
     const cuando = new Date(f + 'T12:00:00Z').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
     let titulo = anterior?.titulo || dia.foco, comentario = anterior?.comentario || '', sensacion = (anterior && E.sensaciones?.[anterior.id]) || null;
     // Hora de inicio y duración, editables como en "Save Workout" de Hevy.
@@ -1668,7 +1687,7 @@ export function descartarSesion({ volver = null, alDescartar } = {}) {
     opciones: [{ valor: 'si', icono: icono('basurero'), clase: 'quitar', nombre: 'Sí, descartar', peligro: true }, { valor: 'no', icono: icono('flecha'), nombre: 'No, seguir entrenando' }],
     alElegir: v => {
       if (v !== 'si') return;
-      for (const k of ['inicioSesion', 'registro', 'filas', 'aproxPuestas', 'notas', 'pasos', 'pasosClaves', 'pasosSaltados', 'pasosMedidas', 'cardioHecho', 'retirados']) if (E[k]?.[f]) delete E[k][f];
+      for (const k of ['inicioSesion', 'pausas', 'registro', 'filas', 'aproxPuestas', 'notas', 'pasos', 'pasosClaves', 'pasosSaltados', 'pasosMedidas', 'cardioHecho', 'retirados']) if (E[k]?.[f]) delete E[k][f];
       detenerDescanso();
       pasosAbierta = null;
       guardar();
@@ -1695,7 +1714,7 @@ export function empezarHoy() {
   if (empezarSesion(f)) guardar();
   actualizarPantalla();
 }
-export { transcurrido };
+export { transcurrido, enPausa };
 
 /** Vuelve a dibujar Hoy sin mover la pantalla ni perder el campo o el botón donde estaba el foco. */
 function vistaHoyMantener(ir) {
