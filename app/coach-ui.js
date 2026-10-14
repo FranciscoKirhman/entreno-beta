@@ -5,7 +5,7 @@
 // hice" (alternativas con la semana a la vista antes de aceptar) o "Revisar después" (vuelve a preguntar mañana).
 import { propuestaChatHtml, confirmarCambioChat } from './propuesta-chat.js';
 import { E, guardar, esc, $, ctxNucleo, cambiarPlan, hoy, avisar } from './comun.js';
-import { responder, aplicarOpcion } from '../nucleo/coach.js';
+import { aplicarOpcion } from '../nucleo/coach.js';
 import * as nube from './nube.js';
 import { sesionesPorRevisar, diaCorto } from '../nucleo/sin-registro.js';
 import { sesionDe, sumarDias } from '../nucleo/agenda.js';
@@ -324,10 +324,10 @@ async function enviar(texto, ir, archivo = null) {
   let completada = true, consulta;
   E.chat.push({ rol: 'persona', texto });
   const modo = E.chatModo === 'plan' ? 'plan' : 'chat';
-  // Afinando el plan, todo va a la IA; sin cuenta o sin IA, se explica cómo activarla.
-  const r = modo === 'plan' ? { requiere_ia: true, texto: 'Afinar el plan conversando lo hace el coach con IA. Mientras tanto, en Tu plan está el porqué de cada día.' }
-    : Array.isArray(E.plan?.dias) && !E.plan.bloqueado ? responder(texto, ctxNucleo()) : { requiere_ia: true, texto: 'Podemos preparar tu primer plan cuando completes los datos básicos del perfil.' };
-  if ((r.requiere_ia || archivo) && nube.conectado()) {
+  // El chat es siempre con IA: las reglas de Entreno son una herramienta de la IA en el servidor. Sin cuenta o sin
+  // señal no hay coach; se explica qué falta.
+  const r = { requiere_ia: true, texto: !nube.hay() || !nube.usuarioId() ? 'El coach con IA necesita tu cuenta: entra en Perfil, Ajustes, Cuenta.' : 'No hay conexión: el coach con IA responde cuando vuelva la señal. Lo que escribiste queda aquí.' };
+  if (nube.conectado()) {
     const mensaje = { rol: 'coach', texto: 'Pensando…', pendiente: true };
     consulta = consultaActual = { estado, usuario, mensaje };
     E.chat.push(mensaje);
@@ -338,7 +338,7 @@ async function enviar(texto, ir, archivo = null) {
       if (E !== estado || usuario !== nube.usuarioId()) return false;
       E.chat = E.chat.filter(m => m !== mensaje);
       completada = !ia.requiere_ia && !ia.requiere_permiso && !ia.motivo;
-      E.chat.push({ rol: 'coach', texto: ia.texto || r.texto, propuesta: ia.propuesta || null, opciones: ia.propuesta ? confirmarIA(ia.propuesta.id) : ia.opciones || null, sugerencias: ia.sugerencias || null });
+      E.chat.push({ rol: 'coach', texto: ia.texto || r.texto, propuesta: ia.propuesta || null, opciones: ia.propuesta ? confirmarIA(ia.propuesta.id) : ia.opciones || null, sugerencias: ia.sugerencias || null, enlace: ia.enlace || null });
     } catch (e) {
       if (E !== estado || usuario !== nube.usuarioId()) return false;
       completada = false;
@@ -346,9 +346,9 @@ async function enviar(texto, ir, archivo = null) {
       E.chat.push({ rol: 'coach', texto: `No pude completar la consulta. Se conserva lo escrito y el archivo para que decidas cuándo reintentar. ${e.message}` });
     } finally { if (consultaActual === consulta) consultaActual = null; }
   } else {
-    // Las reglas nunca traen el plan cambiado: proponen y la persona confirma con un botón.
-    completada = !r.requiere_ia;
-    E.chat.push({ rol: 'coach', texto: r.texto + (r.requiere_ia && !nube.conectado() ? (nube.hay() ? ' Con una cuenta, esto lo responde la IA.' : ' En esta versión de prueba el coach responde con las reglas de la app; la IA llega con las cuentas.') : ''), opciones: r.opciones || null, enlace: r.enlace || null });
+    // Sin cuenta o sin señal: se dice qué falta y lo escrito queda en el borrador.
+    completada = false;
+    E.chat.push({ rol: 'coach', texto: r.texto });
   }
   if (completada) {
     if (borrador.texto.trim() === texto.trim()) borrador.texto = E.borradorChat = '';
