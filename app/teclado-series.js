@@ -61,6 +61,11 @@ export function activarTecladoSeries(raiz) {
     ev.preventDefault();
     avanzar(ev.target);
   });
+  // Como Hevy: al tocar un campo se selecciona lo escrito, así lo nuevo lo reemplaza (si no, "0:30" + "45" = 30:45).
+  raiz.addEventListener('focusin', ev => {
+    const t = ev.target;
+    if (t.matches?.(CAMPOS) && t.value) setTimeout(() => { if (document.activeElement === t) t.setSelectionRange(0, t.value.length); }, 0);
+  });
   if (!tactil()) return;
   raiz.addEventListener('focusin', ev => {
     if (!ev.target.matches?.(CAMPOS)) return;

@@ -2,7 +2,7 @@
 // imagen), cómo se hace y los errores comunes, tus marcas, por qué está en tu plan (con los papers que lo respaldan)
 // tu progreso (gráficos, ritmo e historial, en app/progreso-ejercicio.js) y con qué se puede cambiar. Se abre desde la
 // ⓘ de cada ejercicio y desde Progreso.
-import { modoCardio, relojTexto } from '../nucleo/unidades.js';
+import { modoCardio, relojTexto, textoCardio } from '../nucleo/unidades.js';
 import { datoCambiado } from './datos-nube.js';
 import { E, R, D, C, TECNICA, EVIDENCIA, indice, hoy, esc, $, fechaCorta, coma, enUnidad, unidadPeso, peso, guardar, avisar, volumenTexto } from './comun.js';
 import { explicarEjercicio, enlaceVideo } from '../nucleo/explicar.js';
@@ -193,9 +193,9 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
         ${m.menorAyuda ? `<div><span class="num grande">${esc(kg(m.menorAyuda.carga_kg))} <small>× ${m.menorAyuda.reps}</small></span><span class="pequeno suave">Tu menor ayuda (el número es la ayuda de la máquina: bajarla es progresar)</span></div>` : ''}
         ${m.pesada ? `<div><span class="num grande">${esc(kg(m.pesada.carga_kg))} <small>× ${m.pesada.reps}</small></span><span class="pequeno suave">Tu serie más pesada</span></div>` : ''}
         ${m.mejor ? `<div><span class="num grande">${esc(kg(m.mejor.estimado))}</span><span class="pequeno suave">Lo que levantarías 1 vez (estimado)</span></div>` : ''}
-        ${!m.pesada && !m.menorAyuda && m.reps ? `<div><span class="num grande">${m.reps.reps}${seg ? ' s' : ''}</span><span class="pequeno suave">Tu mejor serie</span></div>` : ''}
+        ${!m.pesada && !m.menorAyuda && m.reps ? `<div><span class="num grande">${m.reps.reps}${modoCardio({ ejercicio_id: id }) === 'pisos' ? ' pisos' : seg ? ' s' : ''}</span><span class="pequeno suave">Tu mejor serie</span></div>` : ''}
       </div>
-      <p class="pequeno suave">Anotado ${m.veces === 1 ? '1 vez' : `${m.veces} veces`}. La última, el ${esc(fechaCorta(m.ultima.fecha))}: <span class="num">${esc(m.ultima.series.map(s => (s.carga_kg ? `${coma(enUnidad(s.carga_kg))} × ${s.reps ?? (s.distancia_m != null ? `${s.distancia_m} m` : '')}` : `${s.reps ?? s.duracion_seg ?? ''}${seg || s.duracion_seg != null ? ' s' : ''}`)).join(', '))}</span></p>`
+      <p class="pequeno suave">Anotado ${m.veces === 1 ? '1 vez' : `${m.veces} veces`}. La última, el ${esc(fechaCorta(m.ultima.fecha))}: <span class="num">${esc(m.ultima.series.map(s => textoCardio({ ...s, ejercicio_id: id }) || (s.carga_kg ? `${coma(enUnidad(s.carga_kg))} × ${s.reps ?? (s.distancia_m != null ? `${s.distancia_m} m` : '')}` : `${s.reps ?? s.duracion_seg ?? ''}${seg || s.duracion_seg != null ? ' s' : ''}`)).join(', '))}</span></p>`
         : '<p class="suave pequeno">Todavía no lo anotas. Cuando lo hagas, aquí vas a ver tu serie más pesada, tu máximo estimado y cómo te fue la última vez.</p>'}
     </section>
 
