@@ -60,7 +60,7 @@ import { proponerSesionVacia } from './sesion-libre-ui.js';
 import { ilustracionesCalentamiento } from '../nucleo/imagenes-calentamiento.js';
 import { IMAGENES } from './comun.js';
 import { elegirCardio } from './cardio-ui.js';
-import { CARDIOS, registroCardio, esEscalera } from '../nucleo/cardio.js';
+import { CARDIOS, registroCardio, esEscalera, cardioDeTexto } from '../nucleo/cardio.js';
 import { hayImagen, srcMiniatura } from './imagenes.js';
 import { abrirAjustesSesion, ajuste } from './ajustes-sesion.js';
 import { cuerpoHtml, intensidades } from './cuerpo.js';
@@ -585,6 +585,28 @@ function correrSolapa() {
 }
 
 /** Cardio: el texto del plan, su cronómetro y, si va por tramos de intensidad, una barra con cada tramo. */
+/** El cardio del plan como una fila de Hevy: lo de la vez anterior ("60 en 16:36"), pisos o km, el tiempo como reloj
+ *  y el visto. En gris va lo de la vez anterior (o el tiempo del plan): marcar sin escribir guarda eso. */
+function filaCardioPlan(texto, marca, totalPlan, escalera) {
+  const c = cardioDeTexto(texto), f = hoy();
+  const previa = [...E.sesiones].filter(s => s.fecha < f).sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.hora || '').localeCompare(a.hora || ''))
+    .flatMap(s => s.series || []).find(x => (c?.id && x.ejercicio_id === c.id) || (!x.ejercicio_id && x.ejercicio_nombre === (c?.nombre || 'Cardio')));
+  const distPrev = previa ? (escalera ? previa.reps ?? null : previa.distancia_m != null ? previa.distancia_m / 1000 : null) : null;
+  const antes = previa ? [distPrev != null ? (escalera ? `${distPrev}` : `${coma(distPrev)} km`) : '', relojTexto(previa.duracion_seg)].filter(Boolean).join(' en ') : '';
+  const dist = escalera ? marca.pisos : marca.distancia_km, hecho = Boolean(marca.hecho);
+  return `<div class="tabla-series cardio cardio-plan">
+      <div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span><span aria-hidden="true">${escalera ? 'Pisos' : 'Km'}</span><span aria-hidden="true">Tiempo</span><span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>
+      <div class="serie cardio tipo-normal${hecho ? ' hecha' : ''}">
+        <span class="tipo-serie" aria-hidden="true">1</span>
+        <span class="antes num">${esc(antes)}</span>
+        <input type="text" inputmode="${escalera ? 'numeric' : 'decimal'}" autocomplete="off" id="cardio-dist" value="${esc(dist != null ? coma(dist) : '')}" placeholder="${esc(distPrev != null ? coma(distPrev) : '')}" aria-label="${escalera ? 'Pisos' : 'Kilómetros'}">
+        <input type="text" inputmode="numeric" autocomplete="off" id="cardio-tiempo" data-tiempo value="${esc(marca.minutos ? relojTexto(Math.round(marca.minutos * 60)) : '')}" placeholder="${esc(relojTexto(previa?.duracion_seg ?? (totalPlan || null)))}" aria-label="Tiempo, en minutos y segundos">
+        <button type="button" class="check" id="cardio-hecho" aria-pressed="${hecho}" aria-label="Cardio hecho">${hecho ? icono('visto', 'visto-serie') : ''}</button>
+      </div>
+    </div>
+    <p class="pequeno suave">${previa ? 'En gris, lo de la vez anterior: marcar sin escribir guarda eso.' : 'Anota el tiempo real; marcar sin escribir guarda el tiempo del plan.'}</p>`;
+}
+
 function cardioHtml(texto) {
   if (!texto) return '';
   const tramos = tramosDeCardio(texto);
@@ -596,12 +618,7 @@ function cardioHtml(texto) {
   return `<section class="tarjeta cardio">
     <div class="cab-tarjeta"><h3>Cardio</h3><button type="button" class="boton chico" data-elegir-cardio>Cambiar</button>${total ? `<button type="button" class="boton chico reloj-paso" data-tramos="${esc(JSON.stringify(tramos))}" data-final="¡Cardio listo!">▶ ${reloj(total)}</button>` : ''}</div>
     ${imagen && hayImagen(imagen) ? `<img class="cardio-imagen" src="${imagen}" alt="" width="96" height="96">` : ''}<p class="pequeno">${esc(texto)}</p>
-    <button type="button" class="boton chico" id="cardio-hecho" aria-pressed="${Boolean(E.cardioHecho?.[hoy()]?.hecho && E.cardioHecho[hoy()].texto === texto)}">${E.cardioHecho?.[hoy()]?.hecho && E.cardioHecho[hoy()].texto === texto ? 'Cardio hecho ✓' : 'Marcar cardio como hecho'}</button>
-    <p class="cardio-real pequeno">Realizado: ${marca.minutos ? coma(marca.minutos)+' min' : 'tiempo sin medir'}${escalera ? marca.pisos ? ' · '+marca.pisos+' pisos' : '' : marca.distancia_km ? ' · '+(marca.distancia_km<1 ? Math.round(marca.distancia_km*1000)+' m' : coma(marca.distancia_km)+' km') : ''}</p>
-    <details class="extra"><summary>${escalera ? 'Otro tiempo o pisos' : 'Otro tiempo o distancia'}</summary><div class="fila-cardio"><label class="pequeno">Minutos <input type="text" inputmode="decimal" id="cardio-min" value="${esc(coma(E.cardioHecho?.[hoy()]?.texto === texto ? E.cardioHecho[hoy()].minutos ?? '' : ''))}" placeholder="${total ? Math.round(total / 60) : ''}" aria-label="Minutos reales de cardio"></label>${escalera ? `<label class="pequeno">Pisos <input type="number" min="0" max="1000" id="cardio-pisos" value="${esc(E.cardioHecho?.[hoy()]?.pisos ?? '')}" aria-label="Pisos reales de escaladora"></label>` : `<label class="pequeno">Distancia <input type="text" inputmode="decimal" id="cardio-km" value="${esc(coma(E.cardioHecho?.[hoy()]?.texto === texto ? E.cardioHecho[hoy()].distancia_km ?? '' : ''))}" placeholder="km" aria-label="Distancia en kilómetros (opcional)"> km</label>`}</div></details>
-    <div class="cardio-atajos"><span class="pequeno">Tiempo real</span>${[5,10,15,20,30].map(n=>`<button type="button" class="boton chico" data-cardio-tiempo="${n}">${n} min</button>`).join('')}</div>
-    ${escalera ? `<div class="cardio-atajos"><span class="pequeno">Pisos realizados</span>${[10,20,30,50,100].map(n=>`<button type="button" class="boton chico" data-cardio-pisos="${n}">${n} pisos</button>`).join('')}</div>` : `<div class="cardio-atajos"><span class="pequeno">Distancia realizada</span>${[250,500,750,1000,1500,2000].map(n=>`<button type="button" class="boton chico" data-cardio-metros="${n}">${n<1000?n+' m':String(n/1000).replace('.',',')+' km'}</button>`).join('')}</div>`}
-    <p class="pequeno suave">Anota el tiempo real. Marcar hecho sin minutos conserva la duración sugerida como estimación.</p>
+    ${filaCardioPlan(texto, marca, total, escalera)}
     ${porRpe ? `<div class="tramos-cardio" aria-hidden="true">${tramos.map(t => `<i style="flex:${t.seg}"><b>${Math.round(t.seg / 60)}′</b><span>RPE ${esc(t.rpe)}</span></i>`).join('')}</div>` : ''}
   </section>`;
 }
@@ -934,24 +951,28 @@ function enlazar(ir, dia) {
     await cambiarPlan(r.plan,'Orden de hoy actualizado.',nube);repintar();
   });
   const repintar = () => vistaHoyMantener(ir);
-  $('cardio-hecho')?.addEventListener('click', () => {
-    const antes = E.cardioHecho?.[f];
-    (E.cardioHecho ||= {})[f] = { ...(antes?.texto === dia.cardio ? antes : {}), texto: dia.cardio, hecho: !(antes?.texto === dia.cardio && antes.hecho) };
-    guardar(); repintar();
-  });
-  raiz.querySelectorAll('[data-cardio-tiempo]').forEach(b=>b.onclick=()=>{const input=$('cardio-min');input.value=b.dataset.cardioTiempo;input.dispatchEvent(new Event('input',{bubbles:true}));repintar();});
-  raiz.querySelectorAll('[data-cardio-metros]').forEach(b=>b.onclick=()=>{const input=$('cardio-km');input.value=String(Number(b.dataset.cardioMetros)/1000).replace('.',',');input.dispatchEvent(new Event('input',{bubbles:true}));repintar();});
-  raiz.querySelectorAll('[data-cardio-pisos]').forEach(b=>b.onclick=()=>{const input=$('cardio-pisos');input.value=b.dataset.cardioPisos;input.dispatchEvent(new Event('input',{bubbles:true}));repintar();});
   const marcaCardioActual = () => {
     E.cardioHecho ||= {};
     if (E.cardioHecho[f]?.texto !== dia.cardio) E.cardioHecho[f] = { texto: dia.cardio, hecho: false };
     return E.cardioHecho[f];
   };
+  // Cardio del plan como fila de Hevy: el visto marca o desmarca; sin nada escrito, usa los valores en gris.
+  $('cardio-hecho')?.addEventListener('click', () => {
+    const m = marcaCardioActual(), escalera = esEscalera(dia.cardio);
+    if (!m.hecho) {
+      const dist = $('cardio-dist'), tiempo = $('cardio-tiempo');
+      if (!m.minutos && tiempo?.placeholder) { const r = leerReloj(tiempo.placeholder); if (r.seg) m.minutos = r.seg / 60; }
+      if (escalera ? m.pisos == null : m.distancia_km == null) { const v = numero(dist?.placeholder || ''); if (v != null) { if (escalera) m.pisos = v; else m.distancia_km = v; } }
+    }
+    m.hecho = !m.hecho;
+    guardar(); repintar();
+  });
   // Las mediciones se pueden anotar antes de marcar hecho y se conservan al desmarcar.
-
-  $('cardio-min')?.addEventListener('input', ev => { marcaCardioActual().minutos = numero(ev.target.value); guardar(); });
-  $('cardio-pisos')?.addEventListener('input',ev=>{marcaCardioActual().pisos=numero(ev.target.value);guardar();});
-  $('cardio-km')?.addEventListener('input', ev => { marcaCardioActual().distancia_km = numero(ev.target.value); guardar(); });
+  $('cardio-dist')?.addEventListener('input', ev => { const m = marcaCardioActual(), v = numero(ev.target.value); if (esEscalera(dia.cardio)) m.pisos = v == null ? null : Math.round(v); else m.distancia_km = v; guardar(); });
+  $('cardio-tiempo')?.addEventListener('input', ev => { const r = leerReloj(ev.target.value); if (ev.target.value !== r.texto) ev.target.value = r.texto; marcaCardioActual().minutos = r.seg ? r.seg / 60 : null; guardar(); });
+  for (const id of ['cardio-dist', 'cardio-tiempo']) $(id)?.addEventListener('focus', ev => { const t = ev.target; if (t.value) setTimeout(() => t.setSelectionRange(0, t.value.length), 0); });
+  // 0:90 queda como 1:30 al salir del campo, como Hevy.
+  $('cardio-tiempo')?.addEventListener('blur', ev => { const r = leerReloj(ev.target.value); if (r.seg) ev.target.value = relojTexto(r.seg); });
   const ejercicioDe = id => { const k = dia.ejercicios.findIndex((x, j) => idDe(x, j) === id); return { e: dia.ejercicios[k], k }; };
   const lugar = (R().lugares || [])[0];
   /** Consejo para la serie siguiente (nucleo/series.js), según reps, esfuerzo y fallo. Solo en las de trabajo. */
