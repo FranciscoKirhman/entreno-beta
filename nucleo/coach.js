@@ -115,7 +115,9 @@ export function responder(texto, ctx) {
       };
     }
     case 'maquina_ocupada': {
-      if (!dia) return { texto: 'Hoy no tienes sesión.' };
+      // "Siempre está ocupada" o sin sesión hoy: es un cambio del plan, no de hoy. Lo resuelve el coach con IA.
+      const delPlan = /\b(siempre|todas las semanas|cada vez|en mi gimnasio|del plan|en el plan|en mi plan)\b/.test(String(texto).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase());
+      if (!dia || delPlan) return { requiere_ia: true, texto: 'Cambiar un ejercicio en todo tu plan lo hace el coach con IA.' + (dia ? ' Para hoy, dime qué máquina y te doy alternativas.' : '') };
       const id = q.ejercicio && dia.ejercicios.some(e => e.ejercicio_id === q.ejercicio) ? q.ejercicio : null;
       if (!id) return { texto: '¿Qué ejercicio? Elige uno:', opciones: dia.ejercicios.map(e => ({ etiqueta: e.nombre, accion: { tipo: 'elegir_alternativa', fecha: hoy, ejercicio: e.ejercicio_id } })) };
       return opcionesAlternativa(ctx, hoy, id);
@@ -156,7 +158,8 @@ export function responder(texto, ctx) {
     }
     case 'por_que': case 'tecnica': {
       const e = dia?.ejercicios.find(x => x.ejercicio_id === q.ejercicio) || plan?.dias.flatMap(d => d.ejercicios).find(x => x.ejercicio_id === q.ejercicio);
-      if (!e) return { texto: '¿De qué ejercicio? Escribe el nombre, por ejemplo "¿por qué hip thrust?".' };
+      // Sin un ejercicio reconocible ("¿por qué mi plan llega hasta el 16?") es una pregunta abierta: la responde la IA.
+      if (!e) return { requiere_ia: true, texto: '¿De qué ejercicio? Escribe el nombre, por ejemplo "¿por qué hip thrust?".' };
       const d = plan.dias.find(x => x.ejercicios.includes(e));
       const ex = explicarEjercicio({ e, dia: d, plan, respuestas: r, indice, evidencia: ctx.evidencia });
       if (q.intencion === 'tecnica') return { texto: `${ex.ejercicio}: mira cómo se hace aquí.`, enlace: ex.video, explicacion: ex };

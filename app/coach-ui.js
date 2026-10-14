@@ -294,11 +294,25 @@ function opcionesMensaje(m) {
     ? Array.isArray(E.plan?.dias) && !E.plan.bloqueado ? irA('semana') : [{ etiqueta: 'Completar mi perfil', accion: { tipo: 'ir', vista: 'perfil' } }] : null;
 }
 
+/** El texto de la IA con formato simple y seguro: párrafos, **negrita** y listas con "- ". Todo se escapa antes. */
+function textoRico(t) {
+  const linea = x => esc(x).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  const bloques = [];
+  for (const l of String(t || '').split('\n')) {
+    const item = l.match(/^\s*(?:[-•*]|\d+[.)])\s+(.*)$/), titulo = l.match(/^\s*#{1,4}\s+(.*)$/);
+    if (item) { const u = bloques.at(-1); if (u?.tipo === 'ul') u.items.push(item[1]); else bloques.push({ tipo: 'ul', items: [item[1]] }); }
+    else if (titulo) bloques.push({ tipo: 'h', texto: titulo[1] });
+    else if (!l.trim()) bloques.push({ tipo: 'corte' });
+    else { const u = bloques.at(-1); if (u?.tipo === 'p') u.texto += ' ' + l.trim(); else bloques.push({ tipo: 'p', texto: l.trim() }); }
+  }
+  return bloques.map(b => (b.tipo === 'ul' ? `<ul>${b.items.map(x => `<li>${linea(x)}</li>`).join('')}</ul>` : b.tipo === 'h' ? `<p><strong>${linea(b.texto)}</strong></p>` : b.tipo === 'p' ? `<p>${linea(b.texto)}</p>` : '')).join('');
+}
+
 function burbuja(m, i) {
   const opciones = opcionesMensaje(m), ocupada = decisiones.has(m);
   // semana: cómo quedaría (o quedó) la semana, día por día, con lo que cambia marcado.
   const semana = m.semana?.length ? `<ul class="semana-chat">${m.semana.map(d => `<li class="${d.libre ? 'libre' : d.cambio ? 'cambia' : ''}"><span class="num">${esc(diaCorto(d.fecha))}</span><strong>${esc(d.foco)}</strong>${d.cambio ? `<small>${esc(d.cambio)}</small>` : ''}</li>`).join('')}</ul>` : '';
-  return `<div id="mensaje-chat-${i}" tabindex="-1" class="burbuja ${m.rol}"><div class="texto-chat">${esc(m.texto)}${m.enlace ? ` <a class="enlace" href="${esc(m.enlace)}" target="_blank" rel="noopener">Ver videos</a>` : ''}</div>${semana}${m.propuesta ? propuestaChatHtml({ ...m.propuesta, estado: m.estadoPropuesta || m.propuesta.estado }) : ''}${opciones?.length ? `<div class="opciones-chat" ${ocupada ? 'aria-busy="true"' : ''}>${opciones.map((o, k) => `<button type="button" ${ocupada ? 'disabled' : ''} class="boton${['confirmar', 'confirmar_ia', 'aceptar_alternativa'].includes(o.accion?.tipo) && k === 0 ? ' primario' : ''}" data-msg="${i}" data-opcion="${k}">${esc(o.etiqueta)}</button>${o.nota ? `<span class="pequeno suave nota-opcion">${esc(o.nota)}</span>` : ''}${o.avisos?.length ? `<span class="pequeno suave">${esc(o.avisos.join(' '))}</span>` : ''}`).join('')}</div>` : ''}</div>`;
+  return `<div id="mensaje-chat-${i}" tabindex="-1" class="burbuja ${m.rol}"><div class="texto-chat">${m.rol === 'coach' ? textoRico(m.texto) : esc(m.texto)}${m.enlace ? ` <a class="enlace" href="${esc(m.enlace)}" target="_blank" rel="noopener">Ver videos</a>` : ''}</div>${semana}${m.propuesta ? propuestaChatHtml({ ...m.propuesta, estado: m.estadoPropuesta || m.propuesta.estado }) : ''}${opciones?.length ? `<div class="opciones-chat" ${ocupada ? 'aria-busy="true"' : ''}>${opciones.map((o, k) => `<button type="button" ${ocupada ? 'disabled' : ''} class="boton${['confirmar', 'confirmar_ia', 'aceptar_alternativa'].includes(o.accion?.tipo) && k === 0 ? ' primario' : ''}" data-msg="${i}" data-opcion="${k}">${esc(o.etiqueta)}</button>${o.nota ? `<span class="pequeno suave nota-opcion">${esc(o.nota)}</span>` : ''}${o.avisos?.length ? `<span class="pequeno suave">${esc(o.avisos.join(' '))}</span>` : ''}`).join('')}</div>` : ''}${m.sugerencias?.length && i === E.chat.length - 1 ? `<div class="chips respuestas-rapidas" role="group" aria-label="Respuestas rápidas">${m.sugerencias.map(x => `<button type="button" class="sugerencia">${esc(x)}</button>`).join('')}</div>` : ''}</div>`;
 }
 
 async function enviar(texto, ir, archivo = null) {
@@ -324,7 +338,7 @@ async function enviar(texto, ir, archivo = null) {
       if (E !== estado || usuario !== nube.usuarioId()) return false;
       E.chat = E.chat.filter(m => m !== mensaje);
       completada = !ia.requiere_ia && !ia.requiere_permiso && !ia.motivo;
-      E.chat.push({ rol: 'coach', texto: ia.texto || r.texto, propuesta: ia.propuesta || null, opciones: ia.propuesta ? confirmarIA(ia.propuesta.id) : ia.opciones || null });
+      E.chat.push({ rol: 'coach', texto: ia.texto || r.texto, propuesta: ia.propuesta || null, opciones: ia.propuesta ? confirmarIA(ia.propuesta.id) : ia.opciones || null, sugerencias: ia.sugerencias || null });
     } catch (e) {
       if (E !== estado || usuario !== nube.usuarioId()) return false;
       completada = false;
