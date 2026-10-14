@@ -33,6 +33,14 @@ export function leerReloj(texto) {
   return { texto: h ? `${h}:${p.slice(2, 4)}:${p.slice(4)}` : `${m}:${p.slice(4)}`, seg };
 }
 
+/** Una serie guardada de cardio como se lee: "55 pisos en 15:00", "2,5 km en 20:00", "15:00". null si no es cardio. */
+export function textoCardio(s) {
+  const modo = modoCardio(s);
+  if (!modo) return null;
+  const dist = modo === 'pisos' ? (s.reps != null ? `${s.reps} pisos` : '') : s.distancia_m != null ? `${String(Math.round(s.distancia_m / 10) / 100).replace('.', ',')} km` : '';
+  return [dist, relojTexto(s.duracion_seg)].filter(Boolean).join(' en ') || null;
+}
+
 /** Una fila anotada (reps es lo que se escribió en la caja) → los campos que se guardan. */
 export function camposGuardados(e, r) {
   const cardio = modoCardio(e);

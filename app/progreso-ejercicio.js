@@ -6,7 +6,7 @@ import { seriesAnotadas } from '../nucleo/semanal.js';
 import { porSesion, medidasCon, desdePeriodo, ritmo, PERIODOS } from '../nucleo/progreso-ejercicio.js';
 import { recordsPorRepeticiones } from '../nucleo/records.js';
 import { lineaHevy } from './grafico.js';
-import { relojTexto } from '../nucleo/unidades.js';
+import { relojTexto, modoCardio, textoCardio } from '../nucleo/unidades.js';
 
 const NOMBRE = { peso: 'Carga más alta', e1rm: 'Máximo estimado', volumen: 'Volumen', reps: 'Repeticiones', duracion: 'Tiempo', distancia: 'Distancia' };
 const elegido = new Map(); // por ejercicio: {medida, periodo}, mientras la app está abierta
@@ -41,7 +41,10 @@ export function ritmoDe(series, id, { asistido = false } = {}) {
   return ritmo(filas, hoy(), { campo: campoRitmo(filas, asistido) });
 }
 
-function textoPunto(f, medida) {
+function textoPunto(f, medida, id) {
+  const cardio = modoCardio({ ejercicio_id: id });
+  if (cardio === 'pisos' && medida === 'reps') return `${f.reps} pisos`;
+  if (cardio && medida === 'distancia') return `${coma(Math.round(f.distancia / 10) / 100)} km`;
   switch (medida) {
     case 'peso': { const s = f.series.find(x => Number(x.carga_kg) === f.peso); return `${peso(f.peso)}${s?.reps ? ` × ${s.reps}` : ''}`; }
     case 'e1rm': return `${peso(f.e1rm)} estimado`;
@@ -74,7 +77,7 @@ function graficoHtml(id, filas, medida, periodo) {
   const enRango = filas.filter(f => f.fecha >= desde && f[medida] != null);
   if (!enRango.length) return `<p class="pequeno suave">Sin sesiones en este período. Prueba con "Todo".</p>`;
   const convertir = v => (['peso', 'e1rm', 'volumen'].includes(medida) ? enUnidad(v) : v);
-  const puntos = enRango.map(f => ({ fecha: f.fecha, valor: convertir(f[medida]), texto: textoPunto(f, medida) }));
+  const puntos = enRango.map(f => ({ fecha: f.fecha, valor: convertir(f[medida]), texto: textoPunto(f, medida, id) }));
   const { min, max, marcas } = escala(puntos.map(p => p.valor), medida);
   return lineaHevy({ puntos, desde, hasta, min, max, marcas, titulo: `${NOMBRE[medida]}, ${puntos.length} ${puntos.length === 1 ? 'sesión' : 'sesiones'}`, izquierda: medida === 'volumen' ? 50 : 52 });
 }
@@ -88,16 +91,18 @@ export function progresoEjercicioHtml(id, { asistido = false, conHistorial = fal
   if (!medidas.includes(sel.medida)) sel.medida = medidas[0];
   const r = ritmo(filas, hoy(), { campo: campoRitmo(filas, asistido) });
   const porReps = asistido ? [] : recordsPorRepeticiones(series.filter(s => s.ejercicio_id === id));
-  const nombre = m => (asistido && m === 'peso' ? 'Ayuda' : NOMBRE[m]);
+  const cardio = modoCardio({ ejercicio_id: id });
+  const nombre = m => (asistido && m === 'peso' ? 'Ayuda' : cardio === 'pisos' && m === 'reps' ? 'Pisos' : NOMBRE[m]);
   const sesiones = [...filas].reverse();
   const u = unidadPeso();
-  const textoSesion = f => (f.series.some(s => s.distancia_m != null) ? f.series.map(s => `${s.carga_kg ? `${peso(s.carga_kg)} × ` : ''}${s.distancia_m ?? '?'} m`).join(', ') : f.series.some(s => Number(s.carga_kg) > 0) ? seriesTexto(f.series) : f.series.map(s => (s.duracion_seg ? `${s.duracion_seg} s` : s.reps ?? '?')).join(', '));
+  const textoSesion = f => (cardio ? f.series.map(s => textoCardio({ ...s, ejercicio_id: id }) || '').filter(Boolean).join(', ')
+    : f.series.some(s => s.distancia_m != null) ? f.series.map(s => `${s.carga_kg ? `${peso(s.carga_kg)} × ` : ''}${s.distancia_m ?? '?'} m`).join(', ') : f.series.some(s => Number(s.carga_kg) > 0) ? seriesTexto(f.series) : f.series.map(s => (s.duracion_seg ? `${s.duracion_seg} s` : s.reps ?? '?')).join(', '));
   return `<section class="tarjeta" id="progreso-ejercicio">
     <div class="gh-titulo"><h2>Tu progreso</h2>
       <label class="gh-periodo"><span class="sr-only">Período</span><select data-periodo-sel>${PERIODOS.map(([v, t]) => `<option value="${v}"${v === sel.periodo ? ' selected' : ''}>${t}</option>`).join('')}</select></label></div>
     <div id="grafico-ejercicio">${graficoHtml(id, filas, sel.medida, sel.periodo)}</div>
     ${medidas.length > 1 ? `<div class="chips-medida-hevy" role="group" aria-label="Qué medir">${medidas.map(m => `<button type="button" class="chip-opcion" data-medida="${m}" aria-pressed="${m === sel.medida}">${esc(nombre(m))}</button>`).join('')}</div>` : `<p class="sobretitulo">${esc(nombre(medidas[0]))}</p>`}
-    <p class="pequeno suave gh-ritmo">${esc(textoRitmo(r, { asistido }) || 'Con 3 sesiones en al menos 2 semanas vas a ver aquí tu ritmo de progreso.')}</p>
+ <p class="pequeno suave gh-ritmo">${esc((cardio === 'pisos' ? textoRitmo(r, { asistido })?.replace(/repeticiones|repetición/g, 'pisos') : textoRitmo(r, { asistido })) || 'Con 3 sesiones en al menos 2 semanas vas a ver aquí tu ritmo de progreso.')}</p>
     ${porReps.length ? `<details class="extra"><summary>Récords por repeticiones</summary>
       <ul class="pequeno lista-simple por-reps">${porReps.map(x => `<li><span>${x.reps} ${x.reps === 1 ? 'repetición' : 'repeticiones'}</span><span><strong class="num">${esc(`${num(enUnidad(x.carga_kg))} ${u}`)}</strong> <span class="suave">${esc(fechaCorta(x.fecha))}</span></span></li>`).join('')}</ul></details>` : ''}
     ${conHistorial ? '' : '<!-- el historial está en la pestaña Historial de la ficha -->'}${!conHistorial ? '' : `<details class="extra"${historialCompleto ? ' open' : ''}><summary>Historial: ${sesiones.length} ${sesiones.length === 1 ? 'sesión' : 'sesiones'}</summary>

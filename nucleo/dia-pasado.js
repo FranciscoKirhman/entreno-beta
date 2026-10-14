@@ -3,7 +3,7 @@
 // kg va siempre en kilos; en las series por tiempo, reps son segundos. Al guardar se arma la sesión con el mismo
 // formato que guarda Hoy, así el historial, los récords, el resumen y la cuenta la tratan igual.
 
-import { unidadDe, camposGuardados } from './unidades.js';
+import { unidadDe, camposGuardados, modoCardio } from './unidades.js';
 
 const vacia = () => ({ kg: null, reps: null, rir: null, tipo: 'efectiva' });
 
@@ -26,6 +26,9 @@ export function borradorDeSesion(s, indice) {
     const clave = x.ejercicio_id || x.ejercicio_nombre;
     let g = ejercicios.find(e => (e.ejercicio_id || e.nombre) === clave);
     if (!g) ejercicios.push(g = { ejercicio_id: x.ejercicio_id || null, nombre: x.ejercicio_nombre || indice?.porId.get(x.ejercicio_id)?.nombre || 'Ejercicio', unidad: x.reps != null ? 'reps' : x.duracion_seg != null ? 'seg' : x.distancia_m != null ? 'm' : 'reps', series: [] });
+    // Cardio (escaladora, trotadora): pisos o km, y tiempo, como en Entrenar.
+    const cardio = modoCardio(x);
+    if (cardio) { g.series.push({ dist: cardio === 'pisos' ? x.reps ?? null : x.distancia_m != null ? x.distancia_m / 1000 : null, seg: x.duracion_seg ?? null, tipo: x.tipo || 'efectiva' }); continue; }
     g.series.push({ kg: x.carga_kg ?? null, reps: g.unidad === 'seg' ? x.duracion_seg ?? null : g.unidad === 'm' ? x.distancia_m ?? null : x.reps ?? null, rir: x.rir ?? (x.rpe != null ? Math.max(0, 10 - x.rpe) : null), tipo: x.tipo || 'efectiva', distancia_m: x.distancia_m });
   }
   return { id: s.id, fecha: s.fecha, hora: s.hora, titulo: s.titulo || 'Sesión', duracion_min: s.duracion_min ?? null, comentario: s.comentario || '', notas: s.notas || [], ejercicios };
@@ -39,6 +42,11 @@ export function seriesDelBorrador(b) {
   let orden = 0;
   for (const e of b.ejercicios) {
     for (const s of e.series) {
+      if (modoCardio(e)) {
+        if (!(Number(s.dist) > 0 || Number(s.seg) > 0)) continue;
+        out.push({ orden: orden++, ejercicio_id: e.ejercicio_id, ejercicio_nombre: e.nombre, tipo: s.tipo || 'efectiva', ...camposGuardados(e, s), rpe: null, rir: null });
+        continue;
+      }
       if (!(Number(s.reps) > 0)) continue;
       const rir = s.tipo === 'fallo' || e.unidad === 'm' ? (s.tipo === 'fallo' ? 0 : null) : s.rir ?? null;
       out.push({ orden: orden++, ejercicio_id: e.ejercicio_id, ejercicio_nombre: e.nombre, tipo: s.tipo || 'efectiva',

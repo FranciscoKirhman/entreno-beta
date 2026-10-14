@@ -1,5 +1,6 @@
 // Arriba de Progreso, como el perfil de Hevy: un gráfico de barras de las últimas semanas (duración, volumen o
 // repeticiones) y un panel de cuatro botones que lleva a Estadísticas, Ejercicios, Medidas y Calendario.
+import { modoCardio } from '../nucleo/unidades.js';
 import { E, esc, $, hoy, indice, volumenTexto } from './comun.js';
 import { sumarDias, diaSemana } from '../nucleo/agenda.js';
 import { esAsistido } from '../nucleo/catalogo.js';
@@ -24,7 +25,7 @@ function porSemana() {
     w.duracion += Number(s.duracion_min) || 0;
     for (const x of s.series || []) {
       if (x.tipo === 'calentamiento' && !ajuste('calentamientoStats')) continue;
-      const reps = Number(x.reps) || 0;
+      const reps = modoCardio(x) ? 0 : Number(x.reps) || 0; // los pisos de la escaladora no son repeticiones
       w.reps += reps;
       if (!esAsistido(indice.porId.get(x.ejercicio_id))) w.volumen += (Number(x.carga_kg) || 0) * reps;
     }

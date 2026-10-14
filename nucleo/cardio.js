@@ -16,7 +16,10 @@ export const CARDIOS = [
   { id: 'patinador', nombre: 'Saltos de patinador', equipamiento: [], carga_articular: ['cadera', 'rodilla', 'tobillo'], imagen: 'img/ejercicios/mini/patinador.webp' },
 ];
 
+/** La escaladora se nombra de muchas formas: "Escaleras 15 minutos", "Escalera", "Stair Machine". */
+export const esEscalera = texto => /escal(era|eras|adora)|stair/i.test(String(texto || ''));
 export function cardioDeTexto(texto) {
+  if (esEscalera(texto)) return CARDIOS.find(c => c.id === 'escaladora');
   return [...CARDIOS].sort((a, b) => b.nombre.length - a.nombre.length).find(c => String(texto || '').toLowerCase().startsWith(c.nombre.toLowerCase().replace(/ estática| al aire libre/g, ''))) || null;
 }
 /** El cardio marcado como hecho → una serie para guardar. La marca puede traer los minutos reales y la distancia
@@ -29,8 +32,8 @@ export function registroCardio(texto, marca) {
   const c = cardioDeTexto(texto);
   return { ejercicio_id: ['bicicleta', 'remoergometro'].includes(c?.id) ? null : c?.id || null,
     ejercicio_nombre: c?.nombre || 'Cardio', tipo: 'efectiva', carga_kg: null, reps: null, duracion_seg: seg, rir: null, rpe: null,
-    ...(Number.isInteger(Number(marca.pisos)) && Number(marca.pisos)>0 ? {pisos:Number(marca.pisos)} : {}),
-    ...(km > 0 ? { distancia_m: Math.round(km * 1000) } : {}) };
+    // Los pisos van en reps, igual que "Stair Machine (Floors)" de Hevy; la escaladora no lleva distancia.
+    ...(c?.id === 'escaladora' ? { reps: Number(marca.pisos) > 0 ? Math.round(Number(marca.pisos)) : null } : km > 0 ? { distancia_m: Math.round(km * 1000) } : {}) };
 }
 
 export function motivoNoCardio(cardio, ctx) {

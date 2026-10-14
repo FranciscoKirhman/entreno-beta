@@ -1,5 +1,6 @@
 // Resumen de una sesión, como el de Hevy al guardar: se abre solo al terminar y desde el historial. Cuánto levantaste,
 // los récords, qué salió bien y qué salió mal (contra el plan del día y la vez anterior), cada ejercicio y compartir.
+import { textoCardio } from '../nucleo/unidades.js';
 import { E, esc, $, indice, hoy, fechaCorta, peso, volumenTexto, seriesTexto, avisar, IMAGENES } from './comun.js';
 import { resumenSesion } from '../nucleo/resumen-sesion.js';
 import { sesionDe } from '../nucleo/agenda.js';
@@ -11,6 +12,8 @@ import { imagenSesion } from './imagen-sesion.js';
 import { cuentaNuevaHtml, enlazarCuentaNueva } from './cuenta-ui.js';
 import { cuerpoHtml, intensidades } from './cuerpo.js';
 import { guardarComoRutina } from './rutinas.js';
+import { editarDuracionGuardada } from './duracion-sesion.js';
+import { icono } from './iconos.js';
 
 const nombreEj = (id, respaldo) => indice.porId.get(id)?.nombre || respaldo || 'Ejercicio';
 // Insignia de cada récord (hoja RS01 del banco de imágenes). Mientras no esté cortada, se muestra la etiqueta "Récord".
@@ -55,6 +58,9 @@ function textoMal(m) {
 
 /** Las series de un ejercicio en palabras: peso y repeticiones, o el tiempo si van por tiempo. */
 function textoSeries(xs) {
+  // Cardio: la escaladora en pisos y tiempo, la trotadora en km y tiempo.
+  const cardio = xs.map(textoCardio);
+  if (cardio.length && cardio.every(Boolean)) return cardio.join(', ');
   const conReps = xs.filter(x => x.reps != null);
   if (conReps.length) return seriesTexto(conReps);
   // Peso y distancia (caminata del granjero) o cardio con distancia: "24 kg × 30 m".
@@ -125,7 +131,7 @@ export function vistaResumen(ir, { id, desde = null } = {}) {
     ${dice('celebra', n ? `¡${n} ${n === 1 ? 'récord' : 'récords'} hoy! Mira abajo cuáles.` : r.mal.length ? '¡Sesión terminada! Abajo ves qué salió bien y qué cuidar la próxima.' : dia ? '¡Sesión terminada! Hiciste lo que pedía el plan.' : '¡Sesión registrada! Abajo está cada ejercicio.')}
     ${dia && !r.mal.length && IMAGENES.has('img/resumen/completa.webp') ? '<img class="medalla-completa" src="img/resumen/completa.webp" alt="Sesión completa" width="64" height="64" decoding="async">' : ''}
     <div class="cifras-resumen">
-      ${cifra(r.minutos == null ? 'sin dato' : r.minutos < 1 ? 'menos de 1' : `${r.minutos}`, 'minutos')}
+      <button type="button" class="cifra cifra-editable" id="editar-duracion" aria-label="Duración: ${r.minutos ?? 'sin dato'} minutos. Corregir la duración y la hora"><strong class="num">${r.minutos == null ? 'sin dato' : r.minutos < 1 ? 'menos de 1' : `${r.minutos}`}</strong><span class="pequeno suave">minutos ${icono('lapiz', 'icono icono-chico')}</span></button>
       ${cifra(esc(volumenTexto(r.volumen)), 'levantados en total')}
       ${cifra(r.seriesTrabajo, 'series de trabajo')}
       ${cifra(r.ejercicios, r.ejercicios === 1 ? 'ejercicio' : 'ejercicios')}
@@ -178,6 +184,7 @@ export function vistaResumen(ir, { id, desde = null } = {}) {
   };
   // Como el botón de Hevy para ChatGPT y Claude: el texto se copia y la persona lo pega en su IA (la app no lo envía).
   $('guardar-como-rutina').onclick = () => guardarComoRutina(sesion, ir);
+  $('editar-duracion').onclick = ev => editarDuracionGuardada(sesion, { volver: ev.currentTarget, alCambiar: () => vistaResumen(ir, { id: sesion.id, desde }) });
   $('copiar-ia').onclick = async () => {
     const texto = textoParaIA({ sesion, r, dia, foco });
     try { await navigator.clipboard.writeText(texto); $('copiado-ia').textContent = 'Copiado. Abre tu IA y pégalo.'; }

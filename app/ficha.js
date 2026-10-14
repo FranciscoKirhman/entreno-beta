@@ -2,6 +2,7 @@
 // imagen), cómo se hace y los errores comunes, tus marcas, por qué está en tu plan (con los papers que lo respaldan)
 // tu progreso (gráficos, ritmo e historial, en app/progreso-ejercicio.js) y con qué se puede cambiar. Se abre desde la
 // ⓘ de cada ejercicio y desde Progreso.
+import { modoCardio, relojTexto } from '../nucleo/unidades.js';
 import { datoCambiado } from './datos-nube.js';
 import { E, R, D, C, TECNICA, EVIDENCIA, indice, hoy, esc, $, fechaCorta, coma, enUnidad, unidadPeso, peso, guardar, avisar, volumenTexto } from './comun.js';
 import { explicarEjercicio, enlaceVideo } from '../nucleo/explicar.js';
@@ -46,7 +47,17 @@ function recordsHtml(id, seg) {
   const u = unidadPeso(), kg = x => `${coma(Math.round(enUnidad(x) * 10) / 10)} ${u}`;
   const conPeso = todas.filter(x => Number(x.carga_kg) > 0 && x.reps != null);
   const filas = [];
-  if (conPeso.length) {
+  const cardio = modoCardio({ ejercicio_id: id });
+  if (cardio) {
+    // Cardio: más pisos (o km) en una sesión, más tiempo y el mejor ritmo.
+    const dist = x => (cardio === 'pisos' ? Number(x.reps) || 0 : (Number(x.distancia_m) || 0) / 1000);
+    const porSesion = dias.map(([, xs]) => ({ d: xs.reduce((a, x) => a + dist(x), 0), s: xs.reduce((a, x) => a + (Number(x.duracion_seg) || 0), 0) }));
+    const maxD = Math.max(...porSesion.map(x => x.d)), maxS = Math.max(...porSesion.map(x => x.s));
+    const ritmo = Math.max(...porSesion.filter(x => x.d && x.s).map(x => x.d / (x.s / 60)), 0);
+    if (maxD) filas.push([cardio === 'pisos' ? 'Más pisos en una sesión' : 'Más km en una sesión', cardio === 'pisos' ? `${maxD} pisos` : `${coma(Math.round(maxD * 100) / 100)} km`]);
+    if (maxS) filas.push(['Más tiempo en una sesión', relojTexto(maxS)]);
+    if (ritmo) filas.push(['Mejor ritmo', cardio === 'pisos' ? `${coma(Math.round(ritmo * 10) / 10)} pisos por minuto` : `${coma(Math.round(ritmo * 600) / 10)} km por hora`]);
+  } else if (conPeso.length) {
     const pesada = conPeso.reduce((a, x) => (x.carga_kg > a.carga_kg ? x : a));
     const e1 = conPeso.map(x => ({ x, v: x.carga_kg * (1 + x.reps / 30) })).reduce((a, b) => (b.v > a.v ? b : a));
     const serie = conPeso.reduce((a, x) => (x.carga_kg * x.reps > a.carga_kg * a.reps ? x : a));
@@ -59,6 +70,7 @@ function recordsHtml(id, seg) {
     const sesion = Math.max(...dias.map(([, xs]) => xs.reduce((a, x) => a + valor(x), 0)));
     filas.push(['Mejor serie', seg ? `${mejor} s` : `${mejor} reps`], [seg ? 'Más tiempo en una sesión' : 'Más reps en una sesión', seg ? `${sesion} s` : `${sesion} reps`]);
   }
+  if (!filas.length) return '';
   return `<section class="tarjeta records-ficha"><h2>${icono('trofeo', 'icono icono-records')} Récords personales</h2>
     <ul class="lista-records">${filas.map(([t, v]) => `<li><span>${t}</span><strong class="num">${esc(v)}</strong></li>`).join('')}</ul></section>`;
 }

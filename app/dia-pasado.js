@@ -11,10 +11,28 @@ import { subirACuenta } from './cola.js';
 import { miniatura } from './imagenes.js';
 import { icono } from './iconos.js';
 import * as nube from './nube.js';
+import { modoCardio, leerReloj, relojTexto } from '../nucleo/unidades.js';
 
 const TIPO = { efectiva: '', calentamiento: 'C', fallo: 'F', drop: 'D' };
 const SIGUIENTE_TIPO = { efectiva: 'calentamiento', calentamiento: 'fallo', fallo: 'efectiva', drop: 'efectiva' };
 let buscar = '';
+
+/** Escaladora (pisos) o trotadora (km), con su tiempo como reloj, igual que en Entrenar. */
+function tarjetaCardio(e, k) {
+  const pisos = modoCardio(e) === 'pisos';
+  return `<section class="tarjeta ej-pasado">
+    <div class="cab-pasado">${e.ejercicio_id ? miniatura(e.ejercicio_id) : '<span class="miniatura vacia"></span>'}<div><strong>${esc(e.nombre)}</strong></div>
+      <button type="button" class="boton-icono" data-quitar-ej="${k}" aria-label="Quitar ${esc(e.nombre)}">${icono('cerrar')}</button></div>
+    <div class="filas-pasado dist">
+      <span class="cab">Serie</span><span class="cab">${pisos ? 'Pisos' : 'Km'}</span><span class="cab">Tiempo</span><span></span>
+      ${e.series.map((s, i) => `<button type="button" class="tipo-serie tipo-${s.tipo === 'efectiva' ? 'normal' : s.tipo}" data-tipo="${k}.${i}" aria-label="Serie ${i + 1}, tocar para cambiar el tipo">${TIPO[s.tipo] || i + 1}</button>
+        <input type="text" inputmode="${pisos ? 'numeric' : 'decimal'}" autocomplete="off" data-c="dist" data-k="${k}" data-i="${i}" value="${esc(s.dist != null ? coma(s.dist) : '')}" aria-label="${pisos ? 'Pisos' : 'Kilómetros'}, serie ${i + 1}">
+        <input type="text" inputmode="numeric" autocomplete="off" data-c="seg" data-tiempo data-k="${k}" data-i="${i}" value="${esc(relojTexto(s.seg))}" placeholder="15:00" aria-label="Tiempo, en minutos y segundos, serie ${i + 1}">
+        <button type="button" class="boton-icono" data-quitar-serie="${k}.${i}" aria-label="Quitar la serie ${i + 1}">${icono('cerrar', 'icono icono-chico')}</button>`).join('')}
+    </div>
+    <button type="button" class="boton agregar-serie" data-mas-serie="${k}">+ Serie</button>
+  </section>`;
+}
 
 export function vistaDiaPasado(ir, { id = null } = {}) {
   const ayer = sumarDias(hoy(), -1);
@@ -34,6 +52,7 @@ export function vistaDiaPasado(ir, { id = null } = {}) {
 
   const modo = modoEsfuerzo(R()); // RPE por defecto o RIR, como en Entrenar (se guarda como RIR)
   const tarjeta = (e, k) => {
+    if (modoCardio(e)) return tarjetaCardio(e, k);
     const seg = e.unidad === 'seg', dist = e.unidad === 'm';
     const p = e.plan;
     const pista = p ? `Plan: ${p.series} × ${p.reps_min}${p.reps_max !== p.reps_min ? ` a ${p.reps_max}` : ''}${seg ? ' s' : dist ? ' m' : ''}${p.carga_kg ? ` · ${n(p.carga_kg)} ${u}` : ''}` : '';
@@ -97,6 +116,8 @@ export function vistaDiaPasado(ir, { id = null } = {}) {
     if (!t.dataset.c || t.tagName === 'SELECT') return;
     const s = b.ejercicios[Number(t.dataset.k)]?.series[Number(t.dataset.i)];
     if (!s) return;
+    if (t.dataset.tiempo !== undefined) { const r = leerReloj(t.value); if (t.value !== r.texto) t.value = r.texto; s.seg = r.seg; guardar(); return; }
+    if (t.dataset.c === 'dist') { s.dist = numero(t.value); guardar(); return; }
     const v = numero(t.value);
     s[t.dataset.c] = t.dataset.c === 'kg' ? aKilos(v) : v == null ? null : Math.round(v);
     guardar();

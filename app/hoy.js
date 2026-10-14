@@ -41,6 +41,7 @@ import { descansoHtml, sesionCompletaHtml } from './estados-visuales.js';
 import { srcArticulacion } from './articulaciones.js';
 import { repintarConservando, celebrar, sinMovimiento, entrarPaso, selectorDe } from './movimiento.js';
 import { activarTecladoSeries } from './teclado-series.js';
+import { editarDuracionGuardada, camposDuracionHtml, enlazarCamposDuracion, errorDuracion } from './duracion-sesion.js';
 import { mostrarMedalla } from './medalla.js';
 import { montarAnimaciones } from './animacion-ui.js';
 import { animacionDePaso } from '../nucleo/animaciones.js';
@@ -58,7 +59,7 @@ import { proponerSesionVacia } from './sesion-libre-ui.js';
 import { ilustracionesCalentamiento } from '../nucleo/imagenes-calentamiento.js';
 import { IMAGENES } from './comun.js';
 import { elegirCardio } from './cardio-ui.js';
-import { CARDIOS, registroCardio } from '../nucleo/cardio.js';
+import { CARDIOS, registroCardio, esEscalera } from '../nucleo/cardio.js';
 import { hayImagen, srcMiniatura } from './imagenes.js';
 import { abrirAjustesSesion, ajuste } from './ajustes-sesion.js';
 import { cuerpoHtml, intensidades } from './cuerpo.js';
@@ -540,7 +541,7 @@ function cabSesionHtml(dia) {
       ${accion}
     </div>
     <div class="cab-sesion-cifras">
-      <span${corriendo ? ' class="cab-duracion" role="button" tabindex="0" data-ajustar-duracion aria-label="Duración: ajustar la hora de inicio"' : ''}><small>Duración</small><strong class="num"${corriendo ? ` role="timer" id="solapa-tiempo" data-fecha="${f}"` : ''}>${corriendo ? transcurrido(f) : guardada ? `${E.sesiones.find(s => s.fecha === f && !s.origen)?.duracion_min ?? 0} min` : '0:00'}</strong></span>
+      <span${corriendo || guardada ? ' class="cab-duracion" role="button" tabindex="0" data-ajustar-duracion aria-label="Duración: corregir la hora de inicio y los minutos"' : ''}><small>Duración</small><strong class="num"${corriendo ? ` role="timer" id="solapa-tiempo" data-fecha="${f}"` : ''}>${corriendo ? transcurrido(f) : guardada ? `${E.sesiones.find(s => s.fecha === f && !s.origen)?.duracion_min ?? 0} min` : '0:00'}</strong></span>
       <span><small>Volumen</small><strong class="num">${esc(volumenTexto(a.cifras.volumen + volCal))}</strong></span>
       <span><small>Series</small><strong class="num">${a.hechas} de ${a.total}</strong></span>
       ${cuerpoHtml(intensidades(dia.ejercicios.flatMap((e, k) => filasDe(f, e, k).filter(x => x.hecho && deTrabajo(tipoDe(x))).map(() => ({ ejercicio_id: e.ejercicio_id })))).intensidad, { tamano: 'mini', etiqueta: 'Músculos trabajados hoy' })}
@@ -570,7 +571,7 @@ function cardioHtml(texto) {
   if (!texto) return '';
   const tramos = tramosDeCardio(texto);
   const total = tramos.reduce((x, t) => x + t.seg, 0);
-  const escalera = /escaladora|escaleras/i.test(texto);
+  const escalera = esEscalera(texto);
   const marca = E.cardioHecho?.[hoy()]?.texto === texto ? E.cardioHecho[hoy()] : {};
   const porRpe = tramos.length > 1 && tramos.every(t => t.rpe);
   const imagen = [...CARDIOS].sort((a, b) => b.nombre.length - a.nombre.length).find(c => texto.toLowerCase().startsWith(c.nombre.toLowerCase().replace(/ estática| al aire libre/g, '')))?.imagen;
@@ -579,7 +580,7 @@ function cardioHtml(texto) {
     ${imagen && hayImagen(imagen) ? `<img class="cardio-imagen" src="${imagen}" alt="" width="96" height="96">` : ''}<p class="pequeno">${esc(texto)}</p>
     <button type="button" class="boton chico" id="cardio-hecho" aria-pressed="${Boolean(E.cardioHecho?.[hoy()]?.hecho && E.cardioHecho[hoy()].texto === texto)}">${E.cardioHecho?.[hoy()]?.hecho && E.cardioHecho[hoy()].texto === texto ? 'Cardio hecho ✓' : 'Marcar cardio como hecho'}</button>
     <p class="cardio-real pequeno">Realizado: ${marca.minutos ? coma(marca.minutos)+' min' : 'tiempo sin medir'}${escalera ? marca.pisos ? ' · '+marca.pisos+' pisos' : '' : marca.distancia_km ? ' · '+(marca.distancia_km<1 ? Math.round(marca.distancia_km*1000)+' m' : coma(marca.distancia_km)+' km') : ''}</p>
-    <details class="extra"><summary>Otro tiempo o distancia</summary><div class="fila-cardio"><label class="pequeno">Minutos <input type="text" inputmode="decimal" id="cardio-min" value="${esc(coma(E.cardioHecho?.[hoy()]?.texto === texto ? E.cardioHecho[hoy()].minutos ?? '' : ''))}" placeholder="${total ? Math.round(total / 60) : ''}" aria-label="Minutos reales de cardio"></label>${escalera ? `<label class="pequeno">Pisos <input type="number" min="0" max="1000" id="cardio-pisos" value="${esc(E.cardioHecho?.[hoy()]?.pisos ?? '')}" aria-label="Pisos reales de escaladora"></label>` : `<label class="pequeno">Distancia <input type="text" inputmode="decimal" id="cardio-km" value="${esc(coma(E.cardioHecho?.[hoy()]?.texto === texto ? E.cardioHecho[hoy()].distancia_km ?? '' : ''))}" placeholder="km" aria-label="Distancia en kilómetros (opcional)"> km</label>`}</div></details>
+    <details class="extra"><summary>${escalera ? 'Otro tiempo o pisos' : 'Otro tiempo o distancia'}</summary><div class="fila-cardio"><label class="pequeno">Minutos <input type="text" inputmode="decimal" id="cardio-min" value="${esc(coma(E.cardioHecho?.[hoy()]?.texto === texto ? E.cardioHecho[hoy()].minutos ?? '' : ''))}" placeholder="${total ? Math.round(total / 60) : ''}" aria-label="Minutos reales de cardio"></label>${escalera ? `<label class="pequeno">Pisos <input type="number" min="0" max="1000" id="cardio-pisos" value="${esc(E.cardioHecho?.[hoy()]?.pisos ?? '')}" aria-label="Pisos reales de escaladora"></label>` : `<label class="pequeno">Distancia <input type="text" inputmode="decimal" id="cardio-km" value="${esc(coma(E.cardioHecho?.[hoy()]?.texto === texto ? E.cardioHecho[hoy()].distancia_km ?? '' : ''))}" placeholder="km" aria-label="Distancia en kilómetros (opcional)"> km</label>`}</div></details>
     <div class="cardio-atajos"><span class="pequeno">Tiempo real</span>${[5,10,15,20,30].map(n=>`<button type="button" class="boton chico" data-cardio-tiempo="${n}">${n} min</button>`).join('')}</div>
     ${escalera ? `<div class="cardio-atajos"><span class="pequeno">Pisos realizados</span>${[10,20,30,50,100].map(n=>`<button type="button" class="boton chico" data-cardio-pisos="${n}">${n} pisos</button>`).join('')}</div>` : `<div class="cardio-atajos"><span class="pequeno">Distancia realizada</span>${[250,500,750,1000,1500,2000].map(n=>`<button type="button" class="boton chico" data-cardio-metros="${n}">${n<1000?n+' m':String(n/1000).replace('.',',')+' km'}</button>`).join('')}</div>`}
     <p class="pequeno suave">Anota el tiempo real. Marcar hecho sin minutos conserva la duración sugerida como estimación.</p>
@@ -832,6 +833,9 @@ function enlazar(ir, dia) {
   const ajustarDuracion = ev => {
     if (ev.type === 'keydown' && !['Enter', ' '].includes(ev.key)) return;
     ev.preventDefault();
+    // Ya guardada: se corrige la sesión guardada (y se vuelve a subir a la cuenta).
+    const guardadaYa = !enCurso(f) && E.sesiones.find(s => s.fecha === f && !s.origen);
+    if (guardadaYa) return editarDuracionGuardada(guardadaYa, { volver: ev.currentTarget, alCambiar: repintar });
     const hhmm = t => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
     let inicio = inicioDe(f) || Date.now();
     const minutos = t => Math.max(0, Math.round((Date.now() - t) / 6e4));
@@ -1553,7 +1557,7 @@ function enlazar(ir, dia) {
 
   // Terminar sesión (abajo o en la solapa): queda en el historial local y, con cuenta, en el servidor.
   let terminando = false;
-  const terminarSesion = async ({ titulo = dia.foco, comentario = '', sensacion = null } = {}) => {
+  const terminarSesion = async ({ titulo = dia.foco, comentario = '', sensacion = null, minutos: minutosElegidos = null, horaInicio = null } = {}) => {
     if (terminando) return;
     const series = [], notas = [];
     let orden = 0;
@@ -1586,9 +1590,10 @@ function enlazar(ir, dia) {
     const anteriorGuardada = E.sesiones.find(s => s.fecha === f && !s.origen);
     const id = anteriorGuardada?.id || crypto.randomUUID();
     E.sesiones = E.sesiones.filter(s => !(s.fecha === f && !s.origen));
-    const hora = ahora().slice(11);
-    // Lo que duró: desde "Empezar" (o la primera serie) hasta ahora.
-    const minutos = anteriorGuardada ? anteriorGuardada.duracion_min : inicioDe(f) ? Math.max(1, Math.round((Date.now() - inicioDe(f)) / 6e4)) : avance(dia).cifras.minutos ?? (cardio ? Math.round(cardio.duracion_seg / 60) : null);
+    // La hora es la de inicio (como Hevy); sin ella, la de ahora.
+    const hora = horaInicio || anteriorGuardada?.hora || ahora().slice(11);
+    // Lo que duró: lo escrito al guardar o, si no, desde "Empezar" (o la primera serie) hasta ahora.
+    const minutos = minutosElegidos != null ? minutosElegidos : anteriorGuardada ? anteriorGuardada.duracion_min : inicioDe(f) ? Math.max(1, Math.round((Date.now() - inicioDe(f)) / 6e4)) : avance(dia).cifras.minutos ?? (cardio ? Math.round(cardio.duracion_seg / 60) : null);
     E.sesiones.push({ id, fecha: f, hora, titulo, duracion_min: minutos, series, notas, ...(comentario ? { comentario } : {}) });
     // Cómo se sintió (como OpenGym): aparte de la sesión, así no se pierde cuando la cuenta trae su copia.
     if (sensacion) (E.sensaciones ||= {})[id] = sensacion; else if (E.sensaciones) delete E.sensaciones[id];
@@ -1613,16 +1618,19 @@ function enlazar(ir, dia) {
     const minutos = anterior ? anterior.duracion_min : inicioDe(f) ? Math.max(1, Math.round((Date.now() - inicioDe(f)) / 6e4)) : null;
     const cuando = new Date(f + 'T12:00:00Z').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
     let titulo = anterior?.titulo || dia.foco, comentario = anterior?.comentario || '', sensacion = (anterior && E.sensaciones?.[anterior.id]) || null;
+    // Hora de inicio y duración, editables como en "Save Workout" de Hevy.
+    const hhmm = t => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+    const duracion = { hora: anterior?.hora || (inicioDe(f) ? hhmm(inicioDe(f)) : null), minutos };
     abrirHoja({
       titulo: anterior ? 'Guardar de nuevo' : 'Guardar sesión', volver: b,
       contenido: `<div class="guardar-sesion">
         <label class="guardar-titulo"><span class="pequeno suave">Título</span><input type="text" id="guardar-titulo" maxlength="80" value="${esc(titulo)}"></label>
         <div class="guardar-cifras">
-          <span><small>Duración</small><strong class="num">${minutos != null ? `${minutos} min` : 'sin medir'}</strong></span>
           <span><small>Volumen</small><strong class="num">${esc(volumenTexto(a.cifras.volumen))}</strong></span>
           <span><small>Series</small><strong class="num">${a.hechas}</strong></span>
         </div>
-        <p class="pequeno suave guardar-cuando">${icono('calendario', 'icono icono-chico')} ${esc(mayuscula(cuando))}${inicioDe(f) ? `, desde las ${esc(new Date(inicioDe(f)).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }))}` : ''}</p>
+        <p class="pequeno suave guardar-cuando">${icono('calendario', 'icono icono-chico')} ${esc(mayuscula(cuando))}</p>
+        ${camposDuracionHtml(duracion)}
         <div class="guardar-sensacion"><span class="pequeno suave">¿Cómo se sintió?</span><div class="segmentos" role="radiogroup" aria-label="¿Cómo se sintió?">${SENSACIONES.map(([v, t]) => `<button type="button" role="radio" data-sensacion="${v}" aria-checked="${v === sensacion}">${t}</button>`).join('')}</div></div>
         <label class="guardar-nota"><span class="pequeno suave">¿Cómo te fue?</span><textarea id="guardar-comentario" rows="3" maxlength="500" placeholder="Deja una nota de la sesión">${esc(comentario)}</textarea></label>
         ${sinMarcar > 0 ? `<p class="aviso ojo pequeno">${sinMarcar === 1 ? 'Queda 1 serie sin marcar: no se guarda.' : `Quedan ${sinMarcar} series sin marcar: no se guardan.`} Si las hiciste, vuelve y márcalas.</p>` : ''}
@@ -1633,10 +1641,14 @@ function enlazar(ir, dia) {
         ...(anterior ? [] : [{ valor: 'descartar', icono: icono('basurero'), clase: 'quitar', nombre: 'Descartar sesión', peligro: true }]),
       ],
       alElegir: v => {
-        if (v === 'guardar') terminarSesion({ titulo: titulo.trim() || dia.foco, comentario: comentario.trim(), sensacion });
+        if (v === 'guardar') {
+          if (duracion.minutos != null && errorDuracion(duracion.minutos)) { avisar(errorDuracion(duracion.minutos)); return; }
+          terminarSesion({ titulo: titulo.trim() || dia.foco, comentario: comentario.trim(), sensacion, minutos: duracion.minutos, horaInicio: duracion.hora });
+        }
         else if (v === 'descartar') descartarSesion({ volver: b, alDescartar: () => ir('entrenar') });
       },
     });
+    enlazarCamposDuracion(duracion);
     $('guardar-titulo')?.addEventListener('input', ev => { titulo = ev.target.value; });
     $('guardar-comentario')?.addEventListener('input', ev => { comentario = ev.target.value; });
     document.querySelectorAll('#hoja [data-sensacion]').forEach(x => x.onclick = () => {
