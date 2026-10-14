@@ -437,16 +437,22 @@ function filaPasosHtml(dia, f, tipo) {
   // Plegado en una línea, como pidió Francisco (docs/32, D6): se abre al tocarlo y sigue abierto al repintar.
   return `<details class="tarjeta pasos-tabla" data-panel="pasos-${tipo}" aria-label="${NOMBRE_PASOS[tipo]}"${abiertos.has(`pasos-${tipo}`) ? ' open' : ''}>
     <summary class="cab-tarjeta"><h3>${icono(tipo === 'cal' ? 'fuego' : 'persona', 'icono icono-pasos')} ${NOMBRE_PASOS[tipo]}</h3><span class="pequeno suave">${s.completo ? 'Hecho ✓' : `${s.n} de ${pasos.length} hechos`}</span></summary>
-    <p class="pequeno suave">${tipo === 'cal' ? 'Las aproximaciones están como filas C en cada ejercicio.' : 'Opcional al terminar. Anota segundos, repeticiones o minutos según lo previsto.'}</p>
-    <div class="pasos-tabla-cab" aria-hidden="true"><span>Movimiento y previsto</span><span>Realizado</span><span>Hecho</span></div>
+    <p class="pequeno suave">${tipo === 'cal' ? 'Las aproximaciones están como filas C en cada ejercicio.' : 'Opcional al terminar. Toca ▶ para contar el tiempo y marca cada estiramiento al terminarlo.'}</p>
+    <div class="pasos-tabla-cab" aria-hidden="true"><span>Movimiento y previsto</span><span>${tipo === 'est' ? 'Tiempo' : 'Realizado'}</span><span>Hecho</span></div>
     ${pasos.map((p, i) => { const parte = partePaso(p.name), clave = p.clave || `${i}|${p.name}`;
       return `<div class="pasos-tabla-fila${s.hechos[i] ? ' completa' : ''}">
         <div><strong>${esc(parte.nombre)}</strong><small>${esc(parte.dosis || p.name)}</small><details><summary>Cómo hacerlo</summary><p class="pequeno">${esc(p.how || 'Sigue la dosis indicada en el plan.')}</p></details></div>
-        <button type="button" class="boton paso-dosis" data-paso-dosis="${tipo}" data-paso-indice="${i}" aria-label="${esc(`Registrar dosis de ${parte.nombre}`)}">${esc(medidas[clave] || 'Registrar')}</button>
+        ${tipo === 'est' ? relojEstiramiento(p, parte.nombre) : `<button type="button" class="boton paso-dosis" data-paso-dosis="${tipo}" data-paso-indice="${i}" aria-label="${esc(`Registrar dosis de ${parte.nombre}`)}">${esc(medidas[clave] || 'Registrar')}</button>`}
         <button type="button" class="boton-icono paso-tabla-hecho" data-paso-tabla="${tipo}" data-paso-indice="${i}" aria-pressed="${s.hechos[i]}" aria-label="${esc(`${parte.nombre} hecho`)}">${s.hechos[i] ? icono('visto') : E.pasosOmitidos?.[f]?.[tipo]?.[clave] ? '×' : '○'}</button>
       </div>`; }).join('')}
     <p class="pequeno suave">Marcar hecho confirma el movimiento. El valor realizado queda sin medir si no lo anotas.</p>
   </details>`;
+}
+
+/** Estiramiento: un ▶ que cuenta su tiempo (por lado, si corresponde); sin tiempo en el plan, nada que registrar. */
+function relojEstiramiento(p, nombre) {
+  const tramos = tramosDePaso(p.name, p.seg_estimados), total = tramos.reduce((x, t) => x + t.seg, 0);
+  return tramos.length ? `<button type="button" class="boton reloj-paso paso-play" data-tramos="${esc(JSON.stringify(tramos))}" data-final="¡Listo! Márcalo como hecho." aria-label="${esc(`Contar ${reloj(total)} de ${nombre}`)}">▶ <span class="num">${reloj(total)}</span></button>` : '<span aria-hidden="true"></span>';
 }
 
 /** La pantalla paso a paso: arriba Minimizar, el título y Saltar; el avance (cada paso se puede tocar); el paso con su

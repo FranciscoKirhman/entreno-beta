@@ -687,3 +687,5 @@ body:not(.en-sesion) .medalla-record{top:calc(env(safe-area-inset-top,0px) + 16p
 .modo-plan span{display:inline-flex;align-items:center;gap:6px}
 .modo-plan .enlace{min-height:36px}
 .afinar-plan .fila-botones{margin-top:8px}
+/* Estiramiento: ▶ con su tiempo en vez de "Registrar" (app/hoy.js, relojEstiramiento) */
+.pasos-tabla .paso-play{min-height:44px;padding:8px 10px;font-weight:600;white-space:nowrap;color:var(--accent)}
