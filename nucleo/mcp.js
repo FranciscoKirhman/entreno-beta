@@ -4,6 +4,7 @@
 // autentica y le pasa a esto un acceso a los datos de esa persona.
 //
 // Nada de lo que propone la IA se guarda sin pasar por el validador.
+import { contextoIA } from './contexto-ia.js';
 import { aplicarCambios, ESQUEMA_CAMBIOS } from './cambios.js';
 import { validarPlan } from './validador.js';
 import { tieneEquipo, nivelAlcanza, cargaZonaBloqueada, articulacionesBloqueadas } from './catalogo.js';
@@ -40,7 +41,7 @@ export const HERRAMIENTAS = [
     description: 'Objetivo, nivel, días, lugar, lesiones activas y el plan de esta semana de la persona en Entreno. Úsalo primero.',
     inputSchema: { type: 'object', properties: {} },
     annotations: { readOnlyHint: true },
-    async run(_, { datos, hoy }) {
+    async run(_, { datos, hoy, indice }) {
       const { respuestas: r, derivados: d } = await datos.perfil();
       const plan = await datos.planActivo();
       const semana = plan?.dias.filter(x => x.fecha >= hoy).slice(0, Math.min(6, d.dias_meta)) || [];
@@ -50,6 +51,8 @@ export const HERRAMIENTAS = [
         lesiones_activas: (r.lesiones || []).filter(l => l.activa !== false).map(l => ({ zona: l.region, tipo: l.tipo, intensidad: l.intensidad, alta: l.alta || null })),
         lugar: ((r.lugares || []).find(l => l.principal) || (r.lugares || [])[0])?.nombre || null,
         plan: plan ? { inicio: plan.inicio, semana_descarga: plan.semana_descarga, proximos_dias: semana } : null,
+        // Cómo vienes: sensaciones, esfuerzo, check-ins y tendencias (solo donde el servidor lo ofrece).
+        ...(datos.contexto && indice ? { como_vienes: contextoIA({ historial: await datos.historial(8), ...(await datos.contexto()), indice, hoy, respuestas: r }) } : {}),
       });
     },
   },

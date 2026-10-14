@@ -4,7 +4,7 @@ import { conPropios, idsPropios } from '../nucleo/propios.js';
 import { unirSesiones } from '../nucleo/sincronizacion.js';
 import { firmaPerfil } from '../nucleo/firma-perfil.js';
 
-const ETIQUETAS = { objetivo_principal: 'Objetivo', tiempo_entrenando: 'Experiencia', dias_meta: 'Días por semana', dias_firmes: 'Días seguros', duracion_min: 'Minutos por sesión', dias_no_puedo: 'Días que no podís', musculos_prioridad: 'Prioridades', rotacion: 'Variedad' };
+const ETIQUETAS = { objetivo_principal: 'Objetivo', tiempo_entrenando: 'Experiencia', dias_meta: 'Días por semana', dias_firmes: 'Días seguros', duracion_min: 'Minutos por sesión', dias_no_puedo: 'Días que no puedes', musculos_prioridad: 'Prioridades', rotacion: 'Variedad' };
 export function propuestaChatHtml(p) {
   const estado = ({ aplicada: 'Cambios aceptados', descartada: 'Propuesta descartada', por_comprobar: 'Confirmación por comprobar', no_disponible: 'Propuesta no disponible' })[p.estado] || 'Por confirmar';
   const paquete = p.paquete || { plan: p.plan };

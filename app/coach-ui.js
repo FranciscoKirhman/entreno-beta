@@ -62,10 +62,14 @@ export function vistaCoach(ir, mensajeInicial) {
   // Desde el menú ⋯ de un ejercicio llega {ejercicio, nombre}: preguntas sobre ese ejercicio y el texto empezado.
   const sobre = mensajeInicial && typeof mensajeInicial === 'object' && mensajeInicial.ejercicio ? mensajeInicial : null;
   const revisar = Boolean(mensajeInicial?.revisar); // desde el aviso de Hoy
+  // Desde Tu plan: {plan: 'afinar' | 'explicar'} abre una conversación de planificación con la IA.
+  const desdePlan = mensajeInicial && typeof mensajeInicial === 'object' && mensajeInicial.plan;
+  if (desdePlan) E.chatModo = 'plan';
   const porRevisar = sesionesPorRevisar(E.plan, E.sesiones, { hoy: hoy(), marcas: E.marcasPlan || {}, despues: E.revisarDespues || {} });
   const sugerencias = sugerenciasCoach(sobre), otrasIdeas = SUGERENCIAS.filter(s => !sugerencias.includes(s));
   $('app').innerHTML = `<div id="vista-coach">
     <h1>Coach</h1>
+    ${E.chatModo === 'plan' ? `<div class="modo-plan"><span>${icono('calendario', 'icono icono-chico')} Afinando tu plan</span><button type="button" class="enlace" id="salir-modo-plan">Volver al chat</button></div>` : ''}
     ${revisionHtml(porRevisar)}
     ${sensacionHtml()}
     ${!E.plan ? '<p>Cuéntame qué quieres entrenar. Para preparar el primer plan, completa tu edad y acepta los términos en tu perfil.</p><button class="boton" id="perfil-chat">Completar mi perfil</button>' : ''}
@@ -165,6 +169,8 @@ export function vistaCoach(ir, mensajeInicial) {
   if (!revisar && (mensajeInicial?.respuesta || E.chat.length && !mensajeInicial && !porRevisar.length)) mostrarUltimaRespuesta(estadoVista, usuarioVista, !redaccionActiva);
   if (typeof mensajeInicial === 'string') enviar(mensajeInicial, ir);
   else if (sobre) { const m = $('mensaje'); if (!borrador.texto) { m.value = `Sobre ${sobre.nombre}: `; borrador.texto = E.borradorChat = m.value; guardar(); } m.focus(); m.setSelectionRange(m.value.length, m.value.length); }
+  if (desdePlan) enviar(desdePlan === 'explicar' ? 'Explícame mi plan día por día: qué trabaja cada día y por qué.' : 'Quiero afinar mi plan. Hazme las preguntas que necesites antes de cambiarlo.', ir);
+  $('salir-modo-plan')?.addEventListener('click', () => { E.chatModo = null; guardar(); vistaCoach(ir); });
 }
 
 /** El campo crece con el texto hasta unas cinco líneas, como iMessage; recién ahí se desplaza por dentro (T24). */
@@ -300,7 +306,10 @@ async function enviar(texto, ir, archivo = null) {
   const borrador = borradorChat();
   let completada = true, consulta;
   E.chat.push({ rol: 'persona', texto });
-  const r = Array.isArray(E.plan?.dias) && !E.plan.bloqueado ? responder(texto, ctxNucleo()) : { requiere_ia: true, texto: 'Podemos preparar tu primer plan cuando completes los datos básicos del perfil.' };
+  const modo = E.chatModo === 'plan' ? 'plan' : 'chat';
+  // Afinando el plan, todo va a la IA; sin cuenta o sin IA, se explica cómo activarla.
+  const r = modo === 'plan' ? { requiere_ia: true, texto: 'Afinar el plan conversando lo hace el coach con IA. Mientras tanto, en Tu plan está el porqué de cada día.' }
+    : Array.isArray(E.plan?.dias) && !E.plan.bloqueado ? responder(texto, ctxNucleo()) : { requiere_ia: true, texto: 'Podemos preparar tu primer plan cuando completes los datos básicos del perfil.' };
   if ((r.requiere_ia || archivo) && nube.conectado()) {
     const mensaje = { rol: 'coach', texto: 'Pensando…', pendiente: true };
     consulta = consultaActual = { estado, usuario, mensaje };
@@ -308,7 +317,7 @@ async function enviar(texto, ir, archivo = null) {
     guardar(); vistaCoach(ir);
     try {
       const historial = E.chat.filter(m => !m.pendiente).slice(-8).map(m => ({ rol: m.rol, texto: m.texto.slice(0, 4000) }));
-      const ia = await nube.chat(texto, historial.slice(0, -1), archivo ? { tipo: archivo.tipo, texto: archivo.texto } : null);
+      const ia = await nube.chat(texto, historial.slice(0, -1), archivo ? { tipo: archivo.tipo, texto: archivo.texto } : null, modo);
       if (E !== estado || usuario !== nube.usuarioId()) return false;
       E.chat = E.chat.filter(m => m !== mensaje);
       completada = !ia.requiere_ia && !ia.requiere_permiso && !ia.motivo;

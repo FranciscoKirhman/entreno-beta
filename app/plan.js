@@ -50,6 +50,11 @@ export function vistaPlan(ir, { armarPlan, nuevo = false } = {}) {
       </div>
       <button type="button" class="enlace" id="cambiar-objetivo">Cambiar objetivo</button>
     </section>
+    <section class="tarjeta afinar-plan">
+      <h3>Tu plan con el coach</h3>
+      <p class="pequeno suave">Pídele que te explique cada día o que lo ajuste a ti: ejercicios que te gustan o evitas, máquinas ocupadas, más días. Te muestra el cambio y tú decides.</p>
+      <div class="fila-botones"><button type="button" class="boton primario" id="afinar-plan">Afinar mi plan</button><button type="button" class="boton" id="explicar-plan">Explícame mi plan</button></div>
+    </section>
 
     ${dice(nuevo ? 'celebra' : 'explica', nuevo ? '¡Listo! Lo armé con lo que me contaste. Abajo ves, punto por punto, cómo quedó lo que pediste.' : 'Este es tu plan. Abajo ves, punto por punto, cómo quedó lo que pediste.')}
 
@@ -99,6 +104,9 @@ export function vistaPlan(ir, { armarPlan, nuevo = false } = {}) {
   </div>`;
 
   $('empezar-plan').onclick = () => ir('hoy');
+  // El coach en modo plan (docs/35-plan-ia.md): la conversación va a la IA con las instrucciones de planificación.
+  $('afinar-plan').onclick = () => ir('coach', { plan: 'afinar' });
+  $('explicar-plan').onclick = () => ir('coach', { plan: 'explicar' });
   enlazarCuentaNueva(ir);
   $('a-perfil').onclick = () => ir('perfil');
   $('cambiar-objetivo').onclick = ev => abrirHoja({

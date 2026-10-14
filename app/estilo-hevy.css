@@ -681,3 +681,9 @@ body:not(.en-sesion) .medalla-record{top:calc(env(safe-area-inset-top,0px) + 16p
 /* Sesión en pausa: la duración se ve detenida (app/hoy.js) */
 .cab-duracion.en-pausa strong{color:var(--ink-muted)!important}
 .cab-duracion.en-pausa small{color:var(--accent);font-weight:600}
+
+/* Coach afinando el plan (app/coach-ui.js) y su entrada en Tu plan (app/plan.js) */
+.modo-plan{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-4px 0 12px;padding:8px 12px;border-radius:12px;background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent);font-weight:600;font-size:14px}
+.modo-plan span{display:inline-flex;align-items:center;gap:6px}
+.modo-plan .enlace{min-height:36px}
+.afinar-plan .fila-botones{margin-top:8px}
