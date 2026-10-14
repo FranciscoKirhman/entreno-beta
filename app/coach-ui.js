@@ -69,7 +69,8 @@ export function vistaCoach(ir, mensajeInicial) {
   const sugerencias = sugerenciasCoach(sobre), otrasIdeas = SUGERENCIAS.filter(s => !sugerencias.includes(s));
   $('app').innerHTML = `<div id="vista-coach">
     <h1>Coach</h1>
-    ${E.chatModo === 'plan' ? `<div class="modo-plan"><span>${icono('calendario', 'icono icono-chico')} Afinando tu plan</span><button type="button" class="enlace" id="salir-modo-plan">Volver al chat</button></div>` : ''}
+    ${E.chatModo === 'plan' ? `<div class="modo-plan"><span>${icono('calendario', 'icono icono-chico')} Afinando tu plan</span><button type="button" class="enlace" id="salir-modo-plan">Volver al chat</button></div>`
+      : E.plan?.dias?.length && !E.plan.bloqueado ? `<div class="atajos-plan" role="group" aria-label="Tu plan con el coach"><button type="button" class="boton" id="coach-afinar">${icono('calendario', 'icono icono-chico')} Afinar mi plan</button><button type="button" class="boton" id="coach-explicar">${icono('libro', 'icono icono-chico')} Explícame mi plan</button></div>` : ''}
     ${revisionHtml(porRevisar)}
     ${sensacionHtml()}
     ${!E.plan ? '<p>Cuéntame qué quieres entrenar. Para preparar el primer plan, completa tu edad y acepta los términos en tu perfil.</p><button class="boton" id="perfil-chat">Completar mi perfil</button>' : ''}
@@ -171,6 +172,8 @@ export function vistaCoach(ir, mensajeInicial) {
   else if (sobre) { const m = $('mensaje'); if (!borrador.texto) { m.value = `Sobre ${sobre.nombre}: `; borrador.texto = E.borradorChat = m.value; guardar(); } m.focus(); m.setSelectionRange(m.value.length, m.value.length); }
   if (desdePlan) enviar(desdePlan === 'explicar' ? 'Explícame mi plan día por día: qué trabaja cada día y por qué.' : 'Quiero afinar mi plan. Hazme las preguntas que necesites antes de cambiarlo.', ir);
   $('salir-modo-plan')?.addEventListener('click', () => { E.chatModo = null; guardar(); vistaCoach(ir); });
+  $('coach-afinar')?.addEventListener('click', () => vistaCoach(ir, { plan: 'afinar' }));
+  $('coach-explicar')?.addEventListener('click', () => vistaCoach(ir, { plan: 'explicar' }));
 }
 
 /** El campo crece con el texto hasta unas cinco líneas, como iMessage; recién ahí se desplaza por dentro (T24). */

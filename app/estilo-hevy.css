@@ -697,3 +697,6 @@ body:not(.en-sesion) .medalla-record{top:calc(env(safe-area-inset-top,0px) + 16p
 #vista-hoy .cardio-plan .tipo-serie{display:grid;place-items:center;min-height:40px;border-radius:8px;background:var(--fill);font-weight:600}
 #vista-hoy .cardio-plan .antes{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;font-size:14px;color:var(--ink-muted)}
 #vista-hoy .cardio-plan .cab-series span:nth-child(2){text-align:center}
+/* Coach: atajos para afinar o explicar el plan (app/coach-ui.js) */
+.atajos-plan{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:-4px 0 14px}
+.atajos-plan .boton{min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-weight:600;color:var(--accent)}
