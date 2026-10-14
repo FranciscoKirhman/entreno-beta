@@ -11,7 +11,7 @@ const medio = x => Math.round(x * 2) / 2;
 
 /**
  * Una fila por sesión en que se hizo el ejercicio, de la más antigua a la más nueva.
- * @returns [{fecha, peso, e1rm, volumen, reps, duracion, distancia, series}] peso: la carga más alta (en asistidos, la menor ayuda)
+ * @returns [{fecha, peso, e1rm, volumen, serie, reps, duracion, distancia, series}] peso: la carga más alta (en asistidos, la menor ayuda)
  */
 export function porSesion(series, id, { asistido = false } = {}) {
   const fechas = new Map();
@@ -25,6 +25,8 @@ export function porSesion(series, id, { asistido = false } = {}) {
       peso: conKg.length ? (asistido ? Math.min(...conKg.map(s => n(s.carga_kg))) : Math.max(...conKg.map(s => n(s.carga_kg)))) : null,
       e1rm: !asistido && conPeso.length ? medio(Math.max(...conPeso.map(e1rm))) : null,
       volumen: !asistido && conPeso.length ? Math.round(conPeso.reduce((a, s) => a + n(s.carga_kg) * n(s.reps), 0)) : null,
+      // Mejor serie (como "Best Set Volume" de Hevy): la serie con más peso por repeticiones.
+      serie: !asistido && conPeso.length ? Math.round(Math.max(...conPeso.map(s => n(s.carga_kg) * n(s.reps)))) : null,
       reps: max(s => s.reps),
       duracion: max(s => s.duracion_seg),
       distancia: max(s => s.distancia_m),
@@ -35,13 +37,13 @@ export function porSesion(series, id, { asistido = false } = {}) {
 /** Qué medidas tienen datos, en el orden en que se muestran. */
 export function medidasCon(filas, { asistido = false } = {}) {
   const hay = k => filas.filter(f => f[k] != null).length >= 1;
-  return (asistido ? ['peso', 'reps'] : ['peso', 'e1rm', 'volumen', 'reps', 'duracion', 'distancia']).filter(hay);
+  return (asistido ? ['peso', 'reps'] : ['peso', 'e1rm', 'serie', 'volumen', 'reps', 'duracion', 'distancia']).filter(hay);
 }
 
-export const PERIODOS = [['3m', '3 meses', 91], ['1a', '1 año', 365], ['todo', 'Todo', null]];
-/** Primer día del período: 3 meses, 1 año o desde la primera sesión. */
+export const PERIODOS = [['1m', '1 mes', 30], ['3m', '3 meses', 91], ['6m', '6 meses', 182], ['1a', '1 año', 365], ['todo', 'Todo', null]];
+/** Primer día del período: 1, 3 o 6 meses, 1 año o desde la primera sesión (sin período válido, 3 meses). */
 export function desdePeriodo(periodo, hoy, filas) {
-  const p = PERIODOS.find(x => x[0] === periodo) || PERIODOS[0];
+  const p = PERIODOS.find(x => x[0] === periodo) || PERIODOS[1];
   const primera = filas[0]?.fecha || hoy;
   return p[2] ? sumarDias(hoy, -p[2] + 1) : (primera < hoy ? primera : sumarDias(hoy, -6));
 }

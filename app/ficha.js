@@ -281,7 +281,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
       opciones: [{ valor: 'si', icono: icono('cerrar'), nombre: 'Sí, borrarlo', peligro: true }, { valor: 'no', icono: icono('flecha'), nombre: 'No, dejarlo' }],
       alElegir: v => { if (v !== 'si') return; E.ejerciciosPropios = (E.ejerciciosPropios || []).filter(e => e.id !== id); E.mensaje = `Borraste "${ej.nombre}".`; datoCambiado('ejercicios_propios'); ir(desde === 'ejercicio' ? 'hoy' : desde); } });
   });
-  enlazarProgresoEjercicio(id, { asistido: esAsistido(ej) });
+  enlazarProgresoEjercicio(id, { asistido: esAsistido(ej), ir });
   // Pestañas, como Hevy: Resumen, Historial y Cómo se hace. Cambiar no vuelve a dibujar la ficha.
   document.querySelectorAll('[data-pestana-ficha]').forEach(b => b.onclick = () => {
     pestanaFicha = b.dataset.pestanaFicha;

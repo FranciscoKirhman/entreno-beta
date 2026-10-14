@@ -37,14 +37,52 @@ const valorTexto = (m, v) => (m === 'duracion' ? (v >= 60 ? `${String(Math.round
 export function graficoSemanasHtml() {
   if (!E.sesiones.length) return '';
   const xs = porSemana(), max = Math.max(1, ...xs.map(x => x[metrica]));
-  const actual = xs.at(-1)[metrica];
-  return `<section class="tarjeta grafico-semanas" aria-label="Tus últimas ${SEMANAS} semanas">
-    <p class="grafico-semanas-total"><strong class="num">${esc(valorTexto(metrica, actual))}</strong> <span class="suave">esta semana</span></p>
-    <div class="barras-semanas" role="img" aria-label="${esc(xs.map(x => `semana del ${corta(x.desde)}: ${valorTexto(metrica, x[metrica])}`).join('; '))}">
-      ${xs.map((x, i) => `<div class="barra-semana${i === xs.length - 1 ? ' actual' : ''}"><i style="height:${Math.round((x[metrica] / max) * 100)}%"></i><span>${i % 2 === 1 || i === xs.length - 1 ? esc(corta(x.desde)) : ''}</span></div>`).join('')}
+  // Más que Hevy: el promedio de las semanas anteriores (sin la actual, que está en curso) como línea punteada, y la
+  // semana elegida comparada con ese promedio. Tocar o deslizar sobre las barras elige la semana.
+  const pasadas = xs.slice(0, -1).filter(x => x[metrica] > 0);
+  const prom = pasadas.length ? pasadas.reduce((a, x) => a + x[metrica], 0) / pasadas.length : null;
+  const datos = xs.map((x, i) => {
+    const v = x[metrica], pct = prom ? Math.round(((v - prom) / prom) * 100) : null;
+    return { t: valorTexto(metrica, v), f: i === xs.length - 1 ? 'esta semana' : `semana del ${corta(x.desde)}`,
+      // La semana actual está en curso: se dice cuánto llevas, sin rojo.
+      c: pct == null ? '' : i === xs.length - 1 ? `<span class="suave">Llevas ${Math.round((v / prom) * 100)} % de tu promedio</span>` : !v ? '' : `<span class="gh-cambio ${pct >= 0 ? 'sube' : 'baja'}">${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct)} %</span> <span class="suave">vs. tu promedio</span>` };
+  });
+  const ult = datos.at(-1);
+  return `<section class="tarjeta grafico-semanas" aria-label="Tus últimas ${SEMANAS} semanas" data-semanas='${esc(JSON.stringify(datos))}'>
+    <p class="grafico-semanas-total"><strong class="num">${esc(ult.t)}</strong> <span class="suave gs-fecha">${esc(ult.f)}</span></p>
+    <p class="gh-cambios pequeno gs-cambio">${ult.c}</p>
+    <div class="barras-semanas" role="img" aria-label="${esc(xs.map(x => `semana del ${corta(x.desde)}: ${valorTexto(metrica, x[metrica])}`).join('; '))}${prom ? esc(`. Promedio: ${valorTexto(metrica, prom)}`) : ''}">
+      ${xs.map((x, i) => `<div class="barra-semana${i === xs.length - 1 ? ' actual elegida' : ''}" data-i="${i}"><i style="height:${Math.round((x[metrica] / max) * 100)}%"></i><span>${i % 2 === 1 || i === xs.length - 1 ? esc(corta(x.desde)) : ''}</span></div>`).join('')}
+      ${prom ? `<b class="promedio-semanas" style="--prom:${(prom / max).toFixed(3)}" aria-hidden="true"></b>` : ''}
     </div>
+    ${prom ? `<p class="gh-pie pequeno suave"><span class="gh-pie-linea"></span>Promedio: ${esc(valorTexto(metrica, prom))} por semana</p>` : ''}
     <div class="segmentos grafico-semanas-metricas" role="group" aria-label="Qué mostrar">${Object.entries(METRICAS).map(([k, t]) => `<button type="button" data-metrica-semana="${k}" aria-pressed="${k === metrica}">${t}</button>`).join('')}</div>
   </section>`;
+}
+
+function elegirSemana(caja, i) {
+  const d = JSON.parse(caja.dataset.semanas || '[]')[i];
+  if (!d) return;
+  caja.querySelector('.grafico-semanas-total').innerHTML = `<strong class="num">${esc(d.t)}</strong> <span class="suave gs-fecha">${esc(d.f)}</span>`;
+  caja.querySelector('.gs-cambio').innerHTML = d.c;
+  caja.querySelectorAll('.barra-semana').forEach(b => b.classList.toggle('elegida', Number(b.dataset.i) === i));
+}
+function semanaEn(caja, clientX) {
+  const barras = [...caja.querySelectorAll('.barra-semana')];
+  let mejor = 0;
+  barras.forEach((b, i) => { const r = b.getBoundingClientRect(), c = Math.abs(r.left + r.width / 2 - clientX); if (c < Math.abs(barras[mejor].getBoundingClientRect().left + barras[mejor].getBoundingClientRect().width / 2 - clientX)) mejor = i; });
+  return mejor;
+}
+let semanaActiva = null;
+if (typeof document !== 'undefined') {
+  document.addEventListener('pointerdown', ev => {
+    const caja = ev.target.closest?.('.grafico-semanas');
+    if (!caja || !ev.target.closest('.barras-semanas')) return;
+    semanaActiva = caja; elegirSemana(caja, semanaEn(caja, ev.clientX));
+  });
+  document.addEventListener('pointermove', ev => { if (semanaActiva && ev.buttons) elegirSemana(semanaActiva, semanaEn(semanaActiva, ev.clientX)); });
+  document.addEventListener('pointerup', () => { semanaActiva = null; });
+  document.addEventListener('pointercancel', () => { semanaActiva = null; });
 }
 
 // Cada botón del panel abre su propia pantalla, como el "Dashboard" de Hevy (Progreso → Estadísticas, etc.).

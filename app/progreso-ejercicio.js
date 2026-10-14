@@ -8,7 +8,7 @@ import { recordsPorRepeticiones } from '../nucleo/records.js';
 import { lineaHevy } from './grafico.js';
 import { relojTexto, modoCardio, textoCardio } from '../nucleo/unidades.js';
 
-const NOMBRE = { peso: 'Carga más alta', e1rm: 'Máximo estimado', volumen: 'Volumen', reps: 'Repeticiones', duracion: 'Tiempo', distancia: 'Distancia' };
+const NOMBRE = { peso: 'Carga más alta', e1rm: 'Máximo estimado', serie: 'Mejor serie', volumen: 'Volumen de la sesión', reps: 'Repeticiones', duracion: 'Tiempo', distancia: 'Distancia' };
 const elegido = new Map(); // por ejercicio: {medida, periodo}, mientras la app está abierta
 let historialCompleto = false;
 
@@ -49,6 +49,7 @@ function textoPunto(f, medida, id) {
     case 'peso': { const s = f.series.find(x => Number(x.carga_kg) === f.peso); return `${peso(f.peso)}${s?.reps ? ` × ${s.reps}` : ''}`; }
     case 'e1rm': return `${peso(f.e1rm)} estimado`;
     case 'volumen': return volumenTexto(f.volumen);
+    case 'serie': { const s = f.series.find(x => Math.round(Number(x.carga_kg) * Number(x.reps)) === f.serie); return s ? `${peso(s.carga_kg)} × ${s.reps}` : volumenTexto(f.serie); }
     case 'reps': return `${f.reps} repeticiones`;
     case 'distancia': return `${f.distancia} m`;
     default: return relojTexto(f.duracion);
@@ -62,7 +63,7 @@ function escala(valores, medida) {
   if (lo === hi) { lo -= Math.max(1, lo * 0.1); hi += Math.max(1, hi * 0.1); }
   const margen = (hi - lo) * 0.12;
   lo = Math.max(0, lo - margen); hi += margen;
-  const etiqueta = v => (medida === 'reps' ? `${Math.round(v)}` : medida === 'duracion' ? `${Math.round(v)} s` : medida === 'distancia' ? `${Math.round(v)} m` : medida === 'volumen' ? Math.round(v).toLocaleString('es-CL') : `${coma(Math.round(v * 10) / 10)} ${u}`);
+  const etiqueta = v => (medida === 'reps' ? `${Math.round(v)}` : medida === 'duracion' ? relojTexto(Math.round(v)) : medida === 'distancia' ? `${Math.round(v)} m` : medida === 'volumen' ? Math.round(v).toLocaleString('es-CL') : `${coma(Math.round(v * 10) / 10)} ${u}`);
   // Líneas en números redondos (1, 2, 2,5 o 5 por una potencia de 10), unas tres en la altura del gráfico.
   const bruto = (hi - lo) / 3, base = 10 ** Math.floor(Math.log10(bruto));
   let paso = [1, 2, 2.5, 5, 10].map(k => k * base).find(k => k >= bruto);
@@ -72,14 +73,24 @@ function escala(valores, medida) {
   return { min: lo, max: hi, marcas };
 }
 
-function graficoHtml(id, filas, medida, periodo) {
+function graficoHtml(id, filas, medida, periodo, asistidoActual = false) {
   const hasta = hoy(), desde = desdePeriodo(periodo, hasta, filas);
   const enRango = filas.filter(f => f.fecha >= desde && f[medida] != null);
   if (!enRango.length) return `<p class="pequeno suave">Sin sesiones en este período. Prueba con "Todo".</p>`;
-  const convertir = v => (['peso', 'e1rm', 'volumen'].includes(medida) ? enUnidad(v) : v);
-  const puntos = enRango.map(f => ({ fecha: f.fecha, valor: convertir(f[medida]), texto: textoPunto(f, medida, id) }));
+  const convertir = v => (['peso', 'e1rm', 'volumen', 'serie'].includes(medida) ? enUnidad(v) : v);
+  // Las series de ese día y la sesión, para el detalle bajo el gráfico al tocar un punto.
+  const detalle = f => (modoCardio({ ejercicio_id: id }) ? f.series.map(s => textoCardio({ ...s, ejercicio_id: id })).filter(Boolean).join(', ')
+    : f.series.some(s => Number(s.carga_kg) > 0) ? seriesTexto(f.series) : f.series.map(s => (s.duracion_seg ? relojTexto(s.duracion_seg) : `${s.reps ?? '?'}`)).join(', '));
+  const sesionDe = fecha => E.sesiones.find(s => s.fecha === fecha && (s.series || []).some(x => x.ejercicio_id === id))?.id || null;
+  const puntos = enRango.map(f => ({ fecha: f.fecha, valor: convertir(f[medida]), texto: textoPunto(f, medida, id), detalle: `${f.series.length} ${f.series.length === 1 ? 'serie' : 'series'}: ${detalle(f)}`, sesion: sesionDe(f.fecha) }));
   const { min, max, marcas } = escala(puntos.map(p => p.valor), medida);
-  return lineaHevy({ puntos, desde, hasta, min, max, marcas, titulo: `${NOMBRE[medida]}, ${puntos.length} ${puntos.length === 1 ? 'sesión' : 'sesiones'}`, izquierda: medida === 'volumen' ? 50 : 52 });
+  // Cambios y tendencia en la unidad de la medida (los valores ya vienen en kg o lb).
+  const u = unidadPeso(), pisos = modoCardio({ ejercicio_id: id }) === 'pisos';
+  const abs = (d, txt) => `${d > 0 ? '+' : d < 0 ? '−' : ''}${txt(Math.abs(d))}`;
+  const cambio = d => abs(d, v => (['peso', 'e1rm'].includes(medida) ? `${num(v)} ${u}` : ['volumen', 'serie'].includes(medida) ? `${Math.round(v).toLocaleString('es-CL')} ${u}`
+    : medida === 'reps' ? `${num(v)} ${pisos ? 'pisos' : 'reps'}` : medida === 'duracion' ? relojTexto(Math.round(v)) : `${Math.round(v)} m`));
+  return lineaHevy({ puntos, desde, hasta, min, max, marcas, titulo: `${NOMBRE[medida]}, ${puntos.length} ${puntos.length === 1 ? 'sesión' : 'sesiones'}`,
+    izquierda: ['volumen', 'serie'].includes(medida) ? 54 : 52, cambio, ritmo: cambio, mejorBaja: asistidoActual && medida === 'peso' });
 }
 
 export function progresoEjercicioHtml(id, { asistido = false, conHistorial = false } = {}) {
@@ -100,7 +111,7 @@ export function progresoEjercicioHtml(id, { asistido = false, conHistorial = fal
   return `<section class="tarjeta" id="progreso-ejercicio">
     <div class="gh-titulo"><h2>Tu progreso</h2>
       <label class="gh-periodo"><span class="sr-only">Período</span><select data-periodo-sel>${PERIODOS.map(([v, t]) => `<option value="${v}"${v === sel.periodo ? ' selected' : ''}>${t}</option>`).join('')}</select></label></div>
-    <div id="grafico-ejercicio">${graficoHtml(id, filas, sel.medida, sel.periodo)}</div>
+    <div id="grafico-ejercicio">${graficoHtml(id, filas, sel.medida, sel.periodo, asistido)}</div>
     ${medidas.length > 1 ? `<div class="chips-medida-hevy" role="group" aria-label="Qué medir">${medidas.map(m => `<button type="button" class="chip-opcion" data-medida="${m}" aria-pressed="${m === sel.medida}">${esc(nombre(m))}</button>`).join('')}</div>` : `<p class="sobretitulo">${esc(nombre(medidas[0]))}</p>`}
  <p class="pequeno suave gh-ritmo">${esc((cardio === 'pisos' ? textoRitmo(r, { asistido })?.replace(/repeticiones|repetición/g, 'pisos') : textoRitmo(r, { asistido })) || 'Con 3 sesiones en al menos 2 semanas vas a ver aquí tu ritmo de progreso.')}</p>
     ${porReps.length ? `<details class="extra"><summary>Récords por repeticiones</summary>
@@ -112,14 +123,16 @@ export function progresoEjercicioHtml(id, { asistido = false, conHistorial = fal
   </section>`;
 }
 
-export function enlazarProgresoEjercicio(id, { asistido = false } = {}) {
+export function enlazarProgresoEjercicio(id, { asistido = false, ir = null } = {}) {
   const caja = $('progreso-ejercicio');
   if (!caja) return;
+  // "Ver la sesión" del detalle de un punto abre su resumen.
+  caja.addEventListener('click', ev => { const b = ev.target.closest('[data-ver-sesion]'); if (b && ir) ir('resumen', { id: b.dataset.verSesion }); });
   const repintar = () => {
     const y = scrollY, abiertos = [...caja.querySelectorAll('details')].map(d => d.open);
     caja.outerHTML = progresoEjercicioHtml(id, { asistido });
     $('progreso-ejercicio').querySelectorAll('details').forEach((d, i) => { if (abiertos[i]) d.open = true; });
-    enlazarProgresoEjercicio(id, { asistido });
+    enlazarProgresoEjercicio(id, { asistido, ir });
     scrollTo(0, y);
   };
   const actual = () => ({ medida: caja.querySelector('[data-medida][aria-pressed="true"]')?.dataset.medida, periodo: caja.querySelector('[data-periodo-sel]')?.value });

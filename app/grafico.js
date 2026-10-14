@@ -2,6 +2,7 @@
 // dos gráficos, nunca con dos ejes). Línea de 2 px, puntos de 8 px con un anillo del color de la tarjeta, grilla
 // suave y un aviso al tocar o pasar sobre cada punto. El color es --serie-1 (validado en claro y oscuro).
 import { esc } from './comun.js';
+import { analisisSerie } from '../nucleo/analisis-grafico.js';
 
 const ANCHO = 320, ALTO = 112, DER = 10, ARRIBA = 10, ABAJO = 20;
 const dias = (a, b) => Math.round((Date.parse(b + 'T12:00:00Z') - Date.parse(a + 'T12:00:00Z')) / 864e5);
@@ -58,52 +59,81 @@ document.addEventListener('click', ev => {
 document.addEventListener('pointerover', ev => { const p = ev.target.closest?.('[data-dato]'); if (p && ev.pointerType === 'mouse') { ocultarTodos(); mostrar(p); } });
 document.addEventListener('focusin', ev => { const p = ev.target.closest?.('[data-dato]'); if (p) { ocultarTodos(); mostrar(p); } });
 
-// ── Gráfico como el de Hevy (ficha del ejercicio, medidas) ─────────────────────────────────────────────────────────
-// Arriba, el valor grande y su fecha; al tocar o deslizar el dedo sobre el gráfico, una línea vertical marca el punto
-// más cercano y el valor de arriba cambia. Deslizar en vertical sigue desplazando la página. Con teclado, flechas.
-const GH_ANCHO = 340, GH_ALTO = 170, GH_DER = 12, GH_ARRIBA = 12, GH_ABAJO = 24;
+// ── Gráfico de progreso (ficha del ejercicio, medidas), como Hevy y más ───────────────────────────────────────────
+// Arriba, el valor grande, su fecha y cuánto cambió contra la sesión anterior y el inicio del período. Al tocar o
+// deslizar el dedo, una línea vertical marca el punto más cercano y debajo aparecen las series de ese día con un
+// enlace a la sesión. El récord del período lleva su marca y una recta punteada muestra la tendencia con su ritmo por
+// semana (nucleo/analisis-grafico.js). Deslizar en vertical sigue desplazando la página. Con teclado, flechas.
+
+const GH_ANCHO = 340, GH_ALTO = 210, GH_DER = 14, GH_ARRIBA = 22, GH_ABAJO = 26;
 const larga = iso => new Date(iso + 'T12:00:00Z').toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).replace(/\./g, '');
 
 /**
- * @param puntos [{fecha, valor, texto}] texto: el valor como se lee arriba ("45 kg × 8")
+ * @param puntos [{fecha, valor, texto, detalle?, sesion?}] texto: el valor como se lee arriba ("45 kg × 8");
+ *   detalle: las series de ese día; sesion: id para abrirla
  * @param marcas [{valor, texto}] grilla con su etiqueta a la izquierda
+ * @param cambio (diferencia) → texto con unidad ("+2,5 kg"); sin él, no se muestran cambios
+ * @param mejorBaja true si bajar es mejorar (la ayuda de los asistidos); neutro: sin verde ni rojo (medidas del cuerpo)
  */
-export function lineaHevy({ puntos, desde, hasta, min, max, marcas = [], titulo, izquierda = 48 }) {
+export function lineaHevy({ puntos, desde, hasta, min, max, marcas = [], titulo, izquierda = 48, cambio = null, mejorBaja = false, ritmo = null, neutro = false }) {
   const IZQ = izquierda, total = Math.max(1, dias(desde, hasta));
   const x = f => IZQ + (dias(desde, f) / total) * (GH_ANCHO - IZQ - GH_DER);
   const y = v => GH_ARRIBA + (1 - (Math.min(max, Math.max(min, v)) - min) / (max - min)) * (GH_ALTO - GH_ARRIBA - GH_ABAJO);
   const ps = [...puntos].filter(p => p.valor != null && p.fecha >= desde && p.fecha <= hasta).sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
   if (!ps.length) return '';
-  const ult = ps.at(-1);
+  const a = analisisSerie(ps, { mejorBaja });
+  const piso = GH_ALTO - GH_ABAJO;
   const grilla = marcas.map(m => `<line x1="${IZQ}" x2="${GH_ANCHO - GH_DER}" y1="${y(m.valor).toFixed(1)}" y2="${y(m.valor).toFixed(1)}" class="g-grilla"/>
-    <text x="${IZQ - 6}" y="${(y(m.valor) + 3.5).toFixed(1)}" class="g-eje" text-anchor="end">${esc(m.texto)}</text>`).join('');
-  // Cuatro o cinco fechas parejas en el eje de abajo.
+    <text x="${IZQ - 6}" y="${(y(m.valor) + 4).toFixed(1)}" class="g-eje" text-anchor="end">${esc(m.texto)}</text>`).join('');
   const n = Math.min(5, Math.max(2, Math.round(total / 30) + 1));
   const ejeX = Array.from({ length: n }, (_, i) => {
     const f = new Date(Date.parse(desde + 'T12:00:00Z') + Math.round((total * i) / (n - 1)) * 864e5).toISOString().slice(0, 10);
     return `<text x="${x(f).toFixed(1)}" y="${GH_ALTO - 6}" class="g-eje" text-anchor="${i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}">${esc(corta(f))}</text>`;
   }).join('');
-  const base = `<line x1="${IZQ}" x2="${GH_ANCHO - GH_DER}" y1="${GH_ALTO - GH_ABAJO}" y2="${GH_ALTO - GH_ABAJO}" class="g-base"/>`;
-  const linea = ps.length > 1 ? `<polyline class="gh-linea" points="${ps.map(p => `${x(p.fecha).toFixed(1)},${y(p.valor).toFixed(1)}`).join(' ')}"/>` : '';
-  const area = ps.length > 1 ? `<polygon class="gh-area" points="${x(ps[0].fecha).toFixed(1)},${GH_ALTO - GH_ABAJO} ${ps.map(p => `${x(p.fecha).toFixed(1)},${y(p.valor).toFixed(1)}`).join(' ')} ${x(ult.fecha).toFixed(1)},${GH_ALTO - GH_ABAJO}"/>` : '';
-  const circulos = ps.map((p, i) => `<circle class="gh-punto${i === ps.length - 1 ? ' elegido' : ''}" data-i="${i}" cx="${x(p.fecha).toFixed(1)}" cy="${y(p.valor).toFixed(1)}" r="3.6"/>`).join('');
-  const datos = ps.map(p => ({ x: +x(p.fecha).toFixed(1), y: +y(p.valor).toFixed(1), t: p.texto, f: larga(p.fecha) }));
+  const base = `<line x1="${IZQ}" x2="${GH_ANCHO - GH_DER}" y1="${piso}" y2="${piso}" class="g-base"/>`;
+  const coords = ps.map(p => `${x(p.fecha).toFixed(1)},${y(p.valor).toFixed(1)}`).join(' ');
+  const linea = ps.length > 1 ? `<polyline class="gh-linea" points="${coords}"/>` : '';
+  const area = ps.length > 1 ? `<polygon class="gh-area" points="${x(ps[0].fecha).toFixed(1)},${piso} ${coords} ${x(ps.at(-1).fecha).toFixed(1)},${piso}"/>` : '';
+  const t = a.tendencia;
+  const tendencia = t ? `<line class="gh-tendencia" x1="${x(ps[0].fecha).toFixed(1)}" y1="${y(t.desde).toFixed(1)}" x2="${x(ps.at(-1).fecha).toFixed(1)}" y2="${y(t.hasta).toFixed(1)}"/>` : '';
+  // El récord: un anillo y la palabra arriba del punto (si no tapa el borde).
+  const r = ps[a.mejor], rx = x(r.fecha), ry = y(r.valor);
+  const record = ps.length > 1 && !neutro ? `<circle class="gh-record" cx="${rx.toFixed(1)}" cy="${ry.toFixed(1)}" r="7"/><text class="gh-record-texto" x="${Math.min(GH_ANCHO - GH_DER - 18, Math.max(IZQ + 18, rx)).toFixed(1)}" y="${Math.max(10, ry - 11).toFixed(1)}" text-anchor="middle">Récord</text>` : '';
+  const circulos = ps.map((p, i) => `<circle class="gh-punto${i === ps.length - 1 ? ' elegido' : ''}" data-i="${i}" cx="${x(p.fecha).toFixed(1)}" cy="${y(p.valor).toFixed(1)}" r="4"/>`).join('');
+  const clase = d => (!d || neutro ? 'igual' : (d > 0) !== mejorBaja ? 'sube' : 'baja');
+  const flecha = d => (!d ? '=' : d > 0 ? '▲' : '▼');
+  const cambioTexto = (d, que) => (d == null || !cambio ? '' : `<span class="gh-par"><span class="gh-cambio ${clase(d)}">${flecha(d)} ${esc(cambio(d))}</span> <span class="suave">${que}</span></span>`);
+  const datos = ps.map((p, i) => ({
+    x: +x(p.fecha).toFixed(1), t: p.texto, f: larga(p.fecha), s: p.sesion || null, d: p.detalle || '',
+    c: [cambioTexto(a.cambios[i].anterior, 'vs. anterior'), cambioTexto(a.cambios[i].inicio, 'en el período')].filter(Boolean).join(' · '),
+    r: i === a.mejor && ps.length > 1 && !neutro, // en las medidas del cuerpo no hay récord
+  }));
+  const ult = datos.at(-1);
+  const pie = t && ritmo ? `<p class="gh-pie pequeno suave"><span class="gh-pie-linea"></span>Tendencia: ${esc(ritmo(t.porSemana))} por semana</p>` : '';
   return `<div class="grafico-hevy" data-gh='${esc(JSON.stringify(datos))}'>
-    <p class="gh-cab" aria-live="polite"><strong class="gh-valor num">${esc(ult.texto)}</strong> <span class="gh-fecha">${esc(larga(ult.fecha))}</span></p>
-    <svg viewBox="0 0 ${GH_ANCHO} ${GH_ALTO}" role="img" tabindex="0" aria-label="${esc(`${titulo}. Usa las flechas para recorrer los puntos.`)}">${grilla}${base}${ejeX}${area}${linea}
-      <line class="gh-cursor" x1="${datos.at(-1).x}" x2="${datos.at(-1).x}" y1="${GH_ARRIBA - 6}" y2="${GH_ALTO - GH_ABAJO}"/>${circulos}</svg>
+    <div class="gh-cab" aria-live="polite"><p><strong class="gh-valor num">${esc(ult.t)}</strong> <span class="gh-fecha">${esc(ult.f)}</span>${ult.r ? ' <span class="gh-chip-record">Récord</span>' : ''}</p>
+      <p class="gh-cambios pequeno">${ult.c}</p></div>
+    <svg viewBox="0 0 ${GH_ANCHO} ${GH_ALTO}" role="img" tabindex="0" aria-label="${esc(`${titulo}. Usa las flechas para recorrer los puntos.`)}">${grilla}${base}${ejeX}${area}${tendencia}${linea}
+      <line class="gh-cursor" x1="${ult.x}" x2="${ult.x}" y1="${GH_ARRIBA - 8}" y2="${piso}"/>${record}${circulos}</svg>
+    ${pie}
+    <div class="gh-detalle"${ult.d ? '' : ' hidden'}><span class="gh-detalle-texto num">${esc(ult.d)}</span>${ult.s ? `<button type="button" class="enlace gh-ver" data-ver-sesion="${esc(ult.s)}">Ver la sesión ›</button>` : ''}</div>
   </div>`;
 }
 
 function elegirPunto(caja, i) {
   const datos = JSON.parse(caja.dataset.gh || '[]'), d = datos[i];
-  if (!d) return;
+  if (!d || Number(caja.dataset.ghI) === i) return;
   caja.dataset.ghI = i;
-  caja.querySelector('.gh-valor').textContent = d.t;
-  caja.querySelector('.gh-fecha').textContent = d.f;
+  caja.querySelector('.gh-cab p').innerHTML = `<strong class="gh-valor num">${esc(d.t)}</strong> <span class="gh-fecha">${esc(d.f)}</span>${d.r ? ' <span class="gh-chip-record">Récord</span>' : ''}`;
+  caja.querySelector('.gh-cambios').innerHTML = d.c;
   const cursor = caja.querySelector('.gh-cursor');
   cursor.setAttribute('x1', d.x); cursor.setAttribute('x2', d.x);
   caja.querySelectorAll('.gh-punto').forEach(c => c.classList.toggle('elegido', Number(c.dataset.i) === i));
+  const det = caja.querySelector('.gh-detalle');
+  if (det) {
+    det.hidden = !d.d;
+    det.innerHTML = `<span class="gh-detalle-texto num">${esc(d.d)}</span>${d.s ? `<button type="button" class="enlace gh-ver" data-ver-sesion="${esc(d.s)}">Ver la sesión ›</button>` : ''}`;
+  }
 }
 function puntoCercano(caja, clientX) {
   const svg = caja.querySelector('svg'), r = svg.getBoundingClientRect();

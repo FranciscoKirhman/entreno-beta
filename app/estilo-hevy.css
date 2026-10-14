@@ -642,3 +642,39 @@ body:not(.en-sesion) .medalla-record{top:calc(env(safe-area-inset-top,0px) + 16p
 .chips-medida-hevy .chip-opcion[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
 .gh-ritmo{margin-top:4px}
 .grafico-hevy .g-eje{font-size:10.5px;fill:var(--ink-muted)}
+
+/* Gráfico de progreso, segunda versión: más alto y legible, récord, tendencia, cambios y detalle del punto */
+.grafico-hevy .gh-cab{display:block;margin:0 0 4px}
+.grafico-hevy .gh-cab p{margin:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.grafico-hevy .gh-valor{font-size:28px;letter-spacing:-.01em}
+.grafico-hevy .gh-cambios{min-height:20px;margin-top:2px!important;color:var(--ink-muted)}
+.grafico-hevy .gh-cambio{font-weight:600;font-variant-numeric:tabular-nums}
+.grafico-hevy .gh-cambio.sube{color:var(--good)}
+.grafico-hevy .gh-cambio.baja{color:var(--critical)}
+.grafico-hevy .gh-chip-record{align-self:center;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)}
+.grafico-hevy .g-eje{font-size:12px}
+.grafico-hevy .gh-linea{stroke-width:2.8}
+.grafico-hevy .gh-punto{r:4}
+.grafico-hevy .gh-punto.elegido{r:7}
+.grafico-hevy .gh-tendencia{stroke:var(--ink-muted);stroke-width:1.4;stroke-dasharray:4 4;opacity:.7}
+.grafico-hevy .gh-record{fill:none;stroke:var(--accent);stroke-width:2;opacity:.55}
+.grafico-hevy .gh-record-texto{font-size:11px;font-weight:700;fill:var(--accent)}
+.grafico-hevy .gh-pie{display:flex;align-items:center;gap:8px;margin:6px 0 0}
+.grafico-hevy .gh-pie-linea{width:18px;border-top:1.6px dashed var(--ink-muted)}
+.grafico-hevy .gh-detalle{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--fill);font-size:14px}
+.grafico-hevy .gh-detalle[hidden]{display:none}
+.grafico-hevy .gh-detalle-texto{min-width:0;overflow-wrap:anywhere}
+.grafico-hevy .gh-ver{flex:none;min-height:36px;font-weight:600}
+/* Gráfico semanal tocable, con la línea del promedio (app/progreso-hevy.js) */
+.grafico-semanas .grafico-semanas-total{margin:0}
+.grafico-semanas .gs-cambio{margin:2px 0 10px;min-height:20px;color:var(--ink-muted)}
+.grafico-semanas .gh-cambio{font-weight:600}
+.grafico-semanas .gh-cambio.sube{color:var(--good)}
+.grafico-semanas .gh-cambio.baja{color:var(--critical)}
+.barras-semanas{touch-action:pan-y;cursor:pointer;-webkit-user-select:none;user-select:none}
+.barra-semana i{opacity:.55;transition:opacity .15s}
+.barra-semana.elegida i{opacity:1}
+.promedio-semanas{position:absolute;left:0;right:0;bottom:calc(20px + (100% - 20px) * var(--prom));border-top:1.5px dashed var(--ink-muted);pointer-events:none}
+.grafico-semanas .gh-pie{display:flex;align-items:center;gap:8px;margin:22px 0 0}
+.grafico-semanas .gh-pie-linea{width:18px;border-top:1.6px dashed var(--ink-muted)}
+.gh-par{white-space:nowrap}
