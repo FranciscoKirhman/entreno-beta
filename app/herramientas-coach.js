@@ -1,13 +1,15 @@
 // La hoja ＋ del Coach, como la de iMessage: herramientas a un toque en vez de escribir. "Para hoy" usa las reglas
 // del entrenador en el teléfono (app/cambios-ui.js), así funciona sin señal; "Tu plan" abre el chat con la IA ya
-// encaminado; las calculadoras (nucleo/calculadoras.js) son locales; "Traer datos" usa el adjunto del chat.
+// encaminado; las calculadoras (nucleo/calculadoras.js y nucleo/calentamiento.js) son locales; "Traer datos" usa el adjunto del chat.
 import { E, R, guardar, hoy, avisar, unidadPeso, coma } from './comun.js';
 import { abrirHoja } from './hoja.js';
 import { accionHoy } from './cambios-ui.js';
 import { icono } from './iconos.js';
 import { sesionDe } from '../nucleo/agenda.js';
 import { discosPorLado, discosDisponibles, BARRAS_KG, BARRAS_LB } from '../nucleo/discos.js';
-import { maximoEstimado, cargasPorPorcentaje, seriesCalentamiento } from '../nucleo/calculadoras.js';
+import { maximoEstimado, cargasPorPorcentaje } from '../nucleo/calculadoras.js';
+import { seriesDeCalentamiento } from '../nucleo/calentamiento.js';
+import { ajuste } from './ajustes-sesion.js';
 
 const n = x => coma(Math.round(x * 100) / 100);
 const hayPlan = () => Array.isArray(E.plan?.dias) && !E.plan.bloqueado;
@@ -31,7 +33,7 @@ export function abrirHerramientas(o) {
       ${conHoy ? grupo('Para hoy', [['tiempo', 'reloj', 'Poco tiempo', 'naranja'], ['maquina', 'cambiar', 'Cambiar ejercicio', 'naranja'], ['cansado', 'luna', 'Estoy cansado', 'naranja'], ['dolor', 'curita', 'Me duele algo', 'naranja']]) : ''}
       ${conPlan ? grupo('Tu plan', [['mover', 'calendario', 'Mover o faltar', 'azul'], ['afinar', 'ajustes', 'Afinar mi plan', 'azul'], ['explicar', 'libro', 'Explícame mi plan', 'azul'], ['checkin', 'visto', 'Check in semanal', 'azul']]) : ''}
       ${grupo('Calculadoras', [['discos', 'pesa', 'Discos', 'verde'], ['rm', 'medidor', '1RM y cargas', 'verde'], ['calentar', 'fuego', 'Series de calentamiento', 'verde']])}
-      ${grupo('Traer datos', [['importar', 'flecha', 'Importar de Hevy', 'morado'], ['pegar', 'lapiz', 'Pegar un plan', 'morado'], ['foto', 'camara', 'Foto o PDF (pronto)', 'morado', true]])}
+      ${grupo('Traer datos', [['importar', 'bajar', 'Importar de Hevy', 'morado'], ['pegar', 'lapiz', 'Pegar un plan', 'morado'], ['foto', 'camara', 'Foto o PDF (pronto)', 'morado', true]])}
     </div>`,
     opciones: [],
     alElegir: v => elegir(v, o),
@@ -137,10 +139,12 @@ function calculadoraCalentamiento(volver) {
     pintar: () => {
       const t = leer('calc-trabajo'), barra = barraElegida();
       if (!t) return '<p class="pequeno suave">Escribe el peso de tu primera serie de trabajo.</p>';
-      const xs = seriesCalentamiento(t, { barra, paso: paso() });
+      // El esquema elegido en Ajustes de la sesión, con la barra sola primero si queda por debajo.
+      const xs = t > barra ? seriesDeCalentamiento(t, { incremento: paso(), barra, esquema: ajuste('esquemaCal') }).filter(x => x.kg != null) : [];
+      if (xs.length && xs[0].kg > barra) xs.unshift({ kg: barra, reps: 10 });
       if (!xs.length) return '<p class="pequeno">Con ese peso basta con unas repeticiones suaves de la barra o del movimiento.</p>';
       return `<ol class="lista-calentamiento">${xs.map(x => `<li><strong>${n(x.kg)} ${u}</strong> × ${x.reps}</li>`).join('')}<li class="trabajo"><strong>${n(t)} ${u}</strong> series de trabajo</li></ol>
-        <p class="pequeno suave">Descansa lo justo entre ellas (1 minuto o menos); el calentamiento no debe cansarte.</p>`;
+        <p class="pequeno suave">Descansa poco entre ellas (30 s a 1 min); el calentamiento no debe cansarte. El esquema se cambia en Ajustes de la sesión.</p>`;
     },
   });
 }

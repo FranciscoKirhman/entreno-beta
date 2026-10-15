@@ -1,4 +1,3 @@
-import { secuenciaGratisHtml, secuenciaGratisDe, enlazarSecuenciaGratis } from './secuencias-gratis.js';
 // Ficha de un ejercicio, como en Hevy: el dibujo de cómo se hace (o su máquina), los músculos que trabaja (con su
 // imagen), cómo se hace y los errores comunes, tus marcas, por qué está en tu plan (con los papers que lo respaldan)
 // tu progreso (gráficos, ritmo e historial, en app/progreso-ejercicio.js) y con qué se puede cambiar. Se abre desde la
@@ -173,7 +172,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
     <button type="button" class="volver" id="volver"${antes ? '' : ` data-vuelve-a="${esc(desde)}"`}>${icono('flecha', 'icono flecha-atras')} ${esc(VOLVER[desde] || 'Atrás')}</button>
     <div class="ficha-pestanas" role="tablist" aria-label="Secciones de la ficha">${PESTANAS.map(([v, t]) => `<button type="button" role="tab" id="pestana-${v}" data-pestana-ficha="${v}" aria-selected="${v === pestanaFicha}" aria-controls="panel-${v}">${t}</button>`).join('')}</div>
     <div class="panel-ficha" id="panel-resumen" role="tabpanel" aria-labelledby="pestana-resumen" data-panel-ficha="resumen"${pestanaFicha === 'resumen' ? '' : ' hidden'}>
-    ${secuenciaGratisDe(id) ? secuenciaGratisHtml(id) : anim ? '<div class="ficha-animacion" id="ficha-animacion"></div>' : dibujo ? `<img class="ficha-dibujo" src="${dibujo}" alt="Cómo se hace: ${esc(ej.nombre)}" width="960" height="640">` : ''}
+    ${anim ? '<div class="ficha-animacion" id="ficha-animacion"></div>' : dibujo ? `<img class="ficha-dibujo" src="${dibujo}" alt="Cómo se hace: ${esc(ej.nombre)}" width="960" height="640">` : ''}
     ${anim && dibujo ? `<details class="extra ficha-ilustracion"><summary>Ver la ilustración de las dos posiciones</summary><img class="ficha-dibujo" src="${dibujo}" alt="Cómo se hace: ${esc(ej.nombre)}" width="960" height="640" loading="lazy"></details>` : ''}
     <h1>${esc(ej.nombre)}</h1>
     <p class="ficha-musculos-texto suave">Principal: ${esc(mayuscula(musculos(ej.musculos_primarios)))}${ej.musculos_secundarios.length ? `<br>Secundarios: ${esc(mayuscula(musculos(ej.musculos_secundarios)))}` : ''}</p>
@@ -242,8 +241,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
     </div>
   </div>`;
 
-  enlazarSecuenciaGratis($('vista-ficha'));
-  if (anim && !secuenciaGratisDe(id)) montarAnimacion($('ficha-animacion'), anim, { nombre: ej.nombre });
+  if (anim) montarAnimacion($('ficha-animacion'), anim, { nombre: ej.nombre });
   // Banco ampliado: las instrucciones en español se cargan aparte, solo al abrir una de sus fichas.
   if (ej.extra) tecnicaExtra().then(t => { const ol = $('ficha-pasos'); if (ol && t[id]) ol.innerHTML = t[id].map(x => `<li>${esc(x)}</li>`).join(''); }).catch(() => {});
   enlazarFuturos($('vista-ficha'));

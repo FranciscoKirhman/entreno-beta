@@ -1,6 +1,6 @@
 // Calculadoras del gimnasio para la hoja ＋ del Coach (app/herramientas-coach.js). Funcionan sin señal ni IA.
-// Máximo estimado con Epley (la misma fórmula del motor del plan), cargas por porcentaje y series de calentamiento
-// hacia el peso de trabajo, redondeadas a lo que se puede armar con la barra y los discos del gimnasio.
+// Máximo estimado con Epley (la misma fórmula del motor del plan) y cargas por porcentaje, redondeadas a lo que se
+// puede armar con los discos del gimnasio. Las series de calentamiento son las de nucleo/calentamiento.js.
 import { e1rm } from './motor-plan.js';
 
 const r2 = x => Math.round(x * 100) / 100;
@@ -17,26 +17,10 @@ export function maximoEstimado(kg, reps, rir = 0) {
 /** Repeticiones al fallo que salen con un porcentaje del máximo (Epley al revés). */
 const repsCon = pct => Math.max(1, Math.round(30 * (100 / pct - 1)));
 
-/** Tabla de cargas: 95 % a 50 % del máximo, cada una con cuántas repeticiones salen al fallo. */
+/** Tabla de cargas: 95 % a 50 % del máximo, cada una con cuántas repeticiones salen al fallo, sin pesos repetidos. */
 export function cargasPorPorcentaje(maximo, { paso = 2.5 } = {}) {
   if (!(Number(maximo) > 0)) return [];
-  return [95, 90, 85, 80, 75, 70, 65, 60, 50].map(pct => ({ pct, kg: redondear(maximo * pct / 100, paso), reps: repsCon(pct) }));
-}
-
-/**
- * Series de calentamiento hacia el peso de trabajo, como las de un entrenador: la barra sola y luego subir de a poco
- * con menos repeticiones (50 % × 5, 70 % × 3, 85 % × 1 si el peso es alto). Sin cargas repetidas ni bajo la barra.
- * @returns [{ kg, reps }]
- */
-export function seriesCalentamiento(trabajo, { barra = 20, paso = 2.5 } = {}) {
-  trabajo = Number(trabajo);
-  if (!(trabajo > 0)) return [];
-  if (trabajo <= barra) return [];
-  const series = [{ kg: barra, reps: 10 }];
-  const pasos = trabajo >= 2 * barra + 20 ? [[50, 5], [70, 3], [85, 1]] : [[60, 5], [80, 2]];
-  for (const [pct, reps] of pasos) {
-    const kg = redondear(trabajo * pct / 100, paso);
-    if (kg > series.at(-1).kg && kg < trabajo) series.push({ kg, reps });
-  }
-  return series;
+  // Con discos grandes dos porcentajes pueden quedar en el mismo peso: se muestra una sola vez.
+  return [95, 90, 85, 80, 75, 70, 65, 60, 50].map(pct => ({ pct, kg: redondear(maximo * pct / 100, paso), reps: repsCon(pct) }))
+    .filter((x, i, xs) => i === 0 || x.kg !== xs[i - 1].kg);
 }

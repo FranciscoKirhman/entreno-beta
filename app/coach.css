@@ -71,7 +71,7 @@
 #coach-redaccion .coach-entrada textarea:focus{outline:none;box-shadow:none}
 .coach-entrada:focus-within{border-color:var(--accent)}
 .coach-enviar{flex:none;width:32px;height:32px;min-width:32px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;padding:0;cursor:pointer;margin:2px}
-.coach-enviar .icono{width:18px;height:18px;transform:rotate(-90deg)}
+.coach-enviar .icono{width:18px;height:18px;stroke-width:2.6}
 .coach-enviar:disabled{background:var(--surface-2);color:var(--ink-muted);cursor:default}
 #vista-coach .coach-campo button{min-height:32px}
 /* Archivo adjunto: una píldora dentro del campo, con su ✕. */

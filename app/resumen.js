@@ -1,12 +1,15 @@
 // Resumen de una sesión, como el de Hevy al guardar: se abre solo al terminar y desde el historial. Cuánto levantaste,
-// los récords, qué salió bien y qué salió mal (contra el plan del día y la vez anterior), cada ejercicio y compartir.
+// los récords, lo que dice el coach con IA (qué salió bien y qué cuidar, leyendo la sesión contra el plan y la vez
+// anterior), cada ejercicio y compartir. El comentario es la respuesta del chat a la sesión (app/coach-ui.js).
 import { textoCardio } from '../nucleo/unidades.js';
 import { E, esc, $, indice, hoy, fechaCorta, peso, volumenTexto, seriesTexto, avisar, IMAGENES } from './comun.js';
 import { resumenSesion } from '../nucleo/resumen-sesion.js';
 import { sesionDe } from '../nucleo/agenda.js';
 import { estadoDelPlan } from '../nucleo/registrado.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
-import { dice } from './cuestionario.js';
+import { dice, nombreAsistente, imagenAsistente } from './cuestionario.js';
+import { textoRico, pedirComentarioSesion } from './coach-ui.js';
+import * as nube from './nube.js';
 import { esAsistido } from '../nucleo/catalogo.js';
 import { imagenSesion } from './imagen-sesion.js';
 import { cuentaNuevaHtml, enlazarCuentaNueva } from './cuenta-ui.js';
@@ -39,13 +42,6 @@ export function textoRecord(r, { corto = false } = {}) {
   }
 }
 
-function textoBien(b) {
-  const nombre = nombreEj(b.ejercicio_id);
-  if (b.tipo === 'record') return `${nombre}: ${textoRecord(b.record)}.`;
-  if (b.tipo === 'rango_completo') return `${nombre}: completaste el rango (${b.reps_max} en todas las series). La próxima vez toca subir un poco el peso.`;
-  if (b.tipo === 'mejor_que_antes') return `${nombre}: más volumen que la vez anterior (${volumenTexto(b.volumen)} contra ${volumenTexto(b.antes)}).`;
-  return nombre;
-}
 function textoMal(m) {
   const nombre = nombreEj(m.ejercicio_id, m.nombre);
   if (m.tipo === 'no_hecho') return `${nombre}: no lo hiciste.`;
@@ -103,9 +99,24 @@ function numeroSesionHtml(sesion) {
   return n > 0 ? `<p class="numero-sesion"><strong class="num">${n}</strong><span>${n === 1 ? '¡Tu primera sesión!' : `Es tu sesión número ${n.toLocaleString('es-CL')}`}</span></p>` : '';
 }
 
-export function vistaResumen(ir, { id, desde = null } = {}) {
-  const sesion = E.sesiones.find(s => s.id === id) || E.sesiones.filter(s => !s.origen).at(-1);
-  if (!sesion) return ir('hoy');
+/** Lo que dice el coach con IA de esta sesión: la respuesta del chat al mensaje de la sesión (mensajeSesionCoach).
+ *  Mientras llega, o si falta señal o cuenta, lo dice en una línea. */
+function comentarioCoachHtml(sesion) {
+  const pregunta = E.chat.findLast(m => m.rol === 'persona' && m.sesionId === sesion.id);
+  const respuesta = E.chat.findLast(m => m.rol === 'coach' && m.sesionId === sesion.id && !m.pendiente);
+  const quien = nombreAsistente();
+  const cara = pose => `<span class="coach-avatar">${imagenAsistente(pose, 'asistente-mini')}</span>`;
+  if (respuesta) return `<div class="coach-dice">${cara('explica')}<div><h3>${esc(quien)} dice</h3><div class="texto-coach">${textoRico(respuesta.texto)}</div>
+    <button type="button" class="enlace seguir" data-seguir-coach>Seguir en el Coach&nbsp;›</button></div></div>`;
+  const linea = (pose, texto, boton = '') => `<div class="coach-dice">${cara(pose)}<div><h3>${esc(quien)}</h3><p class="pequeno suave">${texto}</p>${boton}</div></div>`;
+  if (pregunta?.porEnviar) return linea('sin_senal', 'Te comento la sesión cuando vuelva la señal.');
+  if (pregunta) return linea('pensando', '<span class="escribiendo" aria-label="Revisando tu sesión"><i></i><i></i><i></i></span>');
+  if (!nube.hay() || !nube.usuarioId()) return linea('saludo', `Con tu cuenta, ${esc(quien)} comenta cada sesión: qué salió bien y qué cuidar la próxima.`);
+  return linea('pregunta', 'Esta sesión todavía no tiene comentario.', '<button type="button" class="boton" data-pedir-comentario>Pedir comentario</button>');
+}
+
+/** La sesión comparada con su día del plan y con la vez anterior. */
+function datosResumen(sesion) {
   // El día del plan con que se compara: el de su fecha si se anotó en la app; si vino de Hevy, el que más se le
   // parece (nucleo/registrado.js), que puede ser de otro día si se recuperó o se adelantó.
   let dia = null;
@@ -119,7 +130,20 @@ export function vistaResumen(ir, { id, desde = null } = {}) {
   }
   const asistidos = new Set((sesion.series || []).map(s => s.ejercicio_id).filter(x => esAsistido(indice.porId.get(x))));
   const r = resumenSesion({ sesion, dia, historial: historialAntes(sesion), asistidos });
-  const foco = dia?.foco || sesion.titulo || 'Entrenamiento';
+  return { r, dia, foco: dia?.foco || sesion.titulo || 'Entrenamiento' };
+}
+
+/** El mensaje que recibe el coach con IA al guardar una sesión: lo hecho contra el plan y la vez anterior, los
+ *  récords y, si hay, las notas para el entrenador. Su respuesta es el comentario del resumen. */
+export function mensajeSesionCoach(sesion, notas = null) {
+  const { r, dia, foco } = datosResumen(sesion);
+  return [textoParaIA({ sesion, r, dia, foco }).split('\n').slice(2, -2).join('\n').trim(), notas].filter(Boolean).join('\n\n');
+}
+
+export function vistaResumen(ir, { id, desde = null } = {}) {
+  const sesion = E.sesiones.find(s => s.id === id) || E.sesiones.filter(s => !s.origen).at(-1);
+  if (!sesion) return ir('hoy');
+  const { r, dia, foco } = datosResumen(sesion);
   const n = r.records.length;
   const cifra = (valor, texto) => `<div class="cifra"><strong class="num">${valor}</strong><span class="pequeno suave">${texto}</span></div>`;
   $('app').innerHTML = `<div id="vista-resumen">
@@ -128,7 +152,7 @@ export function vistaResumen(ir, { id, desde = null } = {}) {
     ${numeroSesionHtml(sesion)}
     ${E.sensaciones?.[sesion.id] ? `<p class="sensacion-resumen">Se sintió: <strong>${esc({ facil: 'muy fácil', justo: 'justo', brutal: 'brutal' }[E.sensaciones[sesion.id]])}</strong></p>` : ''}
     ${sesion.comentario ? `<p class="comentario-resumen">${esc(sesion.comentario)}</p>` : ''}
-    ${dice('celebra', n ? `¡${n} ${n === 1 ? 'récord' : 'récords'} hoy! Mira abajo cuáles.` : r.mal.length ? '¡Sesión terminada! Abajo ves qué salió bien y qué cuidar la próxima.' : dia ? '¡Sesión terminada! Hiciste lo que pedía el plan.' : '¡Sesión registrada! Abajo está cada ejercicio.')}
+    ${dice('celebra', n ? `¡${n} ${n === 1 ? 'récord' : 'récords'} hoy! Mira abajo cuáles.` : dia ? '¡Sesión terminada! Hiciste lo que pedía el plan.' : '¡Sesión registrada! Abajo está cada ejercicio.')}
     ${dia && !r.mal.length && IMAGENES.has('img/resumen/completa.webp') ? '<img class="medalla-completa" src="img/resumen/completa.webp" alt="Sesión completa" width="64" height="64" decoding="async">' : ''}
     <div class="cifras-resumen">
       <button type="button" class="cifra cifra-editable" id="editar-duracion" aria-label="Duración: ${r.minutos ?? 'sin dato'} minutos. Corregir la duración y la hora"><strong class="num">${r.minutos == null ? 'sin dato' : r.minutos < 1 ? 'menos de 1' : `${r.minutos}`}</strong><span class="pequeno suave">minutos ${icono('lapiz', 'icono icono-chico')}</span></button>
@@ -138,12 +162,7 @@ export function vistaResumen(ir, { id, desde = null } = {}) {
     </div>
     ${(() => { const t = intensidades((sesion.series || []).filter(x => x.tipo !== 'calentamiento' && x.ejercicio_id)); return Object.keys(t.porMusculo).length ? `<section class="tarjeta cuerpo-resumen"><h3>Lo que entrenaste</h3>${cuerpoHtml(t.intensidad, { tamano: 'grande', etiqueta: 'Lo que entrenaste' })}</section>` : ''; })()}
     ${n ? `<section class="tarjeta"><h3>Récords</h3><ul class="lista-resumen record">${r.records.map(x => `<li>${insignia(x.tipo)} ${esc(nombreEj(x.ejercicio_id))}: ${esc(textoRecord(x))}</li>`).join('')}</ul></section>` : ''}
-    <section class="tarjeta"><h3>Qué salió bien</h3>${r.bien.filter(b => b.tipo !== 'record').length || n
-      ? `<ul class="lista-resumen bien">${r.bien.filter(b => b.tipo !== 'record').map(b => `<li>${esc(textoBien(b))}</li>`).join('') || '<li>Los récords de arriba.</li>'}</ul>`
-      : '<p class="pequeno suave">Sesión registrada. Cuando repitas estos ejercicios, aquí vas a ver tus récords y lo que mejoraste.</p>'}</section>
-    <section class="tarjeta"><h3>Qué salió mal</h3>${r.mal.length
-      ? `<ul class="lista-resumen mal">${r.mal.map(m => `<li>${esc(textoMal(m))}</li>`).join('')}</ul>`
-      : `<p class="pequeno suave">${dia ? 'Nada que corregir: hiciste lo que pedía el plan.' : 'Nada que corregir comparado con la vez anterior. Esta sesión no corresponde a un día de tu plan.'}</p>`}</section>
+    <section class="tarjeta" id="coach-dice" aria-live="polite">${comentarioCoachHtml(sesion)}</section>
     <section class="tarjeta"><h3>Cada ejercicio</h3><ul class="pequeno detalle-h">${r.porEjercicio.map(g => `<li><strong>${esc(nombreEj(g.ejercicio_id, g.nombre))}</strong>: ${esc(textoSeries(g.series))}${g.anterior.length ? `<br><span class="suave">La vez anterior: ${esc(textoSeries(g.anterior))}</span>` : ''}</li>`).join('')}</ul></section>
     <button type="button" class="boton fila-boton guardar-rutina" id="guardar-como-rutina">Guardar como rutina</button>
     <details class="extra" id="resumen-ia"><summary>Preguntarle a tu IA por esta sesión</summary>
@@ -158,6 +177,14 @@ export function vistaResumen(ir, { id, desde = null } = {}) {
     <div class="fila-botones"><button type="button" class="boton primario" id="volver-hoy">Listo</button></div>
   </div>`;
   $('volver-hoy').onclick = () => ir('hoy');
+  // El comentario llega cuando responde la IA: se repinta solo esa tarjeta mientras el resumen está abierto.
+  const caja = $('coach-dice');
+  caja.addEventListener('click', ev => {
+    if (ev.target.closest('[data-seguir-coach]')) ir('coach');
+    if (ev.target.closest('[data-pedir-comentario]')) { pedirComentarioSesion(sesion, mensajeSesionCoach(sesion)); caja.innerHTML = comentarioCoachHtml(sesion); }
+  });
+  const alResponder = () => { if (!caja.isConnected) return document.removeEventListener('coach-chat', alResponder); caja.innerHTML = comentarioCoachHtml(sesion); };
+  document.addEventListener('coach-chat', alResponder);
   enlazarCuentaNueva(ir);
   // Imagen para historias, como Hevy: sin peso corporal ni fotos. Si el teléfono deja compartir archivos, abre su menú;
   // si no, se muestra para guardarla.

@@ -27,7 +27,36 @@ function bloqueDe(plan, hoy) {
     proxima_semana: proxima ? { semana: proxima.semana, desde: proxima.desde } : null };
 }
 
-const texto = obj => ({ content: [{ type: 'text', text: typeof obj === 'string' ? obj : JSON.stringify(obj, null, 1) }] });
+// JSON compacto: la sangría no le sirve al modelo y cada salto de línea cuesta tokens en cada vuelta.
+const texto = obj => ({ content: [{ type: 'text', text: typeof obj === 'string' ? obj : JSON.stringify(obj) }] });
+const sinVacios = o => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined && !(Array.isArray(v) && !v.length)));
+
+// Lo que lee la IA (docs/37-inteligencia-por-uso.md): el calentamiento va por nombre (sus textos de técnica e imágenes
+// son para la pantalla) y la nota genérica de carga, que se repite en cada ejercicio, se omite.
+const NOTA_GENERICA = /^Elige (un peso|la ayuda)/;
+export function diaParaIA(dia) {
+  const { calentamiento, ejercicios, ...resto } = dia;
+  return sinVacios({ ...resto,
+    calentamiento: Array.isArray(calentamiento) ? calentamiento.map(c => c.name || c.nombre).filter(Boolean) : calentamiento,
+    ejercicios: (ejercicios || []).map(({ orden: _o, nota, ...e }) => sinVacios({ ...e, unidad: e.unidad === 'reps' ? null : e.unidad, ...(nota && !NOTA_GENERICA.test(nota) ? { nota } : {}) })),
+  });
+}
+
+/** El historial agrupado por ejercicio: cada serie como "40x6 rir2 rpe8" en vez de repetir el ejercicio en cada fila. */
+export function historialParaIA(sesiones = []) {
+  const serie = x => [x.duracion_seg ? `${x.duracion_seg}s` : `${x.carga_kg ?? 'pc'}x${x.reps ?? '?'}`,
+    x.rir != null ? `rir${x.rir}` : '', x.rpe != null ? `rpe${x.rpe}` : '', x.tipo && x.tipo !== 'efectiva' && x.tipo !== 'normal' ? x.tipo : ''].filter(Boolean).join(' ');
+  return sesiones.map(s => {
+    const grupos = new Map();
+    for (const x of [...(s.series || [])].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))) {
+      const clave = x.ejercicio_id || x.ejercicio_nombre;
+      if (!grupos.has(clave)) grupos.set(clave, { id: x.ejercicio_id || null, nombre: x.ejercicio_nombre || null, series: [] });
+      grupos.get(clave).series.push(serie(x));
+    }
+    return sinVacios({ fecha: s.fecha || (s.inicio ? String(s.inicio).slice(0, 10) : null), titulo: s.titulo, duracion_min: s.duracion_min, notas: s.notas,
+      ejercicios: [...grupos.values()].map(sinVacios) });
+  });
+}
 
 /** Ejercicios que esta persona puede hacer: equipamiento de su lugar principal, nivel y lesiones. */
 export function permitidos({ indice, respuestas: r, derivados: d, hoy }) {
@@ -60,7 +89,7 @@ export const HERRAMIENTAS = [
         series_por_musculo_semana: d.series_rango, repeticiones_de_reserva_minimas: d.rir_minimo,
         lesiones_activas: (r.lesiones || []).filter(l => l.activa !== false).map(l => ({ zona: l.region, tipo: l.tipo, intensidad: l.intensidad, alta: l.alta || null })),
         lugar: ((r.lugares || []).find(l => l.principal) || (r.lugares || [])[0])?.nombre || null,
-        plan: plan ? { inicio: plan.inicio, semana_descarga: plan.semana_descarga, bloque: bloqueDe(plan, hoy), proximos_dias: semana } : null,
+        plan: plan ? { inicio: plan.inicio, semana_descarga: plan.semana_descarga, bloque: bloqueDe(plan, hoy), proximos_dias: semana.map(diaParaIA) } : null,
         // Cómo vienes: sensaciones, esfuerzo, check-ins y tendencias (solo donde el servidor lo ofrece).
         ...(datos.contexto && indice ? { como_vienes: contextoIA({ historial: await datos.historial(8), ...(await datos.contexto()), indice, hoy, respuestas: r }) } : {}),
       });
@@ -69,10 +98,10 @@ export const HERRAMIENTAS = [
   {
     name: 'ver_historial',
     title: 'Ver historial',
-    description: 'Sesiones registradas en las últimas semanas, con cada serie (carga, repeticiones, RPE).',
+    description: 'Sesiones registradas en las últimas semanas, agrupadas por ejercicio. Cada serie se escribe "cargaxreps" (pc: peso corporal; s: segundos) con rir y rpe si se anotaron, y el tipo si no es efectiva.',
     inputSchema: { type: 'object', properties: { semanas: { type: 'integer', minimum: 1, maximum: 12, default: 4 } } },
     annotations: { readOnlyHint: true },
-    async run({ semanas = 4 }, { datos }) { return texto(await datos.historial(Math.min(12, Math.max(1, semanas)))); },
+    async run({ semanas = 4 }, { datos }) { return texto(historialParaIA(await datos.historial(Math.min(12, Math.max(1, semanas))))); },
   },
   {
     name: 'buscar_ejercicios',

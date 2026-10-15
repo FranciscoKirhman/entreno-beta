@@ -33,15 +33,15 @@ import { grupos, unir, separar, copiarSuperseries, despuesDeSerie, etiquetaSuper
 import { icono } from './iconos.js';
 import { miniatura } from './imagenes.js';
 import { NOMBRE_MUSCULO, lista, mayuscula, imagenesMusculos } from './musculos.js';
-import { preguntar, proponer, seguir } from './cambios-ui.js';
+import { proponer, seguir, abrirAjustarHoy } from './cambios-ui.js';
 import { aplicarOpcion } from '../nucleo/coach.js';
 import { nombreAsistente } from './cuestionario.js';
 import * as nube from './nube.js';
 import { descansoHtml, sesionCompletaHtml } from './estados-visuales.js';
-import { srcArticulacion } from './articulaciones.js';
 import { repintarConservando, celebrar, sinMovimiento, entrarPaso, selectorDe } from './movimiento.js';
 import { activarTecladoSeries } from './teclado-series.js';
 import { mandarAlCoach } from './coach-ui.js';
+import { mensajeSesionCoach } from './resumen.js';
 import { notasDeSesionTexto, huellaNotas } from '../nucleo/revision-semanal.js';
 import { msActivos, msPausa, minutosAlGuardar, alternarPausa } from '../nucleo/duracion-sesion.js';
 import { editarDuracionGuardada, camposDuracionHtml, enlazarCamposDuracion, errorDuracion } from './duracion-sesion.js';
@@ -1567,42 +1567,11 @@ function enlazar(ir, dia) {
   };
 
   // Ajustar hoy: lo mismo que contarle al entrenador, con la vista previa y la confirmación en hojas.
-  $('ajustar-hoy').onclick = () => {
-    const b = $('ajustar-hoy');
-    const min = duracionSesion(dia);
-    const listo = r => (r.ir === 'semana' ? ir('semana') : repintar());
-    const o = { titulo: 'Ajustar hoy', volver: b, alCambiar: listo };
-    abrirHoja({
-      titulo: 'Ajustar hoy', volver: b,
-      nota: 'Te muestro cómo quedaría y te pregunto antes de cambiar algo.',
-      opciones: [
-        { valor: 'tiempo', icono: icono('reloj'), nombre: 'Tengo poco tiempo' },
-        { valor: 'cansado', icono: icono('luna'), nombre: 'Dormí mal o estoy cansado' },
-        { valor: 'maquina', icono: icono('cambiar'), nombre: 'Una máquina está ocupada' },
-        { valor: 'otra', icono: icono('calendario'), nombre: 'Prefiero entrenar otra cosa' },
-        { valor: 'falte', icono: icono('flecha'), nombre: 'Hoy no puedo, moverla' },
-        { valor: 'dolor', icono: icono('curita'), clase: 'tipo-fallo', nombre: 'Me duele algo' },
-        { valor: 'chat', icono: icono('chat'), nombre: `Hablar con ${nombreAsistente()}` },
-      ],
-      alElegir: v => {
-        if (v === 'tiempo') abrirHoja({
-          titulo: '¿Cuánto tiempo tienes?', volver: b, nota: `La sesión completa toma unos ${min} minutos.`,
-          opciones: [20, 30, 40, 45, 60].filter(x => x < min).map(x => ({ valor: String(x), icono: icono('reloj'), nombre: `${x} minutos` })),
-          alElegir: x => preguntar(`solo tengo ${x} minutos`, o),
-        });
-        else if (v === 'cansado') preguntar('dormí mal y estoy cansado', o);
-        else if (v === 'maquina') preguntar('la máquina está ocupada', { ...o, titulo: '¿Qué máquina está ocupada?' });
-        else if (v === 'otra') preguntar('hoy no quiero hacer esto, ¿qué otra opción tienes?', { ...o, titulo: 'Otra opción para hoy' });
-        else if (v === 'falte') proponer({ tipo: 'falte', fecha: f }, o);
-        else if (v === 'chat') ir('coach');
-        else if (v === 'dolor') abrirHoja({
-          titulo: '¿Dónde te duele?', volver: b, nota: `Te llevo con ${nombreAsistente()} para ver qué hacer hoy.`,
-          opciones: C.zonas.articulaciones.map(([z, t]) => ({ valor: z, imagen: srcArticulacion(z), icono: icono('curita'), clase: 'tipo-fallo', nombre: t })),
-          alElegir: z => ir('coach', `me duele ${z === 'lumbar' ? 'la zona lumbar' : `${['muneca', 'cadera', 'rodilla'].includes(z) ? 'la' : 'el'} ${C.zonas.articulaciones.find(x => x[0] === z)[1].toLowerCase()}`}`),
-        });
-      },
-    });
-  };
+  // Ajustar hoy (compartido con la hoja ＋ del Coach, app/cambios-ui.js): reglas del teléfono, sin señal ni IA.
+  $('ajustar-hoy').onclick = () => abrirAjustarHoy({
+    volver: $('ajustar-hoy'), alCambiar: r => (r.ir === 'semana' ? ir('semana') : repintar()),
+    alDolor: texto => ir('coach', texto), alChat: () => ir('coach'),
+  });
 
   // Terminar sesión (abajo o en la solapa): queda en el historial local y, con cuenta, en el servidor.
   let terminando = false;
@@ -1655,16 +1624,19 @@ function enlazar(ir, dia) {
       E.mensaje += subio ? ' También quedó en tu cuenta.' : ' Todavía no se pudo subir a tu cuenta: queda en este teléfono y se sube sola cuando vuelva la señal.';
       guardar();
     }
-    // Las notas para el entrenador y el comentario van al coach con IA y quedan a la vista en el chat (una vez por
-    // versión: guardar de nuevo sin cambiarlas no las repite).
+    // La sesión (lo hecho contra el plan, récords y las notas para el entrenador) va al coach con IA: su respuesta queda
+    // en el chat y es el comentario del resumen. Una vez por versión: guardar de nuevo sin cambios no la repite.
     const nombres = new Map(dia.ejercicios.map(e => [e.ejercicio_id, e.nombre]));
     const textoNotas = notasDeSesionTexto({ fecha: f, titulo, comentario, notas: notas.map(n => ({ ...n, nombre: nombres.get(n.ejercicio_id) })) }, indice);
-    const huella = textoNotas && `${id}:${huellaNotas(textoNotas)}`;
-    if (huella && !E.notasAlCoach?.[huella] && !modoEjemplo) {
+    const guardada = E.sesiones.find(s => s.id === id);
+    const texto = guardada && mensajeSesionCoach(guardada, textoNotas);
+    const huella = texto && `${id}:${huellaNotas(texto)}`;
+    if (huella && !E.notasAlCoach?.[huella] && !modoEjemplo && nube.hay() && nube.usuarioId()) {
       (E.notasAlCoach ||= {})[huella] = true;
-      mandarAlCoach({ texto: textoNotas, modo: 'nota', tipo: 'nota' });
+      // En el chat se ve lo que escribió la persona (o una línea); la IA recibe la sesión completa.
+      mandarAlCoach({ texto: textoNotas || `Terminé ${titulo || dia.foco}.`, paraIA: texto, modo: 'nota', tipo: 'sesion', sesionId: id });
     }
-    // Como Hevy: al guardar se abre el resumen (récords, cuánto levantaste, qué salió bien y qué salió mal).
+    // Como Hevy: al guardar se abre el resumen (récords, cuánto levantaste y lo que dice el coach).
     pasosAbierta = null;
     ir('resumen', { id });
   };
