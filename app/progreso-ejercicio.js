@@ -1,7 +1,9 @@
 // Tu progreso en un ejercicio, dentro de su ficha (como Hevy): el ritmo de las últimas semanas, un gráfico por medida
 // (carga más alta, máximo estimado, volumen, repeticiones o tiempo) por 3 meses, 1 año o todo, tu mejor peso para
 // cada número de repeticiones y el historial de cada sesión en que lo hiciste.
-import { E, esc, $, hoy, fechaCorta, coma, enUnidad, unidadPeso, peso, volumenTexto, seriesTexto } from './comun.js';
+import { E, esc, $, hoy, fechaCorta, coma, enUnidad, unidadPeso, peso, volumenTexto, seriesTexto, indice } from './comun.js';
+import { icono } from './iconos.js';
+import { nombreAsistente } from './cuestionario.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { porSesion, medidasCon, desdePeriodo, ritmo, PERIODOS } from '../nucleo/progreso-ejercicio.js';
 import { recordsPorRepeticiones } from '../nucleo/records.js';
@@ -114,6 +116,7 @@ export function progresoEjercicioHtml(id, { asistido = false, conHistorial = fal
     <div id="grafico-ejercicio">${graficoHtml(id, filas, sel.medida, sel.periodo, asistido)}</div>
     ${medidas.length > 1 ? `<div class="chips-medida-hevy" role="group" aria-label="Qué medir">${medidas.map(m => `<button type="button" class="chip-opcion" data-medida="${m}" aria-pressed="${m === sel.medida}">${esc(nombre(m))}</button>`).join('')}</div>` : `<p class="sobretitulo">${esc(nombre(medidas[0]))}</p>`}
  <p class="pequeno suave gh-ritmo">${esc((cardio === 'pisos' ? textoRitmo(r, { asistido })?.replace(/repeticiones|repetición/g, 'pisos') : textoRitmo(r, { asistido })) || 'Con 3 sesiones en al menos 2 semanas vas a ver aquí tu ritmo de progreso.')}</p>
+    ${r && r.tendencia !== 'sube' && !asistido && !cardio ? `<button type="button" class="boton fila-boton preguntar-coach" data-preguntar-coach>${icono('chat', 'icono icono-chico')} ¿Por qué no subo? Pregúntale a ${esc(nombreAsistente())}</button>` : ''}
     ${porReps.length ? `<details class="extra"><summary>Récords por repeticiones</summary>
       <ul class="pequeno lista-simple por-reps">${porReps.map(x => `<li><span>${x.reps} ${x.reps === 1 ? 'repetición' : 'repeticiones'}</span><span><strong class="num">${esc(`${num(enUnidad(x.carga_kg))} ${u}`)}</strong> <span class="suave">${esc(fechaCorta(x.fecha))}</span></span></li>`).join('')}</ul></details>` : ''}
     ${conHistorial ? '' : '<!-- el historial está en la pestaña Historial de la ficha -->'}${!conHistorial ? '' : `<details class="extra"${historialCompleto ? ' open' : ''}><summary>Historial: ${sesiones.length} ${sesiones.length === 1 ? 'sesión' : 'sesiones'}</summary>
@@ -128,6 +131,8 @@ export function enlazarProgresoEjercicio(id, { asistido = false, ir = null } = {
   if (!caja) return;
   // "Ver la sesión" del detalle de un punto abre su resumen.
   caja.addEventListener('click', ev => { const b = ev.target.closest('[data-ver-sesion]'); if (b && ir) ir('resumen', { id: b.dataset.verSesion }); });
+  // Estancado o bajando: la pregunta va al Coach con el nombre del ejercicio (la IA lee el historial).
+  caja.addEventListener('click', ev => { if (ev.target.closest('[data-preguntar-coach]') && ir) ir('coach', `¿Por qué no subo en ${indice.porId.get(id)?.nombre || 'este ejercicio'}? Revisa mis últimas semanas y dime qué cambiar.`); });
   const repintar = () => {
     const y = scrollY, abiertos = [...caja.querySelectorAll('details')].map(d => d.open);
     caja.outerHTML = progresoEjercicioHtml(id, { asistido });

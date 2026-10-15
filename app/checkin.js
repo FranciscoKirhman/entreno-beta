@@ -9,6 +9,7 @@ import { criteriosAlargar, alargarBloque } from '../nucleo/alargar-bloque.js';
 import { nuevaMedida, agregarMedida } from '../nucleo/medidas.js';
 import { datoCambiado } from './datos-nube.js';
 import { abrirHoja } from './hoja.js';
+import { revisarSemanaSiToca } from './coach-ui.js';
 
 const kg = peso;
 const claveDe = semana => `${E.plan.inicio}|${semana}`;
@@ -214,7 +215,8 @@ export function vistaCheckin(ir, semanaPedida) {
     if (nube.conectado()) {
       nube.guardarCheckin({ semana, plan_inicio: E.plan.inicio, respuestas: respuestasSemana, banderas: p.banderas.map(b => b.id), series: p.series, sesiones: sesionesHechas,
         cambios: aceptados.map(i => ({ ejercicio_id: i.ejercicio_id, plantilla: i.plantilla, accion: i.accion, regla: i.regla, carga_kg: i.carga_kg, reps_min: i.reps_min, reps_max: i.reps_max })) })
-        .catch(e => console.warn('Check-in no guardado en la cuenta', e));
+        .catch(e => console.warn('Check-in no guardado en la cuenta', e))
+        .finally(() => revisarSemanaSiToca()); // con el check-in en la cuenta, el coach revisa la semana si ya terminó
     }
     mostrarSemana(p.siguiente);
     guardar();

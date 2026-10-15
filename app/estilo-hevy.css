@@ -708,3 +708,18 @@ body:not(.en-sesion) .medalla-record{top:calc(env(safe-area-inset-top,0px) + 16p
 #vista-coach .burbuja.coach .texto-chat li{margin:2px 0}
 #vista-coach .respuestas-rapidas{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 #vista-coach .respuestas-rapidas .sugerencia{min-height:40px;padding:8px 14px;border-radius:999px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);font-weight:600;text-align:left}
+/* Notas de la sesión y revisión semanal: escritas solas, en tono suave con su etiqueta y el formato del coach. */
+#vista-coach .burbuja.persona.automatico{background:color-mix(in srgb,var(--accent) 14%,var(--surface));color:var(--ink);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent)}
+#vista-coach .burbuja.automatico .tipo-mensaje{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--accent);margin-bottom:6px}
+#vista-coach .burbuja.automatico .texto-chat p{margin:0 0 6px}
+#vista-coach .burbuja.automatico .texto-chat p:last-child{margin-bottom:0}
+#vista-coach .burbuja.automatico .texto-chat ul{margin:2px 0 0;padding-left:18px}
+/* Ideas de la IA: mismas pastillas que las respuestas rápidas. */
+#ideas-ia{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 4px}
+#ideas-ia:empty{display:none}
+#ideas-ia .sugerencia{min-height:40px;padding:8px 14px;border-radius:999px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);font-weight:600;text-align:left}
+/* Respuesta del coach sin estar en el chat: un punto en la pestaña. */
+#nav [data-ir="coach"]{position:relative}
+#nav [data-ir="coach"].con-novedad::after{content:'';position:absolute;top:8px;left:calc(50% + 9px);width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--surface)}
+/* Con el teclado abierto en el chat, el menú se oculta y la caja queda arriba del teclado (app/coach-ui.js). */
+body.escribiendo-coach #nav{display:none!important}

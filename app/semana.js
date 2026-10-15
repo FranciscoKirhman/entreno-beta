@@ -13,6 +13,8 @@ import { semanaDe } from '../nucleo/ciclos.js';
 import { grupos, etiquetaSuperserie } from '../nucleo/superseries.js';
 import { miniatura } from './imagenes.js';
 import * as nube from './nube.js';
+import { icono } from './iconos.js';
+import { nombreAsistente } from './cuestionario.js';
 
 const DIAS_CORTOS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 
@@ -87,6 +89,7 @@ export function vistaSemana(ir) {
         <div class="panel">
           <label class="pequeno">Mover a <input type="date" data-mover="${x.fecha}" value="${x.fecha}"></label>
           <div class="fila-botones"><button type="button" class="boton" data-aplicar-mover="${x.fecha}">Mover</button><button type="button" class="boton" data-falte="${x.fecha}">Falté este día</button></div>
+          <button type="button" class="enlace" data-coach-dia="${x.fecha}">${icono('chat', 'icono icono-chico')} Que ${esc(nombreAsistente())} me proponga dónde moverla</button>
         </div>
       </details>
     </section>`).join('')}
@@ -114,6 +117,8 @@ export function vistaSemana(ir) {
     await cambiarPlan(r.plan, `Listo: ${nombreDia(de)} ${Number(de.slice(8))} → ${nombreDia(a)} ${Number(a.slice(8))}.${r.avisos.length ? ' Ojo: ' + r.avisos.join(' ') : ''}`, nube);
     vistaSemana(ir);
   });
+  // El Coach con la semana a la vista: la IA propone opciones y nada cambia sin aceptarlo.
+  raiz.querySelectorAll('[data-coach-dia]').forEach(b => b.onclick = () => { const d = sesionDe(E.plan, b.dataset.coachDia); ir('coach', `Quiero mover ${d?.foco || 'la sesión'} del ${fechaCorta(b.dataset.coachDia)}. ¿Dónde la pongo?`); });
   raiz.querySelectorAll('[data-falte]').forEach(b => b.onclick = async () => {
     const r = marcarFaltada(E.plan, b.dataset.falte, { hoy: hoy(), noPuedo: R().dias_no_puedo || [] });
     if (!r.ok) { E.mensaje = r.error; guardar(); return vistaSemana(ir); }

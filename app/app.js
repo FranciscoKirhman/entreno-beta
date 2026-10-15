@@ -20,7 +20,7 @@ import { elegirSeccionProgreso } from './progreso-hevy.js';
 import { vistaFicha } from './ficha.js';
 import { vistaDiaPasado } from './dia-pasado.js';
 import { vistaSemana } from './semana.js';
-import { vistaCoach } from './coach-ui.js';
+import { vistaCoach, revisarSemanaSiToca, marcarNovedadCoach } from './coach-ui.js';
 import { vistaProgreso } from './progreso.js';
 import { vistaMas } from './mas.js';
 import { pintarPerfilesPrueba, abrirEnlacePerfiles } from './perfiles-prueba-ui.js';
@@ -235,6 +235,7 @@ function ir(vista, extra) {
   $('nav').hidden = !E.plan || E.plan.bloqueado;
   const pestana = ['ejercicio', 'resumen'].includes(vista) ? PESTANA[extra?.desde] || extra?.desde || 'hoy' : PESTANA[vista] || vista;
   document.querySelectorAll('#nav [data-ir]').forEach(b => b.setAttribute('aria-current', String(b.dataset.ir === pestana)));
+  marcarNovedadCoach();
   pintarModo();
   pintarPerfilesPrueba();
   abrirEnlacePerfiles(); // #perfiles=…: el enlace privado reemplaza pasar el archivo a cada teléfono
@@ -363,6 +364,8 @@ async function iniciarEnSegundoPlano() {
     try { resultado = await sincronizarAlEntrar(); }
     catch { if (vigente()) E.mensaje = 'No pude sincronizar ahora. Puedes seguir con la copia de esta cuenta en el teléfono y reintentar en Perfil.'; }
     if (!vigente()) return;
+    // Con la cuenta al día: la revisión de la semana que terminó y las notas que quedaron sin enviar.
+    revisarSemanaSiToca();
     if (nube.entroPorEnlace()) {
       if (resultado?.completa) E.mensaje = `Entraste como ${nube.correo()}.`;
       E.vista = E.plan ? 'hoy' : 'mas';

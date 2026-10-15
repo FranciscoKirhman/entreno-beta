@@ -1,7 +1,7 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
 // Los archivos de cada publicación se leen desde su copia; una versión nueva instala otra copia completa.
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-14 17:53 · 169a4bf";
+const VERSION = "2026-10-15 10:07 · 4901b06";
 const ARCHIVOS = [
  "./",
  "ajustes-sesion.js",
@@ -21,6 +21,7 @@ const ARCHIVOS = [
  "cardio-ui.js",
  "checkin.js",
  "coach-ui.js",
+ "coach.css",
  "cola.js",
  "comun.js",
  "conexion-ia.js",
@@ -48,6 +49,7 @@ const ARCHIVOS = [
  "fotos-local.js",
  "funciones-futuras.js",
  "grafico.js",
+ "herramientas-coach.js",
  "hevy-auto.js",
  "hoja.js",
  "hoy-directo.css",
@@ -613,6 +615,19 @@ const ARCHIVOS = [
  "img/resumen/repeticiones.webp",
  "img/resumen/tiempo.webp",
  "img/resumen/volumen.webp",
+ "img/secuencias/ATTRIBUTION.md",
+ "img/secuencias/LICENSE-ASSETS",
+ "img/secuencias/bench-press/frame-1.svg",
+ "img/secuencias/bench-press/frame-3.svg",
+ "img/secuencias/bicep-curl/frame-1.svg",
+ "img/secuencias/bicep-curl/frame-3.svg",
+ "img/secuencias/bodyweight-squat/frame-1.svg",
+ "img/secuencias/bodyweight-squat/frame-3.svg",
+ "img/secuencias/glute-bridge/frame-1.svg",
+ "img/secuencias/glute-bridge/frame-3.svg",
+ "img/secuencias/goblet-squat/frame-1.svg",
+ "img/secuencias/goblet-squat/frame-3.svg",
+ "img/secuencias/procedencia.json",
  "index.html",
  "inicio.js",
  "manifest.webmanifest",
@@ -639,6 +654,7 @@ const ARCHIVOS = [
  "recuperar-cuenta.js",
  "resumen.js",
  "rutinas.js",
+ "secuencias-gratis.js",
  "semana.js",
  "sesion-libre-ui.js",
  "tablero-original.js",
@@ -660,6 +676,7 @@ const ARCHIVOS = [
  "../nucleo/animaciones-frente.js",
  "../nucleo/animaciones.js",
  "../nucleo/bienestar.js",
+ "../nucleo/calculadoras.js",
  "../nucleo/calendario-asistencia.js",
  "../nucleo/calentamiento-sesion.js",
  "../nucleo/calentamiento.js",
@@ -719,6 +736,7 @@ const ARCHIVOS = [
  "../nucleo/resumen-sesion.js",
  "../nucleo/retorno-app.js",
  "../nucleo/retorno-cuenta.js",
+ "../nucleo/revision-semanal.js",
  "../nucleo/salud-apple.js",
  "../nucleo/semanal.js",
  "../nucleo/serie-completa.js",

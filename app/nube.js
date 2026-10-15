@@ -266,7 +266,7 @@ export async function guardarCheckin({ semana, plan_inicio, respuestas = {}, ban
   ok(await supa.from('checkins').insert({ user_id: uid(), tipo: 'semanal', respuestas: { ...respuestas, semana, plan_inicio },
     resumen_automatico: { series, sesiones }, banderas_rojas: banderas, cambios_aplicados: cambios }));
 }
-export const chat = (mensaje, historial, archivo, modo = 'chat') => funcion('coach', { cuerpo: { mensaje, historial, ...(archivo ? { archivo } : {}), ...(modo === 'plan' ? { modo } : {}) } });
+export const chat = (mensaje, historial, archivo, modo = 'chat') => funcion('coach', { cuerpo: { mensaje, historial, ...(archivo ? { archivo } : {}), ...(modo !== 'chat' ? { modo } : {}) } });
 export const estadoChat = () => funcion('coach', { metodo: 'GET' });
 export async function cargarSuplementos() {
   const ambito = ambitoActual(), { cliente, usuario } = ambito;

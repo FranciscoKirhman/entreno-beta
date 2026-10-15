@@ -15,6 +15,7 @@ export const ESQUEMA_CAMBIOS = {
         properties: {
           tipo: { type: 'string', enum: TIPOS },
           dia: { type: 'string', description: 'Plantilla del día (ej. "torso_a"), que cambia todas las semanas, o una fecha AAAA-MM-DD, que cambia solo ese día.' },
+          desde: { type: 'string', description: 'Con una plantilla: AAAA-MM-DD desde el que cambia (por ejemplo, el lunes que viene). Los días anteriores quedan como estaban.' },
           de: { type: 'string', description: 'reemplazar_ejercicio: id del ejercicio actual. mover_dia: fecha actual.' },
           a: { type: 'string', description: 'reemplazar_ejercicio: id del ejercicio nuevo. mover_dia: fecha nueva.' },
           ejercicio: { type: 'string', description: 'Id del ejercicio (cambiar_prescripcion, agregar_ejercicio, quitar_ejercicio).' },
@@ -35,9 +36,9 @@ export const ESQUEMA_CAMBIOS = {
 
 const esFecha = s => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
 
-function diasDe(plan, dia) {
+function diasDe(plan, dia, desde) {
   if (esFecha(dia)) return plan.dias.filter(x => x.fecha === dia);
-  return plan.dias.filter(x => x.plantilla === dia);
+  return plan.dias.filter(x => x.plantilla === dia && (!esFecha(desde) || x.fecha >= desde));
 }
 
 /**
@@ -58,8 +59,8 @@ export function aplicarCambios(plan, cambios, indice) {
       aplicados.push(c);
       continue;
     }
-    const dias = diasDe(nuevo, c.dia);
-    if (!dias.length) { rechazar(c, `No hay días que calcen con "${c.dia}".`); continue; }
+    const dias = diasDe(nuevo, c.dia, c.desde);
+    if (!dias.length) { rechazar(c, `No hay días que calcen con "${c.dia}"${esFecha(c.desde) ? ` desde el ${c.desde}` : ''}.`); continue; }
     const idNuevo = c.tipo === 'reemplazar_ejercicio' ? c.a : c.ejercicio;
     if (c.tipo !== 'quitar_ejercicio' && !indice.porId.has(idNuevo)) { rechazar(c, `"${idNuevo}" no está en el catálogo.`); continue; }
     let tocados = 0;
@@ -99,7 +100,8 @@ export function aplicarCambios(plan, cambios, indice) {
 export function describirCambio(c, plan, indice) {
   const nombre = id => indice.porId.get(id)?.nombre || id;
   const fecha = f => { const d = new Date(f + 'T12:00:00Z'); return `${['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][d.getUTCDay()]} ${d.getUTCDate()}`; };
-  const cuando = esFecha(c.dia) ? `el ${fecha(c.dia)}` : `en ${plan.dias.find(x => x.plantilla === c.dia)?.foco || c.dia}, todas las semanas`;
+  const foco = plan.dias.find(x => x.plantilla === c.dia)?.foco || c.dia;
+  const cuando = esFecha(c.dia) ? `el ${fecha(c.dia)}` : esFecha(c.desde) ? `en ${foco}, desde el ${fecha(c.desde)}` : `en ${foco}, todas las semanas`;
   let texto;
   switch (c.tipo) {
     case 'reemplazar_ejercicio': texto = `Cambia ${nombre(c.de)} por ${nombre(c.a)} ${cuando}`; break;

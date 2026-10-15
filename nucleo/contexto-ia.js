@@ -1,7 +1,9 @@
 // Lo que la IA lee además del plan (ver_resumen): cómo se sintieron las últimas sesiones, el esfuerzo anotado, las
-// respuestas de los check-ins, la tendencia de los ejercicios principales y los ejercicios favoritos o evitados.
+// respuestas de los check-ins, las notas de las sesiones (para el entrenador), la tendencia de los ejercicios
+// principales y los ejercicios favoritos o evitados.
 // Va resumido (pocas cifras por tema) para gastar menos y que la IA explique con datos reales, no inventados.
 import { porSesion, ritmo } from './progreso-ejercicio.js';
+import { resumenParaEntrenador } from './notas.js';
 
 const SENTIR = { facil: 'muy fácil', justo: 'justo', brutal: 'brutal' };
 const fechaDe = s => String(s.inicio || s.fecha || '').slice(0, 10);
@@ -13,8 +15,10 @@ const rpeDe = x => (x.rpe != null ? Number(x.rpe) : x.rir != null ? 10 - Number(
  * @param historial sesiones con series (como datos.historial): {id, inicio, titulo, series:[{ejercicio_id, tipo, carga_kg, reps, rir, rpe}]}
  * @param sensaciones {[id de sesión]: 'facil'|'justo'|'brutal'}
  * @param checkins [{creado, respuestas: {semana, energia, sueno, estres, obstaculos}}]
+ * @param notas [{fecha, ejercicio_id, respuestas, nota, para_entrenador}] (notas_ejercicio de la cuenta)
+ * @param comentarios [{fecha, titulo, comentario}] lo escrito en "¿Cómo te fue?" al guardar la sesión
  */
-export function contextoIA({ historial = [], sensaciones = {}, checkins = [], indice, hoy, respuestas = {} }) {
+export function contextoIA({ historial = [], sensaciones = {}, checkins = [], notas = [], comentarios = [], indice, hoy, respuestas = {} }) {
   const nombre = id => indice?.porId.get(id)?.nombre || id;
   const sesiones = [...historial].sort((a, b) => fechaDe(b).localeCompare(fechaDe(a)));
   const ultimas = sesiones.slice(0, 6).map(s => {
@@ -40,8 +44,17 @@ export function contextoIA({ historial = [], sensaciones = {}, checkins = [], in
     const r = c.respuestas || {};
     return { semana: r.semana ?? null, energia: r.energia ?? null, sueno: r.sueno ?? null, estres: r.estres ?? null, faltas_por: r.obstaculos?.length ? r.obstaculos : null };
   });
+  // Notas de las últimas 3 semanas: primero lo que preocupa (dolor, técnica rota) y lo marcado para el entrenador.
+  const desdeNotas = new Date(Date.parse(hoy + 'T12:00:00Z') - 20 * 864e5).toISOString().slice(0, 10);
+  const notasSesion = resumenParaEntrenador(notas.filter(n => String(n.fecha) >= desdeNotas), indice).slice(0, 8)
+    .map(({ fecha, ejercicio, marcas, nota }) => ({ fecha, ejercicio, ...(marcas.length ? { marcas } : {}), ...(nota ? { nota: String(nota).slice(0, 300) } : {}) }));
+  const comentariosSesion = comentarios.filter(c => String(c.fecha) >= desdeNotas && String(c.comentario || '').trim())
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).slice(0, 5)
+    .map(c => ({ fecha: c.fecha, sesion: c.titulo || null, comentario: String(c.comentario).trim().slice(0, 300) }));
   return {
-    ultimas_sesiones: ultimas, esfuerzo_ultimas_2_semanas: esfuerzo, ultimos_checkins: ultimosCheckins, tendencias,
+    ultimas_sesiones: ultimas,
+    ...(notasSesion.length ? { notas_de_sesion: notasSesion } : {}),
+    ...(comentariosSesion.length ? { comentarios_de_sesion: comentariosSesion } : {}), esfuerzo_ultimas_2_semanas: esfuerzo, ultimos_checkins: ultimosCheckins, tendencias,
     ejercicios_favoritos: (respuestas.favoritos || []).map(nombre), ejercicios_evitados: (respuestas.prohibidos || []).map(nombre),
   };
 }

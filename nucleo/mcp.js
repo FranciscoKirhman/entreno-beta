@@ -13,9 +13,19 @@ import { evaluarDia, TEXTO_RECOMENDACION } from './bienestar.js';
 import { explicarEjercicio } from './explicar.js';
 import { planDeCuidado } from './cuidado.js';
 import { leerPlanTexto, calendarizar } from './importar-plan.js';
+import { semanasDelPlan } from './semanal.js';
 
 export const VERSIONES = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 const SERVIDOR = { name: 'entreno', title: 'Entreno', version: '0.2.0' };
+
+// El bloque entero está planificado; los ajustes van semana a semana, desde el lunes que viene.
+function bloqueDe(plan, hoy) {
+  const semanas = semanasDelPlan(plan);
+  if (!semanas.length) return null;
+  const actual = semanas.filter(s => s.desde <= hoy).at(-1) || null, proxima = semanas.find(s => s.desde > hoy) || null;
+  return { semanas: semanas.length, semana_actual: actual?.semana ?? null, termina: semanas.at(-1).ultima,
+    proxima_semana: proxima ? { semana: proxima.semana, desde: proxima.desde } : null };
+}
 
 const texto = obj => ({ content: [{ type: 'text', text: typeof obj === 'string' ? obj : JSON.stringify(obj, null, 1) }] });
 
@@ -50,7 +60,7 @@ export const HERRAMIENTAS = [
         series_por_musculo_semana: d.series_rango, repeticiones_de_reserva_minimas: d.rir_minimo,
         lesiones_activas: (r.lesiones || []).filter(l => l.activa !== false).map(l => ({ zona: l.region, tipo: l.tipo, intensidad: l.intensidad, alta: l.alta || null })),
         lugar: ((r.lugares || []).find(l => l.principal) || (r.lugares || [])[0])?.nombre || null,
-        plan: plan ? { inicio: plan.inicio, semana_descarga: plan.semana_descarga, proximos_dias: semana } : null,
+        plan: plan ? { inicio: plan.inicio, semana_descarga: plan.semana_descarga, bloque: bloqueDe(plan, hoy), proximos_dias: semana } : null,
         // Cómo vienes: sensaciones, esfuerzo, check-ins y tendencias (solo donde el servidor lo ofrece).
         ...(datos.contexto && indice ? { como_vienes: contextoIA({ historial: await datos.historial(8), ...(await datos.contexto()), indice, hoy, respuestas: r }) } : {}),
       });

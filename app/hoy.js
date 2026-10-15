@@ -3,7 +3,7 @@
 // cada ejercicio con su miniatura, su ficha (cómo se hace y por qué), el menú ⋯ y la tabla de series: tipo
 // (calentamiento, normal, al fallo, drop set), lo de la vez anterior, cronómetro de descanso y superseries.
 import { datoCambiado, cicloCambiado } from './datos-nube.js';
-import { E, guardar, R, D, C, K, indice, hoy, ahora, esc, $, fechaCorta, ctxNucleo, escala, opcionesRadio, chk, cambiarPlan, numero, coma, mostrarMensaje, avisar, unidadPeso, enUnidad, aKilos, peso, volumenTexto, seriesTexto } from './comun.js';
+import { E, guardar, R, D, C, K, indice, hoy, ahora, esc, $, fechaCorta, ctxNucleo, escala, opcionesRadio, chk, cambiarPlan, numero, coma, mostrarMensaje, avisar, unidadPeso, enUnidad, aKilos, peso, volumenTexto, seriesTexto, modoEjemplo } from './comun.js';
 import { estadoDelPlan } from '../nucleo/registrado.js';
 import { sesionesPorRevisar } from '../nucleo/sin-registro.js';
 import { recordsDeSerie } from '../nucleo/records.js';
@@ -41,6 +41,8 @@ import { descansoHtml, sesionCompletaHtml } from './estados-visuales.js';
 import { srcArticulacion } from './articulaciones.js';
 import { repintarConservando, celebrar, sinMovimiento, entrarPaso, selectorDe } from './movimiento.js';
 import { activarTecladoSeries } from './teclado-series.js';
+import { mandarAlCoach } from './coach-ui.js';
+import { notasDeSesionTexto, huellaNotas } from '../nucleo/revision-semanal.js';
 import { msActivos, msPausa, minutosAlGuardar, alternarPausa } from '../nucleo/duracion-sesion.js';
 import { editarDuracionGuardada, camposDuracionHtml, enlazarCamposDuracion, errorDuracion } from './duracion-sesion.js';
 import { mostrarMedalla } from './medalla.js';
@@ -1652,6 +1654,15 @@ function enlazar(ir, dia) {
       const subio = await subirACuenta('sesion', id, { fecha: f, hora, titulo, duracion_min: minutos, series, notas, ...(comentario ? { comentario } : {}) });
       E.mensaje += subio ? ' También quedó en tu cuenta.' : ' Todavía no se pudo subir a tu cuenta: queda en este teléfono y se sube sola cuando vuelva la señal.';
       guardar();
+    }
+    // Las notas para el entrenador y el comentario van al coach con IA y quedan a la vista en el chat (una vez por
+    // versión: guardar de nuevo sin cambiarlas no las repite).
+    const nombres = new Map(dia.ejercicios.map(e => [e.ejercicio_id, e.nombre]));
+    const textoNotas = notasDeSesionTexto({ fecha: f, titulo, comentario, notas: notas.map(n => ({ ...n, nombre: nombres.get(n.ejercicio_id) })) }, indice);
+    const huella = textoNotas && `${id}:${huellaNotas(textoNotas)}`;
+    if (huella && !E.notasAlCoach?.[huella] && !modoEjemplo) {
+      (E.notasAlCoach ||= {})[huella] = true;
+      mandarAlCoach({ texto: textoNotas, modo: 'nota', tipo: 'nota' });
     }
     // Como Hevy: al guardar se abre el resumen (récords, cuánto levantaste, qué salió bien y qué salió mal).
     pasosAbierta = null;
