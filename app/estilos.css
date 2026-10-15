@@ -36,7 +36,19 @@ input[type=file]{max-width:100%;font-size:14px}
 
 /* Arriba no va el nombre de la app (como en iOS): la barra aparece solo para avisar sin señal o con qué cuenta. */
 .barra{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:center;gap:10px;padding:calc(env(safe-area-inset-top,0px) + 6px) 16px 6px;background:color-mix(in srgb,var(--bg) 80%,transparent);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px)}
-.barra:not(:has(#modo:not([hidden]))){display:none}
+.barra:not(:has(#modo:not([hidden]), #campana:not([hidden]))){display:none}
+/* Campanita de sincronización: a la derecha de la barra, con punto rojo si algo falló y no se ha mirado. */
+.barra:has(#campana:not([hidden])){min-height:calc(env(safe-area-inset-top,0px) + 34px)}
+.campana{position:absolute;right:10px;bottom:2px;width:30px;height:30px;display:grid;place-items:center;padding:0;border:0;border-radius:50%;background:none;color:var(--ink-muted);cursor:pointer}
+.campana svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.campana-punto{position:absolute;top:3px;right:4px;width:9px;height:9px;border-radius:50%;background:var(--critical);box-shadow:0 0 0 2px var(--bg)}
+.campana-lista{list-style:none;margin:0 0 14px;padding:0;background:var(--surface);border-radius:14px;overflow:hidden}
+.campana-lista li{display:flex;flex-direction:column;gap:2px;padding:10px 16px;font-size:15px}
+.campana-lista li+li{border-top:1px solid var(--line)}
+.campana-lista li.problema{color:var(--critical)}
+.campana-lista li .pequeno{color:var(--ink-muted)}
+.campana-cola{margin:0 0 12px}
+.campana-vacia{text-align:center;color:var(--ink-muted);margin:0 0 14px}
 .marca{display:none}
 .demo{font:600 12px/1 var(--f-texto);color:var(--ink-muted);background:var(--fill);padding:5px 10px;border-radius:999px;min-width:0;max-width:70vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .barra nav{margin-left:auto;display:flex;gap:4px}

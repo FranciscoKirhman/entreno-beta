@@ -1620,9 +1620,8 @@ function enlazar(ir, dia) {
     detenerDescanso();
     guardar();
     if (nube.conectado()) {
-      const subio = await subirACuenta('sesion', id, { fecha: f, hora, titulo, duracion_min: minutos, series, notas, ...(comentario ? { comentario } : {}) });
-      E.mensaje += subio ? ' También quedó en tu cuenta.' : ' Todavía no se pudo subir a tu cuenta: queda en este teléfono y se sube sola cuando vuelva la señal.';
-      guardar();
+      // Si subió o quedó esperando señal lo cuenta la campanita (app/campana.js), no el aviso de guardado.
+      await subirACuenta('sesion', id, { fecha: f, hora, titulo, duracion_min: minutos, series, notas, ...(comentario ? { comentario } : {}) });
     }
     // La sesión (lo hecho contra el plan, récords y las notas para el entrenador) va al coach con IA: su respuesta queda
     // en el chat y es el comentario del resumen. Una vez por versión: guardar de nuevo sin cambios no la repite.

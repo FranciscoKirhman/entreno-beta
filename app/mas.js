@@ -520,7 +520,7 @@ function enlazarCuenta(ir, sincronizarAlEntrar) {
     if (E !== origen) return;
     activarCuenta(nube.usuarioId());
     const estado = E, usuario = nube.usuarioId(), vigente = () => E === estado && nube.usuarioId() === usuario;
-    try { const resultado = await sincronizarAlEntrar(); if (!vigente()) return; E.mensaje = resultado.completa ? `Entraste como ${nube.correo()}.` : resultado.mensaje; }
+    try { await sincronizarAlEntrar(); if (!vigente()) return; E.mensaje = `Entraste como ${nube.correo()}.`; } // si quedó algo pendiente, lo dice la campanita
     catch (e) { if (!vigente()) return; E.mensaje = `Entraste, pero no pude sincronizar: ${e.message}. Reintenta en Perfil.`; }
     guardar(); ir(E.plan ? 'hoy' : 'mas', E.plan ? undefined : { panel: 'cuenta' });
   });

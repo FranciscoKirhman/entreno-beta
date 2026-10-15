@@ -36,6 +36,7 @@ import { progresoNivel } from '../nucleo/nivel.js';
 import { programarAvisos } from './avisos.js';
 import { actualizarPantalla, sesionEnCurso } from './pantalla.js';
 import { dejarPendiente, subirPendientes } from './cola.js';
+import { anotarSinc, pintarCampana, configurarCampana } from './campana.js';
 import * as nube from './nube.js';
 import { CONFIG } from './config.js';
 import { sinSenalHtml } from './estados-visuales.js';
@@ -188,9 +189,11 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
   if (pendientes) partes.push(`${pendientes} elementos pendientes`);
   if (Object.entries(E.nubeDatos || {}).some(([k, v]) => v.pendiente && (k !== 'medidas_cuerpo' || E.consentimientos?.medidas_cuerpo === true)) && !avisos.some(x => x.parte === 'Datos del teléfono')) partes.push('datos del teléfono pendientes');
   const completa = !partes.length;
-  const mensaje = completa ? `Sincronización completa. ${E.sesiones.length} sesiones disponibles en esta cuenta.`
-    : `Sincronización incompleta. ${partes.join('. ')}. La copia del teléfono se conserva. Reintenta en Perfil.`;
-  if (!completa || E.mensaje === E.sincronizacionCuenta?.mensaje) E.mensaje = completa ? null : mensaje;
+  const mensaje = completa ? `Todo sincronizado. ${E.sesiones.length} sesiones en tu cuenta.`
+    : `Sincronización incompleta. ${partes.join('. ')}. La copia del teléfono se conserva.`;
+  // Va a la campanita, no a un aviso flotante (el de una versión anterior que haya quedado guardado se descarta).
+  if (E.mensaje === E.sincronizacionCuenta?.mensaje) E.mensaje = null;
+  anotarSinc(mensaje, completa ? { resuelve: true } : { problema: true });
   E.sincronizacionCuenta = { completa, pendientes, avisos, mensaje };
   comprobar();
   if (completa) marcarCuentaRecuperada(usuario);
@@ -237,6 +240,7 @@ function ir(vista, extra) {
   document.querySelectorAll('#nav [data-ir]').forEach(b => b.setAttribute('aria-current', String(b.dataset.ir === pestana)));
   marcarNovedadCoach();
   pintarModo();
+  pintarCampana();
   pintarPerfilesPrueba();
   abrirEnlacePerfiles(); // #perfiles=…: el enlace privado reemplaza pasar el archivo a cada teléfono
   const vistas = {
@@ -317,7 +321,7 @@ if (CONFIG.sinSenal && 'serviceWorker' in navigator) navigator.serviceWorker.reg
 // Primero la copia de este perfil y su segunda copia. La red no participa en el primer dibujo.
 activarCuenta(nube.usuarioGuardado({ claveSesion: claveSesionCuenta() }));
 // Si el almacenamiento principal quedó atrás de la segunda copia del teléfono, se vuelve a lo último que se escribió.
-const avisarRecuperado = async () => { if (await recuperarCopia()) E.mensaje = 'Recuperé lo último que anotaste desde la copia de seguridad de este teléfono.'; };
+const avisarRecuperado = async () => { if (await recuperarCopia()) anotarSinc('Recuperé lo último que anotaste desde la copia de seguridad de este teléfono.'); };
 await avisarRecuperado();
 // El banco ampliado: ya, si lo guardado usa alguno de sus ejercicios; si no, después de abrir.
 if (usaExtras(E)) await asegurarExtras(); else setTimeout(asegurarExtras, 3000);
@@ -362,7 +366,7 @@ async function iniciarEnSegundoPlano() {
     const estado = E, usuario = nube.usuarioId(), vigente = () => E === estado && nube.usuarioId() === usuario;
     let resultado;
     try { resultado = await sincronizarAlEntrar(); }
-    catch { if (vigente()) E.mensaje = 'No pude sincronizar ahora. Puedes seguir con la copia de esta cuenta en el teléfono y reintentar en Perfil.'; }
+    catch { if (vigente()) anotarSinc('No pude sincronizar al abrir. Sigues con la copia de este teléfono.', { problema: navigator.onLine }); }
     if (!vigente()) return;
     // Con la cuenta al día: la revisión de la semana que terminó y las notas que quedaron sin enviar.
     revisarSemanaSiToca();
@@ -376,4 +380,5 @@ async function iniciarEnSegundoPlano() {
   hevyAlAbrir(() => { if (['hoy', 'semana', 'progreso'].includes(E.vista)) repintarSinMover(); });
 }
 // Dejar que la copia llegue a la pantalla antes de cargar el cliente de cuentas o hacer consultas.
+configurarCampana({ sincronizar: () => sincronizarAlEntrar({ forzar: true }) });
 requestAnimationFrame(() => setTimeout(() => iniciarEnSegundoPlano().catch(e => console.warn('No pude iniciar la cuenta', e)), 0));

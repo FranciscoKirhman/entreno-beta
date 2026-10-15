@@ -1,7 +1,8 @@
 // Hevy entra solo (nucleo/hevy-api.js): la clave de la API vive solo en este navegador, fuera de los datos de la app,
 // así no viaja en los respaldos ni a la cuenta. Al abrir la app (cada 30 minutos como mucho) se traen los
 // entrenamientos nuevos.
-import { E, guardar, indice, avisar, modoEjemplo, ambitoDatos } from './comun.js';
+import { E, guardar, indice, modoEjemplo, ambitoDatos } from './comun.js';
+import { anotarSinc } from './campana.js';
 import { traerDeHevy } from '../nucleo/hevy-api.js';
 
 const CLAVE = 'entreno-hevy-clave', ULTIMA = 'entreno-hevy-ultima';
@@ -39,6 +40,6 @@ export async function hevyAlAbrir(alLlegar) {
   if (Date.now() - ultima < 30 * 60e3) return;
   try {
     const r = await sincronizarHevy();
-    if (r.nuevas.length) { avisar(`Llegaron ${r.nuevas.length === 1 ? '1 sesión' : `${r.nuevas.length} sesiones`} de Hevy.`); alLlegar?.(); }
+    if (r.nuevas.length) { anotarSinc(`Llegaron ${r.nuevas.length === 1 ? '1 sesión' : `${r.nuevas.length} sesiones`} de Hevy.`); alLlegar?.(); }
   } catch { /* se reintenta la próxima vez; en Perfil se ve el error */ }
 }

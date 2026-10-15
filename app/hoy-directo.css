@@ -45,7 +45,7 @@
 @media (prefers-reduced-motion:no-preference){.esfuerzo-escala [role="radio"]{transition:background-color .15s,color .15s}}
 /* Solapa de la sesión en curso, como Hevy: el tiempo, lo levantado y Terminar. Vidrio solo en esta capa de controles. */
 .solapa-sesion{position:sticky;top:calc(env(safe-area-inset-top,0px) + 6px);z-index:4;display:flex;align-items:center;gap:10px;min-height:48px;margin:0 0 6px;padding:4px 4px 4px 16px;border-radius:999px;background:color-mix(in srgb,var(--surface) 82%,transparent);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);box-shadow:0 0 0 .5px var(--border),0 4px 16px rgba(0,0,0,.08)}
-body:has(.barra #modo:not([hidden])) .solapa-sesion{top:calc(env(safe-area-inset-top,0px) + 46px)}
+body:has(.barra :is(#modo, #campana):not([hidden])) .solapa-sesion{top:calc(env(safe-area-inset-top,0px) + 46px)}
 .solapa-foco{flex:1;min-width:0;font:600 15px/1.2 var(--f-texto);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .solapa-dato{font:600 15px/1.2 var(--f-texto);white-space:nowrap}
 .solapa-dato+.solapa-dato{color:var(--ink-muted)}

@@ -13,7 +13,7 @@ import { aplicarIndicacion } from '../nucleo/cuidado.js';
 import { resumenParaEntrenador } from '../nucleo/notas.js';
 import { reconocer } from '../nucleo/importar-plan.js';
 import { guardarFotoLocal, listarFotosLocales, borrarFotoLocal, guardarArchivoLocal } from './fotos-local.js';
-import { subirACuenta, subirPendientes, estadoCola } from './cola.js';
+import { subirACuenta } from './cola.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { semanaPorMusculo, musculosContraFranja } from '../nucleo/volumen-semana.js';
 import { resumenPeriodo, periodo } from '../nucleo/resumen-periodo.js';
@@ -336,7 +336,6 @@ export async function vistaProgreso(ir) {
   }));
   const resumen = resumenParaEntrenador(notas, indice);
   const cons = E.suplementos.length ? constancia(E.suplementos, E.tomas, hoy()) : null;
-  const cola = estadoCola();
   const sec = seccionProgreso();
   $('app').innerHTML = `<div id="vista-progreso"${sec ? ` data-en-seccion="${sec}"` : ''}>
     ${sec ? `<button type="button" class="volver" id="p-volver" data-vuelve-a="progreso">${icono('flecha', 'icono flecha-atras')} Progreso</button>` : ''}
@@ -349,8 +348,6 @@ export async function vistaProgreso(ir) {
     <section class="tarjeta tarjeta-entrenamientos">
       <h3>Entrenamientos</h3>
       ${historialHtml()}
-      ${nube.conectado() && cola.total ? `<div class="aviso ojo" id="cola">${cola.total} cosa${cola.total === 1 ? '' : 's'} esperando subir a tu cuenta (${[cola.sesiones && `${cola.sesiones} ${cola.sesiones === 1 ? 'sesión' : 'sesiones'}`, cola.indicaciones && `${cola.indicaciones} indicación${cola.indicaciones === 1 ? '' : 'es'}`, cola.bienestar && `${cola.bienestar} registro${cola.bienestar === 1 ? '' : 's'} de bienestar`].filter(Boolean).join(', ')}). Quedan guardadas en este teléfono y se suben solas cuando hay señal.${cola.detenidos ? ` Después de varios intentos se pausó${cola.error ? ` (${esc(cola.error)})` : ''}.` : ''}
-        <div class="fila-botones"><button type="button" class="boton" id="reintentar">Reintentar ahora</button></div></div>` : ''}
     </section>
     <div data-seccion-p="estadisticas">
     ${musculosMapaHtml()}
@@ -514,18 +511,10 @@ export async function vistaProgreso(ir) {
     const { plan, quitados } = aplicarIndicacion(E.plan, ind, indice);
     await cambiarPlan(plan, `Indicación incorporada.${quitados.length ? ` Se sacaron ${quitados.length} ejercicio(s) que cargaban lo restringido.` : ''}`, nube);
     if (nube.conectado()) {
-      const subio = await subirACuenta('indicacion', ind.id, ind);
-      E.mensaje = `${E.mensaje || ''} ${subio ? 'Quedó guardada en tu cuenta.' : 'Todavía no se pudo subir a tu cuenta: se sube sola cuando haya señal.'}`.trim();
-      guardar();
+      await subirACuenta('indicacion', ind.id, ind); // cómo le fue lo cuenta la campanita (app/campana.js)
     }
     vistaProgreso(ir);
   };
-  $('reintentar')?.addEventListener('click', async ev => {
-    ev.currentTarget.disabled = true;
-    const r = await subirPendientes({ forzar: true });
-    E.mensaje = r?.subidos.length ? `Subido a tu cuenta: ${r.subidos.length}.` : `No se pudo subir${r?.fallidos[0]?.error ? `: ${r.fallidos[0].error}` : ''}. Se vuelve a intentar sola.`;
-    guardar(); vistaProgreso(ir);
-  });
   document.querySelectorAll('[data-ver-archivo]').forEach(b => b.onclick = async () => {
     try { window.open(await nube.verArchivoIndicacion(b.dataset.verArchivo), '_blank', 'noopener'); }
     catch (e) { E.mensaje = `No se pudo abrir el documento: ${e.message}`; guardar(); vistaProgreso(ir); }

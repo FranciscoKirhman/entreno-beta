@@ -19,7 +19,7 @@ body.en-sesion #nav{display:none!important}
 /* ── Cabecera de la sesión: minimizar, nombre, reloj y Terminar; debajo duración, volumen y series ── */
 .cab-sesion{position:sticky;top:0;z-index:8;margin:calc(-12px - env(safe-area-inset-top,0px)) -16px 6px;padding:calc(env(safe-area-inset-top,0px) + 8px) 12px 0;
   background:color-mix(in srgb,var(--bg) 82%,transparent);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px)}
-body:has(.barra #modo:not([hidden])) .cab-sesion{top:calc(env(safe-area-inset-top,0px) + 38px);margin-top:0}
+body:has(.barra :is(#modo, #campana):not([hidden])) .cab-sesion{top:calc(env(safe-area-inset-top,0px) + 38px);margin-top:0}
 .cab-sesion{display:flex;flex-direction:column;border-bottom:.5px solid var(--line)}
 .cab-sesion-fila{display:grid;grid-template-columns:44px minmax(0,1fr) 44px auto;align-items:center;gap:8px;min-height:48px;padding-bottom:6px}
 .cab-avance{order:1}.cab-sesion-cifras{order:2}
@@ -250,7 +250,7 @@ body.con-mini-sesion main:has(#vista-coach){padding-bottom:calc(var(--coach-reda
 /* ── Agregar ejercicio desde la sesión (como Hevy): Cancelar, título y Crear; elegir varios ── */
 .banco-cab-sesion{position:sticky;top:0;z-index:4;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;margin:calc(-12px - env(safe-area-inset-top,0px)) -16px 8px;padding:calc(env(safe-area-inset-top,0px) + 8px) 16px 8px;
   background:color-mix(in srgb,var(--bg) 82%,transparent);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px)}
-body:has(.barra #modo:not([hidden])) .banco-cab-sesion{top:calc(env(safe-area-inset-top,0px) + 38px);margin-top:0}
+body:has(.barra :is(#modo, #campana):not([hidden])) .banco-cab-sesion{top:calc(env(safe-area-inset-top,0px) + 38px);margin-top:0}
 .banco-cab-sesion h1{margin:0;font:600 17px/1.2 var(--f-titulo);text-align:center}
 .banco-cab-sesion .enlace{min-height:44px;padding:0 16px;border-radius:999px;background:var(--surface);box-shadow:inset 0 0 0 .5px var(--vidrio-borde),0 2px 8px rgba(0,0,0,.08);font-size:17px}
 #vista-banco .banco-filtro select{font-weight:600}
@@ -322,7 +322,7 @@ button.publicacion-cab{cursor:pointer}
 /* ── Ficha del ejercicio como Hevy: pestañas Resumen, Historial y Cómo se hace ── */
 .ficha-pestanas{position:sticky;top:0;z-index:4;display:grid;grid-template-columns:repeat(3,1fr);margin:0 -16px 8px;padding:0 8px;border-bottom:.5px solid var(--line);
   background:color-mix(in srgb,var(--bg) 85%,transparent);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px)}
-body:has(.barra #modo:not([hidden])) .ficha-pestanas{top:calc(env(safe-area-inset-top,0px) + 38px)}
+body:has(.barra :is(#modo, #campana):not([hidden])) .ficha-pestanas{top:calc(env(safe-area-inset-top,0px) + 38px)}
 .ficha-pestanas button{min-height:48px;border:0;border-bottom:3px solid transparent;background:none;color:var(--ink-muted);font:500 16px/1.2 var(--f-texto);cursor:pointer}
 .ficha-pestanas button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
 .ficha-musculos-texto{margin:-2px 0 8px;line-height:1.6}

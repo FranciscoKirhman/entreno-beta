@@ -38,11 +38,11 @@ export function editarDuracionGuardada(sesion, { volver = null, alCambiar } = {}
       if (estado.hora) sesion.hora = estado.hora;
       guardar();
       alCambiar?.();
+      avisar('Duración corregida.');
       if (!modoEjemplo && sesion.origen !== 'ejemplo' && nube.conectado()) {
         const { id, enCuenta, ...datos } = sesion;
-        const subio = await subirACuenta('sesion', id, datos);
-        avisar(subio ? 'Duración corregida, también en tu cuenta.' : 'Duración corregida. Se sube a tu cuenta cuando vuelva la señal.');
-      } else avisar('Duración corregida.');
+        await subirACuenta('sesion', id, datos); // cómo le fue lo cuenta la campanita (app/campana.js)
+      }
     },
   });
   enlazarCamposDuracion(estado);

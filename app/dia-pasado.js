@@ -163,9 +163,7 @@ export function vistaDiaPasado(ir, { id = null } = {}) {
     guardar();
     if (nube.conectado()) {
       const { id: idSesion, ...datos } = ses;
-      const subio = await subirACuenta('sesion', idSesion, datos);
-      E.mensaje += subio ? ' También quedó en tu cuenta.' : ' Todavía no se pudo subir a tu cuenta: se sube sola cuando vuelva la señal.';
-      guardar();
+      await subirACuenta('sesion', idSesion, datos); // cómo le fue lo cuenta la campanita (app/campana.js)
     }
     ir('resumen', { id: ses.id, desde: 'progreso' });
   };

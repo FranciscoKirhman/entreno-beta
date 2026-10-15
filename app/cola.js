@@ -4,6 +4,7 @@ import { E, guardar, ambitoDatos, modoEjemplo } from './comun.js';
 import { encolar, procesarCola, juntarCola, proximoIntento, detenidos } from '../nucleo/cola.js';
 import { leerArchivoLocal, borrarArchivoLocal } from './fotos-local.js';
 import * as nube from './nube.js';
+import { anotarSinc } from './campana.js';
 
 let enCurso = null, reloj = null;
 const sinRed = e => Object.assign(e instanceof Error ? e : new Error(e?.message || String(e)),
@@ -61,6 +62,7 @@ export async function subirPendientes({ forzar = false } = {}) {
     E.pendientes = juntarCola(r.cola, antes, E.pendientes || []);
     r.subidos.forEach(marcarSubido);
     guardar();
+    anotarVuelta(r);
     return r;
   })();
   try { return await enCurso; }
@@ -70,6 +72,21 @@ export async function subirPendientes({ forzar = false } = {}) {
     const t = proximoIntento(E.pendientes || []);
     if (t != null && nube.conectado()) reloj = setTimeout(() => subirPendientes(), Math.max(5000, t - Date.now()));
   }
+}
+
+const NOMBRES = { sesion: ['sesión', 'sesiones'], indicacion: ['indicación', 'indicaciones'], bienestar: ['registro de bienestar', 'registros de bienestar'] };
+const contar = lista => Object.entries(NOMBRES).map(([tipo, [uno, varios]]) => {
+  const n = lista.filter(x => x.tipo === tipo).length;
+  return n && `${n} ${n === 1 ? uno : varios}`;
+}).filter(Boolean).join(', ');
+
+/** Cada vuelta queda en la campanita (app/campana.js): lo que subió, lo que espera señal y lo que falló. */
+function anotarVuelta({ subidos, fallidos }) {
+  const quedan = E.pendientes?.length || 0;
+  if (subidos.length) anotarSinc(`Subí a tu cuenta: ${contar(subidos)}.`, { resuelve: !quedan });
+  if (!fallidos.length) return;
+  if (navigator.onLine === false || fallidos.every(x => /fetch|network|load failed|conexi/i.test(x.error || ''))) anotarSinc(`Sin señal: ${quedan === 1 ? '1 cosa espera' : `${quedan} cosas esperan`} en este teléfono y se suben solas.`);
+  else anotarSinc(`No pude subir ${contar(fallidos)}: ${fallidos[0].error}. Se reintenta sola.`, { problema: true });
 }
 
 /** Resumen para mostrar: cuántos esperan y el último error. */
