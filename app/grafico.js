@@ -92,22 +92,33 @@ export function lineaHevy({ puntos, desde, hasta, min, max, marcas = [], titulo,
   }).join('');
   const base = `<line x1="${IZQ}" x2="${GH_ANCHO - GH_DER}" y1="${piso}" y2="${piso}" class="g-base"/>`;
   const coords = ps.map(p => `${x(p.fecha).toFixed(1)},${y(p.valor).toFixed(1)}`).join(' ');
-  const linea = ps.length > 1 ? `<polyline class="gh-linea" points="${coords}"/>` : '';
+  // La sesión en curso (marca 'en_curso') va al final con una línea punteada, como "In progress" de Hevy.
+  const enCurso = ps.length > 1 && ps.at(-1).marca === 'en_curso';
+  const firmes = enCurso ? ps.slice(0, -1) : ps;
+  const pt = p => `${x(p.fecha).toFixed(1)},${y(p.valor).toFixed(1)}`;
+  const linea = (firmes.length > 1 ? `<polyline class="gh-linea" points="${firmes.map(pt).join(' ')}"/>` : '')
+    + (enCurso ? `<polyline class="gh-linea en-curso" points="${pt(ps.at(-2))} ${pt(ps.at(-1))}"/>` : '');
   const area = ps.length > 1 ? `<polygon class="gh-area" points="${x(ps[0].fecha).toFixed(1)},${piso} ${coords} ${x(ps.at(-1).fecha).toFixed(1)},${piso}"/>` : '';
   const t = a.tendencia;
   const tendencia = t ? `<line class="gh-tendencia" x1="${x(ps[0].fecha).toFixed(1)}" y1="${y(t.desde).toFixed(1)}" x2="${x(ps.at(-1).fecha).toFixed(1)}" y2="${y(t.hasta).toFixed(1)}"/>` : '';
   // El récord: un anillo y la palabra arriba del punto (si no tapa el borde).
   const r = ps[a.mejor], rx = x(r.fecha), ry = y(r.valor);
   const record = ps.length > 1 && !neutro ? `<circle class="gh-record" cx="${rx.toFixed(1)}" cy="${ry.toFixed(1)}" r="7"/><text class="gh-record-texto" x="${Math.min(GH_ANCHO - GH_DER - 18, Math.max(IZQ + 18, rx)).toFixed(1)}" y="${Math.max(10, ry - 11).toFixed(1)}" text-anchor="middle">Récord</text>` : '';
-  const circulos = ps.map((p, i) => `<circle class="gh-punto${i === ps.length - 1 ? ' elegido' : ''}" data-i="${i}" cx="${x(p.fecha).toFixed(1)}" cy="${y(p.valor).toFixed(1)}" r="4"/>`).join('');
-  const clase = d => (!d || neutro ? 'igual' : (d > 0) !== mejorBaja ? 'sube' : 'baja');
+  const circulos = ps.map((p, i) => `<circle class="gh-punto${p.marca ? ` ${p.marca}` : ''}${i === ps.length - 1 ? ' elegido' : ''}" data-i="${i}" cx="${x(p.fecha).toFixed(1)}" cy="${y(p.valor).toFixed(1)}" r="4"/>`).join('');
+  // En una semana de descarga se baja a propósito, y la sesión en curso no terminó: el cambio va en gris, no en rojo.
+  let enDescarga = false;
+  const clase = d => (!d || neutro || enDescarga ? 'igual' : (d > 0) !== mejorBaja ? 'sube' : 'baja');
+  const MARCA = { en_curso: 'en curso', descarga: 'semana de descarga' };
   const flecha = d => (!d ? '=' : d > 0 ? '▲' : '▼');
   const cambioTexto = (d, que) => (d == null || !cambio ? '' : `<span class="gh-par"><span class="gh-cambio ${clase(d)}">${flecha(d)} ${esc(cambio(d))}</span> <span class="suave">${que}</span></span>`);
-  const datos = ps.map((p, i) => ({
-    x: +x(p.fecha).toFixed(1), t: p.texto, f: larga(p.fecha), s: p.sesion || null, d: p.detalle || '',
-    c: [cambioTexto(a.cambios[i].anterior, 'vs. anterior'), cambioTexto(a.cambios[i].inicio, 'en el período')].filter(Boolean).join(' · '),
-    r: i === a.mejor && ps.length > 1 && !neutro, // en las medidas del cuerpo no hay récord
-  }));
+  const datos = ps.map((p, i) => {
+    enDescarga = Boolean(p.marca); // descarga o en curso: no se juzga en rojo
+    return {
+      x: +x(p.fecha).toFixed(1), t: p.texto, f: larga(p.fecha) + (MARCA[p.marca] ? ` · ${MARCA[p.marca]}` : ''), s: p.sesion || null, d: p.detalle || '',
+      c: [cambioTexto(a.cambios[i].anterior, 'vs. anterior'), cambioTexto(a.cambios[i].inicio, 'en el período')].filter(Boolean).join(' · '),
+      r: i === a.mejor && ps.length > 1 && !neutro, // en las medidas del cuerpo no hay récord
+    };
+  });
   const ult = datos.at(-1);
   const pie = t && ritmo ? `<p class="gh-pie pequeno suave"><span class="gh-pie-linea"></span>Tendencia: ${esc(ritmo(t.porSemana))} por semana</p>` : '';
   return `<div class="grafico-hevy" data-gh='${esc(JSON.stringify(datos))}'>

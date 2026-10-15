@@ -530,8 +530,9 @@ function opcionesMensaje(m) {
     ...(!pendiente || !E.chatPorTraer.confirmado ? [{ etiqueta: 'Descartar', accion: { tipo: 'descartar_ia', id: m.propuesta.id } }] : []),
   ];
   if (['aplicada', 'descartada', 'no_disponible'].includes(m.estadoPropuesta)) return null;
-  return m.opciones?.length ? m.opciones : m.rol === 'coach' && !m.pendiente
-    ? Array.isArray(E.plan?.dias) && !E.plan.bloqueado ? irA('semana') : [{ etiqueta: 'Completar mi perfil', accion: { tipo: 'ir', vista: 'perfil' } }] : null;
+  // "Ver la semana" solo va con los cambios (los traen sus opciones); una respuesta común no lleva botones.
+  return m.opciones?.length ? m.opciones : m.rol === 'coach' && !m.pendiente && !m.sistema && !(Array.isArray(E.plan?.dias) && !E.plan.bloqueado)
+    ? [{ etiqueta: 'Completar mi perfil', accion: { tipo: 'ir', vista: 'perfil' } }] : null;
 }
 
 /** El texto de la IA con formato simple y seguro: párrafos, **negrita** y listas con "- ". Todo se escapa antes. */

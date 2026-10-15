@@ -75,6 +75,14 @@ function escala(valores, medida) {
   return { min: lo, max: hi, marcas };
 }
 
+/** 'en_curso' si es la sesión de hoy todavía sin guardar; 'descarga' si cayó en la semana de descarga del plan. */
+function marcaDe(f, id) {
+  const guardada = E.sesiones.some(s => s.fecha === f.fecha && (s.series || []).some(x => x.ejercicio_id === id));
+  if (f.fecha === hoy() && !guardada) return 'en_curso';
+  const dia = E.plan?.dias?.find(d => d.fecha === f.fecha);
+  return dia && E.plan.semana_descarga && dia.semana === E.plan.semana_descarga ? 'descarga' : null;
+}
+
 function graficoHtml(id, filas, medida, periodo, asistidoActual = false) {
   const hasta = hoy(), desde = desdePeriodo(periodo, hasta, filas);
   const enRango = filas.filter(f => f.fecha >= desde && f[medida] != null);
@@ -84,7 +92,7 @@ function graficoHtml(id, filas, medida, periodo, asistidoActual = false) {
   const detalle = f => (modoCardio({ ejercicio_id: id }) ? f.series.map(s => textoCardio({ ...s, ejercicio_id: id })).filter(Boolean).join(', ')
     : f.series.some(s => Number(s.carga_kg) > 0) ? seriesTexto(f.series) : f.series.map(s => (s.duracion_seg ? relojTexto(s.duracion_seg) : `${s.reps ?? '?'}`)).join(', '));
   const sesionDe = fecha => E.sesiones.find(s => s.fecha === fecha && (s.series || []).some(x => x.ejercicio_id === id))?.id || null;
-  const puntos = enRango.map(f => ({ fecha: f.fecha, valor: convertir(f[medida]), texto: textoPunto(f, medida, id), detalle: `${f.series.length} ${f.series.length === 1 ? 'serie' : 'series'}: ${detalle(f)}`, sesion: sesionDe(f.fecha) }));
+  const puntos = enRango.map(f => ({ fecha: f.fecha, valor: convertir(f[medida]), marca: marcaDe(f, id), texto: textoPunto(f, medida, id), detalle: `${f.series.length} ${f.series.length === 1 ? 'serie' : 'series'}: ${detalle(f)}`, sesion: sesionDe(f.fecha) }));
   const { min, max, marcas } = escala(puntos.map(p => p.valor), medida);
   // Cambios y tendencia en la unidad de la medida (los valores ya vienen en kg o lb).
   const u = unidadPeso(), pisos = modoCardio({ ejercicio_id: id }) === 'pisos';
@@ -102,7 +110,9 @@ export function progresoEjercicioHtml(id, { asistido = false, conHistorial = fal
   const medidas = medidasCon(filas, { asistido });
   const sel = elegido.get(id) || { medida: medidas.includes('e1rm') ? 'e1rm' : medidas[0], periodo: periodoInicial(filas, hoy()) };
   if (!medidas.includes(sel.medida)) sel.medida = medidas[0];
-  const r = ritmo(filas, hoy(), { campo: campoRitmo(filas, asistido) });
+  // La tendencia no cuenta la semana de descarga ni la sesión en curso: bajan a propósito o no terminaron.
+  const filasRitmo = filas.filter(f => !marcaDe(f, id));
+  const r = ritmo(filasRitmo, hoy(), { campo: campoRitmo(filasRitmo, asistido) });
   const porReps = asistido ? [] : recordsPorRepeticiones(series.filter(s => s.ejercicio_id === id));
   const cardio = modoCardio({ ejercicio_id: id });
   const nombre = m => (asistido && m === 'peso' ? 'Ayuda' : cardio === 'pisos' && m === 'reps' ? 'Pisos' : NOMBRE[m]);

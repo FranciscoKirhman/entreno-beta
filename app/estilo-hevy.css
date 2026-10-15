@@ -659,6 +659,10 @@ body:not(.en-sesion) .medalla-record{top:calc(env(safe-area-inset-top,0px) + 16p
 .grafico-hevy .gh-tendencia{stroke:var(--ink-muted);stroke-width:1.4;stroke-dasharray:4 4;opacity:.7}
 .grafico-hevy .gh-record{fill:none;stroke:var(--accent);stroke-width:2;opacity:.55}
 .grafico-hevy .gh-record-texto{font-size:11px;font-weight:700;fill:var(--accent)}
+/* Sesión en curso: línea punteada y punto hueco (como "In progress" de Hevy). Descarga: punto hueco gris. */
+.grafico-hevy .gh-linea.en-curso{stroke-dasharray:2 5;opacity:.8}
+.grafico-hevy .gh-punto.en_curso{fill:var(--surface);stroke:var(--accent);stroke-width:2}
+.grafico-hevy .gh-punto.descarga{fill:var(--surface);stroke:var(--ink-muted);stroke-width:2}
 .grafico-hevy .gh-pie{display:flex;align-items:center;gap:8px;margin:6px 0 0}
 .grafico-hevy .gh-pie-linea{width:18px;border-top:1.6px dashed var(--ink-muted)}
 .grafico-hevy .gh-detalle{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--fill);font-size:14px}
