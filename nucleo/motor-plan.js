@@ -201,7 +201,14 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
   // Semana tipo
   const nSesiones = Math.min(6, d.dias_meta);
   const dias = elegirDias(nSesiones, r.dias_no_puedo || []);
-  const plantillas = SEMANAS[Math.max(2, dias.length)].slice(0, dias.length);
+  let plantillas = SEMANAS[Math.max(2, dias.length)].slice(0, dias.length);
+  // Los días que no son firmes van al final de la semana: que ahí no quede una sesión de pierna (si se salta, se pierde
+  // la sentadilla, el hip thrust o el peso muerto de la semana). Se rota la semana sin cambiar el orden entre sesiones.
+  if (d.dias_firmes < plantillas.length) {
+    const rotada = k => [...plantillas.slice(k), ...plantillas.slice(0, k)];
+    const k = plantillas.findIndex((_, j) => !rotada(j).slice(d.dias_firmes).some(t => t.startsWith('pierna')));
+    if (k > 0) plantillas = rotada(k);
+  }
 
   // Zonas prioritarias: un aislado extra en los días que ya trabajan esa zona.
   const extras = new Map();
@@ -270,12 +277,22 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
       usadosSemana.set(ej.id, (usadosSemana.get(ej.id) || 0) + 1);
       ejercicios.push({ ej, prioridad });
     }
-    // Lo que no cabe en el tiempo disponible se va desde la prioridad más baja.
-    ejercicios = ejercicios.slice(0, d.ejercicios_por_sesion);
+    // Sesiones cortas (60 minutos o menos): los accesorios de músculos distintos van de a dos en superserie (bíceps
+    // con tríceps, hombro con core), con un descanso por vuelta. Ocupan un solo lugar de la sesión, así un torso de
+    // una hora no se queda sin brazos ni hombro. Los principales siguen en series normales, con su descanso completo.
+    if (d.duracion_min <= 60) emparejarAccesorios(ejercicios);
+    // Lo que no cabe en el tiempo disponible se va desde la prioridad más baja (una superserie cuenta como un lugar).
+    let lugares = 0;
+    ejercicios = ejercicios.filter((x, k) => {
+      const compañero = x.superserie && ejercicios.findIndex((y, j) => j !== k && y.superserie === x.superserie);
+      if (!(x.superserie && compañero >= 0 && compañero < k)) lugares++;
+      return lugares <= d.ejercicios_por_sesion;
+    });
     ejercicios.sort((a, b) => a.prioridad - b.prioridad || TIPO_ORDEN[a.ej.tipo] - TIPO_ORDEN[b.ej.tipo]);
+    ejercicios = juntarSuperseries(ejercicios);
     return {
       plantilla: t, foco: PLANTILLAS[t].foco, dia_semana: dias[i], firme: i < d.dias_firmes,
-      ejercicios: ejercicios.map(({ ej, prioridad }, orden) => armar(ej, prioridad, orden)),
+      ejercicios: ejercicios.map(({ ej, prioridad, superserie }, orden) => ({ ...armar(ej, prioridad, orden), ...(superserie ? { superserie } : {}) })),
     };
   });
 
@@ -430,7 +447,7 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     }
     if (!puesto) break;
   }
-  for (const x of conSemana) x.ejercicios.forEach((e, i) => { e.orden = i; });
+  for (const x of conSemana) { x.ejercicios = juntarSuperseries(x.ejercicios); x.ejercicios.forEach((e, i) => { e.orden = i; }); }
 
   // Calendario: 4 semanas desde el próximo lunes; la cuarta es de descarga.
   const lunes = sumarDias(hoy, (8 - diaSemana(hoy)) % 7 || 0);
@@ -442,6 +459,10 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
       const offset = (x.dia_semana === 0 ? 7 : x.dia_semana) - 1;
       const descarga = semana === 4;
       const conservadora = semana <= d.semanas_conservadoras;
+      // Semana 3, la última antes de la descarga: con experiencia, una repetición menos de reserva (sin bajar de 1 en
+      // los compuestos ni de 0 en los aislados, ni del mínimo del perfil). La exigencia sube dentro del bloque.
+      const intensificar = semana === 3 && !conservadora && !d.conservador && d.nivel !== 'principiante';
+      const rirSemana = e => (intensificar ? Math.max(e.rir - 1, d.rir_minimo, porId.get(e.ejercicio_id)?.tipo === 'compuesto' ? 1 : 0) : e.rir);
       diasPlan.push({
         fecha: sumarDias(lunes, (semana - 1) * 7 + offset), semana, plantilla: x.plantilla, foco: x.foco,
         tipo: 'entrenamiento', firme: x.firme, lugar: lugar.nombre || null,
@@ -452,12 +473,12 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
           ...zonasCalentar.map(z => CALENTAMIENTO_ZONA[z]).filter(Boolean),
         ],
         cardio: cardio(x, i),
-        ejercicios: x.ejercicios.map(e => (descarga ? comoDescarga(e) : { ...e, rir: Math.min(5, conservadora ? Math.max(e.rir, 3) : e.rir) })),
+        ejercicios: x.ejercicios.map(e => (descarga ? comoDescarga(e) : { ...e, rir: Math.min(5, conservadora ? Math.max(e.rir, 3) : rirSemana(e)) })),
       });
     }
   }
   const preparar = dia => {
-    dia.calentamiento = calentamientoDeSesion({ dia, porId: indice.porId, equipo, bloqueadas,
+    dia.calentamiento = calentamientoDeSesion({ dia, porId: indice.porId, equipo, bloqueadas, minutos: d.duracion_min,
       opcionesCarga: Object.fromEntries(dia.ejercicios.map(e => { const ej = indice.porId.get(e.ejercicio_id); return [e.ejercicio_id, { incremento: ej ? incrementoPara(ej, lugar) : 2.5, barra: ej?.equipamiento.includes('barra_rack') ? 20 : 0 }]; })) });
   };
   for (const dia of diasPlan) {
@@ -469,8 +490,10 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
       const protegido = e => (r.favoritos || []).includes(e.ejercicio_id) || (indice.porId.get(e.ejercicio_id)?.musculos_primarios || []).some(m => (r.musculos_prioridad || []).includes(m));
       const candidatos = dia.ejercicios.filter(e => !favoritos.has(e.ejercicio_id) || e.series > 1);
       const ultimo = [...(candidatos.length ? candidatos : dia.ejercicios)].sort((a, b) => Number(protegido(a)) - Number(protegido(b)) || b.prioridad - a.prioridad || b.orden - a.orden)[0];
-      if (ultimo.series > 1) ultimo.series--;
+      // Antes que dejar un ejercicio en 1 serie (que casi no aporta), se saca.
+      if (ultimo.series > 2) ultimo.series--;
       else dia.ejercicios.splice(dia.ejercicios.indexOf(ultimo), 1);
+      dia.ejercicios = juntarSuperseries(dia.ejercicios);
       preparar(dia);
     }
     const disponible = Math.max(0, d.duracion_min - duracionSesion({ ...dia, cardio: null }) - 2);
@@ -495,6 +518,37 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     justificacion: justificacion(d, dias, plantillas, bloqueadas),
     dias: diasPlan,
   };
+}
+
+/** Accesorios (no compuestos) de músculos principales distintos, de a dos, con letra de superserie. Primero bíceps con
+ *  tríceps; después cualquier par que no comparta músculo. Marca cada elegido con { superserie: 'A' | 'B' ... }. */
+function emparejarAccesorios(items) {
+  const libres = items.filter(x => x.ej.tipo !== 'compuesto' && x.ej.tipo !== 'cardio' && !x.superserie);
+  const distintos = (a, b) => !a.ej.musculos_primarios.some(m => b.ej.musculos_primarios.includes(m));
+  const letras = 'ABCDEFGH';
+  let n = 0;
+  const unir = (a, b) => { a.superserie = b.superserie = letras[n++]; };
+  const de = patron => libres.find(x => x.ej.patron === patron && !x.superserie);
+  const bi = de('biceps'), tri = de('triceps');
+  if (bi && tri) unir(bi, tri);
+  for (const a of libres) {
+    if (a.superserie) continue;
+    const b = libres.find(x => x !== a && !x.superserie && distintos(a, x));
+    if (b) unir(a, b);
+  }
+}
+
+/** Deja cada par de superserie seguido (el segundo justo después del primero); una letra sola se quita. */
+export function juntarSuperseries(lista) {
+  const out = [];
+  for (const x of lista) {
+    if (out.includes(x)) continue;
+    out.push(x);
+    const otro = x.superserie && lista.find(y => y !== x && y.superserie === x.superserie);
+    if (otro) out.push(otro);
+  }
+  for (const x of out) if (x.superserie && !out.some(y => y !== x && y.superserie === x.superserie)) delete x.superserie;
+  return out;
 }
 
 export const TEXTO_DESCARGA = 'Semana de descarga: la mitad de las series y más repeticiones de reserva, con los mismos ejercicios. Sirve para llegar fresco al próximo bloque.';
@@ -538,6 +592,8 @@ function justificacion(d, dias, plantillas, bloqueadas) {
     `Cada músculo entre ${d.series_rango[0]} y ${d.series_rango[1]} series a la semana${d.musculos_prioridad.length ? `, más en ${nombres(d.musculos_prioridad)}` : ''}.`,
     'La carga sube solo cuando completas todas las series en el tope de repeticiones. La semana 4 es de descarga.',
   ];
+  if (d.semanas_conservadoras < 3 && !d.conservador && d.nivel !== 'principiante') partes.push('La semana 3 pide una repetición menos de reserva, para subir la exigencia justo antes de la descarga.');
+  if (d.duracion_min <= 60) partes.push('Como la sesión es corta, el calentamiento dura unos 10 minutos y los accesorios van en superserie.');
   if (bloqueadas.size) partes.push(`Mientras dure la lesión, el plan no carga: ${nombres(bloqueadas)}.`);
   if (d.alerta === 'aviso') partes.push('Las dos primeras semanas van más suaves por lo que contestaste en salud.');
   return partes.join(' ');

@@ -101,7 +101,7 @@ export function editarSesion(accion, ctx) {
   // La preparación y sus minutos siguen a los ejercicios elegidos; las indicaciones importadas se conservan.
   if (accion.tipo === 'agregar' || accion.tipo === 'quitar') for (const x of [dia, ...siguientes(nuevo, dia, accion)]) {
     const lugar = ctx.respuestas.lugares?.find(l => l.nombre === x.lugar) || ctx.respuestas.lugares?.find(l => l.principal) || ctx.respuestas.lugares?.[0];
-    x.calentamiento = calentamientoDeSesion({ dia: x, porId: indice.porId, equipo: lugar?.equipamiento || [], bloqueadas: articulacionesBloqueadas(ctx.respuestas.lesiones || [], x.fecha) });
+    x.calentamiento = calentamientoDeSesion({ dia: x, porId: indice.porId, equipo: lugar?.equipamiento || [], bloqueadas: articulacionesBloqueadas(ctx.respuestas.lesiones || [], x.fecha), minutos: ctx.respuestas.duracion_min });
   }
   // Un error que el plan ya traía no bloquea agregar ni quitar (nucleo/validador.js: validarCambio).
   const v = validarCambio(plan, nuevo, ctx);

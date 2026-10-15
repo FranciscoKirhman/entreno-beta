@@ -93,7 +93,8 @@ export const HERRAMIENTAS = [
         series_por_musculo_semana: d.series_rango, repeticiones_de_reserva_minimas: d.rir_minimo,
         lesiones_activas: (r.lesiones || []).filter(l => l.activa !== false).map(l => ({ zona: l.region, tipo: l.tipo, intensidad: l.intensidad, alta: l.alta || null })),
         lugar: ((r.lugares || []).find(l => l.principal) || (r.lugares || [])[0])?.nombre || null,
-        plan: plan ? { inicio: plan.inicio, semana_descarga: plan.semana_descarga, bloque: bloqueDe(plan, hoy), proximos_dias: semana.map(diaParaIA) } : null,
+        plan: plan ? { inicio: plan.inicio, semana_descarga: plan.semana_descarga, bloque: bloqueDe(plan, hoy), proximos_dias: semana.map(diaParaIA),
+          sin_registro: await sinRegistro(plan, datos, hoy) } : null,
         // Cómo vienes: sensaciones, esfuerzo, check-ins y tendencias (solo donde el servidor lo ofrece).
         ...(datos.contexto && indice ? { como_vienes: contextoIA({ historial: await datos.historial(8), ...(await datos.contexto()), indice, hoy, respuestas: r }) } : {}),
       });
@@ -187,6 +188,16 @@ export const HERRAMIENTAS = [
     },
   },
 ];
+
+/** Sesiones del plan de los últimos 7 días (sin hoy) que no tienen un entrenamiento anotado: para saber de qué día
+ *  habla alguien que dice que faltó, en vez de suponer que es la sesión de hoy. */
+export async function sinRegistro(plan, datos, hoy) {
+  if (!datos.historial) return [];
+  const desde = new Date(Date.parse(hoy + 'T12:00:00Z') - 7 * 864e5).toISOString().slice(0, 10);
+  const hechas = new Set((await datos.historial(2)).map(s => s.fecha || new Date(s.inicio).toLocaleDateString('sv-SE', { timeZone: 'America/Santiago' })));
+  return plan.dias.filter(d => d.fecha >= desde && d.fecha < hoy && d.ejercicios?.length && !hechas.has(d.fecha))
+    .map(d => ({ fecha: d.fecha, dia: fechaEnPalabras(d.fecha).replace(/ de \d{4}$/, ''), foco: d.foco, firme: d.firme !== false }));
+}
 
 /** Una carga que se aleja más de un 30 % de la última vez suele ser un error al dictarla: se avisa para que la persona
  *  la revise antes de aceptar (no se bloquea: puede ser a propósito). */

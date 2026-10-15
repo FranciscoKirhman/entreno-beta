@@ -65,7 +65,15 @@ const EQUIVALE = [[/c[ií]rculos de hombro/i, 'hombros'], [/tor[aá]cica/i, 'tor
   [/face pull/i, 'face-banda'], [/tobillo/i, 'tobillo'], [/c[ií]rculos de cadera/i, 'cadera'], [/90\s*\/\s*90/i, '90-90'], [/bisagra/i, 'bisagra'], [/puente de gl[uú]teo/i, 'puente']];
 const equivalente = nombre => EQUIVALE.find(([re]) => re.test(nombre))?.[1] || null;
 
-export function calentamientoDeSesion({ dia, porId, equipo = [], bloqueadas = new Set(), cargas = {}, opcionesCarga = {} }) {
+/**
+ * minutos: duración de la sesión del perfil. En sesiones cortas (60 minutos o menos) el calentamiento se acorta a
+ * unos 10 minutos: 3 de cardio suave, los ejercicios de movilidad y activación que más sirven hoy (uno por zona, el
+ * más específico) y aproximación solo del primer ejercicio principal. Antes duraba unos 20 minutos siempre, y en una
+ * sesión de 45 dejaba lugar para tres ejercicios.
+ */
+export function calentamientoDeSesion({ dia, porId, equipo = [], bloqueadas = new Set(), cargas = {}, opcionesCarga = {}, minutos = null }) {
+  const corta = Number(minutos) > 0 && Number(minutos) <= 60;
+  const maxPasos = Number(minutos) <= 45 ? 2 : 3;
   const actuales = (dia.calentamiento || []).map(p => typeof p === 'string' ? { name: p, how: '' } : p);
   const personalizado = actuales.length && !actuales.some(p => p.origen === 'sesion-v1') && !(actuales.length >= 2 && actuales.slice(0, 2).every(generico));
   const ejerciciosHoy = (dia.ejercicios || []).map(e => ({ e, ej: porId.get(e.ejercicio_id) })).filter(x => x.ej && x.ej.tipo !== 'cardio');
@@ -122,6 +130,7 @@ export function calentamientoDeSesion({ dia, porId, equipo = [], bloqueadas = ne
   if (pasos.length && equipo.includes('bicicleta')) {
     Object.assign(pasos[0], { name: 'Bicicleta o caminata suave, 5 minutos', imagen: 'img/equipos/bicicleta.webp' });
   }
+  if (pasos.length && corta) Object.assign(pasos[0], { name: pasos[0].name.replace('5 minutos', '3 minutos'), seg_estimados: 180 });
   if (zonas.torso) {
     agregar('hombros', 'Círculos de hombro, 10 adelante y 10 atrás', 'De pie, brazos sueltos. Dibuja círculos grandes y lentos sin encoger los hombros hacia las orejas.', 'Prepara el movimiento de hombros para los ejercicios de torso.', '2 · Movilidad', ['hombro'], 'img/articulaciones/hombro.webp', 45);
     agregar('toracica', 'Movilidad torácica sentado, 8 por lado', 'Sentado, manos en la nuca. Gira el pecho sin mover la cadera. Se mueve la espalda alta, sin forzar la zona baja.', 'Ensaya el control del tronco que usarás en presses y remos.', '2 · Movilidad', ['lumbar', 'cuello', 'hombro'], 'img/musculos/espalda.webp', 60);
@@ -145,9 +154,22 @@ export function calentamientoDeSesion({ dia, porId, equipo = [], bloqueadas = ne
     if (patrones.has('bisagra')) agregar('bisagra', 'Bisagra de cadera hacia la pared, 12 repeticiones', 'De espaldas a la pared, echa la cadera atrás hasta tocarla, con las rodillas apenas dobladas y la espalda estable. Vuelve apretando el glúteo.', 'Ensaya el patrón de tu peso muerto antes de poner carga.', '3 · Activación', ['cadera', 'lumbar', 'rodilla'], 'img/articulaciones/cadera.webp', 60);
     agregar('puente', 'Puente de glúteo, 12 repeticiones con pausa', 'Boca arriba, pies al ancho de cadera. Sube hasta alinear rodillas, cadera y hombros, pausa un segundo y baja lento. Mantén las costillas abajo.', 'Activa el glúteo antes del trabajo de piernas, sin arquear la espalda.', '3 · Activación', ['cadera', 'lumbar', 'rodilla'], 'img/ejercicios/mini/puente_gluteo.webp', 60);
   }
+  if (corta) {
+    // Uno por zona (el de activación, que ensaya el movimiento del día) y después en orden, hasta el máximo.
+    const movilidad = pasos.filter(p => p.clave !== 'temperatura');
+    const zonaDe = p => (zonaDeClave(p.clave) === 'torso' ? 'torso' : zonaDeClave(p.clave) === 'pierna' ? 'pierna' : 'otra');
+    const elegidos = [];
+    for (const z of ['pierna', 'torso']) {
+      const dez = movilidad.filter(p => zonaDe(p) === z);
+      const uno = dez.find(p => p.fase === '3 · Activación') || dez[0];
+      if (uno && elegidos.length < maxPasos) elegidos.push(uno);
+    }
+    for (const p of movilidad) if (elegidos.length < maxPasos && !elegidos.includes(p)) elegidos.push(p);
+    for (let i = pasos.length - 1; i >= 0; i--) if (pasos[i].clave !== 'temperatura' && !elegidos.includes(pasos[i])) pasos.splice(i, 1);
+  }
   const extras = actuales.filter(p => !p.origen && !generico(p));
   for (const p of extras) pasos.push({ ...p, clave: clave(p.name), indiceAnterior: actuales.indexOf(p), fase: 'Preparación de tu plan' });
-  const principales = ejercicios.filter(x => x.ej.tipo === 'compuesto').slice(0, 2);
+  const principales = ejercicios.filter(x => x.ej.tipo === 'compuesto').slice(0, corta ? 1 : 2);
   for (const { e, ej } of principales.length ? principales : ejercicios.slice(0, 1)) {
     if ((ej.carga_articular || []).some(z => bloqueadas.has(z))) continue;
     const indicadas = aproximacionesDelPlan(dia, e);
