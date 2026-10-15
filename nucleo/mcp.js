@@ -7,13 +7,14 @@
 import { contextoIA } from './contexto-ia.js';
 import { aplicarCambios, ESQUEMA_CAMBIOS } from './cambios.js';
 import { validarPlan } from './validador.js';
-import { tieneEquipo, nivelAlcanza, cargaZonaBloqueada, articulacionesBloqueadas } from './catalogo.js';
+import { tieneEquipo, nivelAlcanza, cargaZonaBloqueada, articulacionesBloqueadas, normalizar } from './catalogo.js';
 import { moverSesion, intercambiar, marcarFaltada, opcionesParaHoy, sesionDe } from './agenda.js';
 import { evaluarDia, TEXTO_RECOMENDACION } from './bienestar.js';
 import { explicarEjercicio } from './explicar.js';
 import { planDeCuidado } from './cuidado.js';
 import { leerPlanTexto, calendarizar } from './importar-plan.js';
 import { semanasDelPlan } from './semanal.js';
+import { fechaEnPalabras } from './prompts-coach.js';
 
 export const VERSIONES = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 const SERVIDOR = { name: 'entreno', title: 'Entreno', version: '0.2.0' };
@@ -23,7 +24,7 @@ function bloqueDe(plan, hoy) {
   const semanas = semanasDelPlan(plan);
   if (!semanas.length) return null;
   const actual = semanas.filter(s => s.desde <= hoy).at(-1) || null, proxima = semanas.find(s => s.desde > hoy) || null;
-  return { semanas: semanas.length, semana_actual: actual?.semana ?? null, termina: semanas.at(-1).ultima,
+  return { semanas: semanas.length, semana_actual: actual?.semana ?? null, termina: semanas.at(-1).ultima, termina_el: fechaEnPalabras(semanas.at(-1).ultima),
     proxima_semana: proxima ? { semana: proxima.semana, desde: proxima.desde } : null };
 }
 
@@ -73,6 +74,9 @@ export function permitidos({ indice, respuestas: r, derivados: d, hoy }) {
  * @property {(semanas: number) => Promise<object[]>} historial   sesiones con sus series
  * @property {(sesion: object) => Promise<string>} registrarSesion
  */
+// Palabras que no ayudan a buscar un ejercicio.
+const SIN_PESO = new Set(['con', 'del', 'las', 'los', 'una', 'uno', 'para', 'por', 'que', 'sin', 'mas', 'equivalente', 'parecido', 'similar', 'otro', 'otra', 'ejercicio', 'ejercicios', 'gimnasio', 'nivel', 'avanzado', 'intermedio', 'principiante']);
+
 export const HERRAMIENTAS = [
   {
     name: 'ver_resumen',
@@ -106,14 +110,23 @@ export const HERRAMIENTAS = [
   {
     name: 'buscar_ejercicios',
     title: 'Buscar ejercicios',
-    description: 'Ejercicios que esta persona puede hacer con su equipamiento, su nivel y sus lesiones. Usa solo estos ids al proponer cambios.',
+    description: 'Ejercicios que esta persona puede hacer con su equipamiento, su nivel y sus lesiones, ordenados por coincidencia. texto: palabras sueltas del nombre, el equipo o el músculo (por ejemplo "remo polea" o "espalda"). patron (opcional): tiron_horizontal, tiron_vertical, empuje_horizontal, empuje_vertical, sentadilla, unilateral_pierna, bisagra, extension_cadera, flexion_rodilla, extension_rodilla, hombro_aislado, biceps, triceps o core. Usa solo estos ids al proponer cambios.',
     inputSchema: { type: 'object', properties: { texto: { type: 'string' }, patron: { type: 'string' } } },
     annotations: { readOnlyHint: true },
     async run({ texto: q = '', patron }, ctx) {
       const { respuestas, derivados } = await ctx.datos.perfil();
+      // Por palabras y no por frase exacta: la IA suele escribir frases ("remo con polea o mancuerna") que nunca
+      // aparecen tal cual en un nombre, y gastaba vueltas buscando sin resultados.
+      const palabras = normalizar(q).split(/\s+/).filter(w => w.length > 2 && !SIN_PESO.has(w));
+      const p = patron ? normalizar(patron).replace(/\s+/g, '_') : '';
       const lista = permitidos({ ...ctx, respuestas, derivados })
-        .filter(e => (!patron || e.patron === patron) && (!q || `${e.id} ${e.nombre} ${e.nombre_hevy}`.toLowerCase().includes(q.toLowerCase())));
-      return texto(lista.map(e => ({ id: e.id, nombre: e.nombre, patron: e.patron, musculos: e.musculos_primarios })));
+        .filter(e => !p || normalizar(e.patron || '').replace(/\s+/g, '_').includes(p))
+        .map(e => {
+          const pajar = normalizar(`${e.id.replaceAll('_', ' ')} ${e.nombre} ${e.nombre_hevy || ''} ${(e.musculos_primarios || []).join(' ')} ${(e.equipamiento || []).join(' ').replaceAll('_', ' ')}`);
+          return { e, puntos: palabras.filter(w => pajar.includes(w)).length };
+        })
+        .filter(x => !palabras.length || x.puntos > 0).sort((a, b) => b.puntos - a.puntos).slice(0, 25);
+      return texto(lista.map(({ e }) => ({ id: e.id, nombre: e.nombre, patron: e.patron, musculos: e.musculos_primarios })));
     },
   },
   {
@@ -169,10 +182,25 @@ export const HERRAMIENTAS = [
         tipo: 'efectiva', carga_kg: s.carga_kg ?? null, reps: s.reps, rir: s.rir ?? null,
       })));
       const id = await datos.registrarSesion({ sesion: { fecha, titulo: titulo || 'Sesión', origen: 'manual' }, series });
-      return texto({ registrada: !ctx.soloProponer, ...(ctx.soloProponer ? { esperando_confirmacion: true } : {}), id, series: series.length });
+      const avisos = datos.historial ? cargasRaras(series, await datos.historial(12), indice) : [];
+      return texto({ registrada: !ctx.soloProponer, ...(ctx.soloProponer ? { esperando_confirmacion: true } : {}), id, series: series.length, ...(avisos.length ? { avisos } : {}) });
     },
   },
 ];
+
+/** Una carga que se aleja más de un 30 % de la última vez suele ser un error al dictarla: se avisa para que la persona
+ *  la revise antes de aceptar (no se bloquea: puede ser a propósito). */
+function cargasRaras(series, historial, indice) {
+  const ultima = new Map();
+  for (const s of [...historial].sort((a, b) => String(a.inicio || a.fecha).localeCompare(String(b.inicio || b.fecha))))
+    for (const x of s.series || []) if (x.tipo !== 'calentamiento' && Number(x.carga_kg) > 0) ultima.set(x.ejercicio_id, Number(x.carga_kg));
+  const avisos = [];
+  for (const id of new Set(series.map(x => x.ejercicio_id))) {
+    const nueva = Math.max(...series.filter(x => x.ejercicio_id === id).map(x => Number(x.carga_kg) || 0)), antes = ultima.get(id);
+    if (nueva > 0 && antes && Math.abs(nueva - antes) / antes > 0.3) avisos.push(`${indice.porId.get(id)?.nombre || id}: ${nueva} kg y la última vez fueron ${antes} kg. Pregunta si es correcto antes de que lo acepte.`);
+  }
+  return avisos;
+}
 
 /**
  * Valida un plan cambiado y lo guarda si pasa; si no, devuelve los errores sin guardar nada. Con ctx.soloProponer

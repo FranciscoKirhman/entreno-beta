@@ -25,14 +25,16 @@ export function semanaPorRevisar(plan, hoy, revisadas = {}) {
   const clave = `${plan.inicio}|${s.semana}`;
   if (revisadas[clave]) return null;
   const siguiente = semanas.find(x => x.semana === s.semana + 1) || null;
-  return { semana: s.semana, desde: s.desde, hasta: s.hasta, clave, siguiente: siguiente ? { semana: siguiente.semana, desde: siguiente.desde } : null, ultima: !siguiente };
+  // Revisada tarde (la semana siguiente ya empezó): los ajustes parten mañana, no en un lunes que ya pasó.
+  const desdeSiguiente = siguiente && (siguiente.desde >= hoy ? siguiente.desde : sumarDias(hoy, 1));
+  return { semana: s.semana, desde: s.desde, hasta: s.hasta, clave, siguiente: siguiente ? { semana: siguiente.semana, desde: desdeSiguiente, ...(desdeSiguiente !== siguiente.desde ? { tarde: true } : {}) } : null, ultima: !siguiente };
 }
 
 /** El mensaje que queda en el chat (texto) y el que lee la IA (paraIA, con la fecha exacta para proponer_cambios). */
 export function mensajeRevision(s) {
   const rango = mes(s.desde) === mes(s.hasta) ? `${diaLargo(s.desde)} al ${diaLargo(s.hasta)} de ${mes(s.hasta)}` : `${diaLargo(s.desde)} de ${mes(s.desde)} al ${diaLargo(s.hasta)} de ${mes(s.hasta)}`;
   const texto = s.siguiente
-    ? `Revisión de la semana ${s.semana} (${rango}). Ajusta lo que haga falta desde el ${diaLargo(s.siguiente.desde)}.`
+    ? `Revisión de la semana ${s.semana} (${rango}). Ajusta lo que haga falta desde ${s.siguiente.tarde ? 'mañana, ' : 'el '}${diaLargo(s.siguiente.desde)}.`
     : `Revisión de la semana ${s.semana} (${rango}), la última del bloque. ¿Cómo voy y conviene armar el siguiente?`;
   return { texto, paraIA: s.siguiente ? `${texto} (desde = ${s.siguiente.desde})` : texto };
 }

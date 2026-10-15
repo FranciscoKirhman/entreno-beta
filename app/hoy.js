@@ -386,7 +386,7 @@ function calentamientoCompleto(dia, f) {
   const lugar = lugarDe(dia);
   const cargas = Object.fromEntries(dia.ejercicios.map((e, k) => [e.ejercicio_id, filasDe(f, e, k).find(x => deTrabajo(tipoDe(x)) && x.kg != null)?.kg ?? e.carga_kg ?? anterior(todas, e.ejercicio_id, f)?.series[0]?.carga_kg]));
   const opcionesCarga = Object.fromEntries(ejs.map(ej => [ej.id, { incremento: incrementoPara(ej, lugar) || 2.5, barra: ej.equipamiento.includes('barra_rack') ? 20 : 0, esquema: ajuste('esquemaCal') }]));
-  return calentamientoDeSesion({ dia, porId: indice.porId, equipo: lugar?.equipamiento || [], bloqueadas: articulacionesBloqueadas(R().lesiones, f), cargas, opcionesCarga });
+  return calentamientoDeSesion({ dia, porId: indice.porId, equipo: lugar?.equipamiento || [], bloqueadas: articulacionesBloqueadas(R().lesiones, f), cargas, opcionesCarga, minutos: R().duracion_min });
 }
 // Las series de aproximación van en la tabla de cada ejercicio (filas C): en la pantalla del calentamiento no se repiten.
 const pasosGenerales = todos => todos.filter(p => !p.agregar_id && !/aproximaci/i.test(p.name));
@@ -435,24 +435,23 @@ function filaPasosHtml(dia, f, tipo) {
     </div>`;
   }
   const s = estadoPasos(pasos, tipo, f);
-  const medidas = E.pasosMedidas?.[f]?.[tipo] || {};
   // Plegado en una línea, como pidió Francisco (docs/32, D6): se abre al tocarlo y sigue abierto al repintar.
   return `<details class="tarjeta pasos-tabla" data-panel="pasos-${tipo}" aria-label="${NOMBRE_PASOS[tipo]}"${abiertos.has(`pasos-${tipo}`) ? ' open' : ''}>
     <summary class="cab-tarjeta"><h3>${icono(tipo === 'cal' ? 'fuego' : 'persona', 'icono icono-pasos')} ${NOMBRE_PASOS[tipo]}</h3><span class="pequeno suave">${s.completo ? 'Hecho ✓' : `${s.n} de ${pasos.length} hechos`}</span></summary>
-    <p class="pequeno suave">${tipo === 'cal' ? 'Las aproximaciones están como filas C en cada ejercicio.' : 'Opcional al terminar. Toca ▶ para contar el tiempo y marca cada estiramiento al terminarlo.'}</p>
-    <div class="pasos-tabla-cab" aria-hidden="true"><span>Movimiento y previsto</span><span>${tipo === 'est' ? 'Tiempo' : 'Realizado'}</span><span>Hecho</span></div>
+    <p class="pequeno suave">${tipo === 'cal' ? 'Toca ▶ para contar el tiempo y marca cada movimiento al terminarlo. Las aproximaciones están como filas C en cada ejercicio.' : 'Opcional al terminar. Toca ▶ para contar el tiempo y marca cada estiramiento al terminarlo.'}</p>
+    <div class="pasos-tabla-cab" aria-hidden="true"><span>Movimiento y previsto</span><span>Tiempo</span><span>Hecho</span></div>
     ${pasos.map((p, i) => { const parte = partePaso(p.name), clave = p.clave || `${i}|${p.name}`;
       return `<div class="pasos-tabla-fila${s.hechos[i] ? ' completa' : ''}">
         <div><strong>${esc(parte.nombre)}</strong><small>${esc(parte.dosis || p.name)}</small><details><summary>Cómo hacerlo</summary><p class="pequeno">${esc(p.how || 'Sigue la dosis indicada en el plan.')}</p></details></div>
-        ${tipo === 'est' ? relojEstiramiento(p, parte.nombre) : `<button type="button" class="boton paso-dosis" data-paso-dosis="${tipo}" data-paso-indice="${i}" aria-label="${esc(`Registrar dosis de ${parte.nombre}`)}">${esc(medidas[clave] || 'Registrar')}</button>`}
+        ${relojPaso(p, parte.nombre)}
         <button type="button" class="boton-icono paso-tabla-hecho" data-paso-tabla="${tipo}" data-paso-indice="${i}" aria-pressed="${s.hechos[i]}" aria-label="${esc(`${parte.nombre} hecho`)}">${s.hechos[i] ? icono('visto') : E.pasosOmitidos?.[f]?.[tipo]?.[clave] ? '×' : '○'}</button>
       </div>`; }).join('')}
-    <p class="pequeno suave">Marcar hecho confirma el movimiento. El valor realizado queda sin medir si no lo anotas.</p>
   </details>`;
 }
 
-/** Estiramiento: un ▶ que cuenta su tiempo (por lado, si corresponde); sin tiempo en el plan, nada que registrar. */
-function relojEstiramiento(p, nombre) {
+/** Calentamiento y estiramiento: un ▶ que cuenta su tiempo (por lado, si corresponde); lo que va por repeticiones solo
+ *  se marca con el tick, sin nada que anotar. */
+function relojPaso(p, nombre) {
   const tramos = tramosDePaso(p.name, p.seg_estimados), total = tramos.reduce((x, t) => x + t.seg, 0);
   return tramos.length ? `<button type="button" class="boton reloj-paso paso-play" data-tramos="${esc(JSON.stringify(tramos))}" data-final="¡Listo! Márcalo como hecho." aria-label="${esc(`Contar ${reloj(total)} de ${nombre}`)}">▶ <span class="num">${reloj(total)}</span></button>` : '<span aria-hidden="true"></span>';
 }
@@ -922,21 +921,6 @@ function enlazar(ir, dia) {
         if (boton) $(boton)?.click();
       },
     });
-  });
-  raiz.querySelectorAll('[data-paso-dosis]').forEach(b => b.onclick = () => {
-    const tipo = b.dataset.pasoDosis, i = Number(b.dataset.pasoIndice), p = pasosDe(dia, f, tipo)[i];
-    const parte = partePaso(p.name), clave = p.clave || `${i}|${p.name}`;
-    const unidad = /\bmin|minuto/i.test(parte.dosis) ? 'min' : /\bs\b|seg/i.test(parte.dosis) ? 's' : 'reps';
-    const opciones = unidad === 'min' ? [2,3,5,6,8,10] : unidad === 's' ? [15,20,30,45,60,90] : [5,6,8,10,12,15,20];
-    abrirHoja({ titulo: parte.nombre, nota: `Previsto: ${parte.dosis || p.name}. Elige lo que realizaste.`, volver: b,
-      opciones: [...opciones.map(n => ({valor: `${n} ${unidad}`, nombre: `${n} ${unidad}${/por lado/i.test(parte.dosis) ? ' por lado' : ''}`})), {valor:'otro',nombre:'Otro valor'}, {valor:'borrar',nombre:'Dejar sin medir'}],
-      alElegir: v => {
-        const guardarValor = valor => { (((E.pasosMedidas ||= {})[f] ||= {})[tipo] ||= {})[clave] = valor; guardar(); repintar(); };
-        if (v !== 'otro') return guardarValor(v === 'borrar' ? '' : v + (/por lado/i.test(parte.dosis) ? ' por lado' : ''));
-        let otro = 0;
-        abrirHoja({titulo:'Registrar otro valor',contenido:`<label>Realizado en ${unidad}<input id="paso-otro" type="number" min="0" max="999" step="1" inputmode="numeric"></label>`,opciones:[{valor:'guardar',nombre:'Guardar'}],alElegir:()=>{if(otro>0)guardarValor(`${otro} ${unidad}`);}});
-        document.getElementById('paso-otro').oninput=e=>{otro=Number(e.target.value);};
-      }});
   });
   // Como las series: un toque marca el movimiento como hecho y otro lo desmarca, sin preguntar.
   raiz.querySelectorAll('[data-paso-tabla]').forEach(b => b.onclick = () => {

@@ -71,7 +71,9 @@ export function validarPlan(plan, { derivados: d, respuestas: r, indice, hoy }) 
       if ((dia.ejercicios || []).some((e, i) => e.superserie && !g[i])) adv('superserie_suelta', `${dia.fecha}: una superserie quedó con un solo ejercicio o separada; se hace como serie normal.`, donde);
     }
     const minutos = duracionSesion(dia);
-    if (minutos === null || minutos > d.duracion_min) err('duracion', `${dia.fecha}: la sesión dura unos ${minutos} minutos y tienes ${d.duracion_min}.`, { ...donde, valor: minutos });
+    // La semana 0 son los días que quedan del bloque anterior al armar el siguiente: ya cumplían el plan del que vienen
+    // y no se rearman, así que acortar los minutos del bloque nuevo no los vuelve inválidos.
+    if (dia.semana !== 0 && (minutos === null || minutos > d.duracion_min)) err('duracion', `${dia.fecha}: la sesión dura unos ${minutos} minutos y tienes ${d.duracion_min}.`, { ...donde, valor: minutos });
   }
 
   // Volumen por músculo en una semana normal (la 1) y que la descarga baje.
