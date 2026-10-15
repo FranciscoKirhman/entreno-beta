@@ -11,6 +11,7 @@ import { CONFIG } from './config.js';
 import { leerCopia, escribirCopia } from './copia-entreno.js';
 import { estadoDeCopia } from '../nucleo/copia-segura.js';
 import { revisarTrasladoCuenta } from '../nucleo/consentimiento-nube.js';
+import { corregirHistorial } from '../nucleo/corregir-historial.js';
 
 const cargar = u => fetch(u).then(r => { if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.json(); });
 export const [C, catalogo, K, EVIDENCIA, PLANES, TECNICA] = await Promise.all(
@@ -106,6 +107,7 @@ try {
   if (perfilDePrueba && guardado == null) throw new Error('Falta la copia de ese perfil');
   const viejo = CLAVE_PERSONAL === CLAVE_ORIGINAL ? JSON.parse(localStorage.getItem('entreno-demo-v1') || 'null') : null;
   E = { ...E, ...(viejo ? { respuestas: viejo.respuestas, plan: viejo.plan } : {}), ...JSON.parse(guardado || '{}') };
+  corregirHistorial(E.sesiones, indice); // solo en memoria: se guarda con el próximo cambio
 } catch { lecturaFallida = true; errorGuardado = errorPerfilPrueba || 'No pude leer tus datos guardados. Descarga un respaldo de esta sesión antes de cerrar.'; }
 // La segunda copia (IndexedDB) se lee al cargar cada ámbito (al abrir y al entrar a una cuenta), antes de escribirla de
 // nuevo: si el almacenamiento principal quedó atrás, recuperarCopia() la usa. alCargar guarda la hora del estado
@@ -167,6 +169,7 @@ export function activarCuenta(id = null) {
   try { datos = JSON.parse(localStorage.getItem(nueva) || '{}'); }
   catch { throw new Error('No pude leer la copia de esa cuenta. Tus datos actuales se conservan.'); }
   E = { ...VACIO(), ...datos }; CLAVE = nueva; ambitoDatos = id || AMBITO_LOCAL; personal = E;
+  corregirHistorial(E.sesiones, indice);
   alCargar = { clave: nueva, guardadoEn: Number(datos.guardadoEn) || 0, lectura: leerCopia(nueva, { renovar: true }), consumida: false, revisionInicial: revisionLocal };
   // La copia nueva se recupera antes de guardar: no dar una hora nueva a un estado vacío todavía.
   lecturaFallida = false; alinearPropios();
@@ -223,6 +226,7 @@ export async function recuperarCopia() {
   const estado = estadoDeCopia(guardadoEn, copia);
   if (!estado) return false;
   E = { ...VACIO(), ...estado };
+  corregirHistorial(E.sesiones, indice);
   personal = E;
   lecturaFallida = false; errorGuardado = null;
   guardar();
@@ -251,6 +255,7 @@ export function restaurar(r) {
   const antes = E, bloqueoAnterior = lecturaFallida;
   lecturaFallida = false;
   E = { ...VACIO(), ...structuredClone(r.estado), vista: 'hoy', mensaje: null };
+  corregirHistorial(E.sesiones, indice);
   if (!modoEjemplo) E.sesiones = E.sesiones.filter(s => s.origen !== 'ejemplo');
   if (!guardar()) { E = antes; lecturaFallida = bloqueoAnterior; throw new Error('No pude guardar el respaldo. Tus datos anteriores se conservan.'); }
 }

@@ -21,6 +21,9 @@
 .coach-cabecera .coach-mas{position:relative}
 .coach-cabecera .coach-mas::after{content:'';position:absolute;inset:-4px}
 #vista-coach .coach-cabecera button{min-height:36px;min-width:36px}
+/* Con la barra de arriba a la vista (cuenta o ejemplo, app/estilos.css: .barra, 34 px más el notch), la cabecera se
+   pega justo debajo: así la barra no tapa la cara del coach al desplazar, y el margen del notch no se repite. */
+body:has(.barra #modo:not([hidden])) .coach-cabecera{top:calc(env(safe-area-inset-top,0px) + 34px);padding-top:6px}
 
 /* Saludo: la pose del coach, "Buenas tardes" y lo de hoy en una línea, con botones para actuar. */
 .coach-hola{display:grid;justify-items:center;text-align:center;gap:6px;padding:8px 8px 14px}
