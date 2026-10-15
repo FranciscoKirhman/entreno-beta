@@ -50,7 +50,7 @@ export function pintarCampana() {
 }
 
 const hora = iso => {
-  const d = new Date(iso), h = d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+  const d = new Date(iso), h = d.toLocaleTimeString('es-CL', { hour: 'numeric', minute: '2-digit' });
   const dias = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / 864e5);
   return dias === 0 ? `Hoy ${h}` : dias === 1 ? `Ayer ${h}` : `${d.toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })} ${h}`;
 };

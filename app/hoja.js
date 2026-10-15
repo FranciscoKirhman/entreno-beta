@@ -122,5 +122,9 @@ export function abrirHoja({ titulo, nota = '', notaOculta = false, contenido = '
   });
   document.addEventListener('keydown', teclaEscape);
   arrastrarParaCerrar(fondo);
-  requestAnimationFrame(() => { fondo.classList.add('abierta'); fondo.querySelector('.elegir')?.focus(); });
+  // El foco entra a la hoja (para el lector de pantalla y Escape), no a la primera opción: en el iPhone eso la
+  // dejaba marcada con el borde naranjo, recortado por las esquinas de la lista.
+  const hoja = fondo.querySelector('.hoja');
+  hoja.tabIndex = -1;
+  requestAnimationFrame(() => { fondo.classList.add('abierta'); hoja.focus({ preventScroll: true }); });
 }

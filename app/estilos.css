@@ -255,6 +255,7 @@ body.con-descanso main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 170
 .hoja-fondo.abierta .hoja{transform:none}
 .hoja-fondo.cerrando{pointer-events:none}
 .hoja-fondo.cerrando .hoja{transition-timing-function:ease-in;transition-duration:.2s}
+.hoja:focus{outline:none}
 .hoja .asa{width:44px;height:5px;border-radius:5px;background:var(--border);margin:0 auto 10px}
 .hoja h3{text-align:center;font-size:17px;margin:0 0 12px}
 .opciones-hoja{list-style:none;margin:0;padding:0;background:var(--surface);border-radius:14px;overflow:hidden}

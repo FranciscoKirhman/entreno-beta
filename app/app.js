@@ -366,7 +366,7 @@ async function iniciarEnSegundoPlano() {
     const estado = E, usuario = nube.usuarioId(), vigente = () => E === estado && nube.usuarioId() === usuario;
     let resultado;
     try { resultado = await sincronizarAlEntrar(); }
-    catch { if (vigente()) anotarSinc('No pude sincronizar al abrir. Sigues con la copia de este teléfono.', { problema: navigator.onLine }); }
+    catch (e) { if (vigente()) anotarSinc(`No pude sincronizar al abrir (${e.message}). Sigues con la copia de este teléfono.`, { problema: navigator.onLine }); }
     if (!vigente()) return;
     // Con la cuenta al día: la revisión de la semana que terminó y las notas que quedaron sin enviar.
     revisarSemanaSiToca();
