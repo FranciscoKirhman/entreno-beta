@@ -60,7 +60,11 @@ body:has(.barra #modo:not([hidden])) .coach-cabecera{top:calc(env(safe-area-inse
 
 /* Redacción: ideas en una fila que se desliza, luego ＋ y el campo redondo con la flecha adentro. Sin caja alrededor. */
 #coach-redaccion{background:transparent;border:0;box-shadow:none;padding:0;left:12px;right:12px;display:grid;gap:8px}
-#coach-redaccion .coach-ideas{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -12px;padding:0 12px;scroll-padding:12px;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 12px,#000 calc(100% - 24px),transparent);mask-image:linear-gradient(90deg,transparent 0,#000 12px,#000 calc(100% - 24px),transparent)}
+/* Fondo de vidrio detrás de las ideas y el campo, de borde a borde y hasta el menú, como la barra de Mensajes: el chat
+   no se lee por detrás. #coach-redaccion es fijo con z-index, así que el fondo queda detrás de su contenido. */
+#coach-redaccion::before{content:'';position:absolute;z-index:-1;left:-12px;right:-12px;top:-10px;bottom:calc(-1 * var(--coach-menu-distancia,78px));
+  background:color-mix(in srgb,var(--bg) 82%,transparent);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);border-top:.5px solid var(--line)}
+#coach-redaccion .coach-ideas{display:flex;flex-wrap:nowrap;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -12px;padding:0 12px;scroll-padding:12px;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 12px,#000 calc(100% - 24px),transparent);mask-image:linear-gradient(90deg,transparent 0,#000 12px,#000 calc(100% - 24px),transparent)}
 #coach-redaccion .coach-ideas::-webkit-scrollbar{display:none}
 #coach-redaccion .coach-ideas:empty{display:none}
 #coach-redaccion .coach-ideas .sugerencia{flex:none;min-height:40px;padding:8px 14px;border-radius:999px;border:.5px solid var(--line);background:color-mix(in srgb,var(--surface) 88%,transparent);
