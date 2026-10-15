@@ -41,6 +41,17 @@ export function medidasCon(filas, { asistido = false } = {}) {
 }
 
 export const PERIODOS = [['1m', '1 mes', 30], ['3m', '3 meses', 91], ['6m', '6 meses', 182], ['1a', '1 año', 365], ['todo', 'Todo', null]];
+/** El período con que abre el gráfico: el más corto que muestra al menos 6 sesiones (si no, Todo). Así un ejercicio
+ *  que no se hizo en meses no abre con dos puntos sueltos. */
+export function periodoInicial(filas, hoy, minimo = 6) {
+  for (const [id, , d] of PERIODOS) {
+    if (d == null) return id;
+    const desde = sumarDias(hoy, -d + 1);
+    if (filas.filter(f => f.fecha >= desde).length >= minimo) return id;
+  }
+  return 'todo';
+}
+
 /** Primer día del período: 1, 3 o 6 meses, 1 año o desde la primera sesión (sin período válido, 3 meses). */
 export function desdePeriodo(periodo, hoy, filas) {
   const p = PERIODOS.find(x => x[0] === periodo) || PERIODOS[1];

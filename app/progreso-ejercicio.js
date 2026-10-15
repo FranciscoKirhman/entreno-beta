@@ -5,7 +5,7 @@ import { E, esc, $, hoy, fechaCorta, coma, enUnidad, unidadPeso, peso, volumenTe
 import { icono } from './iconos.js';
 import { nombreAsistente } from './cuestionario.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
-import { porSesion, medidasCon, desdePeriodo, ritmo, PERIODOS } from '../nucleo/progreso-ejercicio.js';
+import { porSesion, medidasCon, desdePeriodo, ritmo, PERIODOS, periodoInicial } from '../nucleo/progreso-ejercicio.js';
 import { recordsPorRepeticiones } from '../nucleo/records.js';
 import { lineaHevy } from './grafico.js';
 import { relojTexto, modoCardio, textoCardio } from '../nucleo/unidades.js';
@@ -65,7 +65,7 @@ function escala(valores, medida) {
   if (lo === hi) { lo -= Math.max(1, lo * 0.1); hi += Math.max(1, hi * 0.1); }
   const margen = (hi - lo) * 0.12;
   lo = Math.max(0, lo - margen); hi += margen;
-  const etiqueta = v => (medida === 'reps' ? `${Math.round(v)}` : medida === 'duracion' ? relojTexto(Math.round(v)) : medida === 'distancia' ? `${Math.round(v)} m` : medida === 'volumen' ? Math.round(v).toLocaleString('es-CL') : `${coma(Math.round(v * 10) / 10)} ${u}`);
+  const etiqueta = v => (medida === 'reps' ? `${Math.round(v)}` : medida === 'duracion' ? relojTexto(Math.round(v)) : medida === 'distancia' ? `${Math.round(v)} m` : ['volumen', 'serie'].includes(medida) ? Math.round(v).toLocaleString('es-CL') : `${coma(Math.round(v * 10) / 10)} ${u}`);
   // Líneas en números redondos (1, 2, 2,5 o 5 por una potencia de 10), unas tres en la altura del gráfico.
   const bruto = (hi - lo) / 3, base = 10 ** Math.floor(Math.log10(bruto));
   let paso = [1, 2, 2.5, 5, 10].map(k => k * base).find(k => k >= bruto);
@@ -89,9 +89,9 @@ function graficoHtml(id, filas, medida, periodo, asistidoActual = false) {
   // Cambios y tendencia en la unidad de la medida (los valores ya vienen en kg o lb).
   const u = unidadPeso(), pisos = modoCardio({ ejercicio_id: id }) === 'pisos';
   const abs = (d, txt) => `${d > 0 ? '+' : d < 0 ? '−' : ''}${txt(Math.abs(d))}`;
-  const cambio = d => abs(d, v => (['peso', 'e1rm'].includes(medida) ? `${num(v)} ${u}` : ['volumen', 'serie'].includes(medida) ? `${Math.round(v).toLocaleString('es-CL')} ${u}`
+  const cambio = d => abs(d, v => (['peso', 'e1rm'].includes(medida) ? `${num(v)} ${u}` : medida === 'volumen' ? `${Math.round(v).toLocaleString('es-CL')} ${u}` : medida === 'serie' ? `${Math.round(v).toLocaleString('es-CL')} ${u} de volumen`
     : medida === 'reps' ? `${num(v)} ${pisos ? 'pisos' : 'reps'}` : medida === 'duracion' ? relojTexto(Math.round(v)) : `${Math.round(v)} m`));
-  return lineaHevy({ puntos, desde, hasta, min, max, marcas, titulo: `${NOMBRE[medida]}, ${puntos.length} ${puntos.length === 1 ? 'sesión' : 'sesiones'}`,
+  return lineaHevy({ puntos, desde, hasta, min, max, marcas, titulo: `${medida === 'serie' ? 'Mejor serie (peso × repeticiones)' : NOMBRE[medida]}, ${puntos.length} ${puntos.length === 1 ? 'sesión' : 'sesiones'}`,
     izquierda: ['volumen', 'serie'].includes(medida) ? 54 : 52, cambio, ritmo: cambio, mejorBaja: asistidoActual && medida === 'peso' });
 }
 
@@ -100,7 +100,7 @@ export function progresoEjercicioHtml(id, { asistido = false, conHistorial = fal
   const filas = porSesion(series, id, { asistido });
   if (!filas.length) return '';
   const medidas = medidasCon(filas, { asistido });
-  const sel = elegido.get(id) || { medida: medidas.includes('e1rm') ? 'e1rm' : medidas[0], periodo: '3m' };
+  const sel = elegido.get(id) || { medida: medidas.includes('e1rm') ? 'e1rm' : medidas[0], periodo: periodoInicial(filas, hoy()) };
   if (!medidas.includes(sel.medida)) sel.medida = medidas[0];
   const r = ritmo(filas, hoy(), { campo: campoRitmo(filas, asistido) });
   const porReps = asistido ? [] : recordsPorRepeticiones(series.filter(s => s.ejercicio_id === id));

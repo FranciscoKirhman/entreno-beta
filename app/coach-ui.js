@@ -26,15 +26,58 @@ function borradorChat() {
   if (!borradores.has(E)) borradores.set(E, { texto: E.borradorChat || '', archivo: null, lectura: 0, leyendo: false });
   return borradores.get(E);
 }
+// Una consulta que se cortó (la app pasó a segundo plano, se cayó la red o el servidor tardó) no se pierde: el
+// servidor la termina y guarda la respuesta con el id de la consulta; aquí se pide cada pocos segundos.
+const RECUPERAR_MS = 4 * 60_000, CADA_MS = 4000;
+const recuperando = new Set();
 function recuperarConsultaInterrumpida() {
   let cambio = false;
   for (const m of E.chat) if (m.pendiente && !(consultaActual?.estado === E && consultaActual.usuario === nube.usuarioId() && consultaActual.mensaje === m)) {
+    if (m.consulta && Date.now() - (m.desde || 0) < RECUPERAR_MS && nube.conectado()) { esperarRespuesta(m); continue; }
     delete m.pendiente;
-    m.texto = 'La consulta se interrumpió. Revisa si llegó una propuesta antes de volver a enviarla.';
-    m.opciones = [{ etiqueta: 'Revisar propuestas en Perfil', accion: { tipo: 'ir', vista: 'mas' } }];
+    m.texto = m.consulta ? 'No me llegó la respuesta de esta consulta. Puedes reintentarla: si ya estaba lista, no se vuelve a cobrar.' : 'La consulta se interrumpió. Revisa si llegó una propuesta antes de volver a enviarla.';
+    m.opciones = m.consulta ? [{ etiqueta: 'Reintentar', accion: { tipo: 'reintentar', consulta: m.consulta } }] : [{ etiqueta: 'Revisar propuestas en Perfil', accion: { tipo: 'ir', vista: 'mas' } }];
     cambio = true;
   }
   if (cambio) guardar();
+}
+
+/** Pide la respuesta guardada de una consulta cortada hasta que llega o se acaba el plazo. */
+async function esperarRespuesta(pendiente) {
+  if (recuperando.has(pendiente.consulta)) return;
+  recuperando.add(pendiente.consulta);
+  const estado = E, usuario = nube.usuarioId(), vigente = () => E === estado && nube.usuarioId() === usuario && E.chat.includes(pendiente);
+  pendiente.texto = 'Sigue pensando…';
+  let desconocida = 0;
+  try {
+    while (vigente() && Date.now() - (pendiente.desde || 0) < RECUPERAR_MS) {
+      await new Promise(r => setTimeout(r, CADA_MS));
+      if (!vigente()) return;
+      let r;
+      try { r = await nube.respuestaChat(pendiente.consulta); } catch { continue; } // sin red: se sigue intentando
+      if (!vigente()) return;
+      if (r.estado === 'lista' && r.respuesta) { aplicarRespuesta(pendiente, r.respuesta); return; }
+      // Nunca llegó al servidor: sin conexión vuelve a la cola; con conexión, después de unos intentos, se ofrece reintentar.
+      if (r.estado === 'desconocida' && ++desconocida >= 3) break;
+    }
+    if (!vigente()) return;
+    const persona = E.chat.find(m => m.rol === 'persona' && m.consulta === pendiente.consulta);
+    E.chat = E.chat.filter(m => m !== pendiente);
+    if (persona && (persona.tipo || sinSenal())) { persona.porEnviar = true; pausarCola(); }
+    else E.chat.push({ rol: 'coach', texto: 'No me llegó la respuesta de esta consulta. Puedes reintentarla: si ya estaba lista, no se vuelve a cobrar.', opciones: [{ etiqueta: 'Reintentar', accion: { tipo: 'reintentar', consulta: pendiente.consulta } }] });
+    guardar(); avisoChat(); pintarChat();
+  } finally { recuperando.delete(pendiente.consulta); }
+}
+
+/** Pone la respuesta del servidor en el lugar de "Pensando…" (al llegar directo o al recuperarla). */
+function aplicarRespuesta(pendiente, ia) {
+  const persona = E.chat.find(m => m.rol === 'persona' && m.consulta === pendiente.consulta);
+  const i = E.chat.indexOf(pendiente);
+  const mensaje = { rol: 'coach', texto: ia.texto || 'Listo.', propuesta: ia.propuesta || null, opciones: ia.propuesta ? confirmarIA(ia.propuesta.id) : ia.opciones || null, sugerencias: ia.sugerencias || null, enlace: ia.enlace || null, ...(persona?.sesionId ? { sesionId: persona.sesionId } : {}) };
+  if (i >= 0) E.chat.splice(i, 1, mensaje); else E.chat.push(mensaje);
+  if (!$('vista-coach')?.isConnected) { E.chatSinLeer = true; marcarNovedadCoach(); }
+  guardar(); avisoChat(); pintarChat();
+  procesarColaCoach();
 }
 
 /** Lo que respondiste en "¿Cómo se sintió?" al guardar (E.sensaciones): con dos de las últimas tres sesiones brutales,
@@ -155,6 +198,13 @@ export function vistaCoach(ir, mensajeInicial) {
     const op = msg && opcionesMensaje(msg)?.[Number(b.dataset.opcion)];
     if (!op || decisiones.has(msg) || !vigente()) return;
     if (op.accion.tipo === 'ir') return ir(op.accion.vista); // los botones para ir a ver el cambio quedan
+    if (op.accion.tipo === 'reintentar') {
+      // La misma consulta (mismo id): si el servidor ya la tenía lista, la devuelve sin volver a cobrar.
+      const persona = E.chat.find(m => m.rol === 'persona' && m.consulta === op.accion.consulta);
+      if (!persona) return;
+      E.chat = E.chat.filter(m => m !== msg);
+      return enviar(persona.texto, ir, null, { existente: persona });
+    }
     decisiones.add(msg);
     b.closest('.opciones-chat')?.querySelectorAll('button').forEach(x => { x.disabled = true; });
     try {
@@ -524,6 +574,7 @@ async function enviar(texto, ir, archivo = null, { existente = null } = {}) {
   let completada = true, consulta;
   const persona = existente || { rol: 'persona', texto };
   if (existente) delete existente.porEnviar; else E.chat.push(persona);
+  persona.consulta ||= typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 10)}`;
   const modo = existente?.modo || (E.chatModo === 'plan' ? 'plan' : 'chat');
   const enVista = () => Boolean($('vista-coach')?.isConnected);
   // El chat es siempre con IA: las reglas de Entreno son una herramienta de la IA en el servidor. Sin cuenta o sin
@@ -539,15 +590,16 @@ async function enviar(texto, ir, archivo = null, { existente = null } = {}) {
     return false;
   }
   if (nube.conectado()) {
-    const mensaje = { rol: 'coach', texto: 'Pensando…', pendiente: true };
+    const mensaje = { rol: 'coach', texto: 'Pensando…', pendiente: true, consulta: persona.consulta, desde: Date.now() };
     consulta = consultaActual = { estado, usuario, mensaje };
     E.chat.push(mensaje);
     guardar();
     if (enVista()) vistaCoach(ir);
     try {
       const historial = E.chat.filter(m => !m.pendiente && m !== persona).slice(-7).map(m => ({ rol: m.rol, texto: m.texto.slice(0, 4000) }));
-      const ia = await nube.chat(persona.paraIA || texto, historial, archivo ? { tipo: archivo.tipo, texto: archivo.texto } : null, modo);
+      const ia = await nube.chat(persona.paraIA || texto, historial, archivo ? { tipo: archivo.tipo, texto: archivo.texto } : null, modo, persona.consulta);
       if (E !== estado || usuario !== nube.usuarioId()) return false;
+      if (ia.estado === 'pensando') { consultaActual = null; esperarRespuesta(mensaje); return false; } // ya la estaba respondiendo
       E.chat = E.chat.filter(m => m !== mensaje);
       if (existente && ia.requiere_permiso) {
         // Sin el permiso de la IA, la nota queda a la vista esperando; se manda al activarlo.
@@ -561,6 +613,13 @@ async function enviar(texto, ir, archivo = null, { existente = null } = {}) {
     } catch (e) {
       if (E !== estado || usuario !== nube.usuarioId()) return false;
       completada = false;
+      // La red se cortó o el servidor tardó (un 504 llega sin CORS: también es TypeError): la consulta pudo llegar y
+      // el servidor la termina igual. Se espera su respuesta guardada en vez de darla por perdida o reenviarla.
+      if (!sinSenal() && (e?.name === 'TypeError' || [502, 503, 504, 546].includes(e?.status))) {
+        if (consultaActual === consulta) consultaActual = null;
+        guardar(); esperarRespuesta(mensaje);
+        return false;
+      }
       E.chat = E.chat.filter(m => m !== mensaje);
       // Lo que salió solo, o lo que no salió por falta de señal, vuelve a esperar; otros errores se muestran.
       if (existente) { existente.porEnviar = true; pausarCola(); }

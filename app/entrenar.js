@@ -4,7 +4,7 @@
 import { E, esc, $, fechaCorta, indice, guardar, D, ahora, mostrarMensaje } from './comun.js';
 import { checklist } from '../nucleo/suplementos.js';
 import { avisoCheckin } from './checkin.js';
-import { avisoDescargaCorto } from './temporada.js';
+import { avisoDescargaCorto, avisoBloqueSiguiente, armarBloqueSiguiente } from './temporada.js';
 import { descansoHtml } from './estados-visuales.js';
 import { estadoHoy, empezarHoy } from './hoy.js';
 import { proponerSesionVacia } from './sesion-libre-ui.js';
@@ -125,6 +125,7 @@ export function vistaEntrenar(ir) {
     ${s.avisoSinRegistro}
     ${D().mensaje_alerta ? `<div class="aviso ojo">${esc(D().mensaje_alerta)}</div>` : ''}
     ${avisoCheckin()}
+    ${avisoBloqueSiguiente()}
     ${avisoDescargaCorto()}
     <h2 class="titulo-seccion">Rutinas</h2>
     <div class="botones-rutinas">
@@ -156,6 +157,7 @@ export function vistaEntrenar(ir) {
   $('abrir-revision')?.addEventListener('click', () => ir('coach', { revisar: true }));
   raiz.querySelectorAll('[data-ir-checkin]').forEach(b => b.onclick = () => ir('checkin', b.dataset.irCheckin));
   raiz.querySelectorAll('[data-ir-semana]').forEach(b => b.onclick = () => ir('semana'));
+  raiz.querySelector('[data-bloque-siguiente]')?.addEventListener('click', async ev => { ev.currentTarget.disabled = true; await armarBloqueSiguiente(); ir('semana'); });
   $('carpeta-plan').onclick = () => { planAbierto = !planAbierto; vistaEntrenar(ir); $('carpeta-plan')?.focus(); };
   // Hacer hoy otra sesión de la semana: el entrenador muestra cómo queda y pregunta (mover o intercambiar los días).
   raiz.querySelectorAll('[data-traer]').forEach(b => b.onclick = () => {

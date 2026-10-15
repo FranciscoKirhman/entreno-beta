@@ -7,6 +7,7 @@ import { progresoNivel } from '../nucleo/nivel.js';
 import { validarPlan } from '../nucleo/validador.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { sumarDias } from '../nucleo/agenda.js';
+import { bloqueSiguienteDisponible, conDiasQueQuedan } from '../nucleo/bloque-siguiente.js';
 import * as nube from './nube.js';
 import { descargaHtml } from './estados-visuales.js';
 import { imagenAsistente } from './cuestionario.js';
@@ -71,7 +72,9 @@ export function tarjetaTemporada() {
     : !s ? 'Terminaste este bloque.'
       : s === p.semana_descarga ? `Vas en la semana ${s} de ${p.semanas}: es la descarga.`
         : `Vas en la semana ${s} de ${p.semanas}; la descarga es la semana ${p.semana_descarga}, desde el ${fechaCorta(sumarDias(p.inicio, (p.semana_descarga - 1) * 7))}.`;
-  const listo = f >= ultimo; // el bloque siguiente se arma desde la última sesión de la descarga
+  // El bloque siguiente se arma desde la última semana del actual: así el mes que viene queda planificado antes.
+  const disp = bloqueSiguienteDisponible(p, f), listo = Boolean(disp);
+  const parte = disp ? lunesDesde(disp.desde) : null;
   return `<section class="tarjeta" id="temporada">
     ${s === p.semana_descarga ? descargaHtml({ texto: 'Menos series y más reserva para recuperar energía antes del siguiente bloque.' }) : '<h3>Tu temporada</h3>'}
     <div class="macro" role="img" aria-label="Bloque ${m.actual} de ${m.bloques.length}${s ? `, semana ${s} de ${p.semanas}` : ''}">
@@ -82,13 +85,49 @@ export function tarjetaTemporada() {
       <ol class="pequeno bloques">${m.bloques.map(b => `<li${b.n === m.actual ? ' class="actual"' : ''}><strong>${esc(b.nombre)}</strong>, ${esc(fechaCorta(b.inicio))} al ${esc(fechaCorta(b.fin))} (${b.semanas} semanas). ${esc(b.enfoque)}</li>`).join('')}</ol>
       <p class="pequeno suave">Cada bloque termina con una semana de descarga (las marcas con borde). Si vienes cansado, la app te propone adelantarla.</p>
     </details>
-    ${listo ? `<p class="pequeno">${sig ? `Sigue el bloque ${sig.n}, ${esc(sig.nombre.toLowerCase())}.` : 'Terminaste la temporada: puedes empezar otra.'} Parte el ${esc(fechaCorta(lunesSiguiente()))} con los pesos que anotaste.</p>
+    ${listo ? `<p class="pequeno">${sig ? `Sigue el bloque ${sig.n}, ${esc(sig.nombre.toLowerCase())}.` : 'Terminaste la temporada: puedes empezar otra.'} Parte el ${esc(fechaCorta(parte))} con los pesos que anotaste${disp.quedan ? '; lo que te queda de este bloque no cambia' : ''}.</p>
       <div class="fila-botones"><button type="button" class="boton primario" id="bloque-siguiente">${sig ? `Armar el bloque ${sig.n}` : 'Empezar una temporada nueva'}</button></div>`
-      : sig && s === p.semana_descarga ? `<p class="pequeno suave">Después de tu última sesión (${esc(fechaCorta(ultimo))}) armas el bloque ${sig.n}.</p>` : ''}
+      : sig && s === p.semana_descarga ? `<p class="pequeno suave">En la última semana del bloque (desde el ${esc(fechaCorta(sumarDias(ultimo, -6)))}) armas el bloque ${sig.n}.</p>` : ''}
   </section>`;
 }
 
-const lunesSiguiente = () => { const f = hoy(), d = new Date(f + 'T12:00:00Z').getUTCDay(); return sumarDias(f, (8 - d) % 7); };
+/** El lunes en que parte un plan armado desde ese día (como nucleo/motor-plan.js). */
+const lunesDesde = f => sumarDias(f, (8 - new Date(f + 'T12:00:00Z').getUTCDay()) % 7);
+
+/** Aviso para Entrenar en la última semana del bloque: armar el siguiente para tener el mes planificado. */
+export function avisoBloqueSiguiente() {
+  const disp = E.plan?.dias?.length ? bloqueSiguienteDisponible(E.plan, hoy()) : null;
+  if (!disp) return '';
+  const termino = disp.fin < hoy();
+  return `<section class="tarjeta destacada aviso-bloque"><h3>${termino ? 'Tu plan terminó' : `Tu plan termina el ${esc(fechaCorta(disp.fin))}`}</h3>
+    <p class="pequeno">Arma el bloque siguiente para tener el mes planificado: parte el ${esc(fechaCorta(lunesDesde(disp.desde)))} con los pesos que anotaste${disp.quedan ? ' y lo que te queda de este bloque no cambia' : ''}.</p>
+    <div class="fila-botones"><button type="button" class="boton primario" data-bloque-siguiente>Armar el bloque siguiente</button></div></section>`;
+}
+
+/** Arma el bloque siguiente (Semana o Entrenar). Es la confirmación de la persona: lo pidió con el botón. */
+export async function armarBloqueSiguiente() {
+  const disp = bloqueSiguienteDisponible(E.plan, hoy());
+  if (!disp) return;
+  const m = macroActual();
+  const sig = m?.bloques.find(b => b.n === m.actual + 1);
+  // El nivel sube entre bloques, con lo que se entrenó.
+  const nv = progresoNivel({ respuestas: R(), fechas: fechasEntrenadas(), hoy: hoy() });
+  if (nv.sube) R().nivel_ganado = nv.alcanzado;
+  const ctx = { derivados: D(), respuestas: R(), indice, hoy: disp.desde };
+  // Si a la persona le gusta variar, el bloque nuevo cambia algunos ejercicios del que termina.
+  const anteriores = new Set((E.plan?.dias || []).flatMap(d => d.ejercicios.map(e => e.ejercicio_id)));
+  const base = generarPlan({ ...ctx, historial: historialReciente(), anteriores });
+  if (base.bloqueado) { E.mensaje = base.mensaje; guardar(); return; }
+  let plan = sig ? aplicarFase(base, sig, { minutos: ctx.derivados.duracion_min }) : base;
+  if (sig && !validarPlan(plan, ctx).ok) plan = { ...base, bloque: sig.n }; // si la fase no cabe en tus reglas, el plan base
+  plan = conDiasQueQuedan(E.plan, plan, hoy());
+  mostrarSemana(1);
+  const subio = nv.sube ? ` Subiste a nivel ${nv.alcanzado}: el plan sube un poco el volumen.` : '';
+  const nuevos = new Set(plan.dias.flatMap(d => d.ejercicios.map(e => e.ejercicio_id)).filter(id => !anteriores.has(id))).size;
+  const variedad = nuevos && ['variar', 'algunos'].includes(R().rotacion) ? ` Como te gusta variar, ${nuevos === 1 ? 'cambió 1 ejercicio' : `cambiaron ${nuevos} ejercicios`}.` : '';
+  const fin = plan.dias.map(d => d.fecha).sort().at(-1);
+  await cambiarPlan(plan, (sig ? `Bloque ${sig.n} armado: ${sig.nombre.toLowerCase()}. Parte el ${fechaCorta(plan.inicio)} y llega hasta el ${fechaCorta(fin)}, con los pesos que anotaste.` : `Temporada nueva: parte el ${fechaCorta(plan.inicio)} y llega hasta el ${fechaCorta(fin)}.`) + subio + variedad, nube);
+}
 
 /** Botones de las tarjetas. `volver` repinta la vista. */
 export function enlazarTemporada(volver) {
@@ -103,24 +142,9 @@ export function enlazarTemporada(volver) {
     await cambiarPlan(adelantarDescarga(E.plan, p.semana), `Descarga adelantada: la semana ${p.semana} es de descarga y el bloque termina el ${fechaCorta(sumarDias(p.desde, 6))}.`, nube);
     mostrarSemana(p.semana); guardar(); volver();
   });
-  $('bloque-siguiente')?.addEventListener('click', async () => {
-    const m = macroActual();
-    const sig = m?.bloques.find(b => b.n === m.actual + 1);
-    // El nivel sube entre bloques, con lo que se entrenó.
-    const nv = progresoNivel({ respuestas: R(), fechas: fechasEntrenadas(), hoy: hoy() });
-    if (nv.sube) R().nivel_ganado = nv.alcanzado;
-    const ctx = { derivados: D(), respuestas: R(), indice, hoy: hoy() };
-    // Si a la persona le gusta variar, el bloque nuevo cambia algunos ejercicios del que termina.
-    const anteriores = new Set((E.plan?.dias || []).flatMap(d => d.ejercicios.map(e => e.ejercicio_id)));
-    const base = generarPlan({ ...ctx, historial: historialReciente(), anteriores });
-    if (base.bloqueado) { E.mensaje = base.mensaje; guardar(); return volver(); }
-    let plan = sig ? aplicarFase(base, sig, { minutos: ctx.derivados.duracion_min }) : base;
-    if (sig && !validarPlan(plan, ctx).ok) plan = { ...base, bloque: sig.n }; // si la fase no cabe en tus reglas, el plan base
-    mostrarSemana(1);
-    const subio = nv.sube ? ` Subiste a nivel ${nv.alcanzado}: el plan sube un poco el volumen.` : '';
-    const nuevos = new Set(plan.dias.flatMap(d => d.ejercicios.map(e => e.ejercicio_id)).filter(id => !anteriores.has(id))).size;
-    const variedad = nuevos && ['variar', 'algunos'].includes(R().rotacion) ? ` Como te gusta variar, ${nuevos === 1 ? 'cambió 1 ejercicio' : `cambiaron ${nuevos} ejercicios`}.` : '';
-    await cambiarPlan(plan, (sig ? `Bloque ${sig.n} armado: ${sig.nombre.toLowerCase()}. Parte el ${fechaCorta(plan.inicio)} con los pesos que anotaste.` : `Temporada nueva: parte el ${fechaCorta(plan.inicio)}.`) + subio + variedad, nube);
+  $('bloque-siguiente')?.addEventListener('click', async ev => {
+    ev.currentTarget.disabled = true;
+    await armarBloqueSiguiente();
     volver();
   });
 }
