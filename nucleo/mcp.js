@@ -5,6 +5,7 @@
 //
 // Nada de lo que propone la IA se guarda sin pasar por el validador.
 import { contextoIA } from './contexto-ia.js';
+import { cicloParaIA } from './ciclo-siguiente.js';
 import { aplicarCambios, ESQUEMA_CAMBIOS } from './cambios.js';
 import { validarPlan } from './validador.js';
 import { tieneEquipo, nivelAlcanza, cargaZonaBloqueada, articulacionesBloqueadas, normalizar } from './catalogo.js';
@@ -93,6 +94,9 @@ export const HERRAMIENTAS = [
         series_por_musculo_semana: d.series_rango, repeticiones_de_reserva_minimas: d.rir_minimo,
         lesiones_activas: (r.lesiones || []).filter(l => l.activa !== false).map(l => ({ zona: l.region, tipo: l.tipo, intensidad: l.intensidad, alta: l.alta || null })),
         lugar: ((r.lugares || []).find(l => l.principal) || (r.lugares || [])[0])?.nombre || null,
+        musculos_prioridad: d.musculos_prioridad || [],
+        // Lo que la persona dejó elegido en Mi plan para su siguiente bloque (nucleo/ciclo-siguiente.js).
+        ...(cicloParaIA(r, plan) ? { siguiente_ciclo_elegido: cicloParaIA(r, plan) } : {}),
         plan: plan ? { inicio: plan.inicio, semana_descarga: plan.semana_descarga, bloque: bloqueDe(plan, hoy), proximos_dias: semana.map(diaParaIA),
           sin_registro: await sinRegistro(plan, datos, hoy) } : null,
         // Cómo vienes: sensaciones, esfuerzo, check-ins y tendencias (solo donde el servidor lo ofrece).

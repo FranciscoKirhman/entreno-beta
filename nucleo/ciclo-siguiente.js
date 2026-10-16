@@ -89,3 +89,33 @@ export function semanasDesde(actual, nuevo, desde) {
   }
   return { plan, cambiados };
 }
+
+/**
+ * Quita del borrador los campos que se acaban de cambiar por otro camino (el chat con proponer_requisitos): lo más
+ * nuevo manda y el borrador no lo vuelve a pisar en el siguiente ciclo.
+ * @returns nuevas respuestas
+ */
+export function quitarDelBorrador(r, campos) {
+  const b = borradorCiclo(r);
+  if (!b) return r;
+  for (const k of campos) delete b[k];
+  const nuevo = { ...r };
+  if (Object.keys(b).length) nuevo.ciclo_siguiente = b; else delete nuevo.ciclo_siguiente;
+  return nuevo;
+}
+
+const sumar = (f, n) => new Date(Date.parse(f + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+/** El lunes en que parte el bloque siguiente: el primero después del último día del plan. */
+export function inicioDelSiguiente(plan) {
+  const fin = (plan?.dias || []).map(d => d.fecha).sort().at(-1);
+  if (!fin) return null;
+  const dia = sumar(fin, 1);
+  return sumar(dia, (8 - new Date(dia + 'T12:00:00Z').getUTCDay()) % 7);
+}
+
+/** Para la IA (ver_resumen): lo que la persona ya eligió para su siguiente bloque y cuándo parte, o null. */
+export function cicloParaIA(r, plan) {
+  const b = borradorCiclo(r);
+  if (!b) return null;
+  return { parte: inicioDelSiguiente(plan), cambios: b, nota: 'Elegido por la persona en Mi plan; se aplica al armar el siguiente bloque.' };
+}

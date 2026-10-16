@@ -23,6 +23,7 @@ import { vistaSemana } from './semana.js';
 import { vistaCoach, revisarSemanaSiToca, marcarNovedadCoach } from './coach-ui.js';
 import { vistaProgreso } from './progreso.js';
 import { vistaMiPlan, configurarMiPlan } from './mi-plan.js';
+import { borradorCiclo, aplicarBorrador } from '../nucleo/ciclo-siguiente.js';
 import { vistaMas } from './mas.js';
 import { pintarPerfilesPrueba, abrirEnlacePerfiles } from './perfiles-prueba-ui.js';
 import { vistaTableroOriginal } from './tablero-original.js';
@@ -52,6 +53,8 @@ import { actualizarChatConfirmado } from './propuesta-chat.js';
 /** Arma (o rehace) el plan con las respuestas y muestra la pantalla "Tu plan". */
 async function armarPlan({ mensaje = null } = {}) {
   const estado = E, usuario = nube.usuarioId();
+  // Un plan nuevo es un ciclo nuevo: lo elegido en Mi plan para el siguiente ciclo pasa al perfil (nucleo/ciclo-siguiente.js).
+  if (borradorCiclo(R())) E.respuestas = aplicarBorrador(R(), hoy());
   const r = R();
   // Sin lugar elegido se supone un gimnasio completo, y la pantalla del plan lo dice.
   if (!r.lugares?.length) {

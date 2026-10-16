@@ -239,7 +239,7 @@ function enlazarAjustes(ir, raiz) {
     if (v === 'importar') return ir('mas', { panel: 'importar' });
     if (v === 'rehacer') return abrirHoja({
       titulo: '¿Rehago el plan?', volver: b,
-      nota: 'Se arma de nuevo con tus respuestas y parte el próximo lunes. Lo que ya registraste no cambia, y puedes deshacerlo.',
+      nota: `Se arma de nuevo con tus respuestas${borradorCiclo(R()) ? ' y lo que elegiste para el siguiente ciclo' : ''}, y parte el próximo lunes. Lo que ya registraste no cambia, y puedes deshacerlo.`,
       opciones: [{ valor: 'si', icono: icono('visto'), clase: 'confirmar', nombre: 'Sí, rehacerlo' }, { valor: 'no', icono: icono('cerrar'), nombre: 'No, dejarlo' }],
       alElegir: x => { if (x === 'si') armarPlanFn?.(); },
     });
