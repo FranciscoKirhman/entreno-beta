@@ -409,22 +409,32 @@ function crecer(t) {
   t.style.height = `${Math.min(t.scrollHeight + 2, 140)}px`;
 }
 
-/** El documento es la única zona de desplazamiento. Reserva el alto real del editor y del menú. La distancia al menú
- *  sale de su alto (no de su posición en pantalla, que en el iPhone cambia al mover la página o abrir el teclado y
- *  hacía subir y bajar la caja). Con el teclado abierto, el menú se oculta y la caja queda pegada arriba del teclado. */
+/** Sin teclado, el documento es la única zona de desplazamiento: reserva el alto real del editor y del menú. La
+ *  distancia al menú sale de su alto (no de su posición en pantalla, que en el iPhone cambia al mover la página).
+ *  Con el teclado abierto, el chat entero ocupa solo la zona visible (visualViewport: arriba y alto, nunca innerHeight,
+ *  que en el iPhone dejaba la caja muy arriba del teclado): cabecera arriba, mensajes al medio y caja abajo, como en
+ *  Mensajes. Al abrir el teclado se ve lo último; al cerrarlo, la página vuelve a donde estaba el chat. */
 function prepararRedaccion() {
-  const panel = $('coach-redaccion'), app = $('app'), nav = $('nav'), editor = $('mensaje');
+  const panel = $('coach-redaccion'), app = $('app'), nav = $('nav'), editor = $('mensaje'), vista = $('vista-coach');
   const vv = typeof visualViewport !== 'undefined' ? visualViewport : null;
-  let observador;
+  let observador, activo = false;
   // En el teléfono basta con que el campo tenga el foco: en iOS reciente la ventana se achica junto con el teclado,
   // así que innerHeight y visualViewport miden lo mismo y la diferencia no sirve para saber si está abierto.
   const tactil = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
   const escribiendo = () => document.activeElement === editor && (tactil || (vv && innerHeight - vv.height > 120));
   const ubicar = () => {
     if (!panel.isConnected) { limpiar(); return; }
-    const teclado = escribiendo();
-    document.body?.classList.toggle('escribiendo-coach', Boolean(teclado));
-    panel.style.bottom = teclado ? `${Math.max(8, vv ? innerHeight - (vv.offsetTop + vv.height) + 8 : 8)}px` : '';
+    const teclado = Boolean(escribiendo()), cuerpo = document.body;
+    if (teclado) {
+      cuerpo.style.setProperty('--coach-vv-arriba', `${vv ? Math.max(0, vv.offsetTop) : 0}px`);
+      cuerpo.style.setProperty('--coach-vv-alto', vv ? `${vv.height}px` : '100dvh');
+    }
+    if (teclado === activo) return;
+    const alFinal = teclado || vista.scrollHeight - vista.scrollTop - vista.clientHeight < 40, desde = vista.scrollTop;
+    activo = teclado;
+    cuerpo.classList.toggle('escribiendo-coach', teclado);
+    if (teclado) vista.scrollTop = vista.scrollHeight;
+    else scrollTo(0, alFinal ? document.documentElement.scrollHeight : desde);
   };
   const medir = () => {
     if (!panel.isConnected) { limpiar(); return; }
@@ -435,7 +445,7 @@ function prepararRedaccion() {
   const alSalir = () => setTimeout(ubicar, 0);
   function limpiar() {
     observador?.disconnect(); vv?.removeEventListener('resize', ubicar); vv?.removeEventListener('scroll', ubicar);
-    document.body?.classList.remove('escribiendo-coach');
+    document.body?.classList.remove('escribiendo-coach'); activo = false;
   }
   medir();
   if (typeof ResizeObserver !== 'undefined') { observador = new ResizeObserver(medir); observador.observe(panel); }

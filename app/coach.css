@@ -90,6 +90,22 @@ body:has(.barra #modo:not([hidden])) .coach-cabecera{top:calc(env(safe-area-inse
 .coach-estado:empty{display:none}
 .coach-estado .enlace{min-height:32px;font-size:12.5px}
 
+/* Sin teclado: con pocos mensajes, el chat queda abajo junto a la caja (como Mensajes), no arriba con un hueco al medio.
+   El alto mínimo es la pantalla menos lo que main reserva arriba y abajo (app/estilos.css). */
+#vista-coach{display:flex;flex-direction:column;min-height:calc(100svh - env(safe-area-inset-top,0px) - 12px - var(--coach-redaccion-alto,100px) - var(--coach-menu-distancia,78px) - 20px)}
+#vista-coach>*{flex-shrink:0}
+body:has(.barra #modo:not([hidden])) #vista-coach{min-height:calc(100svh - env(safe-area-inset-top,0px) - 46px - var(--coach-redaccion-alto,100px) - var(--coach-menu-distancia,78px) - 20px)}
+#vista-coach>.chat{margin-top:auto}
+
+/* Con el teclado abierto (app/coach-ui.js, prepararRedaccion): el chat ocupa justo la zona visible sobre el teclado y
+   se desplaza por dentro. La cabecera queda arriba y la caja abajo, sin el espacio del menú (oculto) ni huecos. */
+body.escribiendo-coach #vista-coach{position:fixed;z-index:6;left:0;right:0;top:var(--coach-vv-arriba,0px);height:var(--coach-vv-alto,100dvh);min-height:0;
+  max-width:560px;margin:0 auto;padding:0 16px;overflow-y:auto;overscroll-behavior:contain;background:var(--bg)}
+body.escribiendo-coach .coach-cabecera,body.escribiendo-coach:has(.barra #modo:not([hidden])) .coach-cabecera{top:0;padding-top:calc(env(safe-area-inset-top,0px) + 6px)}
+body.escribiendo-coach #coach-redaccion,body.escribiendo-coach.con-mini-sesion #coach-redaccion{position:sticky;left:auto;right:auto;bottom:0;max-width:none;margin:8px 0 0;padding:0 0 8px}
+body.escribiendo-coach #coach-redaccion::before{left:-16px;right:-16px;bottom:0}
+body.escribiendo-coach #mini-sesion,body.escribiendo-coach #descanso:not(.grande){display:none}
+
 /* Hoja ＋: grupos con íconos como la de iMessage. */
 .herramientas-coach{display:grid;gap:16px;margin:4px 0 8px}
 .grupo-herramientas h4{margin:0 0 8px;font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-muted)}
