@@ -227,7 +227,37 @@ export async function cargarSesiones() {
     const lote = ok(await ambito.consultar(() => cliente.from('sesiones').select('*, series(*), notas_ejercicio(*)').eq('user_id', usuario).order('inicio').order('id').range(desde, desde + 499)));
     filas.push(...lote); if (lote.length < 500) break; desde += 500;
   }
+  ultimaActualizacion = filas.reduce((m, f) => (f.actualizado && (!m || f.actualizado > m) ? f.actualizado : m), null);
   return filas.map(sesionDelServidor);
+}
+let ultimaActualizacion = null;
+/**
+ * Al abrir: solo las sesiones creadas o cambiadas (también sus series o notas) desde la marca de la vez anterior, con
+ * 5 minutos de margen; sin marca, todas. Devuelve la marca para la próxima vez. Si el servidor todavía no tiene la
+ * columna (supabase/migrations/20261024000000_sesiones_actualizado.sql), trae todo como antes.
+ */
+export async function cargarSesionesCambiadas(marca = null) {
+  const ambito = ambitoActual(), { cliente, usuario } = ambito;
+  // Supabase manda microsegundos; Safari solo lee milisegundos.
+  const t = marca ? Date.parse(String(marca).replace(/(\.\d{3})\d+/, '$1')) : NaN;
+  const desde = Number.isFinite(t) ? new Date(t - 5 * 60000).toISOString() : null;
+  if (!desde) {
+    const sesiones = await cargarSesiones();
+    return { sesiones, hasta: ultimaActualizacion, completa: true };
+  }
+  const filas = []; let pos = 0;
+  try {
+    for (;;) {
+      const lote = ok(await ambito.consultar(() => cliente.from('sesiones').select('*, series(*), notas_ejercicio(*)').eq('user_id', usuario)
+        .gt('actualizado', desde).order('inicio').order('id').range(pos, pos + 499)));
+      filas.push(...lote); if (lote.length < 500) break; pos += 500;
+    }
+  } catch (e) {
+    if (e?.code === '42703' || /actualizado/.test(e?.message || '')) { const sesiones = await cargarSesiones(); return { sesiones, hasta: ultimaActualizacion, completa: true }; }
+    throw e;
+  }
+  const hasta = filas.reduce((m, f) => (f.actualizado && f.actualizado > m ? f.actualizado : m), marca);
+  return { sesiones: filas.map(sesionDelServidor), hasta, completa: false };
 }
 export async function cargarBienestar() {
   const filas = ok(await supa.from('bienestar_diario').select('*').order('fecha'));

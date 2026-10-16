@@ -8,7 +8,8 @@ import { estadoDelPlan } from '../nucleo/registrado.js';
 import { perfilPruebaActivo, clavePerfilPrueba, claveSesionPerfilPrueba, seleccionarPerfilPrueba } from '../nucleo/perfiles-prueba.js';
 import { perfilDelRetornoCuenta } from '../nucleo/retorno-cuenta.js';
 import { CONFIG } from './config.js';
-import { leerCopia, escribirCopia, liberarEspacio, usoAlmacenamiento } from './copia-entreno.js';
+import { leerCopia, escribirCopia, vaciarCopia, liberarEspacio, usoAlmacenamiento } from './copia-entreno.js';
+import { medirGuardado, anotarApertura } from './medicion.js';
 import { estadoDeCopia } from '../nucleo/copia-segura.js';
 import { revisarTrasladoCuenta } from '../nucleo/consentimiento-nube.js';
 import { corregirHistorial } from '../nucleo/corregir-historial.js';
@@ -21,6 +22,7 @@ const cargar = u => pedir(u).then(r => { if (!r.ok) throw new Error(`${u}: ${r.s
 const disponibles = pedir('img/disponibles.json').then(r => (r.ok ? r.json() : [])).catch(() => []);
 export const [C, catalogo, K, EVIDENCIA, PLANES, TECNICA] = await Promise.all(
   ['cuestionario', 'ejercicios', 'checkin', 'evidencia', 'planes', 'tecnica'].map(n => cargar(`../contenido/${n}.json`)));
+anotarApertura('contenido');
 // Banco ampliado (contenido/ejercicios-extra.json, datos MIT de hasaneyldrm/exercises-dataset, sin imágenes): se
 // pueden buscar, agregar a mano y reconocer al importar, pero no tienen revisión profesional ni entran al plan
 // automático (su patrón es 'otro', que el motor no usa) ni a las recomendaciones.
@@ -128,6 +130,9 @@ export function alinearPropios() {
   for (const e of propios) if (e?.id && !indice.porId.has(e.id)) { const ej = { ...e, propio: true }; indice.ejercicios.push(ej); indice.porId.set(ej.id, ej); }
 }
 export function guardar() {
+  const reloj = () => globalThis.performance?.now?.() ?? Date.now();
+  const inicio = reloj();
+  if (esperaPronto) { clearTimeout(esperaPronto); esperaPronto = 0; } // lo escrito hasta ahora entra en este guardado
   revisionLocal += 1;
   alinearPropios();
   try {
@@ -142,6 +147,7 @@ export function guardar() {
     escribirCopia(CLAVE, texto, E.guardadoEn);
     localStorage.setItem(CLAVE, texto);
     if (localStorage.getItem(CLAVE) !== texto) throw new Error('La copia guardada no coincide');
+    try { medirGuardado(Math.round((reloj() - inicio) * 10) / 10, texto.length); } catch { /* medir nunca impide guardar */ }
     errorGuardado = null; sinEspacio = false;
     document.getElementById('error-guardado')?.remove();
     return true;
@@ -161,7 +167,17 @@ export function guardar() {
 // y la migración antigua se leen directo del principal, así que se quedan.
 const MOVIBLE = k => k !== CLAVE && /^entreno-(cuenta-|anterior-|antes-separar-demo$|ejemplo-v1$)/.test(k);
 let sinEspacio = false, liberacion = null;
+// Mientras se escribe en un campo, cada tecla no reescribe todo: se guarda 300 ms después de la última (guardarPronto).
+// Marcar una serie, cambiar de pantalla, pasar al fondo o cualquier guardar() incluyen lo escrito hasta ese momento.
+let esperaPronto = 0;
 let personal = E;
+export function guardarPronto() {
+  revisionLocal += 1; // ya hay un cambio, aunque todavía no esté escrito (recuperarCopia no debe pisarlo)
+  clearTimeout(esperaPronto);
+  esperaPronto = setTimeout(guardar, 300);
+}
+/** Antes de quedarse sin espacio (app/actualizacion.js, al abrir): pasa a IndexedDB las copias que no son la activa. */
+export const liberarOtrasCopias = () => liberarEspacio(MOVIBLE);
 /** Guarda y, si falló por espacio, espera a que se libere y reintenta. Para lo que no puede seguir sin guardar. */
 export async function guardarConEspacio() {
   if (guardar()) return true;
@@ -261,8 +277,24 @@ export function guardarRetorno(pantalla) {
   E.pantallaGuardada = pantalla;
   return guardar();
 }
-// Al pasar al fondo o cerrar, se guarda lo que esté en memoria (la copia se escribe de inmediato en copia-entreno.js).
-if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && !lecturaFallida && (modoEjemplo || alCargar.consumida)) guardar(); });
+// Al pasar al fondo o cerrar se guarda una sola vez: primero se anota lo que pidan las vistas (la pantalla para volver,
+// app/app.js), después se guarda y la segunda copia se escribe de inmediato. Un pagehide justo después de pasar al
+// fondo, sin cambios entre medio, no vuelve a escribir.
+const antesDeOcultar = [];
+export const alOcultar = fn => { antesDeOcultar.push(fn); };
+let revisionOculta = null;
+function guardarAlOcultar() {
+  if (lecturaFallida || !(modoEjemplo || alCargar.consumida)) return;
+  if (revisionOculta === revisionLocal && !esperaPronto) return;
+  for (const fn of antesDeOcultar) { try { fn(); } catch { /* la pantalla de retorno es opcional */ } }
+  guardar();
+  revisionOculta = revisionLocal;
+  vaciarCopia();
+}
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') guardarAlOcultar(); });
+  globalThis.addEventListener?.('pagehide', guardarAlOcultar);
+}
 /** Versión de prueba: borra el cuestionario y el plan para volver a probarlos, y deja lo anotado (historial,
  *  series, notas, suplementos e indicaciones). */
 export function empezarDeNuevo() {

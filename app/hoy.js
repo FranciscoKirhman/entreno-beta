@@ -3,7 +3,7 @@
 // cada ejercicio con su miniatura, su ficha (cómo se hace y por qué), el menú ⋯ y la tabla de series: tipo
 // (calentamiento, normal, al fallo, drop set), lo de la vez anterior, cronómetro de descanso y superseries.
 import { datoCambiado, cicloCambiado } from './datos-nube.js';
-import { E, guardar, R, D, C, K, indice, hoy, ahora, esc, $, fechaCorta, ctxNucleo, escala, opcionesRadio, chk, cambiarPlan, numero, coma, mostrarMensaje, avisar, unidadPeso, enUnidad, aKilos, peso, volumenTexto, seriesTexto, modoEjemplo } from './comun.js';
+import { E, guardar, guardarPronto, R, D, C, K, indice, hoy, ahora, esc, $, fechaCorta, ctxNucleo, escala, opcionesRadio, chk, cambiarPlan, numero, coma, mostrarMensaje, avisar, unidadPeso, enUnidad, aKilos, peso, volumenTexto, seriesTexto, modoEjemplo } from './comun.js';
 import { estadoDelPlan } from '../nucleo/registrado.js';
 import { sesionesPorRevisar } from '../nucleo/sin-registro.js';
 import { recordsDeSerie } from '../nucleo/records.js';
@@ -954,8 +954,8 @@ function enlazar(ir, dia) {
     guardar(); repintar();
   });
   // Las mediciones se pueden anotar antes de marcar hecho y se conservan al desmarcar.
-  $('cardio-dist')?.addEventListener('input', ev => { const m = marcaCardioActual(), v = numero(ev.target.value); if (esEscalera(dia.cardio)) m.pisos = v == null ? null : Math.round(v); else m.distancia_km = v; guardar(); });
-  $('cardio-tiempo')?.addEventListener('input', ev => { const r = leerReloj(ev.target.value); if (ev.target.value !== r.texto) ev.target.value = r.texto; marcaCardioActual().minutos = r.seg ? r.seg / 60 : null; guardar(); });
+  $('cardio-dist')?.addEventListener('input', ev => { const m = marcaCardioActual(), v = numero(ev.target.value); if (esEscalera(dia.cardio)) m.pisos = v == null ? null : Math.round(v); else m.distancia_km = v; guardarPronto(); });
+  $('cardio-tiempo')?.addEventListener('input', ev => { const r = leerReloj(ev.target.value); if (ev.target.value !== r.texto) ev.target.value = r.texto; marcaCardioActual().minutos = r.seg ? r.seg / 60 : null; guardarPronto(); });
   for (const id of ['cardio-dist', 'cardio-tiempo']) $(id)?.addEventListener('focus', ev => { const t = ev.target; if (t.value) setTimeout(() => t.setSelectionRange(0, t.value.length), 0); });
   // 0:90 queda como 1:30 al salir del campo, como Hevy.
   $('cardio-tiempo')?.addEventListener('blur', ev => { const r = leerReloj(ev.target.value); if (r.seg) ev.target.value = relojTexto(r.seg); });
@@ -985,14 +985,14 @@ function enlazar(ir, dia) {
         if (r.hecho) r.consejo = consejo(e, r);
       } else r[t.dataset.c] = t.dataset.c === 'kg' ? aKilos(v) : v;
       lista[t.dataset.i] = r;
-      guardar();
+      guardarPronto(); // cada tecla: se guarda al terminar de escribir (comun.js)
     } else if (t.dataset.nota && t.tagName === 'TEXTAREA') {
       if (t.dataset.visible !== undefined) {
         t.style.height = 'auto'; t.style.height = `${t.scrollHeight}px`;
         const n = (E.notas[f] ||= {})[t.dataset.nota] ||= {};
         if (n.para_entrenador === undefined && t.value.trim()) n.para_entrenador = true; // es una nota para el entrenador
       }
-      guardarNota(t.dataset.nota, 'nota', t.value);
+      guardarNota(t.dataset.nota, 'nota', t.value, true);
     }
   });
   // Al terminar de escribir el RIR de una serie hecha, se actualiza el consejo para la siguiente.
@@ -1380,7 +1380,7 @@ function enlazar(ir, dia) {
     guardarNota(t.dataset.nota, t.dataset.p, v);
     if (t.dataset.p === 'molestia') repintar();
   });
-  function guardarNota(id, p, v) { ((E.notas[f] ||= {})[id] ||= {})[p] = v; guardar(); }
+  function guardarNota(id, p, v, escribiendo = false) { ((E.notas[f] ||= {})[id] ||= {})[p] = v; (escribiendo ? guardarPronto : guardar)(); }
   raiz.querySelectorAll('details[data-panel]').forEach(d => d.addEventListener('toggle', () => { d.open ? abiertos.add(d.dataset.panel) : abiertos.delete(d.dataset.panel); }));
 
   // Ficha del ejercicio: cómo se hace, qué trabaja, tus marcas, por qué está en tu plan y alternativas.

@@ -45,11 +45,12 @@ import { CONFIG } from './config.js';
 import { sinSenalHtml } from './estados-visuales.js';
 import { entrarVista, entrarPose, dibujarGraficos } from './movimiento.js';
 import { instalarAtras, accionAtras, esVuelta, recordarPantalla, alturaDe, volviendoConGesto } from './atras.js';
-import { guardarRetorno } from './comun.js';
+import { alOcultar } from './comun.js';
 import { fechaSesionActiva } from '../nucleo/sesion-activa.js';
 import { pantallaGuardada, retornoGuardado } from '../nucleo/retorno-app.js';
 import { actualizarChatConfirmado } from './propuesta-chat.js';
-import { instalarActualizacion, guardarImagenesDelPlan } from './actualizacion.js';
+import { instalarActualizacion, guardarImagenesDelPlan, revisarEspacio } from './actualizacion.js';
+import { anotarApertura } from './medicion.js';
 
 // ── Plan y cuenta ───────────────────────────────────────────────────────────
 /** Arma (o rehace) el plan con las respuestas y muestra la pantalla "Tu plan". */
@@ -138,8 +139,7 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
       guardar();
     } catch (e) { avisar('Plan', e); }
   }
-  const respuestas = await consultar(() => nube.cargarRespuestas());
-  const plan = await consultar(() => nube.cargarPlan());
+  const [respuestas, plan] = await consultar(() => Promise.all([nube.cargarRespuestas(), nube.cargarPlan()]));
   if (respuestas) {
     const borrador = E.firmaPlan && firmaRespuestas(E.firmaPlan) !== firmaRespuestas();
     if (!E.planPendiente && !borrador && JSON.stringify(E.respuestas) === respuestasAlEntrar) E.respuestas = { ...respuestas, escala_esfuerzo: R().escala_esfuerzo };
@@ -188,8 +188,13 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
   await consultar(() => subirPendientes({ forzar }));
   // Ejercicios propios, medidas, notas fijas y fechas del ciclo (antes solo en el teléfono).
   try { await consultar(() => sincronizarDatosTelefono()); } catch (e) { avisar('Datos del teléfono', e); }
-  E.sesiones = unirSesiones(E.sesiones, idsPropios(await consultar(() => nube.cargarSesiones()), [...(E.ejerciciosPropios || []), ...EXTRAS]), E.pendientes || []);
-  E.bienestar = { ...await consultar(() => nube.cargarBienestar()), ...Object.fromEntries(Object.entries(E.bienestar).filter(([, b]) => !b.enCuenta)) };
+  // Sesiones y bienestar a la vez. De las sesiones, solo lo que cambió desde la vez anterior (todo con "Sincronizar
+  // ahora", forzar, o la primera vez en este teléfono); las que ya están en el teléfono se conservan (unirSesiones).
+  const marca = !forzar && E.sincSesiones?.usuario === usuario ? E.sincSesiones.hasta : null;
+  const [cambiadas, bienestarCuenta] = await consultar(() => Promise.all([nube.cargarSesionesCambiadas(marca), nube.cargarBienestar()]));
+  E.sesiones = unirSesiones(E.sesiones, idsPropios(cambiadas.sesiones, [...(E.ejerciciosPropios || []), ...EXTRAS]), E.pendientes || []);
+  if (cambiadas.hasta) E.sincSesiones = { usuario, hasta: cambiadas.hasta };
+  E.bienestar = { ...bienestarCuenta, ...Object.fromEntries(Object.entries(E.bienestar).filter(([, b]) => !b.enCuenta)) };
   const pendientes = E.pendientes?.length || 0;
   const partes = avisos.map(x => `${x.parte}: ${x.mensaje}`);
   if (E.planPendiente && !avisos.some(x => x.parte === 'Plan')) partes.push('plan pendiente');
@@ -329,6 +334,7 @@ const EJEMPLO = {
 
 // Versión de prueba en el celular: guarda la app para que abra sin señal en el gimnasio (app/actualizacion.js).
 instalarActualizacion();
+revisarEspacio();
 
 // Primero la copia de este perfil y su segunda copia. La red no participa en el primer dibujo.
 activarCuenta(nube.usuarioGuardado({ claveSesion: claveSesionCuenta() }));
@@ -343,7 +349,7 @@ retornoInicial = retornoGuardado(E.pantallaGuardada, E, hoy());
 // Con plan, la primera vez del día se elige entre la sesión planificada y una vacía (salvo a mitad del cuestionario).
 ir(!retornoInicial && !['cuestionario', 'perfil', 'seccion'].includes(E.vista) && eleccionPendiente() ? 'eleccion'
   : retornoInicial?.vista || (['cuestionario', 'hoy', 'semana', 'coach', 'progreso', 'miplan', 'mas', 'checkin', 'plan', 'perfil', 'seccion', 'tablero-original'].includes(E.vista) ? E.vista : (E.plan ? 'hoy' : 'inicio')), retornoInicial?.extra);
-requestAnimationFrame(() => requestAnimationFrame(() => { $('app').dataset.cargaMs = String(Math.round(performance.now())); }));
+requestAnimationFrame(() => requestAnimationFrame(() => { $('app').dataset.cargaMs = String(Math.round(performance.now())); anotarApertura('dibujo'); }));
 observarCuerpos(); // figuras del cuerpo (app/cuerpo.js): se dibujan solas al aparecer
 // Atrás: deslizar desde el borde izquierdo o el botón atrás del teléfono (app/atras.js).
 instalarAtras(() => accionAtras({ vista: E.vista, extra: extraActual, ir, conPlan: Boolean(E.plan) }));
@@ -356,12 +362,16 @@ function repintarSinMover() {
 }
 document.addEventListener('focusout', () => setTimeout(() => { if (repintadoPendiente) repintarSinMover(); }, 0));
 document.addEventListener('click', () => { if (repintadoPendiente) setTimeout(repintarSinMover, 250); });
-const guardarPantalla = () => guardarRetorno(pantallaGuardada(E.vista, extraActual, scrollY, E.vista === 'hoy' ? fechaSesionActiva(E, hoy()) : hoy()));
-addEventListener('pagehide', guardarPantalla);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') guardarPantalla(); });
+// Al pasar al fondo o cerrar, la pantalla para volver entra en el único guardado de ese momento (comun.js: alOcultar).
+const guardarPantalla = () => { E.pantallaGuardada = pantallaGuardada(E.vista, extraActual, scrollY, E.vista === 'hoy' ? fechaSesionActiva(E, hoy()) : hoy()); };
+alOcultar(guardarPantalla);
 
 async function iniciarEnSegundoPlano() {
+  // Lo que se ve en pantalla, sin lo que cambia en cada sincronización aunque no cambie nada visible.
+  const volatiles = new Set(['guardadoEn', 'avisosSinc', 'sincronizacionCuenta', 'sincSesiones', 'pantallaGuardada', 'firmaPreferenciasCuenta']);
+  const firmaVisible = () => JSON.stringify(E, (k, v) => (volatiles.has(k) ? undefined : v));
   const alIniciar = E, usuarioAlIniciar = nube.usuarioId();
+  const firmaAntes = firmaVisible(), extraAntes = extraActual;
   let iniciado;
   try { iniciado = await nube.iniciar({ claveSesion: claveSesionCuenta(), vigente: () => E === alIniciar }); }
   catch (e) {
@@ -380,6 +390,7 @@ async function iniciarEnSegundoPlano() {
     try { resultado = await sincronizarAlEntrar(); }
     catch (e) { if (vigente()) anotarSinc(`No pude sincronizar al abrir (${e.message}). Sigues con la copia de este teléfono.`, { problema: navigator.onLine }); }
     if (!vigente()) return;
+    anotarApertura('cuenta');
     // Con la cuenta al día: la revisión de la semana que terminó y las notas que quedaron sin enviar.
     revisarSemanaSiToca();
     if (nube.entroPorEnlace()) {
@@ -388,7 +399,8 @@ async function iniciarEnSegundoPlano() {
       extraActual = E.plan ? null : { panel: 'cuenta' };
     }
   }
-  repintarSinMover();
+  // Solo se redibuja si la cuenta trajo algo distinto: así la pantalla no salta al abrir cuando todo estaba al día.
+  if (extraActual !== extraAntes || firmaVisible() !== firmaAntes) repintarSinMover();
   guardarImagenesDelPlan();
   hevyAlAbrir(() => { if (['hoy', 'semana', 'progreso', 'miplan'].includes(E.vista)) repintarSinMover(); });
 }

@@ -1,4 +1,5 @@
 import { validarRespaldo } from '../nucleo/respaldo.js';
+import { htmlMedicion, completarMedicion } from './medicion.js';
 // Vista Más: cuenta, ajustar con tu IA (copiar y pegar o conexión directa), importar un plan escrito y reiniciar.
 import { E, guardar, reiniciar, empezarDeNuevo, R, D, esc, $, indice, hoy, cambiarPlan, fechaCorta, respaldo, restaurar, chk, mostrarMensaje, unidadPeso, modoEjemplo, activarCuenta, resumenLocal, traerPerfilLocal, revisionTrasladoLocal, cuentaRecuperada, cuentaVaciaParaTraslado, avisar, asegurarExtras } from './comun.js';
 import { esExportacionHevy, importarParaTelefono } from '../nucleo/hevy-csv.js';
@@ -106,8 +107,10 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel = null }) {
       <div class="fila-botones"><button type="button" class="boton primario" id="perfil">Completar mi perfil</button></div>
       <div class="fila-botones"><button type="button" class="boton" id="borrar-local">Borrar todo de este teléfono</button></div>
     </section>
+    ${CONFIG.modoPrueba ? `<section class="tarjeta" data-mas-panel="prueba"><h3>Rendimiento en este teléfono</h3>${htmlMedicion()}</section>` : ''}
     <p class="pequeno suave">Versión ${esc(CONFIG.version)}</p>
   </div>`;
+  completarMedicion();
   enlazarCuenta(ir, sincronizarAlEntrar);
   $('ver-tablero-original')?.addEventListener('click', () => ir('tablero-original'));
   $('prueba-de-nuevo')?.addEventListener('click', () => { empezarDeNuevo(); ir('cuestionario'); });

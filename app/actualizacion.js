@@ -4,7 +4,7 @@
 // sesión en curso (se recarga oculta, y vuelve a la misma pantalla con app/atras.js y la pantalla guardada), o al
 // cerrarla del todo. Nunca a mitad de un entrenamiento. Después, la campana avisa qué versión quedó.
 import { CONFIG } from './config.js';
-import { E, IMAGENES, indice } from './comun.js';
+import { E, IMAGENES, indice, estadoAlmacenamiento, liberarOtrasCopias } from './comun.js';
 import { sesionEnCurso } from './pantalla.js';
 import { anotarSinc } from './campana.js';
 import { dibujoEjercicio, srcMiniatura, maquinaDe } from './imagenes.js';
@@ -37,6 +37,19 @@ export function instalarActualizacion() {
     }
   });
   avisarVersionAplicada();
+}
+
+// Safari da unos 5 MB al almacenamiento principal. Al 70 % se pasan a IndexedDB las copias que no son la activa; si
+// igual queda sobre el 85 %, la campana avisa para descargar un respaldo. Corre al abrir, en cualquier versión.
+const CUOTA = 5 * 1024 * 1024;
+export function revisarEspacio() {
+  setTimeout(async () => {
+    try {
+      if (estadoAlmacenamiento().total < CUOTA * 0.7) return;
+      await liberarOtrasCopias();
+      if (estadoAlmacenamiento().total >= CUOTA * 0.85) anotarSinc('Este teléfono casi no tiene espacio para guardar Entreno. Descarga un respaldo desde Perfil, Respaldo.', { problema: true });
+    } catch { /* sin almacenamiento: guardar() ya avisa */ }
+  }, 4000);
 }
 
 // Una imagen que todavía no está guardada y no llega (sin señal) queda como espacio vacío, no como imagen rota.
