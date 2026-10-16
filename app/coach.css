@@ -87,7 +87,7 @@ body:has(.barra #modo:not([hidden])) .coach-cabecera{top:calc(env(safe-area-inse
 .adjunto-pildora button{border:0;background:none;color:var(--ink-muted);width:28px;height:28px;min-height:28px;min-width:28px;padding:0;border-radius:50%;cursor:pointer;display:grid;place-items:center}
 #vista-coach .adjunto-pildora button{min-height:28px;min-width:28px}
 .coach-estado{font-size:12.5px;color:var(--ink-muted);text-align:center;margin-top:-2px}
-.coach-estado:empty{display:none}
+.coach-estado:empty,#estado-chat:empty{display:none} /* #estado-chat en estilos.css le da 44 px de alto: vacía no ocupa nada */
 .coach-estado .enlace{min-height:32px;font-size:12.5px}
 
 /* Sin teclado: con pocos mensajes, el chat queda abajo junto a la caja (como Mensajes), no arriba con un hueco al medio.
@@ -105,6 +105,18 @@ body.escribiendo-coach .coach-cabecera,body.escribiendo-coach:has(.barra #modo:n
 body.escribiendo-coach #coach-redaccion,body.escribiendo-coach.con-mini-sesion #coach-redaccion{position:sticky;left:auto;right:auto;bottom:0;max-width:none;margin:8px 0 0;padding:0 0 8px}
 body.escribiendo-coach #coach-redaccion::before{left:-16px;right:-16px;bottom:0}
 body.escribiendo-coach #mini-sesion,body.escribiendo-coach #descanso:not(.grande){display:none}
+/* iOS 26: la barra de las flechas y el ✓ flota encima de la página, dentro de la zona visible. La caja queda sobre
+   ella (unos 56 pt desde el teclado, medido en un iPhone); el vidrio de atrás llena ese espacio. */
+body.escribiendo-coach.barra-teclado-ios #coach-redaccion{padding-bottom:64px}
+/* Mientras escribes, la conversación manda: la cabecera pasa a una línea (cara chica, nombre y estado) y se ocultan los
+   avisos de arriba y el dibujo grande del saludo. Todo vuelve al cerrar el teclado. */
+body.escribiendo-coach .coach-cabecera{padding-top:calc(env(safe-area-inset-top,0px) + 2px);padding-bottom:4px;margin-bottom:4px;grid-template-columns:36px 1fr 36px}
+body.escribiendo-coach .coach-cabecera .coach-quien{display:flex;align-items:center;justify-content:center;gap:7px}
+body.escribiendo-coach .coach-cabecera .coach-avatar{width:28px;height:28px;flex:none}
+body.escribiendo-coach .coach-cabecera .coach-quien strong{font-size:15px}
+body.escribiendo-coach .coach-cabecera .coach-mas{width:32px;height:32px;min-width:32px;min-height:32px}
+body.escribiendo-coach #vista-coach .revision-registro,body.escribiendo-coach #vista-coach .aviso-sensacion,body.escribiendo-coach .coach-hola .asistente-grande{display:none}
+body.escribiendo-coach .coach-hola{padding-top:4px}
 
 /* Hoja ＋: grupos con íconos como la de iMessage. */
 .herramientas-coach{display:grid;gap:16px;margin:4px 0 8px}

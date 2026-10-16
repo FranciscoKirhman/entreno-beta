@@ -422,30 +422,42 @@ function prepararRedaccion() {
   // así que innerHeight y visualViewport miden lo mismo y la diferencia no sirve para saber si está abierto.
   const tactil = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
   const escribiendo = () => document.activeElement === editor && (tactil || (vv && innerHeight - vv.height > 120));
+  // Desde iOS 26 la barra de las flechas y el ✓ flota sobre la página y visualViewport la cuenta como visible: la caja
+  // sube su alto (body.barra-teclado-ios, app/coach.css). Antes de iOS 26 esa barra era parte del teclado. iOS 26 se
+  // reconoce por lo que su Safari trae (anclaje CSS, contrast-color), porque su agente sigue diciendo iOS 18.
+  const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const ios26 = ios && typeof CSS !== 'undefined' && (CSS.supports('anchor-name', '--a') || CSS.supports('color', 'contrast-color(red)'));
   const ubicar = () => {
     if (!panel.isConnected) { limpiar(); return; }
     const teclado = Boolean(escribiendo()), cuerpo = document.body;
+    // El iPhone avisa el foco antes de achicar la zona visible: si se estaba viendo lo último, se vuelve a bajar en
+    // cada cambio de alto (el teclado terminando de abrir, la fila de sugerencias); si subiste a leer, no se mueve.
+    const pegado = teclado && (!activo || vista.scrollHeight - vista.scrollTop - vista.clientHeight < 40);
     if (teclado) {
       cuerpo.style.setProperty('--coach-vv-arriba', `${vv ? Math.max(0, vv.offsetTop) : 0}px`);
       cuerpo.style.setProperty('--coach-vv-alto', vv ? `${vv.height}px` : '100dvh');
     }
-    if (teclado === activo) return;
-    const alFinal = teclado || vista.scrollHeight - vista.scrollTop - vista.clientHeight < 40, desde = vista.scrollTop;
-    activo = teclado;
-    cuerpo.classList.toggle('escribiendo-coach', teclado);
-    if (teclado) vista.scrollTop = vista.scrollHeight;
-    else scrollTo(0, alFinal ? document.documentElement.scrollHeight : desde);
+    if (teclado !== activo) {
+      const alFinal = teclado || vista.scrollHeight - vista.scrollTop - vista.clientHeight < 40, desde = vista.scrollTop;
+      activo = teclado;
+      cuerpo.classList.toggle('escribiendo-coach', teclado);
+      cuerpo.classList.toggle('barra-teclado-ios', teclado && ios26);
+      if (!teclado) scrollTo(0, alFinal ? document.documentElement.scrollHeight : desde);
+    }
+    if (pegado) vista.scrollTop = vista.scrollHeight;
   };
   const medir = () => {
     if (!panel.isConnected) { limpiar(); return; }
     const distancia = nav && !nav.hidden ? `calc(env(safe-area-inset-bottom,0px) + ${nav.offsetHeight + 16}px)` : 'calc(env(safe-area-inset-bottom,0px) + 12px)';
     app.style.setProperty('--coach-menu-distancia', distancia);
     app.style.setProperty('--coach-redaccion-alto', `${Math.round(panel.offsetHeight)}px`);
+    // Con el teclado, si la caja crece con el texto, lo último sigue a la vista.
+    if (activo && vista.scrollHeight - vista.scrollTop - vista.clientHeight < 80) vista.scrollTop = vista.scrollHeight;
   };
   const alSalir = () => setTimeout(ubicar, 0);
   function limpiar() {
     observador?.disconnect(); vv?.removeEventListener('resize', ubicar); vv?.removeEventListener('scroll', ubicar);
-    document.body?.classList.remove('escribiendo-coach'); activo = false;
+    document.body?.classList.remove('escribiendo-coach', 'barra-teclado-ios'); activo = false;
   }
   medir();
   if (typeof ResizeObserver !== 'undefined') { observador = new ResizeObserver(medir); observador.observe(panel); }

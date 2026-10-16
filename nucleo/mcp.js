@@ -16,6 +16,7 @@ import { planDeCuidado } from './cuidado.js';
 import { leerPlanTexto, calendarizar } from './importar-plan.js';
 import { semanasDelPlan } from './semanal.js';
 import { fechaEnPalabras } from './prompts-coach.js';
+import { bloqueSiguienteDisponible } from './bloque-siguiente.js';
 
 export const VERSIONES = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 const SERVIDOR = { name: 'entreno', title: 'Entreno', version: '0.2.0' };
@@ -25,8 +26,13 @@ function bloqueDe(plan, hoy) {
   const semanas = semanasDelPlan(plan);
   if (!semanas.length) return null;
   const actual = semanas.filter(s => s.desde <= hoy).at(-1) || null, proxima = semanas.find(s => s.desde > hoy) || null;
-  return { semanas: semanas.length, semana_actual: actual?.semana ?? null, termina: semanas.at(-1).ultima, termina_el: fechaEnPalabras(semanas.at(-1).ultima),
-    proxima_semana: proxima ? { semana: proxima.semana, desde: proxima.desde } : null };
+  // Si ya se puede armar el siguiente y desde cuándo, calculado (la IA lo deducía mal con la semana 0 de por medio).
+  const fin = semanas.at(-1).ultima, disponible = bloqueSiguienteDisponible(plan, hoy);
+  const armableDesde = new Date(Date.parse(fin + 'T12:00:00Z') - 6 * 864e5).toISOString().slice(0, 10);
+  return { semanas: semanas.length, semana_actual: actual?.semana ?? null, termina: fin, termina_el: fechaEnPalabras(fin),
+    proxima_semana: proxima ? { semana: proxima.semana, desde: proxima.desde } : null,
+    siguiente_bloque: disponible ? { se_puede_armar: true, partiria_el: fechaEnPalabras(disponible.desde) }
+      : { se_puede_armar: false, se_puede_armar_desde: fechaEnPalabras(armableDesde) } };
 }
 
 // JSON compacto: la sangría no le sirve al modelo y cada salto de línea cuesta tokens en cada vuelta.
