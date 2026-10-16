@@ -221,6 +221,17 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     }
   }
 
+  // Lo que dice el historial de cada ejercicio (series de trabajo con fecha): si el máximo estimado no subió en las
+  // últimas 4 semanas respecto de las 4 anteriores, está estancado; si las dominadas salen de 12 o más sin peso en dos
+  // días distintos de las últimas 6 semanas, toca sumarles lastre.
+  const trabajo = historial.filter(x => x.tipo !== 'calentamiento' && x.fecha);
+  const e1rm = x => (Number(x.carga_kg) > 0 && x.reps ? Number(x.carga_kg) * (1 + x.reps / 30) : 0);
+  const mejor = (id, desde, hasta) => Math.max(0, ...trabajo.filter(x => x.ejercicio_id === id && x.fecha >= desde && x.fecha < hasta).map(e1rm));
+  const estancado = id => { const a = mejor(id, sumarDias(hoy, -28), hoy), b = mejor(id, sumarDias(hoy, -56), sumarDias(hoy, -28)); return a > 0 && b > 0 && a <= b * 1.01; };
+  const LASTRE = { dominadas: 'dominadas_lastre', dominadas_supinas: 'dominadas_supinas_lastre' };
+  const pesados = new Set(); // básicos estancados que van en un rango más pesado (se cuentan en la justificación)
+  const pideLastre = id => new Set(trabajo.filter(x => x.ejercicio_id === id && x.fecha >= sumarDias(hoy, -42) && !(Number(x.carga_kg) > 0) && x.reps >= 12).map(x => x.fecha)).size >= 2;
+
   const usadosSemana = new Map();
   const tecnica = r.tecnica || {};
   const elegir = (patron, usadosDia, prioridad = 3) => {
@@ -234,7 +245,10 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
       if (favoritos.has(e.id)) p -= 100;
       p -= Math.min(20, usoHistorial.get(e.id) || 0);
       if (tecnicaFloja && e.equipamiento.includes('barra_rack')) p += 15;
-      if (r.rotacion !== 'mismos' && usadosSemana.has(e.id) && !favoritos.has(e.id)) p += 8;
+      // Variedad entre los días A y B del mismo tipo: otro remo, otro press (pesa más que la costumbre del historial).
+      if (r.rotacion !== 'mismos' && usadosSemana.has(e.id) && !favoritos.has(e.id)) p += 22;
+      if (LASTRE[e.id] && pideLastre(e.id)) p += 30;
+      if (Object.entries(LASTRE).some(([base, l]) => l === e.id && pideLastre(base))) p -= 30;
       if (r.rotacion === 'variar' && usadosSemana.has(e.id)) p += 10;
       // Variedad entre bloques: con "variar" cambian los que se puede; con "algunos", solo los complementarios (los
       // principales se mantienen para comparar el progreso). Pesa más que la costumbre del historial (hasta 20).
@@ -247,8 +261,13 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
   const historialDe = id => historial.filter(s => s.ejercicio_id === id);
   const cargasRef = (r.cargas_referencia || []).map(c => ({ ejercicio_id: c.ejercicio_id, carga_kg: c.peso_kg, reps: c.repeticiones, rir: 2 }));
   /** Un ejercicio del plan con su prescripción y, si hay historial, su carga inicial. */
-  const armar = (ej, prioridad, orden) => {
+  const armar = (ej, prioridad, orden, principal = false) => {
     const pr = prescripcion(ej, prioridad, d);
+    // El primer básico de cada día: con nivel avanzado, 4 series; si está estancado, un rango más pesado (5 a 8).
+    if (principal && pr.unidad === 'reps') {
+      if (d.nivel === 'avanzado') pr.series = Math.max(pr.series, 4);
+      if (estancado(ej.id) && pr.reps_max > 8) { pr.reps_min = 5; pr.reps_max = 8; pesados.add(ej.nombre); }
+    }
     const inc = incrementoPara(ej, lugar);
     const maxMancuerna = ej.equipamiento.includes('mancuernas') ? Number(lugar.mancuerna_max_kg) || null : null;
     // En los asistidos el peso es la ayuda: se parte con la de la última vez (el máximo estimado no aplica).
@@ -288,11 +307,13 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
       if (!(x.superserie && compañero >= 0 && compañero < k)) lugares++;
       return lugares <= d.ejercicios_por_sesion;
     });
-    ejercicios.sort((a, b) => a.prioridad - b.prioridad || TIPO_ORDEN[a.ej.tipo] - TIPO_ORDEN[b.ej.tipo]);
+    // Entre básicos de la misma prioridad va primero el que la persona más ha entrenado (su principal, como la banca).
+    ejercicios.sort((a, b) => a.prioridad - b.prioridad || TIPO_ORDEN[a.ej.tipo] - TIPO_ORDEN[b.ej.tipo]
+      || (a.prioridad === 1 ? (usoHistorial.get(b.ej.id) || 0) - (usoHistorial.get(a.ej.id) || 0) : 0));
     ejercicios = juntarSuperseries(ejercicios);
     return {
       plantilla: t, foco: PLANTILLAS[t].foco, dia_semana: dias[i], firme: i < d.dias_firmes,
-      ejercicios: ejercicios.map(({ ej, prioridad, superserie }, orden) => ({ ...armar(ej, prioridad, orden), ...(superserie ? { superserie } : {}) })),
+      ejercicios: ejercicios.map(({ ej, prioridad, superserie }, orden) => ({ ...armar(ej, prioridad, orden, orden === 0 && prioridad === 1 && ej.tipo === 'compuesto'), ...(superserie ? { superserie } : {}) })),
     };
   });
 
@@ -526,7 +547,9 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     inicio: lunes, semanas: 4, semana_descarga: 4,
     objetivo: d.objetivo, estructura: 'fija', generado_por: 'reglas',
     lugar: lugar.nombre || null,
-    justificacion: justificacion(d, dias, plantillas, bloqueadas),
+    justificacion: [justificacion(d, dias, plantillas, bloqueadas),
+      d.nivel === 'avanzado' ? 'El primer básico de cada día lleva 4 series.' : '',
+      pesados.size ? `Sin subir en las últimas 4 semanas, van en un rango más pesado (5 a 8): ${[...pesados].join(', ')}.` : ''].filter(Boolean).join(' '),
     dias: diasPlan,
   };
 }
