@@ -1531,7 +1531,7 @@ function enlazar(ir, dia) {
     const nombre = nombreDe(e);
     abrirHoja({
       titulo: `¿No volver a hacer ${nombre}?`, volver: b,
-      nota: 'Lo cambio por otro parecido desde hoy en adelante y no vuelve a aparecer en tus planes nuevos. Puedes volver a permitirlo en Perfil, Completar mi perfil.',
+      nota: 'Lo cambio por otro parecido desde hoy en adelante y no vuelve a aparecer en tus planes nuevos. Puedes volver a permitirlo en Mi plan, Ejercicios.',
       opciones: [{ valor: 'si', icono: icono('cerrar'), clase: 'quitar', nombre: 'Sí, no volver a hacerlo', peligro: true }, { valor: 'no', icono: icono('flecha'), nombre: 'No, dejarlo' }],
       alElegir: v => {
         if (v !== 'si') return;

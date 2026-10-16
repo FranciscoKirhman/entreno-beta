@@ -38,6 +38,7 @@ export function vistaPlan(ir, { armarPlan, nuevo = false } = {}) {
   const semanasBloque = Array.from({ length: s.bloque.semanas }, (_, i) => i + 1);
 
   $('app').innerHTML = `<div id="vista-plan" class="obj-${s.objetivo.id}">
+    ${nuevo ? '' : `<button type="button" class="volver" id="plan-volver" data-vuelve-a="miplan">${icono('flecha', 'icono flecha-atras')} Mi plan</button>`}
     <section class="heroe">
       ${imagenObjetivo(s.objetivo.id, 'ilustracion-heroe')}
       <p class="antetitulo">${nuevo ? 'Tu plan está listo' : 'Tu plan'}</p>
@@ -104,6 +105,7 @@ export function vistaPlan(ir, { armarPlan, nuevo = false } = {}) {
   </div>`;
 
   $('empezar-plan').onclick = () => ir('hoy');
+  $('plan-volver')?.addEventListener('click', () => ir('miplan'));
   // El coach en modo plan (docs/35-plan-ia.md): la conversación va a la IA con las instrucciones de planificación.
   $('afinar-plan').onclick = () => ir('coach', { plan: 'afinar' });
   $('explicar-plan').onclick = () => ir('coach', { plan: 'explicar' });

@@ -12,7 +12,7 @@ import { pintarRecomendaciones } from './recomendaciones-ui.js';
 import { agregarARutina } from './rutinas.js';
 
 let despuesDe = null;
-let texto = '', musculo = '', equipo = '', ultimoDesde = 'mas', soloFuera = true, conAmpliado = true;
+let texto = '', musculo = '', equipo = '', ultimoDesde = 'miplan', soloFuera = true, conAmpliado = true;
 // Desde la sesión, como el "Agregar ejercicio" de Hevy: se eligen varios y se agregan juntos (o como superserie).
 const elegidos = new Set();
 /** Los ejercicios hechos hace poco, del más reciente al más antiguo (para la sección Recientes). */
@@ -32,7 +32,7 @@ export function vistaBanco(ir, { desde = ultimoDesde, despues = despuesDe } = {}
   // ordenadas por letra, cada una con su miniatura y un + para sumarla a hoy (con vista previa antes de cambiar).
   $('app').innerHTML = `<div id="vista-banco">
     ${sesion ? `<div class="banco-cab-sesion"><button type="button" class="enlace" id="banco-volver" data-vuelve-a="${desde}">Cancelar</button><h1>Agregar ejercicio</h1><button type="button" class="enlace" id="banco-crear">Crear</button></div>`
-      : `<button type="button" class="volver" id="banco-volver" data-vuelve-a="${esc(desde)}">${icono('flecha', 'icono flecha-atras')} Perfil</button>
+      : `<button type="button" class="volver" id="banco-volver" data-vuelve-a="${esc(desde)}">${icono('flecha', 'icono flecha-atras')} ${desde === 'miplan' ? 'Mi plan' : 'Perfil'}</button>
     <h1>Banco de ejercicios</h1>
     <p class="banco-resumen suave">${conTecnica} con técnica${propios ? ` y ${propios} ${propios === 1 ? 'creado' : 'creados'} por ti` : ''}. Toca uno para ver cómo se hace; con + lo sumas a hoy, aunque hoy descanses.</p>`}
     <div class="banco-buscador" role="search">

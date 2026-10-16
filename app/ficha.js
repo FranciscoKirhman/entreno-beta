@@ -22,7 +22,7 @@ import { animacionDe } from '../nucleo/animaciones.js';
 import { botonFuturo, avisoFuturo, enlazarFuturos } from './funciones-futuras.js';
 import { cuerpoHtml } from './cuerpo.js';
 
-const VOLVER = { hoy: 'Hoy', semana: 'Semana', plan: 'Tu plan', progreso: 'Progreso', banco: 'Banco de ejercicios', ejercicio: 'Atrás' };
+const VOLVER = { hoy: 'Hoy', semana: 'Semana', plan: 'Tu plan', progreso: 'Progreso', miplan: 'Mi plan', banco: 'Banco de ejercicios', ejercicio: 'Atrás' };
 const EQUIPO = Object.fromEntries(C.secciones.flatMap(s => s.preguntas || []).find(p => p.equipamiento)?.equipamiento || []);
 const NIVEL = { principiante: 'Para todos los niveles', intermedio: 'Desde nivel intermedio', avanzado: 'Para nivel avanzado' };
 const musculos = xs => lista(xs.map(m => NOMBRE_MUSCULO[m] || m));

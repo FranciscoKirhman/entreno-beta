@@ -130,8 +130,6 @@ export function vistaEntrenar(ir) {
     <h2 class="titulo-seccion">Rutinas</h2>
     <div class="botones-rutinas">
       <button type="button" class="boton fila-boton" data-rutina-nueva>${icono('mas')} Nueva rutina</button>
-      <button type="button" class="boton fila-boton" id="ver-plan">${icono('libro')} Tu plan</button>
-      <button type="button" class="boton fila-boton" id="ver-semana">${icono('calendario')} Semana</button>
     </div>
     <section class="carpeta-rutinas">
       <button type="button" class="carpeta-cab" id="carpeta-plan" aria-expanded="${planAbierto}">${icono('flecha', `icono carpeta-flecha${planAbierto ? ' abierta' : ''}`)}<span>Tu plan, ${cual} (${semana.length})</span></button>
@@ -147,8 +145,6 @@ export function vistaEntrenar(ir) {
   $('entrenar-igual')?.addEventListener('click', () => ir('coach', 'Hoy no tenía sesión pero quiero entrenar, ¿qué otra opción tienes?'));
   $('sesion-vacia').onclick = ev => proponerSesionVacia({ volver: ev.currentTarget, alCambiar: () => { empezarHoy(); ir('hoy', { sesion: true }); } });
   raiz.querySelectorAll('[data-elegir-cardio]').forEach(b => b.onclick = () => elegirCardio({ volver: b, alCambiar: () => ir('hoy', { sesion: true }) }));
-  $('ver-semana').onclick = () => ir('semana');
-  $('ver-plan').onclick = () => ir('plan');
   const cerrarMes = () => { const d = new Date(s.f.slice(0, 8) + '01T12:00:00Z'); d.setUTCDate(0); E.mesCelebrado = d.toISOString().slice(0, 7); guardar(); };
   $('mes-listo')?.addEventListener('click', () => { cerrarMes(); vistaEntrenar(ir); });
   $('mes-ver')?.addEventListener('click', () => { cerrarMes(); ir('progreso'); });

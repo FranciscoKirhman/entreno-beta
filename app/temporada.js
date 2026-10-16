@@ -1,6 +1,8 @@
 // La temporada (macrociclo, nucleo/ciclos.js) en la vista Semana: los bloques con su fase, en qué semana vas,
 // la propuesta de adelantar la descarga cuando vienes cansado y armar el bloque siguiente al terminar.
-import { E, guardar, R, D, esc, $, hoy, indice, fechaCorta, cambiarPlan, mostrarSemana } from './comun.js';
+import { E, guardar, R, D, C, esc, $, hoy, indice, fechaCorta, cambiarPlan, mostrarSemana } from './comun.js';
+import { derivar } from '../nucleo/derivar.js';
+import { borradorCiclo, respuestasDelCiclo, aplicarBorrador } from '../nucleo/ciclo-siguiente.js';
 import { macroDelPlan, semanaDe, propuestaDescarga, adelantarDescarga, aplicarFase } from '../nucleo/ciclos.js';
 import { generarPlan } from '../nucleo/motor-plan.js';
 import { progresoNivel } from '../nucleo/nivel.js';
@@ -92,7 +94,7 @@ export function tarjetaTemporada() {
 }
 
 /** El lunes en que parte un plan armado desde ese día (como nucleo/motor-plan.js). */
-const lunesDesde = f => sumarDias(f, (8 - new Date(f + 'T12:00:00Z').getUTCDay()) % 7);
+export const lunesDesde = f => sumarDias(f, (8 - new Date(f + 'T12:00:00Z').getUTCDay()) % 7);
 
 /** Aviso para Entrenar en la última semana del bloque: armar el siguiente para tener el mes planificado. */
 export function avisoBloqueSiguiente() {
@@ -104,23 +106,43 @@ export function avisoBloqueSiguiente() {
     <div class="fila-botones"><button type="button" class="boton primario" data-bloque-siguiente>Armar el bloque siguiente</button></div></section>`;
 }
 
-/** Arma el bloque siguiente (Semana o Entrenar). Es la confirmación de la persona: lo pidió con el botón. */
-export async function armarBloqueSiguiente() {
-  const disp = bloqueSiguienteDisponible(E.plan, hoy());
-  if (!disp) return;
+/**
+ * El bloque siguiente sin guardarlo (para la vista previa de Mi plan). Usa el perfil con el borrador del siguiente
+ * ciclo encima (nucleo/ciclo-siguiente.js). `forzar`: armarlo aunque falte más de una semana para que termine el
+ * actual; parte el lunes que viene y lo que queda del actual hasta ese día no cambia.
+ * @returns {{ plan, sig, nv, anteriores, respuestas, derivados } | { bloqueado: true, mensaje } | null}
+ */
+export function planBloqueSiguiente({ forzar = false, cambios = null } = {}) {
+  const disp = bloqueSiguienteDisponible(E.plan, hoy()) || (forzar && E.plan?.dias?.length && !E.plan.libre && !E.plan.bloqueado ? { desde: hoy() } : null);
+  if (!disp) return null;
   const m = macroActual();
   const sig = m?.bloques.find(b => b.n === m.actual + 1);
   // El nivel sube entre bloques, con lo que se entrenó.
   const nv = progresoNivel({ respuestas: R(), fechas: fechasEntrenadas(), hoy: hoy() });
-  if (nv.sube) R().nivel_ganado = nv.alcanzado;
-  const ctx = { derivados: D(), respuestas: R(), indice, hoy: disp.desde };
+  const respuestas = { ...respuestasDelCiclo(R()), ...(cambios || {}), ...(nv.sube ? { nivel_ganado: nv.alcanzado } : {}) };
+  const derivados = derivar(respuestas, C, hoy());
+  const ctx = { derivados, respuestas, indice, hoy: disp.desde };
   // Si a la persona le gusta variar, el bloque nuevo cambia algunos ejercicios del que termina.
   const anteriores = new Set((E.plan?.dias || []).flatMap(d => d.ejercicios.map(e => e.ejercicio_id)));
   const base = generarPlan({ ...ctx, historial: historialReciente(), anteriores });
-  if (base.bloqueado) { E.mensaje = base.mensaje; guardar(); return; }
-  let plan = sig ? aplicarFase(base, sig, { minutos: ctx.derivados.duracion_min }) : base;
+  if (base.bloqueado) return { bloqueado: true, mensaje: base.mensaje };
+  let plan = sig ? aplicarFase(base, sig, { minutos: derivados.duracion_min }) : base;
   if (sig && !validarPlan(plan, ctx).ok) plan = { ...base, bloque: sig.n }; // si la fase no cabe en tus reglas, el plan base
   plan = conDiasQueQuedan(E.plan, plan, hoy());
+  return { plan, sig, nv, anteriores, respuestas, derivados };
+}
+
+/** Arma el bloque siguiente (Semana, Entrenar o Mi plan). Es la confirmación de la persona: lo pidió con el botón. */
+export async function armarBloqueSiguiente({ forzar = false } = {}) {
+  const r = planBloqueSiguiente({ forzar });
+  if (!r) return;
+  if (r.bloqueado) { E.mensaje = r.mensaje; guardar(); return; }
+  const { plan, sig, nv, anteriores } = r;
+  // Lo elegido para el siguiente ciclo pasa al perfil (y a la cuenta) junto con el bloque nuevo.
+  const tenia = Boolean(borradorCiclo(R()));
+  E.respuestas = aplicarBorrador(R(), hoy());
+  if (nv.sube) R().nivel_ganado = nv.alcanzado;
+  if (tenia && nube.conectado()) nube.guardarCuestionario(structuredClone(R())).catch(() => {});
   mostrarSemana(1);
   const subio = nv.sube ? ` Subiste a nivel ${nv.alcanzado}: el plan sube un poco el volumen.` : '';
   const nuevos = new Set(plan.dias.flatMap(d => d.ejercicios.map(e => e.ejercicio_id)).filter(id => !anteriores.has(id))).size;

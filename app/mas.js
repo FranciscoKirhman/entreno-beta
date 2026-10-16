@@ -11,8 +11,7 @@ import { CONFIG } from './config.js';
 import { conexionIAHtml, enlazarConexionIA } from './conexion-ia.js';
 import { iaCopiarHtml, enlazarIACopiar } from './ia-copiar.js';
 import { validarPlan } from '../nucleo/validador.js';
-import { leerPlanTexto, calendarizar, planATexto } from '../nucleo/importar-plan.js';
-import { semanaDe } from '../nucleo/ciclos.js';
+import { leerPlanTexto, calendarizar } from '../nucleo/importar-plan.js';
 import { listarFotosLocales, guardarFotoLocal, restaurarFotosAtomicas } from './fotos-local.js';
 import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
 import * as nube from './nube.js';
@@ -53,7 +52,6 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel = null }) {
   if (!panel && estadoMas?.panel === 'respaldo') estadoMas.panel = null;
   $('app').innerHTML = `<div id="vista-mas">
     <h1>Perfil</h1>
-    <section class="tarjeta" data-mas-panel="banco"><h3>Banco de ejercicios</h3><p class="pequeno suave">Busca por nombre, músculo o equipo, revisa la técnica y agrega ejercicios a hoy.</p><button type="button" class="boton" id="abrir-banco">Explorar ejercicios</button></section>
     ${CONFIG.modoPrueba ? pruebaHtml() : ''}
     ${E.tableroOrigen?.datos ? '<section class="tarjeta"><h3>Tu tablero original</h3><p class="pequeno suave">Consulta el calendario, las series y las indicaciones de tu copia del tablero.</p><button type="button" class="boton" id="ver-tablero-original">Abrir tablero original</button></section>' : ''}
     <section class="tarjeta" id="cuenta">${cuentaHtml()}</section>
@@ -104,9 +102,8 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel = null }) {
 
     <section class="tarjeta" data-mas-panel="plan">
       <h3>Tu plan</h3>
-      <div class="fila-botones"><button type="button" class="boton primario" id="perfil">Completar mi perfil</button><button type="button" class="boton" id="ver-plan">Ver mi plan explicado</button></div>
-      <div class="fila-botones"><button type="button" class="boton" id="rehacer">Rehacer el plan con mis respuestas</button>${E.plan?.dias?.length && !E.plan.bloqueado ? '<button type="button" class="boton" id="compartir-plan">Compartir mi plan</button>' : ''}</div>
-      <div id="plan-compartido"></div>
+      <p class="pequeno suave">El plan, sus ajustes y compartirlo están en la pestaña Mi plan.</p>
+      <div class="fila-botones"><button type="button" class="boton primario" id="perfil">Completar mi perfil</button></div>
       <div class="fila-botones"><button type="button" class="boton" id="borrar-local">Borrar todo de este teléfono</button></div>
     </section>
     <p class="pequeno suave">Versión ${esc(CONFIG.version)}</p>
@@ -139,14 +136,6 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel = null }) {
   $('pantalla-encendida').onchange = ev => { E.pantallaEncendida = ev.target.checked; guardar(); actualizarPantalla(); };
   enlazarIACopiar(ir);
   enlazarConexionIA(async () => { await sincronizarAlEntrar({ forzar: true }); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); }, ir);
-  // Compartir el plan como texto (como las rutinas de Hevy): la otra persona lo pega en "Importar un plan".
-  $('compartir-plan')?.addEventListener('click', async () => {
-    const texto = planATexto(E.plan, { semana: semanaDe(E.plan, hoy()) || 1 });
-    try { if (navigator.share) { await navigator.share({ title: 'Mi plan de Entreno', text: texto }); return; } } catch { return; }
-    $('plan-compartido').innerHTML = `<pre class="prompt" id="texto-plan">${esc(texto)}</pre><p class="pequeno" id="plan-copiado"></p>`;
-    try { await navigator.clipboard.writeText(texto); $('plan-copiado').textContent = 'Copiado. Mándalo a quien quieras: lo pega en Perfil, Importar un plan que ya tengo.'; }
-    catch { $('plan-copiado').textContent = 'Selecciona el texto y cópialo.'; }
-  });
   $('importar').onclick = () => {
     const imp = leerPlanTexto($('plan-texto').value, indice);
     const out = $('resultado-importar');
@@ -216,10 +205,7 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel = null }) {
       }
     };
   };
-  $('rehacer').onclick = () => armarPlan();
   $('perfil').onclick = () => ir('perfil');
-  $('abrir-banco').onclick = () => ir('banco', { desde: 'mas' });
-  $('ver-plan').onclick = () => ir(E.plan ? 'plan' : 'perfil');
   $('borrar-local').onclick = ev => {
     const b = ev.currentTarget;
     if (!b.dataset.confirmar) { b.dataset.confirmar = '1'; b.textContent = 'Toca de nuevo para borrar todo de este teléfono'; return; }
@@ -245,7 +231,7 @@ function recordatoriosHtml() {
       <div class="opcion"><input type="checkbox" id="av-entrenar"${chk(c.entrenar)}><div><label for="av-entrenar">La sesión del día</label>
         <p class="pequeno suave">1 hora antes si la sesión tiene hora; si no, a las <input type="time" id="av-hora" value="${esc(c.horaEntreno)}" aria-label="Hora del aviso de la sesión"></p></div></div>
       <div class="opcion"><input type="checkbox" id="av-sup"${chk(c.suplementos)}><div><label for="av-sup">Suplementos</label>
-        <p class="pequeno suave">A la hora de cada uno${E.suplementos.length ? '' : ' (se agregan en Progreso)'}.</p></div></div>
+        <p class="pequeno suave">A la hora de cada uno${E.suplementos.length ? '' : ' (se agregan en Mi plan)'}.</p></div></div>
     </div>
     ${puede || activos ? `<div class="fila-botones">${activos ? '<button type="button" class="boton" id="av-probar">Probar un aviso</button><button type="button" class="boton" id="av-apagar">Apagar avisos</button>' : '<button type="button" class="boton primario" id="av-activar">Activar avisos</button>'}</div>` : ''}
     <p class="pequeno suave">Ojo: sin un servidor, el teléfono no puede abrir la app a una hora fija. Estos avisos llegan solo con la app abierta (en Android, también un rato después de cerrarla). Para que suenen siempre, aunque la app esté cerrada, agrégalos a tu calendario. Si cambias el plan o los suplementos, vuelve a agregarlos.</p>

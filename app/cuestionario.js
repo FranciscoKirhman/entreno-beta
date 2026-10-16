@@ -403,7 +403,7 @@ export function vistaPerfil(ir, armarPlan) {
     }).join('')}</ul>
     ${E.plan ? '' : '<div class="fila-botones"><button type="button" class="boton primario" id="aplicar">Armar mi plan</button></div>'}
   </div>`;
-  document.querySelectorAll('[data-seccion]').forEach(b => b.onclick = () => { E.seccionPerfil = b.dataset.seccion; guardar(); ir('seccion'); });
+  document.querySelectorAll('[data-seccion]').forEach(b => b.onclick = () => { E.seccionPerfil = b.dataset.seccion; delete E.seccionDesde; guardar(); ir('seccion'); });
   document.querySelectorAll('#vista-perfil [data-asistente]').forEach(b => b.onclick = () => {
     E.asistente = b.dataset.asistente; E.mensaje = `Ahora te acompaña ${nombreAsistente()}.`;
     guardar(); vistaPerfil(ir, armarPlan); mostrarMensaje();
@@ -571,10 +571,12 @@ function validarSeccion(ps) {
 export function vistaSeccion(ir) {
   const s = seccionesVisibles().find(x => x.id === E.seccionPerfil) || seccionesVisibles()[0];
   const ps = preguntasVisibles(s);
+  // Objetivo, días y lugar también se abren desde Mi plan, y vuelven ahí.
+  const volverA = E.seccionDesde === 'miplan' ? 'miplan' : 'perfil';
   let tocado = null;
   const repintar = () => repintarConservando(() => vistaSeccion(ir), tocado);
   $('app').innerHTML = `<div id="vista-seccion">
-    <button type="button" class="enlace" id="a-perfil" data-vuelve-a="perfil">‹ Tu perfil</button>
+    <button type="button" class="enlace" id="a-perfil" data-vuelve-a="${volverA}">‹ ${volverA === 'miplan' ? 'Mi plan' : 'Tu perfil'}</button>
     <h1>${esc(s.titulo)}</h1>
     ${s.intro ? `<div class="aviso ${s.sensible ? 'ojo' : ''}">${esc(s.intro)}</div>` : ''}
     <form id="seccion" novalidate>
@@ -607,6 +609,7 @@ export function vistaSeccion(ir) {
     R()[pid] = [...lista, { nombre: `Lugar ${lista.length + 1}`, tipo: 'gimnasio_basico', equipamiento: [] }];
     guardar(); repintar();
   });
-  f.addEventListener('submit', e => { e.preventDefault(); if (validarSeccion(ps)) ir('perfil'); });
-  $('a-perfil').onclick = () => ir('perfil');
+  const salir = () => { delete E.seccionDesde; guardar(); ir(volverA); };
+  f.addEventListener('submit', e => { e.preventDefault(); if (validarSeccion(ps)) salir(); });
+  $('a-perfil').onclick = salir;
 }

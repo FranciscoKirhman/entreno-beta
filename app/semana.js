@@ -72,6 +72,7 @@ export function vistaSemana(ir) {
   // La nota "elige un peso" se repite en cada ejercicio: en el plan se dice una vez, arriba.
   const eligePeso = dias.some(x => x.ejercicios.some(e => /^Elige un peso/.test(e.nota || '')));
   $('app').innerHTML = `<div id="vista-semana">
+    <button type="button" class="volver" id="semana-volver" data-vuelve-a="miplan">${icono('flecha', 'icono flecha-atras')} Mi plan</button>
     <h1>Semana</h1>
     <p class="resumen-plan">${p.semanas} semanas · ${resumen.sesiones} sesiones en ${diasSemana.length} días: ${esc(diasSemana.map(d => DIAS_CORTOS[d]).join(', '))}</p>
     <button type="button" class="enlace" id="ver-plan">Ver tu plan explicado&nbsp;›</button>
@@ -106,6 +107,7 @@ export function vistaSemana(ir) {
   enlazarCalendario(() => vistaSemana(ir));
   enlazarTemporada(() => vistaSemana(ir));
   $('ver-plan').onclick = () => ir('plan');
+  $('semana-volver').onclick = () => ir('miplan');
   raiz.querySelectorAll('[data-ir-checkin]').forEach(b => b.onclick = () => ir('checkin', b.dataset.irCheckin));
   raiz.querySelectorAll('[data-ficha]').forEach(b => b.onclick = () => ir('ejercicio', { id: b.dataset.ficha, desde: 'semana' }));
   raiz.querySelectorAll('[data-semana]').forEach(b => b.onclick = () => { mostrarSemana(Number(b.dataset.semana)); guardar(); vistaSemana(ir); });

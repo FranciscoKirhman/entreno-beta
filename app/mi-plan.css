@@ -1,0 +1,43 @@
+/* Mi plan (app/mi-plan.js): tarjetas del ciclo, la semana, prioridades, ejercicios y la lista de ajustes. */
+#vista-miplan h1{margin:8px 0 16px}
+#vista-miplan .titulo-seccion{margin:24px 4px 8px;font-size:.8125rem;line-height:1.4;font-weight:500;color:var(--ink-muted)}
+#vista-miplan .tarjeta{border-radius:18px}
+#vista-miplan .mp-ciclo h3{margin:2px 0 8px}
+#vista-miplan .mp-barra{height:8px;border-radius:4px;background:var(--fill);overflow:hidden;margin:0 0 8px}
+#vista-miplan .mp-barra i{display:block;height:100%;background:var(--accent);border-radius:4px}
+#vista-miplan .mp-tablero{margin:12px 0}
+#vista-miplan .mp-semana{display:flex;flex-direction:column;align-items:stretch;gap:8px;width:100%;border:0;text-align:left;font:inherit;color:inherit;cursor:pointer}
+#vista-miplan .mp-dias{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+#vista-miplan .mp-dia{display:flex;align-items:center;justify-content:center;min-height:34px;border-radius:10px;background:var(--fill);color:var(--ink-muted);font-size:.8125rem;font-weight:500}
+#vista-miplan .mp-dia.toca{background:var(--surface-2);color:var(--ink)}
+#vista-miplan .mp-dia.hoy{background:var(--accent-soft);color:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent)}
+#vista-miplan .mp-dia.hecha{background:var(--good-soft);color:var(--good)}
+#vista-miplan .mp-enlace{display:inline-flex;align-items:center;gap:4px;color:var(--accent)}
+#vista-miplan .mp-enlace .icono{width:14px;height:14px}
+#vista-miplan .mp-prioridades .lista-simple li,#vista-miplan .mp-comparacion .lista-simple li{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+#vista-miplan .mp-prioridades .boton{margin-top:10px}
+#vista-miplan .mp-ejercicios h3{margin:4px 0 2px}
+#vista-miplan .mp-ejercicios h3+p{margin-top:0}
+#vista-miplan .mp-ejercicios h3:not(:first-child){margin-top:18px}
+#vista-miplan .mp-ejercicios .chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+#vista-miplan .mp-ejercicios .chip{display:inline-flex;align-items:center;gap:2px}
+#vista-miplan .mp-quitar{display:inline-flex;align-items:center;justify-content:center;min-width:28px;min-height:28px;padding:0}
+#vista-miplan .mp-buscar{width:100%;margin:8px 0 4px}
+#vista-miplan .mp-resultados li{display:flex;justify-content:space-between;align-items:center;gap:12px}
+#vista-miplan .mp-lista{background:var(--surface);border-radius:18px}
+#vista-miplan .mp-fila{display:flex;align-items:center;gap:12px;width:100%;min-height:56px;padding:14px;background:transparent;border:0;text-align:left;font:inherit;color:var(--ink);cursor:pointer}
+#vista-miplan .mp-lista>.mp-fila+.mp-fila{border-top:1px solid var(--line)}
+#vista-miplan .mp-fila>.icono:first-child{width:22px;height:22px;flex:0 0 22px;color:var(--ink-muted)}
+#vista-miplan .mp-texto{display:flex;flex:1;flex-direction:column;min-width:0;gap:2px;overflow-wrap:anywhere}
+#vista-miplan .mp-texto small{font-size:.8125rem;line-height:1.4;color:var(--ink-muted)}
+#vista-miplan .mp-flecha{width:16px;height:16px;flex:0 0 16px;color:var(--ink-muted)}
+#vista-miplan .mp-radio{width:22px;height:22px;flex:0 0 22px;border-radius:50%;box-shadow:inset 0 0 0 2px var(--border)}
+#vista-miplan [aria-checked="true"] .mp-radio{box-shadow:inset 0 0 0 7px var(--accent)}
+#vista-miplan .mp-musculos{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+#vista-miplan .mp-seg{display:flex;flex-wrap:wrap}
+#vista-miplan .mp-seg button{flex:1 1 0;min-width:0;min-height:44px}
+#vista-miplan .num.sube{color:var(--good);font-weight:600}
+#vista-miplan .num.baja{color:var(--ink-muted)}
+#vista-miplan .fila-botones{margin-top:16px}
+#vista-miplan .prompt{white-space:pre-wrap;overflow-wrap:anywhere}
+#vista-miplan .mp-prioridades .lista-simple>li:first-child{border-top:0;padding-top:0}

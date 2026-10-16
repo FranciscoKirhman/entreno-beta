@@ -1,7 +1,7 @@
 // Versión de prueba: guarda la app en el teléfono para que abra sin señal en el gimnasio.
 // Los archivos de cada publicación se leen desde su copia; una versión nueva instala otra copia completa.
 // herramientas/beta.mjs reemplaza VERSION y ARCHIVOS al armar.
-const VERSION = "2026-10-15 20:56 · 150339e";
+const VERSION = "2026-10-15 21:02 · 3b3ccc5";
 const ARCHIVOS = [
  "./",
  "ajustes-sesion.js",
@@ -33,6 +33,7 @@ const ARCHIVOS = [
  "cuerpo-trazos.js",
  "cuerpo.js",
  "cuestionario.js",
+ "cuidados.js",
  "datos-nube.js",
  "descanso.js",
  "deslizar-serie.js",
@@ -623,6 +624,8 @@ const ARCHIVOS = [
  "mas.css",
  "mas.js",
  "medalla.js",
+ "mi-plan.css",
+ "mi-plan.js",
  "mini-sesion.js",
  "modal.js",
  "movimiento.js",
@@ -673,6 +676,7 @@ const ARCHIVOS = [
  "../nucleo/catalogo.js",
  "../nucleo/checkin.js",
  "../nucleo/ciclo-menstrual.js",
+ "../nucleo/ciclo-siguiente.js",
  "../nucleo/ciclos.js",
  "../nucleo/coach.js",
  "../nucleo/cola.js",

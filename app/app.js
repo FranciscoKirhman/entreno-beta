@@ -22,6 +22,7 @@ import { vistaDiaPasado } from './dia-pasado.js';
 import { vistaSemana } from './semana.js';
 import { vistaCoach, revisarSemanaSiToca, marcarNovedadCoach } from './coach-ui.js';
 import { vistaProgreso } from './progreso.js';
+import { vistaMiPlan, configurarMiPlan } from './mi-plan.js';
 import { vistaMas } from './mas.js';
 import { pintarPerfilesPrueba, abrirEnlacePerfiles } from './perfiles-prueba-ui.js';
 import { vistaTableroOriginal } from './tablero-original.js';
@@ -214,9 +215,10 @@ function vistaInicio() {
 }
 
 // ── Navegación ──────────────────────────────────────────────────────────────
-const VISTAS_CON_PLAN = ['hoy', 'entrenar', 'rutina', 'semana', 'progreso', 'checkin', 'plan', 'resumen', 'eleccion'];
-// Cuatro pestañas, como Hevy: Entrenar (la sesión de hoy y el plan como rutinas), Coach, Progreso y Perfil (Más).
-const PESTANA = { eleccion: 'entrenar', hoy: 'entrenar', rutina: 'entrenar', semana: 'entrenar', banco: 'mas', checkin: 'entrenar', plan: 'entrenar', perfil: 'mas', seccion: 'mas', pasado: 'progreso', datos: 'progreso', 'tablero-original': 'mas' };
+const VISTAS_CON_PLAN = ['hoy', 'entrenar', 'rutina', 'semana', 'progreso', 'checkin', 'plan', 'resumen', 'eleccion', 'miplan'];
+// Cuatro pestañas: Entrenar (la sesión de hoy y el plan como rutinas, como Hevy), Coach, Mi plan (con Progreso, Semana y
+// el siguiente ciclo adentro) y Perfil (Más).
+const PESTANA = { eleccion: 'entrenar', hoy: 'entrenar', rutina: 'entrenar', semana: 'miplan', banco: 'miplan', checkin: 'entrenar', plan: 'miplan', perfil: 'mas', seccion: 'mas', progreso: 'miplan', pasado: 'miplan', datos: 'mas', 'tablero-original': 'mas' };
 let antesDeFicha = null, finEntrada = null, extraActual = null, primeraVista = true, retornoInicial = null;
 function ir(vista, extra) {
   if (vista === 'hoy' && primeraVista && E.plan) vista = 'eleccion';
@@ -236,17 +238,18 @@ function ir(vista, extra) {
   extraActual = extra;
   E.vista = vista; guardar();
   $('nav').hidden = !E.plan || E.plan.bloqueado;
-  const pestana = ['ejercicio', 'resumen'].includes(vista) ? PESTANA[extra?.desde] || extra?.desde || 'hoy' : PESTANA[vista] || vista;
+  const pestana = ['ejercicio', 'resumen'].includes(vista) ? PESTANA[extra?.desde] || extra?.desde || 'hoy' : vista === 'seccion' && E.seccionDesde === 'miplan' ? 'miplan' : PESTANA[vista] || vista;
   document.querySelectorAll('#nav [data-ir]').forEach(b => b.setAttribute('aria-current', String(b.dataset.ir === pestana)));
   marcarNovedadCoach();
   pintarModo();
   pintarCampana();
   pintarPerfilesPrueba();
   abrirEnlacePerfiles(); // #perfiles=…: el enlace privado reemplaza pasar el archivo a cada teléfono
+  // "Mis datos" (el respaldo) está en Perfil, Ajustes: la ruta datos lleva ahí.
   const vistas = {
     inicio: vistaInicio, eleccion: () => vistaEleccion(ir), cuestionario: () => vistaRapido(ir, armarPlan), perfil: () => vistaPerfil(ir, armarPlan), seccion: () => vistaSeccion(ir),
     plan: () => vistaPlan(ir, { armarPlan, nuevo: extra?.nuevo }), hoy: () => vistaHoy(ir, extra), entrenar: () => vistaEntrenar(ir), rutina: () => vistaRutina(ir), ejercicio: () => vistaFicha(ir, extra || {}), semana: () => vistaSemana(ir),
-    banco: () => vistaBanco(ir, extra || {}), coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), resumen: () => vistaResumen(ir, extra || {}), progreso: () => vistaProgreso(ir), pasado: () => vistaDiaPasado(ir, extra || {}), datos: () => { vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel: 'respaldo' }); const titulo=document.querySelector('#vista-mas h1');if(titulo)titulo.textContent='Mis datos'; const b=document.getElementById('mas-volver'); if(b){b.querySelector('span').textContent='Progreso';b.onclick=()=>ir('progreso');} }, mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel: extra?.panel }), 'tablero-original': () => vistaTableroOriginal(ir),
+    banco: () => vistaBanco(ir, extra || {}), coach: () => vistaCoach(ir, extra), checkin: () => vistaCheckin(ir, extra), resumen: () => vistaResumen(ir, extra || {}), progreso: () => vistaProgreso(ir), miplan: () => vistaMiPlan(ir, extra), pasado: () => vistaDiaPasado(ir, extra || {}), datos: () => ir('mas', { panel: 'respaldo' }), mas: () => vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel: extra?.panel }), 'tablero-original': () => vistaTableroOriginal(ir),
   };
   // Al volver atrás, la pantalla queda a la altura donde se dejó (la misma que se vio debajo al deslizar).
   const vuelta = vista !== anterior && (esVuelta(anterior, vista) || volviendoConGesto());
@@ -279,7 +282,7 @@ function ir(vista, extra) {
   actualizarPantalla(); // con una sesión en curso, la pantalla no se apaga sola
 }
 // Tocar una pestaña abre su portada (en Progreso, sin la subpantalla que quedó abierta), como Hevy.
-$('nav').addEventListener('click', e => { const b = e.target.closest('[data-ir]'); if (!b) return; if (b.dataset.ir === 'progreso') elegirSeccionProgreso(null); ir(b.dataset.ir === 'hoy' && E.plan ? 'eleccion' : b.dataset.ir); });
+$('nav').addEventListener('click', e => { const b = e.target.closest('[data-ir]'); if (!b) return; if (b.dataset.ir === 'miplan') elegirSeccionProgreso(null); ir(b.dataset.ir === 'hoy' && E.plan ? 'eleccion' : b.dataset.ir); });
 // El enlace de los perfiles también sirve si la app ya estaba abierta (solo cambia lo que va después del #).
 addEventListener('hashchange', () => abrirEnlacePerfiles());
 
@@ -330,7 +333,7 @@ if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 retornoInicial = retornoGuardado(E.pantallaGuardada, E, hoy());
 // Con plan, la primera vez del día se elige entre la sesión planificada y una vacía (salvo a mitad del cuestionario).
 ir(!retornoInicial && !['cuestionario', 'perfil', 'seccion'].includes(E.vista) && eleccionPendiente() ? 'eleccion'
-  : retornoInicial?.vista || (['cuestionario', 'hoy', 'semana', 'coach', 'progreso', 'mas', 'checkin', 'plan', 'perfil', 'seccion', 'tablero-original'].includes(E.vista) ? E.vista : (E.plan ? 'hoy' : 'inicio')), retornoInicial?.extra);
+  : retornoInicial?.vista || (['cuestionario', 'hoy', 'semana', 'coach', 'progreso', 'miplan', 'mas', 'checkin', 'plan', 'perfil', 'seccion', 'tablero-original'].includes(E.vista) ? E.vista : (E.plan ? 'hoy' : 'inicio')), retornoInicial?.extra);
 requestAnimationFrame(() => requestAnimationFrame(() => { $('app').dataset.cargaMs = String(Math.round(performance.now())); }));
 observarCuerpos(); // figuras del cuerpo (app/cuerpo.js): se dibujan solas al aparecer
 // Atrás: deslizar desde el borde izquierdo o el botón atrás del teléfono (app/atras.js).
@@ -377,8 +380,9 @@ async function iniciarEnSegundoPlano() {
     }
   }
   repintarSinMover();
-  hevyAlAbrir(() => { if (['hoy', 'semana', 'progreso'].includes(E.vista)) repintarSinMover(); });
+  hevyAlAbrir(() => { if (['hoy', 'semana', 'progreso', 'miplan'].includes(E.vista)) repintarSinMover(); });
 }
 // Dejar que la copia llegue a la pantalla antes de cargar el cliente de cuentas o hacer consultas.
 configurarCampana({ sincronizar: () => sincronizarAlEntrar({ forzar: true }) });
+configurarMiPlan({ armarPlan });
 requestAnimationFrame(() => setTimeout(() => iniciarEnSegundoPlano().catch(e => console.warn('No pude iniciar la cuenta', e)), 0));
