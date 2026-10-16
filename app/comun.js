@@ -8,7 +8,7 @@ import { estadoDelPlan } from '../nucleo/registrado.js';
 import { perfilPruebaActivo, clavePerfilPrueba, claveSesionPerfilPrueba, seleccionarPerfilPrueba } from '../nucleo/perfiles-prueba.js';
 import { perfilDelRetornoCuenta } from '../nucleo/retorno-cuenta.js';
 import { CONFIG } from './config.js';
-import { leerCopia, escribirCopia } from './copia-entreno.js';
+import { leerCopia, escribirCopia, liberarEspacio, usoAlmacenamiento } from './copia-entreno.js';
 import { estadoDeCopia } from '../nucleo/copia-segura.js';
 import { revisarTrasladoCuenta } from '../nucleo/consentimiento-nube.js';
 import { corregirHistorial } from '../nucleo/corregir-historial.js';
@@ -138,17 +138,36 @@ export function guardar() {
     escribirCopia(CLAVE, texto, E.guardadoEn);
     localStorage.setItem(CLAVE, texto);
     if (localStorage.getItem(CLAVE) !== texto) throw new Error('La copia guardada no coincide');
-    errorGuardado = null;
+    errorGuardado = null; sinEspacio = false;
     document.getElementById('error-guardado')?.remove();
     return true;
-  } catch {
-    errorGuardado = 'No se guardaron los últimos cambios en este teléfono. Descarga un respaldo antes de cerrar o recargar.';
+  } catch (e) {
+    // Sin espacio (Safari da unos 5 MB y ahí conviven varias copias completas): se mueven las otras a IndexedDB y
+    // se vuelve a guardar, una sola vez por ejecución (al cerrar se guarda varias veces seguidas).
+    sinEspacio = !lecturaFallida && (e?.name === 'QuotaExceededError' || e?.code === 22 || /quota/i.test(e?.message || ''));
+    errorGuardado = sinEspacio ? 'Este teléfono se quedó sin espacio para guardar Entreno.' : 'No se guardaron los últimos cambios en este teléfono. Descarga un respaldo antes de cerrar o recargar.';
+    if (sinEspacio && !liberacion) liberacion = liberarEspacio(MOVIBLE).then(() => guardar()).catch(() => false);
     // El estado interno conserva el fallo; no se interrumpe el entrenamiento con un aviso persistente.
     document.getElementById('error-guardado')?.remove();
     return false;
   }
 }
+// Las copias completas que se pueden pasar a IndexedDB sin perder nada: otras cuentas (se recuperan desde su copia al
+// volver a ellas), el ejemplo y las copias de seguridad de una recuperación. La copia personal, los perfiles de prueba
+// y la migración antigua se leen directo del principal, así que se quedan.
+const MOVIBLE = k => k !== CLAVE && /^entreno-(cuenta-|anterior-|antes-separar-demo$|ejemplo-v1$)/.test(k);
+let sinEspacio = false, liberacion = null;
 let personal = E;
+/** Guarda y, si falló por espacio, espera a que se libere y reintenta. Para lo que no puede seguir sin guardar. */
+export async function guardarConEspacio() {
+  if (guardar()) return true;
+  if (!sinEspacio) return false;
+  liberacion ||= liberarEspacio(MOVIBLE).then(() => guardar()).catch(() => false);
+  await liberacion;
+  return guardar();
+}
+/** Para el aviso: cuánto ocupa el almacenamiento principal y si falta espacio. */
+export const estadoAlmacenamiento = () => ({ sinEspacio, ...usoAlmacenamiento() });
 let claveAntesEjemplo = CLAVE_PERSONAL;
 alinearPropios();
 export function entrarEjemplo() {

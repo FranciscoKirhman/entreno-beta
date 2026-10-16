@@ -1,4 +1,4 @@
-import { E, guardar, esc, ambitoDatos, EXTRAS } from './comun.js';
+import { E, guardar, guardarConEspacio, estadoAlmacenamiento, esc, ambitoDatos, EXTRAS } from './comun.js';
 import * as nube from './nube.js';
 import { conPropios, idsPropios } from '../nucleo/propios.js';
 import { unirSesiones } from '../nucleo/sincronizacion.js';
@@ -32,7 +32,14 @@ export async function confirmarCambioChat(id) {
   // También protege una confirmación cuyo recibo se pierde: no se suben copias
   // antiguas mientras no se compruebe qué pasó en la cuenta.
   E.chatPorTraer = { id, firmas, confirmado: false };
-  if (guardar() === false) { delete E.chatPorTraer; throw new Error('Recupera el guardado de este teléfono antes de aceptar cambios en tu cuenta.'); }
+  // Primero el guardado de siempre (sin esperas); solo si falló por espacio se libera y se reintenta.
+  let guardado = guardar();
+  if (!guardado) { guardado = await guardarConEspacio(); if (!vigente()) return false; }
+  if (!guardado) {
+    delete E.chatPorTraer;
+    const { sinEspacio, total } = estadoAlmacenamiento();
+    throw new Error(sinEspacio ? `Este teléfono se quedó sin espacio para guardar Entreno (${(total / 1048576).toFixed(1)} MB usados). Descarga un respaldo en Perfil, Mis datos, y avísame.` : 'Falló el guardado de este teléfono, así que no acepté el cambio. Cierra y abre la app y vuelve a intentarlo.');
+  }
   try { await nube.confirmarPropuestaIA(id); }
   catch (error) {
     if (!vigente()) return false;

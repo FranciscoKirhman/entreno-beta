@@ -416,12 +416,15 @@ function prepararRedaccion() {
   const panel = $('coach-redaccion'), app = $('app'), nav = $('nav'), editor = $('mensaje');
   const vv = typeof visualViewport !== 'undefined' ? visualViewport : null;
   let observador;
-  const escribiendo = () => document.activeElement === editor && vv && innerHeight - vv.height > 120;
+  // En el teléfono basta con que el campo tenga el foco: en iOS reciente la ventana se achica junto con el teclado,
+  // así que innerHeight y visualViewport miden lo mismo y la diferencia no sirve para saber si está abierto.
+  const tactil = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  const escribiendo = () => document.activeElement === editor && (tactil || (vv && innerHeight - vv.height > 120));
   const ubicar = () => {
     if (!panel.isConnected) { limpiar(); return; }
     const teclado = escribiendo();
     document.body?.classList.toggle('escribiendo-coach', Boolean(teclado));
-    panel.style.bottom = teclado ? `${Math.max(8, innerHeight - (vv.offsetTop + vv.height) + 8)}px` : '';
+    panel.style.bottom = teclado ? `${Math.max(8, vv ? innerHeight - (vv.offsetTop + vv.height) + 8 : 8)}px` : '';
   };
   const medir = () => {
     if (!panel.isConnected) { limpiar(); return; }
@@ -577,6 +580,9 @@ async function enviar(texto, ir, archivo = null, { existente = null } = {}) {
   if (existente) delete existente.porEnviar; else E.chat.push(persona);
   persona.consulta ||= typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 10)}`;
   const modo = existente?.modo || (E.chatModo === 'plan' ? 'plan' : 'chat');
+  // Como en Mensajes: al enviar, el campo queda vacío de inmediato. Si la consulta falla, lo escrito vuelve al campo.
+  const vaciado = !existente && nube.conectado() && borrador.texto.trim() === texto.trim() && Boolean(texto.trim());
+  if (vaciado) { borrador.texto = E.borradorChat = ''; const campo = $('mensaje'); if (campo?.isConnected) { campo.value = ''; crecer(campo); } }
   const enVista = () => Boolean($('vista-coach')?.isConnected);
   // El chat es siempre con IA: las reglas de Entreno son una herramienta de la IA en el servidor. Sin cuenta o sin
   // señal no hay coach; se explica qué falta.
@@ -640,7 +646,7 @@ async function enviar(texto, ir, archivo = null, { existente = null } = {}) {
   if (completada && !existente) {
     if (borrador.texto.trim() === texto.trim()) borrador.texto = E.borradorChat = '';
     if (archivo && borrador.archivo === archivo) borrador.archivo = null;
-  }
+  } else if (vaciado && !persona.porEnviar && !borrador.texto) borrador.texto = E.borradorChat = texto;
   guardar(); avisoChat();
   if (enVista()) vistaCoach(ir, { respuesta: true });
   return completada;
