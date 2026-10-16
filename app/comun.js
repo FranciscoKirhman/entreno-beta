@@ -13,7 +13,12 @@ import { estadoDeCopia } from '../nucleo/copia-segura.js';
 import { revisarTrasladoCuenta } from '../nucleo/consentimiento-nube.js';
 import { corregirHistorial } from '../nucleo/corregir-historial.js';
 
-const cargar = u => fetch(u).then(r => { if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.json(); });
+// La portada de la versión de prueba ya pidió estos archivos (herramientas/beta.mjs, precargas): se usa esa respuesta.
+const pedir = u => { const p = globalThis.entrenoPrecarga?.[u]; if (p) delete globalThis.entrenoPrecarga[u]; return p || fetch(u); };
+const cargar = u => pedir(u).then(r => { if (!r.ok) throw new Error(`${u}: ${r.status}`); return r.json(); });
+// Imágenes que hay en app/img (las genera herramientas/imagenes.mjs): así no se piden las que todavía no existen.
+// Va en el mismo grupo que el contenido para no esperar una vuelta más al abrir.
+const disponibles = pedir('img/disponibles.json').then(r => (r.ok ? r.json() : [])).catch(() => []);
 export const [C, catalogo, K, EVIDENCIA, PLANES, TECNICA] = await Promise.all(
   ['cuestionario', 'ejercicios', 'checkin', 'evidencia', 'planes', 'tecnica'].map(n => cargar(`../contenido/${n}.json`)));
 // Banco ampliado (contenido/ejercicios-extra.json, datos MIT de hasaneyldrm/exercises-dataset, sin imágenes): se
@@ -38,8 +43,7 @@ export function asegurarExtras() {
 }
 /** Si lo guardado usa ejercicios del banco ampliado, hay que tenerlos antes de dibujar. */
 export const usaExtras = e => /"extra_\d/.test(JSON.stringify([e?.sesiones, e?.plan, e?.rutinas, e?.registro]));
-/** Imágenes que hay en app/img (las genera herramientas/imagenes.mjs): así no se piden las que todavía no existen. */
-export const IMAGENES = new Set(await fetch('img/disponibles.json').then(r => (r.ok ? r.json() : [])).catch(() => []));
+export const IMAGENES = new Set(await disponibles);
 
 export const hoy = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Santiago' });
 export const ahora = () => new Date().toLocaleString('sv-SE', { timeZone: 'America/Santiago' }).replace(' ', 'T').slice(0, 16);

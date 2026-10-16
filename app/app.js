@@ -11,6 +11,7 @@ import { prepararSesion, unirSesiones } from '../nucleo/sincronizacion.js';
 import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
 import { derivar } from '../nucleo/derivar.js';
 import { generarPlan } from '../nucleo/motor-plan.js';
+import { conDiasQueQuedan } from '../nucleo/bloque-siguiente.js';
 import { vistaHoy, irAlEjercicioEnCurso } from './hoy.js';
 import { vistaEntrenar } from './entrenar.js';
 import { vistaRutina } from './rutinas.js';
@@ -48,6 +49,7 @@ import { guardarRetorno } from './comun.js';
 import { fechaSesionActiva } from '../nucleo/sesion-activa.js';
 import { pantallaGuardada, retornoGuardado } from '../nucleo/retorno-app.js';
 import { actualizarChatConfirmado } from './propuesta-chat.js';
+import { instalarActualizacion, guardarImagenesDelPlan } from './actualizacion.js';
 
 // ── Plan y cuenta ───────────────────────────────────────────────────────────
 /** Arma (o rehace) el plan con las respuestas y muestra la pantalla "Tu plan". */
@@ -85,7 +87,9 @@ async function armarPlan({ mensaje = null } = {}) {
       E.mensaje = `El servidor no respondió (${e.message}); armé el plan en este teléfono.`;
     }
   }
-  E.plan = generarPlan({ derivados: derivar(r, C, hoy()), respuestas: r, indice, hoy: hoy(), historial: historialReciente() }); // parte con los pesos ya anotados
+  // Parte con los pesos ya anotados y conserva lo que queda del plan actual hasta el lunes (semana 0).
+  const nuevo = generarPlan({ derivados: derivar(r, C, hoy()), respuestas: r, indice, hoy: hoy(), historial: historialReciente() });
+  E.plan = nuevo.bloqueado ? nuevo : conDiasQueQuedan(E.plan, nuevo, hoy());
   guardar();
   ir(E.plan.bloqueado ? 'hoy' : 'plan', { nuevo: true });
 }
@@ -223,12 +227,14 @@ const VISTAS_CON_PLAN = ['hoy', 'entrenar', 'rutina', 'semana', 'progreso', 'che
 // el siguiente ciclo adentro) y Perfil (Más).
 const PESTANA = { eleccion: 'entrenar', hoy: 'entrenar', rutina: 'entrenar', semana: 'miplan', banco: 'miplan', checkin: 'entrenar', plan: 'miplan', perfil: 'mas', seccion: 'mas', progreso: 'miplan', pasado: 'miplan', datos: 'mas', 'tablero-original': 'mas' };
 let antesDeFicha = null, finEntrada = null, extraActual = null, primeraVista = true, retornoInicial = null;
+let planConImagenes;
 function ir(vista, extra) {
   if (vista === 'hoy' && primeraVista && E.plan) vista = 'eleccion';
   if (VISTAS_CON_PLAN.includes(vista) && (!E.plan)) vista = 'inicio';
   if (VISTAS_CON_PLAN.includes(vista) && E.plan?.bloqueado) { vistaBloqueada(); return; }
   if (vista === 'plan' && E.plan?.libre) vista = 'inicio'; // sin plan todavía: armarlo o seguir sin plan
   if (E.vista === 'eleccion' && vista !== 'eleccion') E.eleccionInicio = hoy(); // ya eligió (o se fue a otra pestaña)
+  if (E.plan !== planConImagenes) { planConImagenes = E.plan; guardarImagenesDelPlan(); } // plan nuevo: sus dibujos, para verlos sin señal
   const anterior = E.vista;
   // La sesión es una pantalla aparte: llegar a 'hoy' sin sesión en curso ni pedirla (al abrir la app, después de un
   // cambio del Coach) muestra Entrenar. Volver de una ficha o del banco sí vuelve a la sesión.
@@ -321,8 +327,8 @@ const EJEMPLO = {
   terminos: true, privacidad: true, ia_transferencia: true,
 };
 
-// Versión de prueba en el celular: guarda la app para que abra sin señal en el gimnasio.
-if (CONFIG.sinSenal && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(e => console.warn('Sin modo sin señal', e));
+// Versión de prueba en el celular: guarda la app para que abra sin señal en el gimnasio (app/actualizacion.js).
+instalarActualizacion();
 
 // Primero la copia de este perfil y su segunda copia. La red no participa en el primer dibujo.
 activarCuenta(nube.usuarioGuardado({ claveSesion: claveSesionCuenta() }));
@@ -383,6 +389,7 @@ async function iniciarEnSegundoPlano() {
     }
   }
   repintarSinMover();
+  guardarImagenesDelPlan();
   hevyAlAbrir(() => { if (['hoy', 'semana', 'progreso', 'miplan'].includes(E.vista)) repintarSinMover(); });
 }
 // Dejar que la copia llegue a la pantalla antes de cargar el cliente de cuentas o hacer consultas.

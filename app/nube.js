@@ -35,7 +35,7 @@ export async function iniciar({ claveSesion = null, vigente = () => true } = {})
     const storageKey = claveSesion ?? claveSesionPerfilPrueba(retorno ? retorno.perfilId : perfil?.id || null);
     if (retorno && storageKey !== claveSesionPerfilPrueba(retorno.perfilId)) throw errorAcceso('El perfil de este enlace cambió. Abre Entreno, elige tu perfil y pide otro acceso. Tus datos se conservan.');
     const hash = new URLSearchParams(url.hash.slice(1));
-    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+    const { createClient } = await import('./vendor/supabase-2.118.0.js');
     if (!vigente()) return false;
     cliente = createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey, { auth: { persistSession: true, storageKey, flowType: 'pkce', detectSessionInUrl: !conRetorno } });
     supa = cliente; sesion = null;
