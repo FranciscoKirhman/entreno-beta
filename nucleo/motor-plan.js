@@ -317,6 +317,15 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     }
   }
 
+  // Core: hasta 4 ejercicios a la semana. Cada plantilla trae un hueco de core y con 6 días sumaba más series de core
+  // que de espalda; el tiempo que se libera queda para el resto. Se sacan primero los de los días con más ejercicios.
+  const esCore = e => indice.porId.get(e.ejercicio_id)?.tipo === 'core' && !favoritos.has(e.ejercicio_id) && !(r.musculos_prioridad || []).includes('core');
+  for (let sobran = plantillaDias.reduce((n, x) => n + x.ejercicios.filter(esCore).length, 0) - 4; sobran > 0; sobran--) {
+    const x = [...plantillaDias].filter(y => y.ejercicios.some(esCore) && y.ejercicios.length > 2).sort((a, b) => b.ejercicios.length - a.ejercicios.length)[0];
+    if (!x) break;
+    x.ejercicios = x.ejercicios.filter(e => e !== [...x.ejercicios].reverse().find(esCore));
+  }
+
   // Ajuste de volumen: subir a los músculos prioritarios hasta el tope del rango y no pasarse en ninguno.
   const porId = indice.porId;
   const [lo, hi] = d.series_rango;
@@ -462,7 +471,9 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
       // Semana 3, la última antes de la descarga: con experiencia, una repetición menos de reserva (sin bajar de 1 en
       // los compuestos ni de 0 en los aislados, ni del mínimo del perfil). La exigencia sube dentro del bloque.
       const intensificar = semana === 3 && !conservadora && !d.conservador && d.nivel !== 'principiante';
-      const rirSemana = e => (intensificar ? Math.max(e.rir - 1, d.rir_minimo, porId.get(e.ejercicio_id)?.tipo === 'compuesto' ? 1 : 0) : e.rir);
+      // El core y lo que se mide en segundos no cambian: una plancha "a 0 de reserva" no tiene sentido.
+      const rirSemana = e => (intensificar && e.unidad === 'reps' && porId.get(e.ejercicio_id)?.tipo !== 'core'
+        ? Math.max(e.rir - 1, d.rir_minimo, porId.get(e.ejercicio_id)?.tipo === 'compuesto' ? 1 : 0) : e.rir);
       diasPlan.push({
         fecha: sumarDias(lunes, (semana - 1) * 7 + offset), semana, plantilla: x.plantilla, foco: x.foco,
         tipo: 'entrenamiento', firme: x.firme, lugar: lugar.nombre || null,

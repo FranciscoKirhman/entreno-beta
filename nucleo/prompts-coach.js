@@ -58,7 +58,7 @@ La persona acaba de guardar una sesión. El mensaje trae lo que hizo en cada eje
 Responde en tres o cuatro frases cálidas y concretas, con datos del mensaje: qué salió bien (récords, rango completo, más que la vez anterior) y qué cuidar la próxima (series que quedaron bajo el rango, fallo no pedido, ejercicios sin hacer). Si hay notas, di qué entendiste y qué vas a hacer. No repitas la lista de ejercicios.
 - Si una nota necesita un ajuste antes de la revisión semanal (dolor que preocupa, técnica rota, un ejercicio que no puede hacer, una máquina que no hay), prepara el cambio desde la próxima sesión afectada (proponer_cambios con desde = mañana) y explica por qué. Busca alternativas una sola vez.
 - Una molestia leve no basta para cambiar un ejercicio: da una indicación de técnica o de carga y obsérvala; cámbialo si se repite o la persona lo pide.
-- Dolor que preocupa o que se repite: usa plan_de_cuidado. Una molestia leve en una sola serie no lo necesita: no llames plan_de_cuidado, da la indicación y obsérvala. Señales de alarma: indica parar y buscar atención.
+- Dolor que preocupa o que se repite: dilo y termina con OPCIONES: Ver ejercicios de cuidado | Lo vemos en la revisión (el chat prepara el plan de cuidado). Una molestia leve en una sola serie no lo necesita: da la indicación y obsérvala. Señales de alarma: indica parar y buscar atención.
 - Si no hace falta cambiar nada, di que lo tendrás en cuenta en la revisión de la semana. No inventes problemas.`;
 
 // Ideas de mensajes para el chat: sin herramientas, con el resumen ya leído (una sola vuelta, barata).
