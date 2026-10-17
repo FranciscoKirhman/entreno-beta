@@ -4,6 +4,7 @@ import { CONFIG } from './config.js';
 import { aIso } from '../nucleo/hevy-csv.js';
 import { sesionDelServidor } from '../nucleo/sincronizacion.js';
 import { planSinPropios, sinIdPropio } from '../nucleo/propios.js';
+import { planParaCuenta } from '../nucleo/plan-cuenta.js';
 import { perfilPruebaActivo, claveSesionPerfilPrueba } from '../nucleo/perfiles-prueba.js';
 import { destinoCuenta, esRetornoCuenta, limpiarRetornoCuenta, perfilDelRetornoCuenta } from '../nucleo/retorno-cuenta.js';
 import { exigirPermisoSaludCuestionario } from '../nucleo/consentimiento-nube.js';
@@ -182,7 +183,7 @@ export async function cargarRespuestas() {
 export const generarPlan = () => funcion('generar-plan');
 // El plan de la cuenta solo guarda ejercicios del catálogo (nucleo/propios.js); los propios y los del banco ampliado van
 // aparte, en datos_telefono (plan_propios, app/datos-nube.js).
-export const guardarPlan = plan => funcion('guardar-plan', { cuerpo: { plan: planSinPropios(plan) } });
+export const guardarPlan = plan => funcion('guardar-plan', { cuerpo: { plan: planParaCuenta(planSinPropios(plan)) } });
 export async function cargarPlan() {
   const p = ok(await supa.from('planes').select('*, plan_dias(*, plan_ejercicios(*), lugares(nombre))').eq('estado', 'activo').maybeSingle());
   if (!p) return null;
