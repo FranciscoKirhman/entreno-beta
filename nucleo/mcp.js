@@ -17,7 +17,7 @@ import { leerPlanTexto, calendarizar } from './importar-plan.js';
 import { semanasDelPlan } from './semanal.js';
 import { fechaEnPalabras } from './prompts-coach.js';
 import { bloqueSiguienteDisponible, lunesDesde } from './bloque-siguiente.js';
-import { cargaSugerida, registrosParaCarga } from './motor-plan.js';
+import { cargaSugerida, registrosParaCarga, TEXTO_DESCARGA } from './motor-plan.js';
 
 export const VERSIONES = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 const SERVIDOR = { name: 'entreno', title: 'Entreno', version: '0.2.0' };
@@ -58,8 +58,12 @@ const sinAnio = f => fechaEnPalabras(f).replace(/ de \d{4}$/, '');
  * las repeticiones y la reserva de ese día. Sin esto la IA no veía registros de hace más de 4 semanas ni el peso de Hoy.
  */
 export function diaParaIA(dia, { historial = null, indice = null, lugares = [] } = {}) {
-  const { calentamiento, ejercicios, ...resto } = dia;
-  const lugar = lugares.find(l => l.nombre === dia.lugar) || lugares.find(l => l.principal) || lugares[0] || null;
+  // Fuera lo que no le sirve a la IA y viaja en cada petición: el id del día, el tipo (siempre entrenamiento), el
+  // nombre del lugar (puede identificar una sucursal) y el racional que arma el motor (repite foco y prioridades; en la
+  // descarga queda como descarga: true). Un racional escrito a mano se conserva.
+  const { calentamiento, ejercicios, id: _id, tipo, lugar: nombreLugar, racional, ...resto } = dia;
+  const delMotor = racional === TEXTO_DESCARGA || /^[^.]+\. Lo principal es /.test(racional || '');
+  const lugar = lugares.find(l => l.nombre === nombreLugar) || lugares.find(l => l.principal) || lugares[0] || null;
   const delHistorial = e => {
     if (!historial || !e.ejercicio_id) return {};
     const previas = historial.filter(x => x.ejercicio_id === e.ejercicio_id && x.tipo !== 'calentamiento' && x.fecha && x.fecha < dia.fecha);
@@ -71,6 +75,7 @@ export function diaParaIA(dia, { historial = null, indice = null, lugares = [] }
     return { ultima_vez: `${sinAnio(fecha)}: ${serieTexto(top)}`, ...(sugerida != null ? { carga_sugerida_kg: sugerida } : {}) };
   };
   return sinVacios({ ...resto,
+    ...(tipo && tipo !== 'entrenamiento' ? { tipo } : {}), ...(racional === TEXTO_DESCARGA ? { descarga: true } : racional && !delMotor ? { racional } : {}),
     calentamiento: Array.isArray(calentamiento) ? calentamiento.map(c => c.name || c.nombre).filter(Boolean) : calentamiento,
     ejercicios: (ejercicios || []).map(({ orden: _o, nota, ...e }) => sinVacios({ ...e, unidad: e.unidad === 'reps' ? null : e.unidad, ...(nota && !NOTA_GENERICA.test(nota) ? { nota } : {}), ...delHistorial(e) })),
   });
@@ -128,7 +133,8 @@ export const HERRAMIENTAS = [
         objetivo: d.objetivo, nivel: d.nivel, dias_por_semana: d.dias_meta, dias_firmes: d.dias_firmes, minutos_por_sesion: d.duracion_min,
         series_por_musculo_semana: d.series_rango, repeticiones_de_reserva_minimas: d.rir_minimo,
         lesiones_activas: (r.lesiones || []).filter(l => l.activa !== false).map(l => ({ zona: l.region, tipo: l.tipo, intensidad: l.intensidad, alta: l.alta || null })),
-        lugar: ((r.lugares || []).find(l => l.principal) || (r.lugares || [])[0])?.nombre || null,
+        // El tipo de lugar y no su nombre: la IA no lo necesita y el nombre puede identificar una sucursal.
+        lugar: ((r.lugares || []).find(l => l.principal) || (r.lugares || [])[0])?.tipo || null,
         musculos_prioridad: d.musculos_prioridad || [],
         // Lo que la persona dejó elegido en Mi plan para su siguiente bloque (nucleo/ciclo-siguiente.js).
         ...(cicloParaIA(r, plan) ? { siguiente_ciclo_elegido: cicloParaIA(r, plan) } : {}),
