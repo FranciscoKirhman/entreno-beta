@@ -65,7 +65,10 @@ export async function iniciar({ claveSesion = null, vigente = () => true } = {})
       if (cliente && supa === cliente) sesion = null;
       throw errorAcceso(e.code === 'acceso_retornado_fallido' ? e.message : 'No pude completar el acceso. Intenta de nuevo o entra con tu correo. Tus datos se conservan.');
     }
-    if (!cliente || supa === cliente) { supa = null; sesion = null; }
+    // Una sesión vencida o una falla de red no vuelve inexistente el servidor. Mantener el cliente permite
+    // volver a entrar desde Cuenta; false conserva la copia local y evita activar otra cuenta sin autenticar.
+    if (!cliente) { supa = null; sesion = null; }
+    else if (supa === cliente) sesion = null;
     return false;
   }
   finally {
