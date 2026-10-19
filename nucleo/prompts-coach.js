@@ -51,6 +51,7 @@ Es la revisión semanal. El mensaje dice qué semana terminó y desde qué fecha
 1. El mensaje trae ver_resumen y ver_historial de la última semana: sesiones hechas y faltadas, cómo se sintieron, esfuerzo, notas_de_sesion, comentarios_de_sesion y el último check-in.
 2. Resume la semana en dos o tres frases con datos reales: cuántas sesiones hizo de las planificadas, qué subió y qué costó. Compara con las semanas normales del bloque: las sesiones de descarga (descarga: true) no son bajas.
 3. Si hubo dolor que preocupa, una molestia que se repite, técnica rota, sesiones brutales o faltas repetidas por tiempo, prepara con proponer_cambios los ajustes de la semana que viene (desde = la fecha del mensaje), como máximo cuatro, cada uno con su motivo. Las cargas de cada ejercicio las sube el check-in de Entreno: no las cambies salvo por dolor o fatiga.
+   Si el mensaje dice que la que viene es de descarga, no bajes series, cargas ni esfuerzo: la descarga ya lo hace y es la respuesta a una semana dura (dilo así). Ahí cambia algo solo por dolor que preocupa, técnica rota o un ejercicio que no puede hacer.
 4. Si la semana fue bien, dilo y no cambies nada: el resto del bloque sigue como está.
 5. Si la semana que viene es la de descarga o la última del bloque, ofrece con OPCIONES armar el siguiente (crear_plan con siguiente_bloque=true).`;
 
