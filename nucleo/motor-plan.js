@@ -491,10 +491,12 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     && conSemana.reduce((n, x) => n + x.ejercicios.filter(y => porId.get(y.ejercicio_id).musculos_primarios.includes(m)).length, 0) === 1);
   for (const x of conSemana) {
     const sobra = () => duracionEstimada(x.ejercicios) > d.duracion_min * 1.1;
-    const acciones = () => x.ejercicios.flatMap(e => [
-      ...(e.series > 2 ? [{ e, costo: importa(e) + (e.series <= 3 ? 1 : 0) + (esPrincipal(x, e) && e.series > 3 && d.nivel === 'avanzado' ? 2 : esBasico(e) && e.series <= 3 ? 1 : 0), hacer: () => { e.series--; } }] : []),
-      ...(x.ejercicios.length > 2 ? [{ e, costo: importa(e) + 1.5 + (ultimo(e) ? 3 : 0) + (esBasico(e) ? 1.5 : 0), hacer: () => { x.ejercicios = x.ejercicios.filter(y => y !== e); } }] : []),
-    ]).sort((a, b) => a.costo - b.costo || b.e.prioridad - a.e.prioridad || b.e.orden - a.e.orden);
+    // Lo que deja un músculo bajo el piso de su rango cuesta más: así se recorta primero lo que sobra (por ejemplo, un
+    // segundo remo de una prioridad que ya está en su tope) antes que los brazos o los aductores.
+    const acciones = () => { const v = volumenSemanal(conSemana, porId); const bajoPiso = (e, n) => porId.get(e.ejercicio_id).musculos_primarios.some(k => CONTADOS.includes(k) && (v[k] || 0) - n < lo); return x.ejercicios.flatMap(e => [
+      ...(e.series > 2 ? [{ e, costo: importa(e) + (e.series <= 3 ? 1 : 0) + (esPrincipal(x, e) && e.series > 3 && d.nivel === 'avanzado' ? 2 : esBasico(e) && e.series <= 3 ? 1 : 0) + (bajoPiso(e, 1) ? 1 : 0), hacer: () => { e.series--; } }] : []),
+      ...(x.ejercicios.length > 2 ? [{ e, costo: importa(e) + 1.5 + (ultimo(e) ? 3 : 0) + (esBasico(e) ? 1.5 : 0) + (bajoPiso(e, e.series) ? 2 : 0) + (favoritos.has(e.ejercicio_id) ? 3 : 0), hacer: () => { x.ejercicios = x.ejercicios.filter(y => y !== e); } }] : []),
+    ]).sort((a, b) => a.costo - b.costo || b.e.prioridad - a.e.prioridad || b.e.orden - a.e.orden); };
     while (sobra()) { const [a] = acciones(); if (!a) break; a.hacer(); }
     for (const e of x.ejercicios) if (sobra()) e.descanso_seg = Math.min(e.descanso_seg, 90);
     const menor = () => [...x.ejercicios].sort((a, b) => importa(a) - importa(b) || b.prioridad - a.prioridad || b.orden - a.orden)[0];
@@ -525,6 +527,45 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
       break;
     }
     if (!puesto) break;
+  }
+  // Sesiones cortas: un músculo que quedó bajo el piso de su rango (brazos, aductores, pecho u hombro en 4 días de 45 o
+  // 60 minutos) suma un accesorio de 2 series en superserie con otro accesorio del día, si cabe con el calentamiento
+  // real. Antes el remo extra de una prioridad ocupaba el lugar de bíceps y tríceps y el torso quedaba sin brazos.
+  if (d.duracion_min <= 60) {
+    const sinLugar = new Set();
+    const tipoDe = e => porId.get(e.ejercicio_id)?.tipo;
+    const comparten = (a, b) => porId.get(a.ejercicio_id).musculos_primarios.some(m => porId.get(b.ejercicio_id).musculos_primarios.includes(m));
+    for (let vuelta = 0; vuelta < 24; vuelta++) {
+      const v = volumenSemanal(conSemana, porId);
+      const m = CONTADOS.filter(k => !prioritario(k) && !sinLugar.has(k) && EXTRA_POR_MUSCULO[k] && (v[k] || 0) < lo).sort((a, b) => (v[a] || 0) - (v[b] || 0))[0];
+      if (!m) break;
+      let puesto = false;
+      for (const x of [...conSemana].sort((a, b) => duracionEstimada(a.ejercicios) - duracionEstimada(b.ejercicios))) {
+        const ej = elegir(EXTRA_POR_MUSCULO[m], new Set(x.ejercicios.map(e => e.ejercicio_id)));
+        if (!ej || ej.tipo === 'compuesto' || !ej.musculos_primarios.includes(m)) continue;
+        // Sin pasar el tope de otro músculo (la abductora suma glúteo).
+        if ([...ej.musculos_primarios, ...ej.musculos_secundarios].some(k => k !== m && CONTADOS.includes(k) && (v[k] || 0) + (ej.musculos_primarios.includes(k) ? 2 : 1) > (prioritario(k) ? tope : hi))) continue;
+        const nuevo = { ...armar(ej, 4, x.ejercicios.length), series: 2 };
+        const socio = x.ejercicios.find(e => !e.superserie && ['aislamiento', 'core'].includes(tipoDe(e)) && !comparten(e, nuevo));
+        const letra = 'ABCDEFGH'.split('').find(l => !x.ejercicios.some(e => e.superserie === l));
+        let lista = juntarSuperseries([...x.ejercicios.map(e => (e === socio && letra ? { ...e, superserie: letra } : e)), { ...nuevo, ...(socio && letra ? { superserie: letra } : {}) }]);
+        // Si no cabe, se le quita una serie (hasta cinco) a lo que tiene de sobra: más de 2 series, no es el primer
+        // básico ni un básico en 3, y sus músculos siguen sobre el piso sin esa serie.
+        const sobra = l => l.filter(e => e.series > 2 && !esPrincipal(x, e) && !(esBasico(e) && e.series <= 3) && !favoritos.has(e.ejercicio_id)
+          && porId.get(e.ejercicio_id).musculos_primarios.every(k => !CONTADOS.includes(k) || (v[k] || 0) - 1 >= lo))
+          .sort((a, b) => b.prioridad - a.prioridad || b.orden - a.orden)[0];
+        for (let n = 0; n < 5 && duracionEstimada(lista, 10) > d.duracion_min; n++) {
+          const e = sobra(lista);
+          if (!e) break;
+          lista = lista.map(y => (y === e ? { ...y, series: y.series - 1 } : y));
+        }
+        if (duracionEstimada(lista, 10) > d.duracion_min) continue;
+        x.ejercicios = lista;
+        puesto = true;
+        break;
+      }
+      if (!puesto) sinLugar.add(m);
+    }
   }
   for (const x of conSemana) { x.ejercicios = juntarSuperseries(x.ejercicios); x.ejercicios.forEach((e, i) => { e.orden = i; }); }
 
