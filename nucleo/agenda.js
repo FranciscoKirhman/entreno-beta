@@ -73,6 +73,13 @@ function libres(plan, desde, hasta, noPuedo, ocupadas = new Set()) {
  * "Falté el martes": la sesión perdida y las que quedan de la semana se reacomodan en los días libres que
  * quedan, sin juntar el mismo grupo. Si no caben, se pierde primero lo opcional y después la de menor prioridad.
  */
+/** La racha más larga de días seguidos entre unas fechas. */
+function racha(fechas) {
+  let max = 0, n = 0, previa = null;
+  for (const f of [...new Set(fechas)].sort()) { n = previa && sumarDias(previa, 1) === f ? n + 1 : 1; max = Math.max(max, n); previa = f; }
+  return max;
+}
+
 export function marcarFaltada(plan, fecha, { hoy, noPuedo = [], hechas = [] }) {
   const s = sesionDe(plan, fecha);
   if (!s) return { ok: false, plan, error: `No hay sesión el ${fecha}.` };
@@ -90,28 +97,43 @@ export function marcarFaltada(plan, fecha, { hoy, noPuedo = [], hechas = [] }) {
   // Si sobran sesiones, salen las opcionales y luego las de menos días firmes.
   let lista = [...pendientes].sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
   const perdidas = [];
-  while (lista.length > dias.length) {
+  const sacarUna = () => {
     const fuera = lista.find(d => !d.firme) || lista.at(-1);
     perdidas.push(fuera);
     lista = lista.filter(d => d !== fuera);
-  }
+  };
+  while (lista.length > dias.length) sacarUna();
   // Asignación en orden, saltando un día si quedaría pegado al mismo grupo y hay margen.
-  const asignadas = [];
-  let i = 0;
-  for (const d of lista) {
-    const restantes = lista.length - asignadas.length;
-    let j = i;
-    while (j < dias.length - (restantes - 1)) {
-      const prueba = { ...base, dias: [...resto, ...asignadas] };
-      if (!conflictos(prueba, dias[j], d.plantilla).length || j === dias.length - restantes) break;
-      j++;
+  const fechaOriginal = new Map(lista.map(d => [d, d.fecha]));
+  const asignar = () => {
+    const asignadas = [];
+    let i = 0;
+    for (const d of lista) {
+      const restantes = lista.length - asignadas.length;
+      let j = i;
+      while (j < dias.length - (restantes - 1)) {
+        const prueba = { ...base, dias: [...resto, ...asignadas] };
+        if (!conflictos(prueba, dias[j], d.plantilla).length || j === dias.length - restantes) break;
+        j++;
+      }
+      d.fecha = dias[j];
+      asignadas.push(d);
+      i = j + 1;
     }
-    const de = d.fecha;
-    d.fecha = dias[j];
-    asignadas.push(d);
-    i = j + 1;
-    if (de !== d.fecha) d._movida = de;
+    return asignadas;
+  };
+  // Correr todo un día no puede dejar más días seguidos de entrenamiento que los que trae el plan (al menos 3): con 6
+  // días y el lunes faltado, ocupar el domingo libre dejaba 8 seguidos hasta el martes siguiente. Antes de eso sale lo
+  // opcional, y la sesión faltada se retoma la semana que viene.
+  const tope = Math.max(3, racha(plan.dias.filter(d => d.ejercicios?.length).map(d => d.fecha)));
+  const ventana = f => f >= sumarDias(lunesDe(fecha), -7) && f <= sumarDias(domingo, 7);
+  let asignadas = asignar();
+  while (lista.length > 1 && racha([...resto, ...asignadas].filter(d => d.ejercicios?.length && ventana(d.fecha)).map(d => d.fecha)) > tope) {
+    for (const d of lista) d.fecha = fechaOriginal.get(d);
+    sacarUna();
+    asignadas = asignar();
   }
+  for (const d of asignadas) if (fechaOriginal.get(d) !== d.fecha) d._movida = fechaOriginal.get(d);
   const final = ordenar({ ...nuevo, dias: [...resto, ...asignadas] });
   const cambios = asignadas.filter(d => d._movida).map(d => ({ tipo: 'mover', de: d._movida, a: d.fecha, foco: d.foco }));
   for (const d of final.dias) delete d._movida;
