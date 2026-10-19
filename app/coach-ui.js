@@ -64,7 +64,7 @@ async function esperarRespuesta(pendiente) {
     const persona = E.chat.find(m => m.rol === 'persona' && m.consulta === pendiente.consulta);
     E.chat = E.chat.filter(m => m !== pendiente);
     if (persona && (persona.tipo || sinSenal())) { persona.porEnviar = true; pausarCola(); }
-    else E.chat.push({ rol: 'coach', texto: 'No me llegó la respuesta de esta consulta. Puedes reintentarla: si ya estaba lista, no se vuelve a cobrar.', opciones: [{ etiqueta: 'Reintentar', accion: { tipo: 'reintentar', consulta: pendiente.consulta } }] });
+    else E.chat.push({ rol: 'coach', app: true, texto: 'No me llegó la respuesta de esta consulta. Puedes reintentarla: si ya estaba lista, no se vuelve a cobrar.', opciones: [{ etiqueta: 'Reintentar', accion: { tipo: 'reintentar', consulta: pendiente.consulta } }] });
     guardar(); avisoChat(); pintarChat();
   } finally { recuperando.delete(pendiente.consulta); }
 }
@@ -519,7 +519,7 @@ async function decidir(accion, etiqueta, ir) {
   if (!vigente()) return false;
   if (r.plan && E.plan !== r.plan) aceptada = false;
   const cambio = Boolean(r.plan && !aviso) || r.marca?.valor === 'saltada';
-  E.chat.push({ rol: 'coach', texto: aviso || r.texto, opciones: r.opciones || (cambio ? irA(r.ir) : null), semana: r.semana || null });
+  E.chat.push({ rol: 'coach', app: true, texto: aviso || r.texto, opciones: r.opciones || (cambio ? irA(r.ir) : null), semana: r.semana || null });
   guardar();
   return aceptada;
 }
@@ -590,6 +590,42 @@ function burbuja(m, i) {
   return `<div id="mensaje-chat-${i}" tabindex="-1" class="burbuja ${m.rol}${etiqueta ? ' automatico' : ''}${espera ? ' en-espera' : ''}${m.propuesta ? ' con-propuesta' : ''}">${cabeza}<div class="texto-chat">${m.rol === 'coach' || etiqueta ? textoRico(m.texto) : esc(m.texto)}${m.enlace ? ` <a class="enlace" href="${esc(m.enlace)}" target="_blank" rel="noopener">Ver videos</a>` : ''}</div>${semana}${m.propuesta ? propuestaChatHtml({ ...m.propuesta, estado: m.estadoPropuesta || m.propuesta.estado }) : ''}${opciones?.length ? `<div class="opciones-chat" ${ocupada ? 'aria-busy="true"' : ''}>${opciones.map((o, k) => `<button type="button" ${ocupada ? 'disabled' : ''} class="boton${['confirmar', 'confirmar_ia', 'aceptar_alternativa'].includes(o.accion?.tipo) && k === 0 ? ' primario' : ''}" data-msg="${i}" data-opcion="${k}">${esc(o.etiqueta)}</button>${o.nota ? `<span class="pequeno suave nota-opcion">${esc(o.nota)}</span>` : ''}${o.avisos?.length ? `<span class="pequeno suave">${esc(o.avisos.join(' '))}</span>` : ''}`).join('')}</div>` : ''}${m.sugerencias?.length && i === E.chat.length - 1 ? `<div class="chips respuestas-rapidas" role="group" aria-label="Respuestas rápidas">${m.sugerencias.map(x => `<button type="button" class="sugerencia">${esc(x)}</button>`).join('')}</div>` : ''}</div>${espera}`;
 }
 
+/**
+ * Lo que va a la IA como conversación anterior. Lo que escribe la app (aceptaste, no se pudo guardar, sin cuenta) va
+ * como aviso de la app y no como mensaje del coach: la IA lo tomaba como dicho por ella y, ante un "ok", volvía a armar
+ * la misma propuesta. Las líneas grises de las herramientas y lo que espera salir no van.
+ */
+export function historialParaIA(previos) {
+  return previos.filter(m => !m.pendiente && !m.porEnviar && !m.sistema).slice(-7)
+    .map(m => (m.app ? { rol: 'persona', texto: `(Aviso de la app, no lo escribió nadie) ${m.texto}`.slice(0, 4000) } : { rol: m.rol, texto: m.texto.slice(0, 4000) }));
+}
+
+// Un sí escrito justo después de una propuesta: es tocar "Aceptar estos cambios", sin otra vuelta a la IA.
+const AFIRMATIVAS = new Set(['ok', 'oka', 'okey', 'oki', 'okay', 'si', 'sip', 'dale', 'ya', 'listo', 'bueno', 'perfecto', 'de acuerdo', 'acepto',
+  'aceptar', 'hazlo', 'va', 'vale', 'ok dale', 'si dale', 'dale si', 'ya dale', 'si acepto', 'si hazlo', 'si por favor', 'si porfa', 'ok gracias',
+  'si gracias', 'dale gracias', 'acepto los cambios', 'aceptar estos cambios', 'si acepto los cambios', 'ok acepto', 'perfecto gracias']);
+const comoFrase = t => String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z ]+/g, ' ').replace(/\s+/g, ' ').trim();
+function propuestaAbiertaPara(texto) {
+  if (!AFIRMATIVAS.has(comoFrase(texto))) return null;
+  const msg = E.chat.at(-1);
+  if (msg?.rol !== 'coach' || !msg.propuesta?.id || decisiones.has(msg)) return null;
+  const op = opcionesMensaje(msg)?.find(o => o.accion?.tipo === 'confirmar_ia' && o.accion.id === msg.propuesta.id);
+  return op ? { msg, op } : null;
+}
+async function aceptarConTexto({ msg, op }, texto, ir, borrador) {
+  const estado = E, usuario = nube.usuarioId();
+  if (borrador.texto.trim() === texto.trim()) { borrador.texto = E.borradorChat = ''; const campo = $('mensaje'); if (campo?.isConnected) { campo.value = ''; crecer(campo); } }
+  decisiones.add(msg);
+  try {
+    const aceptada = await decidir(op.accion, texto, ir);
+    if (E !== estado || usuario !== nube.usuarioId()) return false;
+    if (aceptada) { msg.opciones = null; msg.estadoPropuesta = 'aplicada'; }
+    else if (E.chatPorTraer?.id === op.accion.id) msg.estadoPropuesta = 'por_comprobar';
+    guardar();
+    return aceptada;
+  } finally { decisiones.delete(msg); if (E === estado && $('vista-coach')?.isConnected) vistaCoach(ir, { respuesta: true }); }
+}
+
 /** existente: un mensaje que ya está en el chat esperando salir (nota de sesión o revisión semanal). */
 async function enviar(texto, ir, archivo = null, { existente = null } = {}) {
   recuperarConsultaInterrumpida();
@@ -597,6 +633,8 @@ async function enviar(texto, ir, archivo = null, { existente = null } = {}) {
   if (archivo && !nube.conectado()) { avisar('Entra a tu cuenta en Perfil para revisar este archivo. Se conserva aquí mientras mantengas la app abierta.'); return false; }
   const estado = E, usuario = nube.usuarioId();
   const borrador = borradorChat();
+  const abierta = !existente && !archivo && propuestaAbiertaPara(texto);
+  if (abierta) return aceptarConTexto(abierta, texto, ir, borrador);
   let completada = true, consulta;
   const persona = existente || { rol: 'persona', texto };
   if (existente) delete existente.porEnviar; else E.chat.push(persona);
@@ -625,7 +663,7 @@ async function enviar(texto, ir, archivo = null, { existente = null } = {}) {
     guardar();
     if (enVista()) vistaCoach(ir);
     try {
-      const historial = E.chat.slice(0, E.chat.indexOf(persona)).filter(m => !m.pendiente && !m.porEnviar && !m.sistema).slice(-7).map(m => ({ rol: m.rol, texto: m.texto.slice(0, 4000) }));
+      const historial = historialParaIA(E.chat.slice(0, E.chat.indexOf(persona)));
       const ia = await nube.chat(persona.paraIA || texto, historial, archivo ? { tipo: archivo.tipo, texto: archivo.texto } : null, modo, persona.consulta);
       if (E !== estado || usuario !== nube.usuarioId()) return false;
       if (ia.estado === 'pensando') { consultaActual = null; esperarRespuesta(mensaje); return false; } // ya la estaba respondiendo
@@ -656,14 +694,14 @@ async function enviar(texto, ir, archivo = null, { existente = null } = {}) {
         persona.porEnviar = true; pausarCola();
         if (borrador.texto.trim() === texto.trim()) borrador.texto = E.borradorChat = '';
       }
-      else E.chat.push({ rol: 'coach', texto: `No pude completar la consulta. Se conserva lo escrito y el archivo para que decidas cuándo reintentar. ${e.message}` });
+      else E.chat.push({ rol: 'coach', app: true, texto: `No pude completar la consulta. Se conserva lo escrito y el archivo para que decidas cuándo reintentar. ${e.message}` });
     } finally { if (consultaActual === consulta) consultaActual = null; }
   } else if (existente) {
     existente.porEnviar = true; guardar(); return false;
   } else {
     // Sin cuenta o sin señal: se dice qué falta y lo escrito queda en el borrador.
     completada = false;
-    E.chat.push({ rol: 'coach', texto: r.texto, ...(!nube.usuarioId() ? { opciones: [{ etiqueta: 'Entrar a mi cuenta', accion: { tipo: 'ir', vista: 'mas' } }] } : {}) });
+    E.chat.push({ rol: 'coach', app: true, texto: r.texto, ...(!nube.usuarioId() ? { opciones: [{ etiqueta: 'Entrar a mi cuenta', accion: { tipo: 'ir', vista: 'mas' } }] } : {}) });
   }
   if (completada && !existente) {
     if (borrador.texto.trim() === texto.trim()) borrador.texto = E.borradorChat = '';

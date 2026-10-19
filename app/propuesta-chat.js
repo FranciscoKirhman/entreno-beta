@@ -38,7 +38,7 @@ export async function confirmarCambioChat(id) {
   if (!guardado) {
     delete E.chatPorTraer;
     const { sinEspacio, total } = estadoAlmacenamiento();
-    throw new Error(sinEspacio ? `Este teléfono se quedó sin espacio para guardar Entreno (${(total / 1048576).toFixed(1)} MB usados). Descarga un respaldo en Perfil, Mis datos, y avísame.` : 'Falló el guardado de este teléfono, así que no acepté el cambio. Cierra y abre la app y vuelve a intentarlo.');
+    throw new Error(sinEspacio ? `Este teléfono se quedó sin espacio para guardar Entreno (${(total / 1048576).toFixed(1)} MB usados). Descarga un respaldo en Perfil, Mis datos, libera espacio y vuelve a tocar Aceptar: la propuesta sigue aquí.` : 'Falló el guardado de este teléfono, así que no acepté el cambio. Cierra y abre la app y vuelve a intentarlo.');
   }
   try { await nube.confirmarPropuestaIA(id); }
   catch (error) {

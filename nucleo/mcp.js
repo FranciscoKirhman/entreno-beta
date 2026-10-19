@@ -191,7 +191,17 @@ export const HERRAMIENTAS = [
       const sinPeso = (cambios || []).some(c => ['reemplazar_ejercicio', 'agregar_ejercicio'].includes(c?.tipo) && c.carga_kg == null);
       const historial = sinPeso && datos.historial ? seriesConFecha(await datos.historial(52)) : [];
       const r = aplicarCambios(plan, cambios, indice, { historial, lugares: respuestas.lugares || [] });
+      // Un cambio que deja el plan igual (el peso que ya tenía) no es una propuesta: se devuelve como rechazado para que
+      // la IA no anuncie algo que no cambia nada.
+      if (r.aplicados.length && JSON.stringify(r.plan.dias) === JSON.stringify(plan.dias)) {
+        r.rechazados.push(...r.aplicados.map(cambio => ({ cambio, motivo: 'El plan ya está así: este cambio no modifica nada.' })));
+        r.aplicados = [];
+      }
       const v = validarCambio(plan, r.plan, { derivados, respuestas, indice, hoy });
+      // Solo las advertencias que trae este cambio: las que el plan ya tenía (un peso de máquina que no calza con los
+      // discos) la IA las repetía en cada respuesta aunque no tuvieran que ver con lo pedido.
+      const yaEstaban = (({ errores, advertencias }) => new Set([...errores, ...advertencias].map(a => a.mensaje)))(validarPlan(plan, { derivados, respuestas, indice, hoy, edicionPersona: true }));
+      v.advertencias = v.advertencias.filter(a => !yaEstaban.has(a.mensaje));
       const listo = aplicar && v.ok && r.aplicados.length > 0;
       if (listo && ctx.soloProponer) ctx.propuesta = { ...r.plan, generado_por: 'ia_externa' };
       else if (listo) await datos.guardarPlan({ ...r.plan, generado_por: 'ia_externa' });
