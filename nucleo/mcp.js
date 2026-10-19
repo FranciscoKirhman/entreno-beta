@@ -7,7 +7,7 @@
 import { contextoIA } from './contexto-ia.js';
 import { cicloParaIA } from './ciclo-siguiente.js';
 import { aplicarCambios, ESQUEMA_CAMBIOS } from './cambios.js';
-import { validarPlan } from './validador.js';
+import { validarPlan, validarCambio } from './validador.js';
 import { tieneEquipo, nivelAlcanza, cargaZonaBloqueada, articulacionesBloqueadas, normalizar } from './catalogo.js';
 import { moverSesion, intercambiar, marcarFaltada, opcionesParaHoy, sesionDe } from './agenda.js';
 import { evaluarDia, TEXTO_RECOMENDACION } from './bienestar.js';
@@ -61,7 +61,7 @@ export function historialParaIA(sesiones = []) {
       if (!grupos.has(clave)) grupos.set(clave, { id: x.ejercicio_id || null, nombre: x.ejercicio_nombre || null, series: [] });
       grupos.get(clave).series.push(serie(x));
     }
-    return sinVacios({ fecha: s.fecha || (s.inicio ? String(s.inicio).slice(0, 10) : null), titulo: s.titulo, duracion_min: s.duracion_min, notas: s.notas,
+    return sinVacios({ fecha: s.fecha || (s.inicio ? new Date(s.inicio).toLocaleDateString('sv-SE', { timeZone: 'America/Santiago' }) : null), titulo: s.titulo, duracion_min: s.duracion_min, notas: s.notas,
       ejercicios: [...grupos.values()].map(sinVacios) });
   });
 }
@@ -152,7 +152,7 @@ export const HERRAMIENTAS = [
       if (!plan) return { ...texto('No hay un plan activo. La persona tiene que completar el cuestionario en la app.'), isError: true };
       const { respuestas, derivados } = await datos.perfil();
       const r = aplicarCambios(plan, cambios, indice);
-      const v = validarPlan(r.plan, { derivados, respuestas, indice, hoy });
+      const v = validarCambio(plan, r.plan, { derivados, respuestas, indice, hoy });
       const listo = aplicar && v.ok && r.aplicados.length > 0;
       if (listo && ctx.soloProponer) ctx.propuesta = { ...r.plan, generado_por: 'ia_externa' };
       else if (listo) await datos.guardarPlan({ ...r.plan, generado_por: 'ia_externa' });
@@ -229,7 +229,9 @@ function cargasRaras(series, historial, indice) {
  */
 async function validarYGuardar(nuevo, ctx, origen) {
   const { respuestas, derivados } = await ctx.datos.perfil();
-  const v = validarPlan(nuevo, { derivados, respuestas, indice: ctx.indice, hoy: ctx.hoy });
+  const anterior = await ctx.datos.planActivo();
+  const contexto = { derivados, respuestas, indice: ctx.indice, hoy: ctx.hoy };
+  const v = anterior ? validarCambio(anterior, nuevo, contexto) : validarPlan(nuevo, { ...contexto, edicionPersona: true });
   const plan = { ...nuevo, generado_por: origen || nuevo.generado_por };
   if (v.ok && ctx.soloProponer) { ctx.propuesta = plan; return { ...v, propuesto: true }; }
   if (v.ok) await ctx.datos.guardarPlan(plan);

@@ -45,6 +45,7 @@ export function enlazarIACopiar(ir) {
     out.innerHTML = `${c.aplicados.length ? `<div class="aviso bien"><strong>Así quedaría tu plan:</strong>${lista(c.aplicados.map(x => describirCambio(x, antes, indice)))}</div>` : '<div class="aviso ojo">La respuesta no trae cambios que se puedan aplicar a tu plan.</div>'}
       ${c.rechazados.length ? `<div class="aviso ojo"><strong>Descartados:</strong>${lista(c.rechazados.map(x => x.motivo))}</div>` : ''}
       ${v.errores.length ? `<div class="aviso alerta"><strong>No pasa las reglas de la app, así que no se aplica:</strong>${lista(v.errores.map(x => x.mensaje))}<p class="pequeno">Pídele a tu IA que lo corrija y vuelve a pegar su respuesta.</p></div>` : ''}
+      ${v.advertencias.length ? `<div class="aviso ojo"><strong>Avisos para decidir:</strong>${lista(v.advertencias.map(x => x.mensaje))}<p>Puedes confirmar el cambio.</p></div>` : ''}
       ${v.ok && c.aplicados.length ? '<div class="fila-botones"><button type="button" class="boton primario" id="aplicar-ia">Aplicar a mi plan</button><button type="button" class="boton" id="no-aplicar-ia">Dejar como está</button></div>' : ''}`;
     $('no-aplicar-ia')?.addEventListener('click', () => { out.innerHTML = '<p class="pequeno suave">No cambié nada.</p>'; });
     $('aplicar-ia')?.addEventListener('click', async () => {

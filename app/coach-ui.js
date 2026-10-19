@@ -621,11 +621,11 @@ async function enviar(texto, ir, archivo = null, { existente = null } = {}) {
   if (nube.conectado()) {
     const mensaje = { rol: 'coach', texto: 'Pensando…', pendiente: true, consulta: persona.consulta, desde: Date.now() };
     consulta = consultaActual = { estado, usuario, mensaje };
-    E.chat.push(mensaje);
+    E.chat.splice(E.chat.indexOf(persona) + 1, 0, mensaje);
     guardar();
     if (enVista()) vistaCoach(ir);
     try {
-      const historial = E.chat.filter(m => !m.pendiente && m !== persona).slice(-7).map(m => ({ rol: m.rol, texto: m.texto.slice(0, 4000) }));
+      const historial = E.chat.slice(0, E.chat.indexOf(persona)).filter(m => !m.pendiente && !m.porEnviar && !m.sistema).slice(-7).map(m => ({ rol: m.rol, texto: m.texto.slice(0, 4000) }));
       const ia = await nube.chat(persona.paraIA || texto, historial, archivo ? { tipo: archivo.tipo, texto: archivo.texto } : null, modo, persona.consulta);
       if (E !== estado || usuario !== nube.usuarioId()) return false;
       if (ia.estado === 'pensando') { consultaActual = null; esperarRespuesta(mensaje); return false; } // ya la estaba respondiendo
@@ -637,7 +637,7 @@ async function enviar(texto, ir, archivo = null, { existente = null } = {}) {
         return false;
       }
       completada = !ia.requiere_ia && !ia.requiere_permiso && !ia.motivo;
-      E.chat.push({ rol: 'coach', texto: ia.texto || r.texto, propuesta: ia.propuesta || null, opciones: ia.propuesta ? confirmarIA(ia.propuesta.id) : ia.opciones || null, sugerencias: ia.sugerencias || null, enlace: ia.enlace || null, ...(persona.sesionId ? { sesionId: persona.sesionId } : {}) });
+      E.chat.splice(E.chat.indexOf(persona) + 1, 0, { rol: 'coach', texto: ia.texto || r.texto, propuesta: ia.propuesta || null, opciones: ia.propuesta ? confirmarIA(ia.propuesta.id) : ia.opciones || null, sugerencias: ia.sugerencias || null, enlace: ia.enlace || null, ...(persona.sesionId ? { sesionId: persona.sesionId } : {}) });
       if (!enVista()) { E.chatSinLeer = true; marcarNovedadCoach(); }
     } catch (e) {
       if (E !== estado || usuario !== nube.usuarioId()) return false;

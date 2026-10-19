@@ -6,7 +6,7 @@ import { porSesion, ritmo } from './progreso-ejercicio.js';
 import { resumenParaEntrenador } from './notas.js';
 
 const SENTIR = { facil: 'muy fácil', justo: 'justo', brutal: 'brutal' };
-const fechaDe = s => String(s.inicio || s.fecha || '').slice(0, 10);
+const fechaDe = s => s.fecha || (s.inicio ? new Date(s.inicio).toLocaleDateString('sv-SE', { timeZone: 'America/Santiago' }) : '');
 const deTrabajo = x => x.tipo !== 'calentamiento';
 const promedio = xs => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : null);
 // Las sesiones de descarga llevan menos carga y series a propósito: se marcan y quedan fuera de las tendencias y del

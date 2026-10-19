@@ -10,10 +10,10 @@ export function prepararSesionVacia(ctx) {
   const anterior = plan.dias.find(d => d.fecha === hoy);
   if (anterior?.ejercicios.some(e => e.indicacion)) return { error: 'Hay ejercicios indicados por un profesional. Conserva esa sesión y agrega ejercicios desde el banco.' };
   const nuevo = structuredClone(plan);
-  const semanaReal = Math.max(1, Math.floor((Date.parse(hoy) - Date.parse(plan.inicio)) / 604800000) + 1);
+  const semanaReal = Math.max(0, Math.floor((Date.parse(hoy) - Date.parse(plan.inicio)) / 604800000) + 1);
   if (!anterior && semanaReal > plan.semanas + 1) return { error: 'Tu plan terminó hace más de una semana. Arma uno nuevo para empezar una sesión vacía.' };
   const lugar = anterior?.lugar || respuestas.lugares?.find(l => l.principal)?.nombre || respuestas.lugares?.[0]?.nombre || 'Casa';
-  const dia = { fecha: hoy, semana: anterior?.semana || Math.min(plan.semanas, semanaReal),
+  const dia = { fecha: hoy, semana: hoy < plan.inicio ? 0 : (anterior?.semana ?? Math.min(plan.semanas, semanaReal)),
     foco: 'Sesión libre', lugar, libre: true, ejercicios: [], calentamiento: [], estiramiento: [], cardio: null, racional: 'Sesión armada por ti desde cero.' };
   nuevo.dias = nuevo.dias.filter(d => d.fecha !== hoy).concat(dia).sort((a, b) => a.fecha.localeCompare(b.fecha));
   const v = validarCambio(plan, nuevo, ctx);

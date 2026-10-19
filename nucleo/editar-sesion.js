@@ -56,7 +56,7 @@ export function editarSesion(accion, ctx) {
     if (!dia) {
       // En la semana de margen después del plan, el día nuevo queda en la última semana: un respaldo no acepta
       // semanas fuera del plan. No es descarga aunque la última lo sea, porque el bloque ya terminó.
-      const semanaReal = Math.max(1, Math.floor((Date.parse(hoy) - Date.parse(plan.inicio)) / 604800000) + 1);
+      const semanaReal = Math.max(0, Math.floor((Date.parse(hoy) - Date.parse(plan.inicio)) / 604800000) + 1);
       if (semanaReal > plan.semanas + 1) return { error: 'Tu plan terminó hace más de una semana. Arma uno nuevo en Tu plan para agregar ejercicios.' };
       fueraDelPlan = semanaReal > plan.semanas;
       dia = { fecha: hoy, semana: Math.min(plan.semanas, semanaReal), foco: 'Sesión libre', lugar: ctx.respuestas.lugares?.find(l => l.principal)?.nombre || ctx.respuestas.lugares?.[0]?.nombre,

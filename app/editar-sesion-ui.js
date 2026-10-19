@@ -9,6 +9,7 @@ import * as nube from './nube.js';
 const contexto = () => ({ ...ctxNucleo(), registro: E.registro, sesiones: E.sesiones });
 const sinGuiones = t => t.replace(/[–—]/g, ' a ');
 /** Cuántas sesiones vienen con la misma plantilla que hoy: con alguna, se puede elegir "desde hoy en adelante". */
+const avisosVolumen = r => [...new Set((r.advertencias || []).filter(a => a.codigo === 'volumen_alto').map(a => sinGuiones(a.mensaje)))].join(' ');
 const cuantasSiguen = () => (E.plan ? siguientes(E.plan, sesionDe(E.plan, hoy())).length : 0);
 
 /** Agregar o quitar un ejercicio: muestra cómo queda hoy y, si la sesión se repite, pregunta si es solo hoy o desde
@@ -26,7 +27,7 @@ export function proponerEdicion(accion, { volver, alCambiar }) {
     { valor: 'no', icono: icono('flecha'), nombre: 'Dejar como está' },
   ];
   abrirHoja({ titulo: agregar ? 'Agregar a la sesión de hoy' : 'Quitar de la sesión de hoy', volver,
-    nota: `${r.ejercicio.nombre || 'Ejercicio'}${agregar ? `: ${presc(r.ejercicio)}` : ''}. ${r.cantidad ? `Hoy quedaría con ${r.cantidad} ${r.cantidad === 1 ? 'ejercicio' : 'ejercicios'}, unos ${r.minutos} minutos.` : 'Hoy quedaría sin ejercicios.'}${r.conservar?.length ? ` ${r.conservar.length === 1 ? 'Se conserva la serie ya hecha' : `Se conservan las ${r.conservar.length} series ya hechas`} al guardar la sesión.` : ''}${adelante?.error ? ` Desde hoy en adelante no se puede: ${sinGuiones(adelante.error)}` : n ? '' : ' Las otras sesiones se mantienen.'}`,
+    nota: `${r.ejercicio.nombre || 'Ejercicio'}${agregar ? `: ${presc(r.ejercicio)}` : ''}. ${r.cantidad ? `Hoy quedaría con ${r.cantidad} ${r.cantidad === 1 ? 'ejercicio' : 'ejercicios'}, unos ${r.minutos} minutos.` : 'Hoy quedaría sin ejercicios.'}${r.conservar?.length ? ` ${r.conservar.length === 1 ? 'Se conserva la serie ya hecha' : `Se conservan las ${r.conservar.length} series ya hechas`} al guardar la sesión.` : ''}${avisosVolumen(r) ? ` Aviso: ${avisosVolumen(r)} Puedes agregarlo igual.` : ''}${adelante?.error ? ` Desde hoy en adelante no se puede: ${sinGuiones(adelante.error)}` : n ? '' : ' Las otras sesiones se mantienen.'}`,
     opciones,
     alElegir: async v => {
       if (v === 'no') return;
@@ -122,11 +123,12 @@ export function arrastrable(ol, alSoltar) {
 export async function agregarVarios(ids, { superserie = false, alCambiar, despues = null } = {}) {
   const ctx = contexto();
   let plan = null;
-  const nombres = [];
+  const nombres = [], advertencias = [];
   for (const id of ids) {
     const r = editarSesion({ tipo: 'agregar', ejercicio: id, despues, alcance: 'hoy' }, plan ? { ...ctx, plan } : ctx);
     if (r.error) { avisar(`No agregué ${indice.porId.get(id)?.nombre || 'un ejercicio'}: ${sinGuiones(r.error).replace(/^\d{4}-\d{2}-\d{2}: /, '')}`); continue; }
     plan = r.plan; despues = id; nombres.push(r.ejercicio.nombre);
+    advertencias.push(...(r.advertencias || []));
   }
   if (!plan) return null;
   const agregados = ids.filter(id => sesionDe(plan, ctx.hoy)?.ejercicios.some(e => e.ejercicio_id === id));
@@ -138,7 +140,8 @@ export async function agregarVarios(ids, { superserie = false, alCambiar, despue
   }
   const lista = nombres.length === 1 ? nombres[0] : `${nombres.slice(0, -1).join(', ')} y ${nombres.at(-1)}`;
   const aviso = await cambiarPlan(plan, `Agregado${nombres.length === 1 ? '' : 's'} a hoy${superserie && agregados.length > 1 ? ', en superserie' : ''}: ${lista}.`, nube);
-  if (aviso) avisar(aviso);
+  const volumen = avisosVolumen({ advertencias });
+  if (aviso || volumen) avisar([aviso, volumen && `Agregado. Aviso de volumen: ${volumen}`].filter(Boolean).join(' '));
   alCambiar?.(agregados);
   return agregados;
 }

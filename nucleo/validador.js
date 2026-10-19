@@ -3,13 +3,15 @@
 import { tieneEquipo, nivelAlcanza, articulacionesBloqueadas, cargaZonaBloqueada } from './catalogo.js';
 import { incrementoPara, duracionSesion, volumenSemanal } from './motor-plan.js';
 import { grupos } from './superseries.js';
+import { conSemanasPrevias } from './semanas-plan.js';
 
 const CONTADOS = ['femoral', 'gluteo', 'cuadriceps', 'aductor_abductor', 'espalda', 'pecho', 'hombro', 'biceps', 'triceps'];
 
 /**
  * @returns {{ok: boolean, errores: {fecha?, ejercicio?, codigo, mensaje}[], advertencias: object[]}}
  */
-export function validarPlan(plan, { derivados: d, respuestas: r, indice, hoy }) {
+export function validarPlan(plan, { derivados: d, respuestas: r, indice, hoy, edicionPersona = false }) {
+  plan = conSemanasPrevias(plan);
   const errores = [], advertencias = [];
   const err = (codigo, mensaje, extra = {}) => errores.push({ codigo, mensaje, ...extra });
   const adv = (codigo, mensaje, extra = {}) => advertencias.push({ codigo, mensaje, ...extra });
@@ -73,7 +75,7 @@ export function validarPlan(plan, { derivados: d, respuestas: r, indice, hoy }) 
     const minutos = duracionSesion(dia);
     // La semana 0 son los días que quedan del bloque anterior al armar el siguiente: ya cumplían el plan del que vienen
     // y no se rearman, así que acortar los minutos del bloque nuevo no los vuelve inválidos.
-    if (dia.semana !== 0 && (minutos === null || minutos > d.duracion_min)) err('duracion', `${dia.fecha}: la sesión dura unos ${minutos} minutos y tienes ${d.duracion_min}.`, { ...donde, valor: minutos });
+    if (dia.semana !== 0 && (minutos === null || minutos > d.duracion_min)) (edicionPersona ? adv : err)('duracion', `${dia.fecha}: la sesión dura unos ${minutos} minutos y tienes ${d.duracion_min}.`, { ...donde, valor: minutos });
   }
 
   // Volumen por músculo en una semana normal (la 1) y que la descarga baje.
@@ -81,7 +83,7 @@ export function validarPlan(plan, { derivados: d, respuestas: r, indice, hoy }) 
   const [lo, hi] = d.series_rango;
   for (const m of CONTADOS) {
     const s = v[m] || 0;
-    if (s > hi + 4) err('volumen_alto', `${m}: ${s} series a la semana; tu tope es ${hi}.`, { musculo: m, valor: s });
+    if (s > hi + 4) (edicionPersona ? adv : err)('volumen_alto', `${m}: ${s} series a la semana; tu tope es ${hi}.`, { musculo: m, valor: s });
     else if (s > 0 && s < lo / 2) adv('volumen_bajo', `${m}: solo ${s} series a la semana.`);
   }
   if (plan.semana_descarga) {
@@ -94,13 +96,13 @@ export function validarPlan(plan, { derivados: d, respuestas: r, indice, hoy }) 
 const claveError = e => [e.codigo, e.fecha || '', e.ejercicio || '', e.musculo || ''].join('|');
 /**
  * Revisa un cambio a un plan que ya existía: solo bloquean los errores que trae el cambio. Si el plan ya tenía uno
- * (por ejemplo, un ejercicio importado con menos reserva que tu mínimo), queda como advertencia. Un error de duración
- * o de volumen que ya estaba cuenta como nuevo si el cambio lo empeora.
+ * (por ejemplo, un ejercicio importado con menos reserva que tu mínimo), queda como advertencia. El tiempo y el volumen recomendados
+ * son avisos para una edición elegida por la persona, nunca un veto.
  * @returns {{ok: boolean, errores: object[], advertencias: object[]}}
  */
 export function validarCambio(antes, despues, ctx) {
-  const previos = new Map(validarPlan(antes, ctx).errores.map(e => [claveError(e), e.valor ?? 0]));
-  const v = validarPlan(despues, ctx);
+  const previos = new Map(validarPlan(antes, { ...ctx, edicionPersona: true }).errores.map(e => [claveError(e), e.valor ?? 0]));
+  const v = validarPlan(despues, { ...ctx, edicionPersona: true });
   // Pasarse del tiempo disponible no bloquea un cambio que pide la persona (Francisco, 13 de octubre de 2026): la vista
   // previa ya dice cuánto dura la sesión, así que queda como advertencia.
   const esNuevo = e => (!previos.has(claveError(e)) || (e.valor ?? 0) > previos.get(claveError(e))) && e.codigo !== 'duracion';

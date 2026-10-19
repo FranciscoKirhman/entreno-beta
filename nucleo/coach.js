@@ -1,3 +1,4 @@
+import { alarmaCoach } from './alarma-coach.js';
 // Chat del coach. Primero intenta resolver el mensaje con reglas (gratis, al instante y sin señal); solo lo que
 // no entiende se manda a la IA (supabase/functions/coach). Las reglas cubren lo más común: faltar, mover un día,
 // "hoy no quiero piernas", máquina ocupada, poco tiempo, dormir mal, dolor, "¿por qué?" y "¿qué me toca?".
@@ -92,6 +93,8 @@ const resumenDia = d => `${d.foco} (${nombreDia(d.fecha)} ${Number(d.fecha.slice
  * @param ctx { plan, hoy, respuestas, derivados, indice, evidencia, consentimientos: {cuidado_lesiones} }
  */
 export function responder(texto, ctx) {
+  const alarma = alarmaCoach(texto);
+  if (alarma) return alarma;
   const { plan, hoy, respuestas: r = {}, indice } = ctx;
   const q = entender(texto, ctx);
   const noPuedo = r.dias_no_puedo || [];
