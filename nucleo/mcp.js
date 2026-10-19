@@ -16,7 +16,7 @@ import { planDeCuidado } from './cuidado.js';
 import { leerPlanTexto, calendarizar } from './importar-plan.js';
 import { semanasDelPlan } from './semanal.js';
 import { fechaEnPalabras } from './prompts-coach.js';
-import { bloqueSiguienteDisponible } from './bloque-siguiente.js';
+import { bloqueSiguienteDisponible, lunesDesde } from './bloque-siguiente.js';
 import { cargaSugerida, registrosParaCarga } from './motor-plan.js';
 
 export const VERSIONES = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
@@ -32,7 +32,8 @@ function bloqueDe(plan, hoy) {
   const armableDesde = new Date(Date.parse(fin + 'T12:00:00Z') - 6 * 864e5).toISOString().slice(0, 10);
   return { semanas: semanas.length, semana_actual: actual?.semana ?? null, termina: fin, termina_el: fechaEnPalabras(fin),
     proxima_semana: proxima ? { semana: proxima.semana, desde: proxima.desde } : null,
-    siguiente_bloque: disponible ? { se_puede_armar: true, partiria_el: fechaEnPalabras(disponible.desde) }
+    // Parte el lunes desde ese día, como el motor (decía el domingo siguiente al fin del bloque).
+    siguiente_bloque: disponible ? { se_puede_armar: true, partiria_el: fechaEnPalabras(lunesDesde(disponible.desde)) }
       : { se_puede_armar: false, se_puede_armar_desde: fechaEnPalabras(armableDesde) } };
 }
 
@@ -134,7 +135,7 @@ export const HERRAMIENTAS = [
         plan: plan ? { inicio: plan.inicio, semana_descarga: plan.semana_descarga, bloque: bloqueDe(plan, hoy), proximos_dias: semana.map(x => diaParaIA(x, { historial: series, indice, lugares: r.lugares || [] })),
           sin_registro: await sinRegistro(plan, datos, hoy, sesiones) } : null,
         // Cómo vienes: sensaciones, esfuerzo, check-ins y tendencias (solo donde el servidor lo ofrece).
-        ...(datos.contexto && indice ? { como_vienes: contextoIA({ historial: (sesiones || []).filter(s => fechaSesion(s) >= hace8), ...(await datos.contexto()), indice, hoy, respuestas: r }) } : {}),
+        ...(datos.contexto && indice ? { como_vienes: contextoIA({ historial: (sesiones || []).filter(s => fechaSesion(s) >= hace8), ...(await datos.contexto()), indice, hoy, respuestas: r, plan }) } : {}),
       });
     },
   },
@@ -261,9 +262,14 @@ export async function sinRegistro(plan, datos, hoy, sesiones = null) {
 /** Una carga que se aleja más de un 30 % de la última vez suele ser un error al dictarla: se avisa para que la persona
  *  la revise antes de aceptar (no se bloquea: puede ser a propósito). */
 function cargasRaras(series, historial, indice) {
+  // La serie más pesada de la última sesión de cada ejercicio (antes, la última serie anotada: una bajada de peso al
+  // final o una descarga disparaban avisos falsos).
   const ultima = new Map();
-  for (const s of [...historial].sort((a, b) => String(a.inicio || a.fecha).localeCompare(String(b.inicio || b.fecha))))
-    for (const x of s.series || []) if (x.tipo !== 'calentamiento' && Number(x.carga_kg) > 0) ultima.set(x.ejercicio_id, Number(x.carga_kg));
+  for (const s of [...historial].sort((a, b) => String(a.inicio || a.fecha).localeCompare(String(b.inicio || b.fecha)))) {
+    const deSesion = new Map();
+    for (const x of s.series || []) if (x.tipo !== 'calentamiento' && Number(x.carga_kg) > 0) deSesion.set(x.ejercicio_id, Math.max(deSesion.get(x.ejercicio_id) || 0, Number(x.carga_kg)));
+    for (const [id, kg] of deSesion) ultima.set(id, kg);
+  }
   const avisos = [];
   for (const id of new Set(series.map(x => x.ejercicio_id))) {
     const nueva = Math.max(...series.filter(x => x.ejercicio_id === id).map(x => Number(x.carga_kg) || 0)), antes = ultima.get(id);

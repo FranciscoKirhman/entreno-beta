@@ -89,8 +89,9 @@ async function armarPlan({ mensaje = null } = {}) {
     }
   }
   // Parte con los pesos ya anotados y conserva lo que queda del plan actual hasta el lunes (semana 0).
-  const nuevo = generarPlan({ derivados: derivar(r, C, hoy()), respuestas: r, indice, hoy: hoy(), historial: historialReciente() });
-  E.plan = nuevo.bloqueado ? nuevo : conDiasQueQuedan(E.plan, nuevo, hoy());
+  const derivados = derivar(r, C, hoy());
+  const nuevo = generarPlan({ derivados, respuestas: r, indice, hoy: hoy(), historial: historialReciente() });
+  E.plan = nuevo.bloqueado ? nuevo : conDiasQueQuedan(E.plan, nuevo, hoy(), { respuestas: r, derivados, indice });
   guardar();
   ir(E.plan.bloqueado ? 'hoy' : 'plan', { nuevo: true });
 }

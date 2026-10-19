@@ -227,8 +227,10 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
   // la sentadilla, el hip thrust o el peso muerto de la semana). Se rota la semana sin cambiar el orden entre sesiones.
   if (d.dias_firmes < plantillas.length) {
     const rotada = k => [...plantillas.slice(k), ...plantillas.slice(0, k)];
-    const k = plantillas.findIndex((_, j) => !rotada(j).slice(d.dias_firmes).some(t => t.startsWith('pierna')));
-    if (k > 0) plantillas = rotada(k);
+    // La rotación con menos días de pierna entre los opcionales (con 4 días y 2 firmes no hay una sin ninguna).
+    const piernas = k => rotada(k).slice(d.dias_firmes).filter(t => t.startsWith('pierna')).length;
+    const k = plantillas.map((_, j) => j).sort((a, b) => piernas(a) - piernas(b) || a - b)[0];
+    if (k > 0 && piernas(k) < piernas(0)) plantillas = rotada(k);
   }
 
   // Zonas prioritarias: un aislado extra en los días que ya trabajan esa zona.
@@ -269,6 +271,8 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
       // Variedad entre los días A y B del mismo tipo: otro remo, otro press (pesa más que la costumbre del historial).
       if (r.rotacion !== 'mismos' && usadosSemana.has(e.id) && !favoritos.has(e.id)) p += 22;
       if (LASTRE[e.id] && pideLastre(e.id)) p += 30;
+      // Quien hace 12 o más dominadas sin peso no necesita la versión asistida (salía en el día B por variedad).
+      if (esAsistido(e) && Object.keys(LASTRE).some(pideLastre)) p += 40;
       if (Object.entries(LASTRE).some(([base, l]) => l === e.id && pideLastre(base))) p -= 30;
       if (r.rotacion === 'variar' && usadosSemana.has(e.id)) p += 10;
       // Variedad entre bloques: con "variar" cambian los que se puede; con "algunos", solo los complementarios (los
@@ -357,6 +361,30 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     }
   }
 
+  // Un día que la lesión dejó sin ejercicios grandes (por ejemplo, empuje con el hombro lesionado) suma básicos de espalda
+  // y pierna permitidos: antes quedaban días de 23 minutos con tríceps y core.
+  const adaptados = [];
+  for (const x of plantillaDias) {
+    if (!bloqueadas.size || x.ejercicios.some(e => indice.porId.get(e.ejercicio_id)?.tipo === 'compuesto')) continue;
+    for (const patron of ['tiron_horizontal', 'sentadilla', 'bisagra', 'tiron_vertical', 'unilateral_pierna', 'extension_cadera']) {
+      if (x.ejercicios.filter(e => indice.porId.get(e.ejercicio_id)?.tipo === 'compuesto').length >= 3) break;
+      const ej = elegir(patron, new Set(x.ejercicios.map(e => e.ejercicio_id)), 2);
+      if (!ej || ej.tipo !== 'compuesto') continue;
+      usadosSemana.set(ej.id, (usadosSemana.get(ej.id) || 0) + 1);
+      x.ejercicios.push(armar(ej, 2, x.ejercicios.length));
+    }
+    if (x.ejercicios.some(e => indice.porId.get(e.ejercicio_id)?.tipo === 'compuesto')) {
+      x.ejercicios.sort((a, b) => a.prioridad - b.prioridad || TIPO_ORDEN[indice.porId.get(a.ejercicio_id).tipo] - TIPO_ORDEN[indice.porId.get(b.ejercicio_id).tipo]);
+      x.ejercicios.forEach((e, i) => { e.orden = i; });
+      adaptados.push(x.foco);
+    }
+  }
+  // El primer básico de cada día (prioridad 1 y compuesto): los recortes de volumen y de tiempo lo tocan al último, para
+  // que no quede con menos series que los accesorios (y la justificación diga lo que el plan hace).
+  const principalDe = new Map(plantillaDias.map(x => { const e = x.ejercicios[0]; return [x.plantilla, e && e.prioridad === 1 && indice.porId.get(e.ejercicio_id)?.tipo === 'compuesto' ? e.ejercicio_id : null]; }));
+  const esPrincipal = (x, e) => principalDe.get(x.plantilla) === e.ejercicio_id;
+  const esBasico = e => e.prioridad === 1 && indice.porId.get(e.ejercicio_id)?.tipo === 'compuesto';
+
   // Core: hasta 4 ejercicios a la semana. Cada plantilla trae un hueco de core y con 6 días sumaba más series de core
   // que de espalda; el tiempo que se libera queda para el resto. Se sacan primero los de los días con más ejercicios.
   const esCore = e => indice.porId.get(e.ejercicio_id)?.tipo === 'core' && !favoritos.has(e.ejercicio_id) && !(r.musculos_prioridad || []).includes('core');
@@ -387,7 +415,9 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     if (!m) break;
     const orden = (a, b) => aporta(b.e, m) - aporta(a.e, m) || b.e.prioridad - a.e.prioridad;
     const t = tocan(m);
-    const serieNoFav = t.filter(x => !fav(x) && x.e.series > 2).sort(orden)[0];
+    // Un básico de prioridad 1 no baja de 3 series por aquí (ni el primero del día de las suyas): antes se sacaba un
+    // accesorio que también cuenta para el músculo.
+    const serieNoFav = t.filter(x => !fav(x) && x.e.series > 2 && !esPrincipal(x.x, x.e) && !(esBasico(x.e) && x.e.series <= 3)).sort(orden)[0];
     const sobra = t.filter(x => !fav(x) && x.e.prioridad >= 2 && x.x.ejercicios.length > 2).sort((a, b) => b.e.prioridad - a.e.prioridad || aporta(b.e, m) - aporta(a.e, m))[0];
     const serieFav = t.filter(x => fav(x) && x.e.series > 2).sort(orden)[0];
     const duro1 = (v[m] || 0) > duro && t.filter(x => !fav(x) && x.e.series > 1).sort(orden)[0];
@@ -462,8 +492,8 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
   for (const x of conSemana) {
     const sobra = () => duracionEstimada(x.ejercicios) > d.duracion_min * 1.1;
     const acciones = () => x.ejercicios.flatMap(e => [
-      ...(e.series > 2 ? [{ e, costo: importa(e) + (e.series <= 3 ? 1 : 0), hacer: () => { e.series--; } }] : []),
-      ...(x.ejercicios.length > 2 ? [{ e, costo: importa(e) + 1.5 + (ultimo(e) ? 3 : 0), hacer: () => { x.ejercicios = x.ejercicios.filter(y => y !== e); } }] : []),
+      ...(e.series > 2 ? [{ e, costo: importa(e) + (e.series <= 3 ? 1 : 0) + (esPrincipal(x, e) && e.series > 3 && d.nivel === 'avanzado' ? 2 : esBasico(e) && e.series <= 3 ? 1 : 0), hacer: () => { e.series--; } }] : []),
+      ...(x.ejercicios.length > 2 ? [{ e, costo: importa(e) + 1.5 + (ultimo(e) ? 3 : 0) + (esBasico(e) ? 1.5 : 0), hacer: () => { x.ejercicios = x.ejercicios.filter(y => y !== e); } }] : []),
     ]).sort((a, b) => a.costo - b.costo || b.e.prioridad - a.e.prioridad || b.e.orden - a.e.orden);
     while (sobra()) { const [a] = acciones(); if (!a) break; a.hacer(); }
     for (const e of x.ejercicios) if (sobra()) e.descanso_seg = Math.min(e.descanso_seg, 90);
@@ -540,7 +570,11 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     while (duracionSesion({ ...dia, cardio: null }) + reserva > d.duracion_min && dia.ejercicios.length) {
       const protegido = e => (r.favoritos || []).includes(e.ejercicio_id) || (indice.porId.get(e.ejercicio_id)?.musculos_primarios || []).some(m => (r.musculos_prioridad || []).includes(m));
       const candidatos = dia.ejercicios.filter(e => !favoritos.has(e.ejercicio_id) || e.series > 1);
-      const ultimo = [...(candidatos.length ? candidatos : dia.ejercicios)].sort((a, b) => Number(protegido(a)) - Number(protegido(b)) || b.prioridad - a.prioridad || b.orden - a.orden)[0];
+      const resguardo = e => (protegido(e) || (principalDe.get(dia.plantilla) === e.ejercicio_id && e.series > 3 && d.nivel === 'avanzado') ? 1 : 0);
+      const lista = candidatos.length ? candidatos : dia.ejercicios;
+      let ultimo = [...lista].sort((a, b) => resguardo(a) - resguardo(b) || b.prioridad - a.prioridad || b.orden - a.orden)[0];
+      // Antes de sacar un básico, se le quita una serie a otro que tenga más de 2 (el primero del día, si hace falta).
+      if (ultimo.series <= 2 && esBasico(ultimo)) ultimo = [...lista].filter(e => e.series > 2).sort((a, b) => b.orden - a.orden)[0] || ultimo;
       // Antes que dejar un ejercicio en 1 serie (que casi no aporta), se saca.
       if (ultimo.series > 2) ultimo.series--;
       else dia.ejercicios.splice(dia.ejercicios.indexOf(ultimo), 1);
@@ -560,6 +594,11 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     preparar(dia);
   }
   diasPlan.sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
+  // Lo que se dice del primer básico, según cómo quedó la semana 1 después de los recortes.
+  const conPrincipal = diasPlan.filter(x => x.semana === 1 && principalDe.get(x.plantilla));
+  const con4 = conPrincipal.filter(x => (x.ejercicios.find(e => e.ejercicio_id === principalDe.get(x.plantilla))?.series || 0) >= 4).length;
+  const fraseBasico = d.nivel !== 'avanzado' || !con4 ? '' : con4 === conPrincipal.length ? 'El primer básico de cada día lleva 4 series.'
+    : `El primer básico lleva 4 series en ${con4} de los ${conPrincipal.length} días; en el resto el tiempo no alcanza.`;
 
   return {
     bloqueado: false,
@@ -567,7 +606,8 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     objetivo: d.objetivo, estructura: 'fija', generado_por: 'reglas',
     lugar: lugar.nombre || null,
     justificacion: [justificacion(d, dias, plantillas, bloqueadas),
-      d.nivel === 'avanzado' ? 'El primer básico de cada día lleva 4 series.' : '',
+      fraseBasico,
+      adaptados.length ? `${[...new Set(adaptados)].join(' y ')} ${adaptados.length > 1 ? 'suman' : 'suma'} espalda y pierna, porque la lesión deja fuera sus ejercicios grandes.` : '',
       pesados.size ? `Sin subir en las últimas 4 semanas, van en un rango más pesado (5 a 8): ${[...pesados].join(', ')}.` : ''].filter(Boolean).join(' '),
     dias: diasPlan,
   };

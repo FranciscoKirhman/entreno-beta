@@ -4,14 +4,16 @@
 // Va resumido (pocas cifras por tema) para gastar menos y que la IA explique con datos reales, no inventados.
 import { porSesion, ritmo } from './progreso-ejercicio.js';
 import { resumenParaEntrenador } from './notas.js';
+import { TEXTO_DESCARGA } from './motor-plan.js';
 
 const SENTIR = { facil: 'muy fácil', justo: 'justo', brutal: 'brutal' };
 const fechaDe = s => s.fecha || (s.inicio ? new Date(s.inicio).toLocaleDateString('sv-SE', { timeZone: 'America/Santiago' }) : '');
 const deTrabajo = x => x.tipo !== 'calentamiento';
 const promedio = xs => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : null);
 // Las sesiones de descarga llevan menos carga y series a propósito: se marcan y quedan fuera de las tendencias y del
-// esfuerzo, para que la IA no las lea como una baja de rendimiento.
-const esDescarga = s => /^descarga\b/i.test(String(s.titulo || '').trim());
+// esfuerzo, para que la IA no las lea como una baja de rendimiento. Se reconocen por el título (las de Hevy) o porque
+// ese día del plan es de descarga: las anotadas en Entreno se titulan con el foco del día ("Torso A").
+const tituloDescarga = s => /^descarga\b/i.test(String(s.titulo || s.foco || '').trim());
 const rpeDe = x => (x.rpe != null ? Number(x.rpe) : x.rir != null ? 10 - Number(x.rir) : null);
 
 /**
@@ -21,8 +23,13 @@ const rpeDe = x => (x.rpe != null ? Number(x.rpe) : x.rir != null ? 10 - Number(
  * @param notas [{fecha, ejercicio_id, respuestas, nota, para_entrenador}] (notas_ejercicio de la cuenta)
  * @param comentarios [{fecha, titulo, comentario}] lo escrito en "¿Cómo te fue?" al guardar la sesión
  */
-export function contextoIA({ historial = [], sensaciones = {}, checkins = [], notas = [], comentarios = [], indice, hoy, respuestas = {} }) {
+export function contextoIA({ historial = [], sensaciones = {}, checkins = [], notas = [], comentarios = [], indice, hoy, respuestas = {}, plan = null }) {
   const nombre = id => indice?.porId.get(id)?.nombre || id;
+  const diasPlan = plan?.dias || [];
+  const fechasDescarga = new Set(diasPlan.filter(d => (plan.semana_descarga && d.semana === plan.semana_descarga) || d.racional === TEXTO_DESCARGA || tituloDescarga(d)).map(d => d.fecha));
+  const esDescarga = s => tituloDescarga(s) || fechasDescarga.has(fechaDe(s));
+  // La reserva que pedía el plan ese día: una serie al fallo que el plan pedía (semana 3 de aislados) no es un exceso.
+  const rirPlan = new Map(diasPlan.flatMap(d => (d.ejercicios || []).map(e => [`${d.fecha}|${e.ejercicio_id}`, e.rir])));
   const sesiones = [...historial].sort((a, b) => fechaDe(b).localeCompare(fechaDe(a)));
   const ultimas = sesiones.slice(0, 6).map(s => {
     const trabajo = (s.series || []).filter(deTrabajo), rpes = trabajo.map(rpeDe).filter(v => v != null);
@@ -30,9 +37,11 @@ export function contextoIA({ historial = [], sensaciones = {}, checkins = [], no
       ...(sensaciones[s.id] ? { se_sintio: SENTIR[sensaciones[s.id]] || sensaciones[s.id] } : {}) };
   });
   const desde = new Date(Date.parse(hoy + 'T12:00:00Z') - 13 * 864e5).toISOString().slice(0, 10);
-  const recientes = sesiones.filter(s => fechaDe(s) >= desde && !esDescarga(s)).flatMap(s => (s.series || []).filter(deTrabajo));
+  const recientes = sesiones.filter(s => fechaDe(s) >= desde && !esDescarga(s)).flatMap(s => (s.series || []).filter(deTrabajo).map(x => ({ ...x, fecha: fechaDe(s) })));
   const rpes = recientes.map(rpeDe).filter(v => v != null);
-  const esfuerzo = { series_trabajo: recientes.length, con_esfuerzo_anotado: rpes.length, rpe_promedio: promedio(rpes), al_fallo: rpes.filter(v => v >= 10).length };
+  const alFallo = recientes.filter(x => rpeDe(x) != null && rpeDe(x) >= 10), pedido = x => rirPlan.get(`${x.fecha}|${x.ejercicio_id}`) === 0;
+  const esfuerzo = { series_trabajo: recientes.length, con_esfuerzo_anotado: rpes.length, rpe_promedio: promedio(rpes),
+    al_fallo_sin_pedirlo: alFallo.filter(x => !pedido(x)).length, al_fallo_pedido_por_el_plan: alFallo.filter(pedido).length };
   // Tendencia de los 5 ejercicios más hechos con peso: máximo estimado y cuánto cambia por semana.
   const series = sesiones.filter(s => !esDescarga(s)).flatMap(s => (s.series || []).filter(deTrabajo).map(x => ({ ...x, fecha: fechaDe(s) })));
   const veces = new Map();

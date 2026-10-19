@@ -52,12 +52,14 @@ export function validarPlan(plan, { derivados: d, respuestas: r, indice, hoy, ed
       if (!nivelAlcanza(d.nivel, ej.nivel_minimo)) err('nivel', `${ej.nombre} es para nivel ${ej.nivel_minimo}.`, en);
       if (!Number.isInteger(e.series) || e.series < 1 || e.series > 10) err('series', `${ej.nombre}: ${e.series} series no es válido (1 a 10).`, en);
       const tope = e.unidad === 'seg' ? 180 : e.unidad === 'm' ? 400 : 30;
-      if (!(e.reps_min >= 1 && e.reps_max >= e.reps_min && e.reps_max <= tope)) err('repeticiones', `${ej.nombre}: rango ${e.reps_min}–${e.reps_max} no es válido.`, en);
+      if (!(e.reps_min >= 1 && e.reps_max >= e.reps_min && e.reps_max <= tope)) err('repeticiones', `${ej.nombre}: rango ${e.reps_min} a ${e.reps_max} no es válido.`, en);
       if (!(e.rir >= rirMinimo && e.rir <= 5)) err('reserva', `${ej.nombre}: ${e.rir} repeticiones de reserva; el mínimo para ti es ${rirMinimo}.`, en);
       if (e.carga_kg != null) {
         const inc = incrementoPara(ej, lugar);
         if (!(e.carga_kg > 0 && e.carga_kg < 500)) err('carga', `${ej.nombre}: ${e.carga_kg} kg no es válido.`, en);
-        else if (inc && Math.abs(e.carga_kg / inc - Math.round(e.carga_kg / inc)) > 1e-6
+        // Solo donde el peso se arma con discos o mancuernas fijas: las máquinas y poleas tienen placas de otros pesos
+        // (61 kg en un curl femoral es normal) y el aviso se repetía en cada propuesta.
+        else if (inc && ['barra_rack', 'smith', 'mancuernas', 'kettlebells'].some(q => ej.equipamiento.includes(q)) && Math.abs(e.carga_kg / inc - Math.round(e.carga_kg / inc)) > 1e-6
           && !(ej.equipamiento.includes('barra_rack') && (e.carga_kg - 20) % inc === 0)) {
           adv('incremento', `${ej.nombre}: ${e.carga_kg} kg no se arma con los discos de ${lugar.nombre || 'tu gimnasio'} (sube de a ${inc} kg).`, en);
         }

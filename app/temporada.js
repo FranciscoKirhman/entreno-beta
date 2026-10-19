@@ -9,7 +9,7 @@ import { progresoNivel } from '../nucleo/nivel.js';
 import { validarPlan } from '../nucleo/validador.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { sumarDias } from '../nucleo/agenda.js';
-import { bloqueSiguienteDisponible, conDiasQueQuedan } from '../nucleo/bloque-siguiente.js';
+import { bloqueSiguienteDisponible, conDiasQueQuedan, lunesDesde } from '../nucleo/bloque-siguiente.js';
 import * as nube from './nube.js';
 import { descargaHtml } from './estados-visuales.js';
 import { imagenAsistente } from './cuestionario.js';
@@ -94,7 +94,7 @@ export function tarjetaTemporada() {
 }
 
 /** El lunes en que parte un plan armado desde ese día (como nucleo/motor-plan.js). */
-export const lunesDesde = f => sumarDias(f, (8 - new Date(f + 'T12:00:00Z').getUTCDay()) % 7);
+export { lunesDesde };
 
 /** Aviso para Entrenar en la última semana del bloque: armar el siguiente para tener el mes planificado. */
 export function avisoBloqueSiguiente() {
@@ -128,7 +128,7 @@ export function planBloqueSiguiente({ forzar = false, cambios = null } = {}) {
   if (base.bloqueado) return { bloqueado: true, mensaje: base.mensaje };
   let plan = sig ? aplicarFase(base, sig, { minutos: derivados.duracion_min }) : base;
   if (sig && !validarPlan(plan, ctx).ok) plan = { ...base, bloque: sig.n }; // si la fase no cabe en tus reglas, el plan base
-  plan = conDiasQueQuedan(E.plan, plan, hoy());
+  plan = conDiasQueQuedan(E.plan, plan, hoy(), { respuestas, derivados, indice });
   return { plan, sig, nv, anteriores, respuestas, derivados };
 }
 
