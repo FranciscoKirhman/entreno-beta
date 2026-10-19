@@ -14,6 +14,7 @@ import { medirGuardado, anotarApertura } from './medicion.js';
 import { estadoDeCopia } from '../nucleo/copia-segura.js';
 import { revisarTrasladoCuenta } from '../nucleo/consentimiento-nube.js';
 import { corregirHistorial } from '../nucleo/corregir-historial.js';
+import { compactarChat } from '../nucleo/compactar-chat.js';
 
 // La portada de la versión de prueba ya pidió estos archivos (herramientas/beta.mjs, precargas): se usa esa respuesta.
 const pedir = u => { const p = globalThis.entrenoPrecarga?.[u]; if (p) delete globalThis.entrenoPrecarga[u]; return p || fetch(u); };
@@ -115,6 +116,7 @@ try {
   const viejo = CLAVE_PERSONAL === CLAVE_ORIGINAL ? JSON.parse(localStorage.getItem('entreno-demo-v1') || 'null') : null;
   E = { ...E, ...(viejo ? { respuestas: viejo.respuestas, plan: viejo.plan } : {}), ...JSON.parse(guardado || '{}') };
   corregirHistorial(E.sesiones, indice); // solo en memoria: se guarda con el próximo cambio
+  compactarChat(E.chat, { protegida: E.chatPorTraer?.id }); // propuestas viejas: sin su plan completo, igual en memoria
 } catch { lecturaFallida = true; errorGuardado = errorPerfilPrueba || 'No pude leer tus datos guardados. Descarga un respaldo de esta sesión antes de cerrar.'; }
 // La segunda copia (IndexedDB) se lee al cargar cada ámbito (al abrir y al entrar a una cuenta), antes de escribirla de
 // nuevo: si el almacenamiento principal quedó atrás, recuperarCopia() la usa. alCargar guarda la hora del estado
@@ -210,6 +212,7 @@ export function activarCuenta(id = null) {
   catch { throw new Error('No pude leer la copia de esa cuenta. Tus datos actuales se conservan.'); }
   E = { ...VACIO(), ...datos }; CLAVE = nueva; ambitoDatos = id || AMBITO_LOCAL; personal = E;
   corregirHistorial(E.sesiones, indice);
+  compactarChat(E.chat, { protegida: E.chatPorTraer?.id });
   alCargar = { clave: nueva, guardadoEn: Number(datos.guardadoEn) || 0, lectura: leerCopia(nueva, { renovar: true }), consumida: false, revisionInicial: revisionLocal };
   // La copia nueva se recupera antes de guardar: no dar una hora nueva a un estado vacío todavía.
   lecturaFallida = false; alinearPropios();

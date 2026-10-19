@@ -424,9 +424,12 @@ function prepararRedaccion() {
   const escribiendo = () => document.activeElement === editor && (tactil || (vv && innerHeight - vv.height > 120));
   // Desde iOS 26 la barra de las flechas y el ✓ flota sobre la página y visualViewport la cuenta como visible: la caja
   // sube su alto (body.barra-teclado-ios, app/coach.css). Antes de iOS 26 esa barra era parte del teclado. iOS 26 se
-  // reconoce por lo que su Safari trae (anclaje CSS, contrast-color), porque su agente sigue diciendo iOS 18.
+  // reconoce al revés: su agente quedó congelado en "OS 18_6", así que solo un sistema que dice ser anterior a 18.6 lleva
+  // la barra dentro del teclado. Reconocerlo por funciones de CSS falló en el iPhone de Francisco (19 de octubre): la caja
+  // quedaba detrás de la barra. Un iOS 18.6 o 18.7 queda con un poco de aire sobre el teclado, nunca tapado.
   const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const ios26 = ios && typeof CSS !== 'undefined' && (CSS.supports('anchor-name', '--a') || CSS.supports('color', 'contrast-color(red)'));
+  const version = String(navigator.userAgent || '').match(/OS (\d+)_(\d+)/);
+  const ios26 = ios && !(version && Number(version[1]) * 100 + Number(version[2]) < 1806);
   const ubicar = () => {
     if (!panel.isConnected) { limpiar(); return; }
     const teclado = Boolean(escribiendo()), cuerpo = document.body;
