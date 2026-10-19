@@ -98,6 +98,27 @@ export function cargaInicial(registros, reps, rir, incremento, maximo) {
   return carga > 0 ? Number(carga.toFixed(2)) : null;
 }
 
+/** Las series de un ejercicio que sirven para estimar su carga: las de las 8 semanas antes de `fecha` o, si no hay, las
+ *  de la última vez que se hizo, aunque sea hace meses. Así un récord de hace un año no manda sobre cómo viene ahora. */
+export function registrosParaCarga(series, id, fecha, semanas = 8) {
+  const previas = series.filter(s => s.ejercicio_id === id && s.tipo !== 'calentamiento' && (!fecha || !s.fecha || s.fecha < fecha));
+  const desde = fecha ? sumarDias(fecha, -7 * semanas) : '';
+  const recientes = previas.filter(s => s.fecha && s.fecha >= desde);
+  if (recientes.length) return recientes;
+  const ultima = previas.reduce((m, s) => ((s.fecha || '') > m ? s.fecha : m), '');
+  return previas.filter(s => (s.fecha || '') === ultima);
+}
+
+/** La carga de un ejercicio que el plan no trae (recién cambiado, agregado o de un plan importado): la de su historial
+ *  llevada a las repeticiones y la reserva de ese día, con la misma fórmula que las cargas iniciales del bloque. Una
+ *  descarga pide más reserva, así que sale más liviana que copiar el peso de una semana normal. */
+export function cargaSugerida({ e, ej, registros = [], lugar = null }) {
+  if (!ej || (e.unidad && e.unidad !== 'reps') || !(e.reps_min > 0)) return null;
+  if (esAsistido(ej)) return ayudaInicial(registros);
+  const maxMancuerna = ej.equipamiento.includes('mancuernas') ? Number(lugar?.mancuerna_max_kg) || null : null;
+  return cargaInicial(registros, Math.min(e.reps_min + 1, e.reps_max ?? Infinity), e.rir ?? 2, incrementoPara(ej, lugar), maxMancuerna);
+}
+
 export function prescripcion(ej, prioridad, d) {
   const obj = d.objetivo;
   const fuerza = obj === 'ganar_fuerza' || (obj === 'deporte' && prioridad === 1);
@@ -269,12 +290,10 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
       if (estancado(ej.id) && pr.reps_max > 8) { pr.reps_min = 5; pr.reps_max = 8; pesados.add(ej.nombre); }
     }
     const inc = incrementoPara(ej, lugar);
-    const maxMancuerna = ej.equipamiento.includes('mancuernas') ? Number(lugar.mancuerna_max_kg) || null : null;
     // En los asistidos el peso es la ayuda: se parte con la de la última vez (el máximo estimado no aplica).
     const asistido = esAsistido(ej);
-    const carga = pr.unidad !== 'reps' ? null
-      : asistido ? ayudaInicial(historialDe(ej.id))
-        : cargaInicial([...historialDe(ej.id), ...cargasRef.filter(c => c.ejercicio_id === ej.id)], pr.reps_min + 1, pr.rir, inc, maxMancuerna);
+    const carga = cargaSugerida({ e: pr, ej, lugar,
+      registros: asistido ? historialDe(ej.id) : [...historialDe(ej.id), ...cargasRef.filter(c => c.ejercicio_id === ej.id)] });
     return {
       ejercicio_id: ej.id, nombre: ej.nombre, orden, prioridad, ...pr, carga_kg: carga,
       nota: carga == null && pr.unidad === 'reps' && inc

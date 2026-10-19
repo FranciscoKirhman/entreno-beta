@@ -123,12 +123,13 @@ export function arrastrable(ol, alSoltar) {
 export async function agregarVarios(ids, { superserie = false, alCambiar, despues = null } = {}) {
   const ctx = contexto();
   let plan = null;
-  const nombres = [], advertencias = [];
+  const nombres = [];
+  let advertencias = [];
   for (const id of ids) {
     const r = editarSesion({ tipo: 'agregar', ejercicio: id, despues, alcance: 'hoy' }, plan ? { ...ctx, plan } : ctx);
     if (r.error) { avisar(`No agregué ${indice.porId.get(id)?.nombre || 'un ejercicio'}: ${sinGuiones(r.error).replace(/^\d{4}-\d{2}-\d{2}: /, '')}`); continue; }
     plan = r.plan; despues = id; nombres.push(r.ejercicio.nombre);
-    advertencias.push(...(r.advertencias || []));
+    advertencias = r.advertencias || []; // las de la última suma ya cuentan todo lo agregado
   }
   if (!plan) return null;
   const agregados = ids.filter(id => sesionDe(plan, ctx.hoy)?.ejercicios.some(e => e.ejercicio_id === id));

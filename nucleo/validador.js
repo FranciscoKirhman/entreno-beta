@@ -109,3 +109,16 @@ export function validarCambio(antes, despues, ctx) {
   const errores = v.errores.filter(esNuevo);
   return { ok: errores.length === 0, errores, advertencias: [...v.advertencias, ...v.errores.filter(e => !esNuevo(e))] };
 }
+
+/**
+ * Revisa el mismo plan con preferencias nuevas: solo bloquea lo que las preferencias empeoran. Lo que ya estaba fuera
+ * de los límites por una edición de la persona (una sesión más larga, más series) no obliga a rearmar el plan.
+ * @returns {{ok: boolean, errores: object[], advertencias: object[]}}
+ */
+export function validarPreferencias(plan, ctxAntes, ctxDespues) {
+  const previos = new Map(validarPlan(plan, ctxAntes).errores.map(e => [claveError(e), e.valor ?? 0]));
+  const v = validarPlan(plan, ctxDespues);
+  const esNuevo = e => !previos.has(claveError(e)) || (e.valor ?? 0) > previos.get(claveError(e));
+  const errores = v.errores.filter(esNuevo);
+  return { ok: errores.length === 0, errores, advertencias: [...v.advertencias, ...v.errores.filter(e => !esNuevo(e))] };
+}

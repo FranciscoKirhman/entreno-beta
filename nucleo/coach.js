@@ -14,7 +14,7 @@ import { contextoDolor } from './dolor.js';
 import { planDeCuidado } from './cuidado.js';
 import { reconocer } from './importar-plan.js';
 import { articulacionesBloqueadas } from './catalogo.js';
-import { duracionEstimada } from './motor-plan.js';
+import { duracionEstimada, cargaSugerida, registrosParaCarga } from './motor-plan.js';
 import { alternativasNoHecha, alternativaEnFecha, fechasLibres, fechaEscrita, semanaDe, firma, diaCorto } from './sin-registro.js';
 
 const DIAS = { domingo: 0, lunes: 1, martes: 2, miercoles: 3, jueves: 4, viernes: 5, sabado: 6 };
@@ -237,8 +237,19 @@ export function calcularCambio(accion, ctx) {
       const ej = indice.porId.get(accion.a), de = indice.porId.get(accion.de)?.nombre || accion.de;
       const adelante = accion.alcance === 'adelante';
       const dias = nuevo.dias.filter(x => (adelante ? x.fecha >= accion.fecha : x.fecha === accion.fecha) && x.ejercicios.some(e => e.ejercicio_id === accion.de));
-      for (const x of dias) x.ejercicios = x.ejercicios.map(e => (e.ejercicio_id === accion.de ? { ...e, ejercicio_id: ej.id, nombre: ej.nombre, carga_kg: null, nota: 'Cambiado. Elige un peso con la misma reserva.' } : e));
-      return { plan: nuevo, ir: 'hoy', propone: `Cambiaría ${de} por ${ej.nombre}, con las mismas series y repeticiones.`, hecho: adelante ? `Listo: ${ej.nombre} en vez de ${de} desde hoy (${dias.length} ${dias.length === 1 ? 'sesión' : 'sesiones'}).` : `Listo: hoy ${ej.nombre} en vez de ${de}.` };
+      // El peso del ejercicio nuevo sale de su historial para las repeticiones y la reserva de cada día (en una
+      // descarga, más liviano): antes quedaba en blanco y Hoy copiaba el de la vez anterior tal cual.
+      const lugares = ctx.respuestas?.lugares || [];
+      const lugarDe = x => lugares.find(l => l.nombre === x.lugar) || lugares.find(l => l.principal) || lugares[0] || null;
+      for (const x of dias) x.ejercicios = x.ejercicios.map(e => {
+        if (e.ejercicio_id !== accion.de) return e;
+        const nuevoE = { ...e, ejercicio_id: ej.id, nombre: ej.nombre, carga_kg: null };
+        nuevoE.carga_kg = cargaSugerida({ e: nuevoE, ej, registros: registrosParaCarga(ctx.historial || [], ej.id, x.fecha), lugar: lugarDe(x) });
+        nuevoE.nota = nuevoE.carga_kg != null ? `Cambiado: el peso sale de tu historial con ${ej.nombre}, para estas repeticiones y esta reserva.` : 'Cambiado. Elige un peso con la misma reserva.';
+        return nuevoE;
+      });
+      const carga = dias[0]?.ejercicios.find(e => e.ejercicio_id === ej.id)?.carga_kg;
+      return { plan: nuevo, ir: 'hoy', propone: `Cambiaría ${de} por ${ej.nombre}, con las mismas series y repeticiones${carga != null ? ` y ${String(carga).replace('.', ',')} kg según tu historial` : ''}.`, hecho: adelante ? `Listo: ${ej.nombre} en vez de ${de} desde hoy (${dias.length} ${dias.length === 1 ? 'sesión' : 'sesiones'}).` : `Listo: hoy ${ej.nombre} en vez de ${de}.` };
     }
     case 'quitar_zona_hoy': {
       const toda = accion.alcance === 'semana';

@@ -5,6 +5,7 @@ import { validarRespaldo } from '../nucleo/respaldo.js';
 import { crearIndice, normalizar } from '../nucleo/catalogo.js';
 import { derivar } from '../nucleo/derivar.js';
 import { estadoDelPlan } from '../nucleo/registrado.js';
+import { seriesAnotadas } from '../nucleo/semanal.js';
 import { perfilPruebaActivo, clavePerfilPrueba, claveSesionPerfilPrueba, seleccionarPerfilPrueba } from '../nucleo/perfiles-prueba.js';
 import { perfilDelRetornoCuenta } from '../nucleo/retorno-cuenta.js';
 import { CONFIG } from './config.js';
@@ -330,6 +331,8 @@ function hechasDelPlan() {
 export const ctxNucleo = () => ({
   plan: E.plan, hoy: hoy(), respuestas: R(), derivados: D(), indice, evidencia: EVIDENCIA, consentimientos: E.consentimientos, indicaciones: E.indicaciones,
   hechas: hechasDelPlan(),
+  // Series anotadas con fecha, para calcular el peso de un ejercicio cambiado (se arma solo si se usa).
+  get historial() { return seriesAnotadas(E.sesiones, E.registro); },
 });
 
 /** Cambia el plan local y, con cuenta, lo guarda en el servidor (que lo valida). */

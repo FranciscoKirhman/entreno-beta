@@ -15,7 +15,7 @@ import { discosPorLado, discosDisponibles, BARRAS_KG, BARRAS_LB } from '../nucle
 import { checklist } from '../nucleo/suplementos.js';
 import { enlaceVideo } from '../nucleo/explicar.js';
 import { sesionDe } from '../nucleo/agenda.js';
-import { duracionSesion, incrementoPara } from '../nucleo/motor-plan.js';
+import { duracionSesion, incrementoPara, cargaSugerida, registrosParaCarga } from '../nucleo/motor-plan.js';
 import { prioridadEsfuerzo, consejoSerie } from '../nucleo/series.js';
 import { TIPOS_SERIE, tipoDe, etiquetas, cuantasFilas, anterior, cifras, tipoParaGuardar } from '../nucleo/registro.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
@@ -272,6 +272,16 @@ const fijarFilas = (f, id, n) => { ((E.filas ||= {})[f] ||= {})[id] = n; };
 const lugarDe = dia => (R().lugares || []).find(x => x.nombre === dia?.lugar) || (R().lugares || []).find(x => x.principal) || (R().lugares || [])[0];
 const deTrabajoFila = x => ['normal', 'fallo'].includes(tipoDe(x));
 /**
+ * El peso de un ejercicio según el plan o, si el plan no lo trae (recién cambiado o de un plan importado), el que sale
+ * de su historial para las repeticiones y la reserva de hoy (nucleo/motor-plan.js: cargaSugerida). Antes se copiaba el
+ * de la vez anterior tal cual: en una descarga quedaba el peso de una semana normal, casi al fallo.
+ */
+function cargaPlanDe(e, dia, f) {
+  if (e.carga_kg != null || !e.ejercicio_id) return e.carga_kg ?? null;
+  return cargaSugerida({ e, ej: indice.porId.get(e.ejercicio_id), lugar: lugarDe(dia),
+    registros: registrosParaCarga(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f) });
+}
+/**
  * Las series de calentamiento de un ejercicio, como en el tablero: las que indica el plan o, si no, las que calcula la
  * app desde el peso de trabajo (lo escrito hoy, el plan o la vez anterior). Se calculan cada vez, así siguen al peso.
  */
@@ -280,7 +290,7 @@ function aproximacionesHoy(dia, e, lista, f) {
   if (plan.length) return plan;
   const ej = indice.porId.get(e.ejercicio_id);
   const prev = e.ejercicio_id ? anterior(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f)?.series[0] : null;
-  const kgTrabajo = (lista || []).find(x => deTrabajoFila(x) && x.kg != null)?.kg ?? e.carga_kg ?? prev?.carga_kg ?? null;
+  const kgTrabajo = (lista || []).find(x => deTrabajoFila(x) && x.kg != null)?.kg ?? cargaPlanDe(e, dia, f) ?? prev?.carga_kg ?? null;
   return seriesDeCalentamiento(kgTrabajo, { incremento: (ej && incrementoPara(ej, lugarDe(dia))) || 2.5, barra: ej?.equipamiento.includes('barra_rack') ? 20 : 0, esquema: ajuste('esquemaCal') });
 }
 /**
@@ -384,7 +394,7 @@ function calentamientoCompleto(dia, f) {
   const todas = seriesAnotadas(E.sesiones, E.registro);
   const ejs = dia.ejercicios.map(e => indice.porId.get(e.ejercicio_id)).filter(Boolean);
   const lugar = lugarDe(dia);
-  const cargas = Object.fromEntries(dia.ejercicios.map((e, k) => [e.ejercicio_id, filasDe(f, e, k).find(x => deTrabajo(tipoDe(x)) && x.kg != null)?.kg ?? e.carga_kg ?? anterior(todas, e.ejercicio_id, f)?.series[0]?.carga_kg]));
+  const cargas = Object.fromEntries(dia.ejercicios.map((e, k) => [e.ejercicio_id, filasDe(f, e, k).find(x => deTrabajo(tipoDe(x)) && x.kg != null)?.kg ?? cargaPlanDe(e, dia, f) ?? anterior(todas, e.ejercicio_id, f)?.series[0]?.carga_kg]));
   const opcionesCarga = Object.fromEntries(ejs.map(ej => [ej.id, { incremento: incrementoPara(ej, lugar) || 2.5, barra: ej.equipamiento.includes('barra_rack') ? 20 : 0, esquema: ajuste('esquemaCal') }]));
   return calentamientoDeSesion({ dia, porId: indice.porId, equipo: lugar?.equipamiento || [], bloqueadas: articulacionesBloqueadas(R().lesiones, f), cargas, opcionesCarga, minutos: R().duracion_min });
 }
@@ -531,7 +541,7 @@ function siguienteSerieHtml(dia, f) {
   const previo = anterior(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f)?.series[posicion];
   const aproximacion = r.aprox != null ? aproximacionesHoy(dia, e, filas, f)[r.aprox] : null;
   const anteriorHoy = [...filas.slice(0, i)].reverse().find(x => deTrabajo(tipoDe(x)) && x.kg != null);
-  const kg = r.kg ?? (deTrabajo(tipo) ? anteriorHoy?.kg ?? e.carga_kg ?? previo?.carga_kg : aproximacion?.kg);
+  const kg = r.kg ?? (deTrabajo(tipo) ? anteriorHoy?.kg ?? cargaPlanDe(e, dia, f) ?? previo?.carga_kg : aproximacion?.kg);
   const reps = r.reps ?? (e.unidad === 'seg' ? e.reps_min : deTrabajo(tipo) || e.unidad === 'm' ? e.reps_max : aproximacion?.reps);
   const dosis = e.unidad === 'seg' ? `${reps ?? ''} s` : `${kg != null ? `${peso(kg)} × ` : ''}${reps ?? ''}${e.unidad === 'm' ? ' m' : ' reps'}`;
   return `<div class="acc-pasos acc-siguiente" id="acc-siguiente">
@@ -737,6 +747,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
   const queEs = esAsistido(ejCat) ? 'ayuda' : conLastre(ejCat) ? 'lastre' : '';
   let iTrabajo = 0; // posición entre las series de trabajo, para mostrar lo de la vez anterior
   let kgHoy = null; // el último peso escrito hoy en una serie de trabajo: pasa a ser el gris de las siguientes
+  const cargaPlan = cardio ? null : cargaPlanDe(e, dia, f);
   // El consejo del entrenador va solo bajo la última serie de trabajo hecha: las anteriores ya se leyeron.
   const ultimaHecha = filas.reduce((u, x, j) => (x.hecho && deTrabajo(tipoDe(x)) ? j : u), -1);
   const filasHtml = filas.map((r, i) => {
@@ -744,10 +755,11 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     const trabajo = deTrabajo(t);
     const prev = trabajo ? previas?.series[iTrabajo++] : null;
     if (cardio) return filaCardio({ id, i, r, t, prev, e, cardio, etiq, nombre: e.nombre || ej?.nombre || id });
-    // En gris va lo que se guarda si marcas sin escribir: lo que ya levantaste hoy, el plan o la vez anterior.
+    // En gris va lo que se guarda si marcas sin escribir: lo que ya levantaste hoy, el plan (o lo calculado desde tu
+    // historial si el plan no trae peso) o la vez anterior.
     // Las de calentamiento puestas por la app traen su peso y repeticiones en gris (aproximacionesHoy).
     const sug = r.aprox != null ? aprox[r.aprox] : null;
-    const kgGris = trabajo ? (kgHoy ?? e.carga_kg ?? prev?.carga_kg ?? null) : sug?.kg ?? null;
+    const kgGris = trabajo ? (kgHoy ?? cargaPlan ?? prev?.carga_kg ?? null) : sug?.kg ?? null;
     if (trabajo && r.kg != null) kgHoy = r.kg;
     const repsGris = seg ? e.reps_min : trabajo || dist ? e.reps_max : sug?.reps ?? null;
     const antes = prev ? (seg ? ((prev.duracion_seg ?? prev.reps) != null ? `${prev.duracion_seg ?? prev.reps} s` : '')
@@ -1299,7 +1311,7 @@ function enlazar(ir, dia) {
     const posicion = lista.slice(0, i).filter(x => deTrabajo(tipoDe(x))).length;
     const prev = e.ejercicio_id ? anteriorEj(e.ejercicio_id, f, dia.foco)?.series[posicion] : null;
     const hoyAntes = [...lista.slice(0, i)].reverse().find(x => deTrabajo(tipoDe(x)) && x.kg != null);
-    return { kg: hoyAntes?.kg ?? e.carga_kg ?? prev?.carga_kg ?? null, prev };
+    return { kg: hoyAntes?.kg ?? cargaPlanDe(e, dia, f) ?? prev?.carga_kg ?? null, prev };
   }
   function marcarSerie(id, i) {
     const { e, k } = ejercicioDe(id);

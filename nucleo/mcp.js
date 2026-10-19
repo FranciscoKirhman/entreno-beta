@@ -17,6 +17,7 @@ import { leerPlanTexto, calendarizar } from './importar-plan.js';
 import { semanasDelPlan } from './semanal.js';
 import { fechaEnPalabras } from './prompts-coach.js';
 import { bloqueSiguienteDisponible } from './bloque-siguiente.js';
+import { cargaSugerida, registrosParaCarga } from './motor-plan.js';
 
 export const VERSIONES = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 const SERVIDOR = { name: 'entreno', title: 'Entreno', version: '0.2.0' };
@@ -42,18 +43,41 @@ const sinVacios = o => Object.fromEntries(Object.entries(o).filter(([, v]) => v 
 // Lo que lee la IA (docs/37-inteligencia-por-uso.md): el calentamiento va por nombre (sus textos de técnica e imágenes
 // son para la pantalla) y la nota genérica de carga, que se repite en cada ejercicio, se omite.
 const NOTA_GENERICA = /^Elige (un peso|la ayuda)/;
-export function diaParaIA(dia) {
+/** La fecha de una sesión en Chile: cortar el texto ISO (UTC) pasaba al día siguiente lo entrenado después de las 21. */
+export const fechaSesion = s => s.fecha || (s.inicio ? new Date(s.inicio).toLocaleDateString('sv-SE', { timeZone: 'America/Santiago' }) : null);
+/** Las series de unas sesiones, cada una con la fecha de su sesión. */
+export const seriesConFecha = (sesiones = []) => sesiones.flatMap(s => (s.series || []).map(x => ({ ...x, fecha: fechaSesion(s) })));
+const serieTexto = x => [x.duracion_seg ? `${x.duracion_seg}s` : x.distancia_m ? `${x.carga_kg ? `${x.carga_kg}kg ` : ''}${x.distancia_m}m` : `${x.carga_kg ?? 'pc'}x${x.reps ?? '?'}`,
+  x.rir != null ? `rir${x.rir}` : '', x.rpe != null ? `rpe${x.rpe}` : '', x.tipo && x.tipo !== 'efectiva' && x.tipo !== 'normal' ? x.tipo : ''].filter(Boolean).join(' ');
+const sinAnio = f => fechaEnPalabras(f).replace(/ de \d{4}$/, '');
+
+/**
+ * Un día del plan para la IA. Con `historial` (series con fecha), cada ejercicio trae su última vez (la serie más
+ * pesada de esa sesión) y, si el plan no tiene peso, carga_sugerida_kg: lo que la app muestra en gris, calculado para
+ * las repeticiones y la reserva de ese día. Sin esto la IA no veía registros de hace más de 4 semanas ni el peso de Hoy.
+ */
+export function diaParaIA(dia, { historial = null, indice = null, lugares = [] } = {}) {
   const { calentamiento, ejercicios, ...resto } = dia;
+  const lugar = lugares.find(l => l.nombre === dia.lugar) || lugares.find(l => l.principal) || lugares[0] || null;
+  const delHistorial = e => {
+    if (!historial || !e.ejercicio_id) return {};
+    const previas = historial.filter(x => x.ejercicio_id === e.ejercicio_id && x.tipo !== 'calentamiento' && x.fecha && x.fecha < dia.fecha);
+    if (!previas.length) return { ultima_vez: 'sin registros' };
+    const fecha = previas.reduce((m, x) => (x.fecha > m ? x.fecha : m), '');
+    const top = previas.filter(x => x.fecha === fecha).sort((a, b) => (Number(b.carga_kg) || 0) - (Number(a.carga_kg) || 0) || (b.reps || 0) - (a.reps || 0))[0];
+    const sugerida = e.carga_kg == null && indice
+      ? cargaSugerida({ e, ej: indice.porId.get(e.ejercicio_id), registros: registrosParaCarga(historial, e.ejercicio_id, dia.fecha), lugar }) : null;
+    return { ultima_vez: `${sinAnio(fecha)}: ${serieTexto(top)}`, ...(sugerida != null ? { carga_sugerida_kg: sugerida } : {}) };
+  };
   return sinVacios({ ...resto,
     calentamiento: Array.isArray(calentamiento) ? calentamiento.map(c => c.name || c.nombre).filter(Boolean) : calentamiento,
-    ejercicios: (ejercicios || []).map(({ orden: _o, nota, ...e }) => sinVacios({ ...e, unidad: e.unidad === 'reps' ? null : e.unidad, ...(nota && !NOTA_GENERICA.test(nota) ? { nota } : {}) })),
+    ejercicios: (ejercicios || []).map(({ orden: _o, nota, ...e }) => sinVacios({ ...e, unidad: e.unidad === 'reps' ? null : e.unidad, ...(nota && !NOTA_GENERICA.test(nota) ? { nota } : {}), ...delHistorial(e) })),
   });
 }
 
 /** El historial agrupado por ejercicio: cada serie como "40x6 rir2 rpe8" en vez de repetir el ejercicio en cada fila. */
 export function historialParaIA(sesiones = []) {
-  const serie = x => [x.duracion_seg ? `${x.duracion_seg}s` : `${x.carga_kg ?? 'pc'}x${x.reps ?? '?'}`,
-    x.rir != null ? `rir${x.rir}` : '', x.rpe != null ? `rpe${x.rpe}` : '', x.tipo && x.tipo !== 'efectiva' && x.tipo !== 'normal' ? x.tipo : ''].filter(Boolean).join(' ');
+  const serie = serieTexto;
   return sesiones.map(s => {
     const grupos = new Map();
     for (const x of [...(s.series || [])].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))) {
@@ -61,7 +85,7 @@ export function historialParaIA(sesiones = []) {
       if (!grupos.has(clave)) grupos.set(clave, { id: x.ejercicio_id || null, nombre: x.ejercicio_nombre || null, series: [] });
       grupos.get(clave).series.push(serie(x));
     }
-    return sinVacios({ fecha: s.fecha || (s.inicio ? new Date(s.inicio).toLocaleDateString('sv-SE', { timeZone: 'America/Santiago' }) : null), titulo: s.titulo, duracion_min: s.duracion_min, notas: s.notas,
+    return sinVacios({ fecha: fechaSesion(s), titulo: s.titulo, duracion_min: s.duracion_min, notas: s.notas,
       ejercicios: [...grupos.values()].map(sinVacios) });
   });
 }
@@ -95,6 +119,10 @@ export const HERRAMIENTAS = [
       const { respuestas: r, derivados: d } = await datos.perfil();
       const plan = await datos.planActivo();
       const semana = plan?.dias.filter(x => x.fecha >= hoy).slice(0, Math.min(6, d.dias_meta)) || [];
+      // Un año de historial, leído una vez: la última vez de cada ejercicio, las sesiones sin anotar y cómo vienes.
+      const sesiones = datos.historial ? await datos.historial(52) : null;
+      const series = sesiones ? seriesConFecha(sesiones) : null;
+      const hace8 = new Date(Date.parse(hoy + 'T12:00:00Z') - 56 * 864e5).toISOString().slice(0, 10);
       return texto({
         objetivo: d.objetivo, nivel: d.nivel, dias_por_semana: d.dias_meta, dias_firmes: d.dias_firmes, minutos_por_sesion: d.duracion_min,
         series_por_musculo_semana: d.series_rango, repeticiones_de_reserva_minimas: d.rir_minimo,
@@ -103,20 +131,28 @@ export const HERRAMIENTAS = [
         musculos_prioridad: d.musculos_prioridad || [],
         // Lo que la persona dejó elegido en Mi plan para su siguiente bloque (nucleo/ciclo-siguiente.js).
         ...(cicloParaIA(r, plan) ? { siguiente_ciclo_elegido: cicloParaIA(r, plan) } : {}),
-        plan: plan ? { inicio: plan.inicio, semana_descarga: plan.semana_descarga, bloque: bloqueDe(plan, hoy), proximos_dias: semana.map(diaParaIA),
-          sin_registro: await sinRegistro(plan, datos, hoy) } : null,
+        plan: plan ? { inicio: plan.inicio, semana_descarga: plan.semana_descarga, bloque: bloqueDe(plan, hoy), proximos_dias: semana.map(x => diaParaIA(x, { historial: series, indice, lugares: r.lugares || [] })),
+          sin_registro: await sinRegistro(plan, datos, hoy, sesiones) } : null,
         // Cómo vienes: sensaciones, esfuerzo, check-ins y tendencias (solo donde el servidor lo ofrece).
-        ...(datos.contexto && indice ? { como_vienes: contextoIA({ historial: await datos.historial(8), ...(await datos.contexto()), indice, hoy, respuestas: r }) } : {}),
+        ...(datos.contexto && indice ? { como_vienes: contextoIA({ historial: (sesiones || []).filter(s => fechaSesion(s) >= hace8), ...(await datos.contexto()), indice, hoy, respuestas: r }) } : {}),
       });
     },
   },
   {
     name: 'ver_historial',
     title: 'Ver historial',
-    description: 'Sesiones registradas en las últimas semanas, agrupadas por ejercicio. Cada serie se escribe "cargaxreps" (pc: peso corporal; s: segundos) con rir y rpe si se anotaron, y el tipo si no es efectiva.',
-    inputSchema: { type: 'object', properties: { semanas: { type: 'integer', minimum: 1, maximum: 12, default: 4 } } },
+    description: 'Sesiones registradas en las últimas semanas, agrupadas por ejercicio. Cada serie se escribe "cargaxreps" (pc: peso corporal; s: segundos) con rir y rpe si se anotaron, y el tipo si no es efectiva. Con ejercicio (id o nombre, por ejemplo "remo con barra"), solo ese ejercicio en las últimas 52 semanas: úsalo antes de decir que algo no tiene registros.',
+    inputSchema: { type: 'object', properties: { semanas: { type: 'integer', minimum: 1, maximum: 12, default: 4 }, ejercicio: { type: 'string', maxLength: 80 } } },
     annotations: { readOnlyHint: true },
-    async run({ semanas = 4 }, { datos }) { return texto(historialParaIA(await datos.historial(Math.min(12, Math.max(1, semanas))))); },
+    async run({ semanas, ejercicio }, { datos, indice }) {
+      if (!ejercicio) return texto(historialParaIA(await datos.historial(Math.min(12, Math.max(1, semanas ?? 4)))));
+      // Un ejercicio puntual: por id, por su nombre en Entreno o por el nombre con que se anotó (por ejemplo, de Hevy).
+      const n = 52, q = normalizar(ejercicio);
+      const ids = new Set([ejercicio, ...(indice?.ejercicios || []).filter(e => normalizar(e.nombre).includes(q)).map(e => e.id)]);
+      const calza = x => ids.has(x.ejercicio_id) || (q.length > 3 && normalizar(x.ejercicio_nombre || '').includes(q));
+      const sesiones = (await datos.historial(n)).map(s => ({ ...s, series: (s.series || []).filter(calza) })).filter(s => s.series.length);
+      return texto({ ejercicio, semanas_revisadas: n, sesiones: historialParaIA(sesiones) });
+    },
   },
   {
     name: 'buscar_ejercicios',
@@ -151,7 +187,10 @@ export const HERRAMIENTAS = [
       const plan = await datos.planActivo();
       if (!plan) return { ...texto('No hay un plan activo. La persona tiene que completar el cuestionario en la app.'), isError: true };
       const { respuestas, derivados } = await datos.perfil();
-      const r = aplicarCambios(plan, cambios, indice);
+      // Un ejercicio que entra sin peso (reemplazado o agregado) sale con el de su historial para ese día.
+      const sinPeso = (cambios || []).some(c => ['reemplazar_ejercicio', 'agregar_ejercicio'].includes(c?.tipo) && c.carga_kg == null);
+      const historial = sinPeso && datos.historial ? seriesConFecha(await datos.historial(52)) : [];
+      const r = aplicarCambios(plan, cambios, indice, { historial, lugares: respuestas.lugares || [] });
       const v = validarCambio(plan, r.plan, { derivados, respuestas, indice, hoy });
       const listo = aplicar && v.ok && r.aplicados.length > 0;
       if (listo && ctx.soloProponer) ctx.propuesta = { ...r.plan, generado_por: 'ia_externa' };
@@ -201,10 +240,10 @@ export const HERRAMIENTAS = [
 
 /** Sesiones del plan de los últimos 7 días (sin hoy) que no tienen un entrenamiento anotado: para saber de qué día
  *  habla alguien que dice que faltó, en vez de suponer que es la sesión de hoy. */
-export async function sinRegistro(plan, datos, hoy) {
-  if (!datos.historial) return [];
+export async function sinRegistro(plan, datos, hoy, sesiones = null) {
+  if (!sesiones && !datos.historial) return [];
   const desde = new Date(Date.parse(hoy + 'T12:00:00Z') - 7 * 864e5).toISOString().slice(0, 10);
-  const hechas = new Set((await datos.historial(2)).map(s => s.fecha || new Date(s.inicio).toLocaleDateString('sv-SE', { timeZone: 'America/Santiago' })));
+  const hechas = new Set((sesiones || await datos.historial(2)).map(fechaSesion));
   return plan.dias.filter(d => d.fecha >= desde && d.fecha < hoy && d.ejercicios?.length && !hechas.has(d.fecha))
     .map(d => ({ fecha: d.fecha, dia: fechaEnPalabras(d.fecha).replace(/ de \d{4}$/, ''), foco: d.foco, firme: d.firme !== false }));
 }

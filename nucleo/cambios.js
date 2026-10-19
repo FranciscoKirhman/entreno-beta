@@ -1,5 +1,6 @@
 // Cambios a un plan pedidos desde afuera: la IA de la persona (ChatGPT, Claude o Gemini, por conector
 // o copiando y pegando) o el coach Pro. Siempre se aplican sobre una copia y después pasa el validador.
+import { cargaSugerida, registrosParaCarga } from './motor-plan.js';
 
 export const TIPOS = ['reemplazar_ejercicio', 'cambiar_prescripcion', 'agregar_ejercicio', 'quitar_ejercicio', 'mover_dia'];
 
@@ -42,10 +43,14 @@ function diasDe(plan, dia, desde) {
 }
 
 /**
+ * historial (series con fecha) y lugares: un ejercicio que entra sin carga (reemplazado o agregado) sale con la de su
+ * historial para las repeticiones y la reserva de ese día, también en la descarga (motor-plan.js: cargaSugerida).
  * @returns {{plan, aplicados: object[], rechazados: {cambio, motivo}[]}}
  */
-export function aplicarCambios(plan, cambios, indice) {
+export function aplicarCambios(plan, cambios, indice, { historial = [], lugares = [] } = {}) {
   const nuevo = structuredClone(plan);
+  const lugarDe = d => lugares.find(l => l.nombre === d.lugar) || lugares.find(l => l.principal) || lugares[0] || null;
+  const conCarga = (e, d) => { if (e.carga_kg == null) e.carga_kg = cargaSugerida({ e, ej: indice.porId.get(e.ejercicio_id), registros: registrosParaCarga(historial, e.ejercicio_id, d.fecha), lugar: lugarDe(d) }); return e; };
   const aplicados = [], rechazados = [];
   const rechazar = (c, motivo) => rechazados.push({ cambio: c, motivo });
   for (const c of cambios || []) {
@@ -69,11 +74,11 @@ export function aplicarCambios(plan, cambios, indice) {
       const ajustarSeries = n => (descarga ? Math.max(1, Math.ceil(n / 2)) : n);
       if (c.tipo === 'agregar_ejercicio') {
         if (d.ejercicios.some(e => e.ejercicio_id === c.ejercicio)) continue;
-        d.ejercicios.push({
+        d.ejercicios.push(conCarga({
           ejercicio_id: c.ejercicio, nombre: indice.porId.get(c.ejercicio).nombre, orden: d.ejercicios.length,
           prioridad: c.prioridad ?? 3, series: ajustarSeries(c.series ?? 3), reps_min: c.reps_min ?? 8, reps_max: c.reps_max ?? 12,
           unidad: 'reps', rir: Math.min(5, (c.rir ?? 2) + (descarga ? 2 : 0)), descanso_seg: 90, carga_kg: c.carga_kg ?? null, nota: c.motivo,
-        });
+        }, d));
         tocados++;
         continue;
       }
@@ -81,7 +86,7 @@ export function aplicarCambios(plan, cambios, indice) {
       const e = d.ejercicios.find(x => x.ejercicio_id === objetivo);
       if (!e) continue;
       if (c.tipo === 'quitar_ejercicio') d.ejercicios = d.ejercicios.filter(x => x !== e);
-      else if (c.tipo === 'reemplazar_ejercicio') Object.assign(e, { ejercicio_id: c.a, nombre: indice.porId.get(c.a).nombre, carga_kg: null, nota: c.motivo });
+      else if (c.tipo === 'reemplazar_ejercicio') conCarga(Object.assign(e, { ejercicio_id: c.a, nombre: indice.porId.get(c.a).nombre, carga_kg: c.carga_kg ?? null, nota: c.motivo }), d);
       else {
         for (const k of ['reps_min', 'reps_max', 'carga_kg', 'prioridad']) if (c[k] !== undefined) e[k] = c[k];
         if (c.series !== undefined) e.series = ajustarSeries(c.series);
