@@ -63,7 +63,13 @@ export function consejoSerie(e, s, incremento = null, { asistido = false, previa
   // Más duro de lo pedido dos veces, o con las repeticiones cayendo: se baja un 5% (al menos un escalón), que es lo que
   // pierde la fuerza entre series cuando se va cerca del fallo. El peso queda en gris en la serie siguiente.
   if (c.tipo === 'bajar' || (pasada && (otraVez || cayeron))) {
-    const nuevo = Math.max(incremento, Math.round((kg - Math.max(incremento, kg * 0.05)) / incremento) * incremento);
+    // Con la fórmula de Epley, el peso con el que esta serie habría salido en el rango pedido (repeticiones mínimas más
+    // la reserva): 75 × 6 al fallo pidiendo 10 a 12 con 1 en reserva da unos 65, no 72,5. Se usa lo que baje más entre
+    // eso y el 5%, siempre al menos un escalón.
+    const hechas = reps + (r ?? 0), pedidas = (e.reps_min || reps) + (e.rir ?? 0);
+    const porEpley = kg * (1 + hechas / 30) / (1 + pedidas / 30);
+    const objetivo = Math.min(kg - Math.max(incremento, kg * 0.05), porEpley);
+    const nuevo = Math.max(incremento, Math.floor(objetivo / incremento + 1e-9) * incremento);
     const por = c.tipo === 'bajar' ? c.texto.replace(/:.*$|\. En la siguiente.*$/, '') : otraVez ? `Dos series seguidas más cerca del fallo que lo pedido (${e.rir} en reserva)` : `Bajaron las repeticiones y quedaste más cerca del fallo que lo pedido (${e.rir} en reserva)`;
     return { tipo: 'bajar', texto: `${por}. La siguiente con ${n(nuevo)} kg: te lo dejé en gris.`, kg: nuevo };
   }
