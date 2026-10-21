@@ -172,5 +172,9 @@ export function etiquetaTiempo(dia) {
   const g = E.tiempoHoy?.[f];
   const sinLimite = g && g.firma === firmaDe(dia) && g.minutos === null;
   if (sinLimite) return 'Sin límite de tiempo';
-  return min == null ? 'Ajustar el tiempo' : enCurso ? `Quedan unos ${min} min` : `Unos ${min} min`;
+  if (min == null) return 'Ajustar el tiempo';
+  if (!enCurso) return `Unos ${min} min`;
+  // A mitad de la sesión, también a qué hora terminarías a este ritmo del plan.
+  const fin = new Date(Date.now() + min * 60000);
+  return `Quedan unos ${min} min · terminas ${fin.getHours()}:${String(fin.getMinutes()).padStart(2, '0')}`;
 }

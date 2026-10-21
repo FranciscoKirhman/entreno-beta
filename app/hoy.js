@@ -763,6 +763,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     const sug = r.aprox != null ? aprox[r.aprox] : null;
     const kgGris = trabajo ? (kgHoy ?? cargaPlan ?? prev?.carga_kg ?? null) : sug?.kg ?? null;
     if (trabajo && r.kg != null) kgHoy = r.kg;
+    if (trabajo && r.hecho && r.consejo?.kg != null) kgHoy = r.consejo.kg; // el peso que sugirió el consejo pasa al gris
     const repsGris = seg ? e.reps_min : trabajo || dist ? e.reps_max : sug?.reps ?? null;
     const antes = prev ? (seg ? ((prev.duracion_seg ?? prev.reps) != null ? `${prev.duracion_seg ?? prev.reps} s` : '')
       : dist ? `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.distancia_m != null ? `${prev.distancia_m} m` : ''}`
@@ -978,9 +979,12 @@ function enlazar(ir, dia) {
   const ejercicioDe = id => { const k = dia.ejercicios.findIndex((x, j) => idDe(x, j) === id); return { e: dia.ejercicios[k], k }; };
   const lugar = (R().lugares || [])[0];
   /** Consejo para la serie siguiente (nucleo/series.js), según reps, esfuerzo y fallo. Solo en las de trabajo. */
-  const consejo = (e, r) => {
+  // Mira también las series ya hechas hoy y cuántas faltan: así dice cuánto bajar (o subir) y lo deja en gris.
+  const consejo = (e, r, lista = [], i = -1) => {
     const ej = indice.porId.get(e.ejercicio_id);
-    return deTrabajo(tipoDe(r)) ? consejoSerie(e, { ...r, fallo: tipoDe(r) === 'fallo' }, ej ? incrementoPara(ej, lugar) : null, { asistido: esAsistido(ej) }) : null;
+    const previas = lista.slice(0, Math.max(0, i)).filter(x => x?.hecho && deTrabajo(tipoDe(x))).map(x => ({ ...x, fallo: tipoDe(x) === 'fallo' }));
+    const quedan = i < 0 ? null : lista.slice(i + 1).filter(x => !x?.hecho && deTrabajo(tipoDe(x))).length;
+    return deTrabajo(tipoDe(r)) ? consejoSerie(e, { ...r, fallo: tipoDe(r) === 'fallo' }, ej ? incrementoPara(ej, lugar) : null, { asistido: esAsistido(ej), previas, quedan }) : null;
   };
 
   // Escribir kilos (o libras) y repeticiones: se guarda en kilos, sin volver a dibujar.
@@ -998,7 +1002,7 @@ function enlazar(ir, dia) {
         // La reserva se escribe como RIR (0 a 5) y se guarda también como RPE, que usa el resto de la app.
         const rir = v == null ? null : Math.max(0, Math.min(5, Math.round(v * 2) / 2)); // pasos de medio
         r.rir = rir; r.rpe = rir == null ? null : 10 - rir;
-        if (r.hecho) r.consejo = consejo(e, r);
+        if (r.hecho) r.consejo = consejo(e, r, lista, Number(t.dataset.i));
       } else r[t.dataset.c] = t.dataset.c === 'kg' ? aKilos(v) : v;
       lista[t.dataset.i] = r;
       guardarPronto(); // cada tecla: se guarda al terminar de escribir (comun.js)
@@ -1102,7 +1106,7 @@ function enlazar(ir, dia) {
   function guardarEsfuerzo(id, i, rpe) {
     const { e, k } = ejercicioDe(id), { lista } = materializar(f, e, k);
     const r = { ...lista[i], rpe, rir: rpe == null ? null : Math.round((10 - rpe) * 2) / 2 };
-    if (r.hecho) r.consejo = consejo(e, r);
+    if (r.hecho) r.consejo = consejo(e, r, lista, i);
     lista[i] = r;
     guardar();
   }
@@ -1137,7 +1141,7 @@ function enlazar(ir, dia) {
           if (t === 'fallo') { r.rpe = 10; r.rir = 0; }
           else if (r.rpe === 10) { r.rpe = null; r.rir = null; }
           if (!deTrabajo(t)) { delete r.rpe; delete r.rir; delete r.consejo; }
-          if (r.hecho) r.consejo = consejo(e, r);
+          if (r.hecho) r.consejo = consejo(e, r, lista, i);
           lista[i] = r;
         }
         guardar(); repintar();
@@ -1315,7 +1319,8 @@ function enlazar(ir, dia) {
     const posicion = lista.slice(0, i).filter(x => deTrabajo(tipoDe(x))).length;
     const prev = e.ejercicio_id ? anteriorEj(e.ejercicio_id, f, dia.foco)?.series[posicion] : null;
     const hoyAntes = [...lista.slice(0, i)].reverse().find(x => deTrabajo(tipoDe(x)) && x.kg != null);
-    return { kg: hoyAntes?.kg ?? cargaPlanDe(e, dia, f) ?? prev?.carga_kg ?? null, prev };
+    // Si el consejo de la serie anterior sugirió otro peso, ese es el que va (lo que se ve en gris).
+    return { kg: (hoyAntes?.hecho ? hoyAntes.consejo?.kg : null) ?? hoyAntes?.kg ?? cargaPlanDe(e, dia, f) ?? prev?.carga_kg ?? null, prev };
   }
   function marcarSerie(id, i) {
     const { e, k } = ejercicioDe(id);
@@ -1341,7 +1346,7 @@ function enlazar(ir, dia) {
     if (!r.hecho) { r.t ||= Date.now(); empezarSesion(f); } // marcar la primera serie también empieza la sesión
     if (!r.hecho && enPausa(f)) (E.pausas ||= {})[f] = alternarPausa(pausaDe(f), Date.now()); // marcar una serie reanuda
     r.hecho = !r.hecho;
-    r.consejo = r.hecho && !cardio ? consejo(e, r) : null;
+    r.consejo = r.hecho && !cardio ? consejo(e, r, lista, i) : null;
     // Récord, como en Hevy: contra todo lo anterior de ese ejercicio y las series previas de hoy.
     let recs = [];
     if (r.hecho && deTrabajo(t) && e.ejercicio_id && !cardio) {

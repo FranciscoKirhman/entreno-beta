@@ -43,15 +43,30 @@ export function etiquetas(filas) {
 export const cuantasFilas = (e, lista = [], guardadas = null) => guardadas ?? Math.max(e.series, lista.length);
 
 /**
- * Lo que hizo la última vez en un ejercicio, antes de `fecha`: sus series de trabajo, en orden.
+ * Lo que hizo la última vez en un ejercicio, antes de `fecha`: sus series de trabajo, en orden. Una sesión liviana
+ * (descarga o día suave: menos del 90% del peso de la vez anterior y sin pasar de RPE 7) no cuenta como "la vez
+ * anterior" si antes hubo una normal: comparar la banca de hoy con la descarga (70 × 8) en vez de con 85 × 10 engaña
+ * y deja el peso en gris muy abajo (Francisco, 21 de octubre de 2026). Se miran hasta 3 sesiones hacia atrás.
  * @param series series anotadas de cualquier día [{fecha, ejercicio_id, carga_kg, reps, rpe}] (semanal.seriesAnotadas)
- * @returns {{fecha, series}} o null
+ * @returns {{fecha, series, saltadas?}} o null; saltadas: las fechas livianas que se pasaron por alto
  */
-export function anterior(series, ejercicioId, fecha) {
+export function anterior(series, ejercicioId, fecha, { saltarLivianas = true } = {}) {
   const previas = series.filter(s => s.ejercicio_id === ejercicioId && s.fecha < fecha);
   if (!previas.length) return null;
-  const ultima = previas.reduce((a, s) => (s.fecha > a ? s.fecha : a), '');
-  return { fecha: ultima, series: previas.filter(s => s.fecha === ultima) };
+  const fechas = [...new Set(previas.map(s => s.fecha))].sort().reverse();
+  const de = f => previas.filter(s => s.fecha === f);
+  const tope = ss => Math.max(0, ...ss.map(s => Number(s.carga_kg) || 0));
+  const rpe = s => s.rpe ?? (s.rir != null ? 10 - s.rir : null);
+  const liviana = (esta, antes) => tope(antes) > 0 && tope(esta) < tope(antes) * 0.9 && esta.every(s => rpe(s) == null || rpe(s) <= 7);
+  const saltadas = [];
+  if (saltarLivianas) {
+    for (let i = 0; i < Math.min(3, fechas.length - 1); i++) {
+      if (!liviana(de(fechas[i]), de(fechas[i + 1]))) break;
+      saltadas.push(fechas[i]);
+    }
+  }
+  const elegida = fechas[saltadas.length];
+  return { fecha: elegida, series: de(elegida), ...(saltadas.length ? { saltadas } : {}) };
 }
 
 /**

@@ -41,8 +41,37 @@ export function prioridadEsfuerzo(e, ej, d = {}, zonasConMolestia = []) {
  * @param e  prescripción del ejercicio
  * @param s  serie hecha { kg, reps, rir?, rpe?, fallo? }
  * @param incremento kg que se pueden sumar o restar (null en peso corporal)
+ * @param o.previas  series de trabajo ya hechas hoy en este ejercicio, antes de esta (para ver si va bajando)
+ * @param o.quedan   series de trabajo que faltan; con 0 no se habla de "la siguiente". Sin contexto (null), como antes.
+ * @returns {{tipo, texto, kg?}} kg: el peso sugerido para la serie siguiente, que la app deja en gris
  */
-export function consejoSerie(e, s, incremento = null, { asistido = false } = {}) {
+export function consejoSerie(e, s, incremento = null, { asistido = false, previas = [], quedan = null } = {}) {
+  const c = consejoSolo(e, s, incremento, { asistido });
+  if (!c || quedan == null) return c;
+  const r = reservaDe(s), reps = Number(s.reps), kg = Number(s.kg);
+  const pasada = r != null && r < e.rir - 0.5;
+  if (quedan === 0) {
+    const cierre = c.tipo === 'bien' ? 'Justo lo pedido.' : c.tipo === 'subir' ? 'Te sobró: la próxima vez puede subir.'
+      : pasada || s.fallo ? 'Terminaste más cerca del fallo que lo pedido: la próxima vez parte con la misma carga.' : 'Quedaste bajo el rango: la próxima vez parte con la misma carga.';
+    return { tipo: c.tipo, texto: `Listo con este ejercicio. ${cierre}` };
+  }
+  if (asistido || !(kg > 0) || !incremento) return c;
+  const n = x => String(Math.round(x * 100) / 100).replace('.', ',');
+  const ultima = previas.at(-1);
+  const otraVez = ultima && reservaDe(ultima) != null && reservaDe(ultima) < e.rir - 0.5;
+  const cayeron = ultima && Number(ultima.reps) > reps;
+  // Más duro de lo pedido dos veces, o con las repeticiones cayendo: se baja un 5% (al menos un escalón), que es lo que
+  // pierde la fuerza entre series cuando se va cerca del fallo. El peso queda en gris en la serie siguiente.
+  if (c.tipo === 'bajar' || (pasada && (otraVez || cayeron))) {
+    const nuevo = Math.max(incremento, Math.round((kg - Math.max(incremento, kg * 0.05)) / incremento) * incremento);
+    const por = c.tipo === 'bajar' ? c.texto.replace(/:.*$|\. En la siguiente.*$/, '') : otraVez ? `Dos series seguidas más cerca del fallo que lo pedido (${e.rir} en reserva)` : `Bajaron las repeticiones y quedaste más cerca del fallo que lo pedido (${e.rir} en reserva)`;
+    return { tipo: 'bajar', texto: `${por}. La siguiente con ${n(nuevo)} kg: te lo dejé en gris.`, kg: nuevo };
+  }
+  if (c.tipo === 'subir') return { ...c, texto: `${c.texto.replace(/\.$/, '')}. Te dejé ${n(kg + incremento)} kg en gris.`, kg: kg + incremento };
+  return c;
+}
+
+function consejoSolo(e, s, incremento = null, { asistido = false } = {}) {
   const reps = Number(s.reps);
   if (!reps || e.unidad === 'seg' || e.unidad === 'm') return null;
   const r = reservaDe(s);
