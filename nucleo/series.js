@@ -55,7 +55,18 @@ export function consejoSerie(e, s, incremento = null, { asistido = false, previa
       : pasada || s.fallo ? 'Terminaste más cerca del fallo que lo pedido: la próxima vez parte con la misma carga.' : 'Quedaste bajo el rango: la próxima vez parte con la misma carga.';
     return { tipo: c.tipo, texto: `Listo con este ejercicio. ${cierre}` };
   }
-  if (asistido || !(kg > 0) || !incremento) return c;
+  // Rango objetivo de la serie siguiente: desde `desde` hasta 2 más, sin salir del rango del plan. En gris va el mínimo.
+  const rango = desde => {
+    const lo = Math.max(e.reps_min || 1, Math.min(desde, e.reps_max || desde));
+    const hi = Math.max(lo, Math.min(lo + 2, e.reps_max || lo + 2));
+    return { reps: lo, rango: [lo, hi], texto: lo === hi ? `${lo}` : `${lo} a ${hi}` };
+  };
+  if (asistido || !(kg > 0) || !incremento) {
+    // Sin peso que sugerir (peso corporal o asistido), igual se dice cuántas repeticiones buscar.
+    if (!pasada && c.tipo !== 'bajar') return c;
+    const o = rango(reps - 1);
+    return { ...c, texto: `${c.texto} Apunta a ${o.texto} repeticiones.`, reps: o.reps, rango: o.rango };
+  }
   const n = x => String(Math.round(x * 100) / 100).replace('.', ',');
   const ultima = previas.at(-1);
   const otraVez = ultima && pasoDe(reservaDe(ultima), e.rir);
@@ -78,12 +89,19 @@ export function consejoSerie(e, s, incremento = null, { asistido = false, previa
       : caidaFuerte ? `Bajaste de ${ultima.reps} a ${reps} repeticiones con el mismo peso`
       : otraVez ? `Dos series seguidas más cerca del fallo que lo pedido (${e.rir} en reserva)` : `Bajaron las repeticiones y quedaste más cerca del fallo que lo pedido (${e.rir} en reserva)`;
     // Las repeticiones en gris también siguen: con menos peso, apuntar a lo que salió (dentro del rango), no al tope.
-    const objetivoReps = Math.max(e.reps_min || 1, Math.min(reps, e.reps_max || reps));
-    return { tipo: 'bajar', texto: `${por}. La siguiente con ${n(nuevo)} kg para ${objetivoReps}: te lo dejé en gris.`, kg: nuevo, reps: objetivoReps };
+    const o = rango(reps);
+    return { tipo: 'bajar', texto: `${por}. La siguiente con ${n(nuevo)} kg para ${o.texto} repeticiones: te lo dejé en gris.`, kg: nuevo, reps: o.reps, rango: o.rango };
   }
-  if (c.tipo === 'subir') return { ...c, texto: `${c.texto.replace(/\.$/, '')}. Te dejé ${n(kg + incremento)} kg en gris.`, kg: kg + incremento };
-  // Más cerca del fallo pero con el peso bien: las repeticiones de la siguiente apuntan a lo que salió, no al tope.
-  if (pasada) return { ...c, reps: Math.max(e.reps_min || 1, Math.min(reps, e.reps_max || reps)) };
+  if (c.tipo === 'subir') {
+    // Con un escalón más se pierden un par de repeticiones.
+    const o = rango(reps - 2);
+    return { ...c, texto: `${c.texto.replace(/\.$/, '')}. Te dejé ${n(kg + incremento)} kg en gris, para ${o.texto} repeticiones.`, kg: kg + incremento, reps: o.reps, rango: o.rango };
+  }
+  // Más cerca del fallo pero con el peso bien: con el cansancio sale una menos, así que se apunta a eso, no al tope.
+  if (pasada) {
+    const o = rango(reps - 1);
+    return { ...c, texto: `${c.texto} Apunta a ${o.texto} repeticiones.`, reps: o.reps, rango: o.rango };
+  }
   return c;
 }
 
