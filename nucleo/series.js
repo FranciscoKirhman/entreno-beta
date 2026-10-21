@@ -49,7 +49,7 @@ export function consejoSerie(e, s, incremento = null, { asistido = false, previa
   const c = consejoSolo(e, s, incremento, { asistido });
   if (!c || quedan == null) return c;
   const r = reservaDe(s), reps = Number(s.reps), kg = Number(s.kg);
-  const pasada = r != null && r < e.rir - 0.5;
+  const pasada = pasoDe(r, e.rir);
   if (quedan === 0) {
     const cierre = c.tipo === 'bien' ? 'Justo lo pedido.' : c.tipo === 'subir' ? 'Te sobró: la próxima vez puede subir.'
       : pasada || s.fallo ? 'Terminaste más cerca del fallo que lo pedido: la próxima vez parte con la misma carga.' : 'Quedaste bajo el rango: la próxima vez parte con la misma carga.';
@@ -58,11 +58,15 @@ export function consejoSerie(e, s, incremento = null, { asistido = false, previa
   if (asistido || !(kg > 0) || !incremento) return c;
   const n = x => String(Math.round(x * 100) / 100).replace('.', ',');
   const ultima = previas.at(-1);
-  const otraVez = ultima && reservaDe(ultima) != null && reservaDe(ultima) < e.rir - 0.5;
+  const otraVez = ultima && pasoDe(reservaDe(ultima), e.rir);
   const cayeron = ultima && Number(ultima.reps) > reps;
+  // Con el mismo peso, perder 3 repeticiones o más (o un 20%) de una serie a otra ya dice que la carga quedó alta,
+  // aunque la serie caiga dentro del rango: 35 × 15 y después 35 × 10 no es "justo lo pedido".
+  const perdidas = ultima && Number(ultima.kg) === kg ? Number(ultima.reps) - reps : 0;
+  const caidaFuerte = perdidas >= Math.max(3, Math.ceil(0.2 * Number(ultima?.reps || 0)));
   // Más duro de lo pedido dos veces, o con las repeticiones cayendo: se baja un 5% (al menos un escalón), que es lo que
   // pierde la fuerza entre series cuando se va cerca del fallo. El peso queda en gris en la serie siguiente.
-  if (c.tipo === 'bajar' || (pasada && (otraVez || cayeron))) {
+  if (c.tipo === 'bajar' || (pasada && (otraVez || cayeron)) || caidaFuerte) {
     // Con la fórmula de Epley, el peso con el que esta serie habría salido en el rango pedido (repeticiones mínimas más
     // la reserva): 75 × 6 al fallo pidiendo 10 a 12 con 1 en reserva da unos 65, no 72,5. Se usa lo que baje más entre
     // eso y el 5%, siempre al menos un escalón.
@@ -70,12 +74,22 @@ export function consejoSerie(e, s, incremento = null, { asistido = false, previa
     const porEpley = kg * (1 + hechas / 30) / (1 + pedidas / 30);
     const objetivo = Math.min(kg - Math.max(incremento, kg * 0.05), porEpley);
     const nuevo = Math.max(incremento, Math.floor(objetivo / incremento + 1e-9) * incremento);
-    const por = c.tipo === 'bajar' ? c.texto.replace(/:.*$|\. En la siguiente.*$/, '') : otraVez ? `Dos series seguidas más cerca del fallo que lo pedido (${e.rir} en reserva)` : `Bajaron las repeticiones y quedaste más cerca del fallo que lo pedido (${e.rir} en reserva)`;
-    return { tipo: 'bajar', texto: `${por}. La siguiente con ${n(nuevo)} kg: te lo dejé en gris.`, kg: nuevo };
+    const por = c.tipo === 'bajar' ? c.texto.replace(/:.*$|\. En la siguiente.*$/, '')
+      : caidaFuerte ? `Bajaste de ${ultima.reps} a ${reps} repeticiones con el mismo peso`
+      : otraVez ? `Dos series seguidas más cerca del fallo que lo pedido (${e.rir} en reserva)` : `Bajaron las repeticiones y quedaste más cerca del fallo que lo pedido (${e.rir} en reserva)`;
+    // Las repeticiones en gris también siguen: con menos peso, apuntar a lo que salió (dentro del rango), no al tope.
+    const objetivoReps = Math.max(e.reps_min || 1, Math.min(reps, e.reps_max || reps));
+    return { tipo: 'bajar', texto: `${por}. La siguiente con ${n(nuevo)} kg para ${objetivoReps}: te lo dejé en gris.`, kg: nuevo, reps: objetivoReps };
   }
   if (c.tipo === 'subir') return { ...c, texto: `${c.texto.replace(/\.$/, '')}. Te dejé ${n(kg + incremento)} kg en gris.`, kg: kg + incremento };
+  // Más cerca del fallo pero con el peso bien: las repeticiones de la siguiente apuntan a lo que salió, no al tope.
+  if (pasada) return { ...c, reps: Math.max(e.reps_min || 1, Math.min(reps, e.reps_max || reps)) };
   return c;
 }
+
+/** Más cerca del fallo que lo pedido. Con 1 de reserva o menos, medio punto ya cuenta: RPE 9,5 pidiendo RIR 1 no es
+ *  "justo lo pedido" (Francisco, 21 de octubre de 2026). Con más reserva pedida, medio punto es ruido de la escala. */
+const pasoDe = (r, rir) => r != null && (r < rir - 0.5 || (rir <= 1 && r <= rir - 0.5));
 
 function consejoSolo(e, s, incremento = null, { asistido = false } = {}) {
   const reps = Number(s.reps);
@@ -91,6 +105,6 @@ function consejoSolo(e, s, incremento = null, { asistido = false } = {}) {
   if (reps > e.reps_max && (r == null || r >= e.rir)) return { tipo: 'subir', texto: `Te pasaste del rango con reserva: en la siguiente serie ${masDificil}.` };
   if (r != null && r > e.rir + 1.5) return { tipo: 'subir', texto: `Te sobraban más repeticiones de las pedidas: ${masDificil} o haz más repeticiones.` };
   if (r != null && r < e.rir - 1.5) return { tipo: 'bajar', texto: `Quedaste mucho más cerca del fallo que lo pedido (${e.rir} en reserva): ${masFacil} para la siguiente.` };
-  if (r != null && r < e.rir - 0.5) return { tipo: 'mantener', texto: `Quedaste más cerca del fallo que lo pedido (${e.rir} en reserva). Mantén ${asistido ? 'la ayuda' : 'la carga'} y no fuerces más.` };
+  if (pasoDe(r, e.rir)) return { tipo: 'mantener', texto: `Quedaste más cerca del fallo que lo pedido (${e.rir} en reserva). Mantén ${asistido ? 'la ayuda' : 'la carga'} y no fuerces más.` };
   return { tipo: 'bien', texto: 'Justo lo pedido. Sigue igual.' };
 }

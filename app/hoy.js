@@ -765,6 +765,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
   const queEs = esAsistido(ejCat) ? 'ayuda' : conLastre(ejCat) ? 'lastre' : '';
   let iTrabajo = 0; // posición entre las series de trabajo, para mostrar lo de la vez anterior
   let kgHoy = null; // el último peso escrito hoy en una serie de trabajo: pasa a ser el gris de las siguientes
+  let repsHoy = null; // las repeticiones que sugirió el consejo de la última serie hecha
   const cargaHoy = cardio ? { kg: null, fatiga: null } : cargaHoyDe(e, dia, f);
   const cargaPlan = cargaHoy.kg;
   // El consejo del entrenador va solo bajo la última serie de trabajo hecha: las anteriores ya se leyeron.
@@ -781,7 +782,8 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     const kgGris = trabajo ? (kgHoy ?? cargaPlan ?? prev?.carga_kg ?? null) : sug?.kg ?? null;
     if (trabajo && r.kg != null) kgHoy = r.kg;
     if (trabajo && r.hecho && r.consejo?.kg != null) kgHoy = r.consejo.kg; // el peso que sugirió el consejo pasa al gris
-    const repsGris = seg ? e.reps_min : trabajo || dist ? e.reps_max : sug?.reps ?? null;
+    const repsGris = seg ? e.reps_min : trabajo && repsHoy != null ? repsHoy : trabajo || dist ? e.reps_max : sug?.reps ?? null;
+    if (trabajo && r.hecho) repsHoy = r.consejo?.reps ?? null;
     const antes = prev ? (seg ? ((prev.duracion_seg ?? prev.reps) != null ? `${prev.duracion_seg ?? prev.reps} s` : '')
       : dist ? `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.distancia_m != null ? `${prev.distancia_m} m` : ''}`
       : `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.reps ?? ''}`) : '';
@@ -1354,7 +1356,8 @@ function enlazar(ir, dia) {
     } else if (!r.hecho && deTrabajo(t) && !cardio) {
       const { kg, prev } = sugerencia(e, lista, i);
       if (r.kg == null && e.unidad !== 'seg') r.kg = kg;
-      if (r.reps == null) r.reps = (e.unidad === 'seg' ? e.reps_min : e.reps_max) ?? prev?.reps ?? null;
+      const hechaAntes = [...lista.slice(0, i)].reverse().find(x => x?.hecho && deTrabajo(tipoDe(x)));
+      if (r.reps == null) r.reps = (e.unidad === 'seg' ? e.reps_min : hechaAntes?.consejo?.reps ?? e.reps_max) ?? prev?.reps ?? null;
     } else if (!r.hecho && r.aprox != null) {
       // Una serie de calentamiento sin escribir se marca con el peso y las repeticiones que estaban en gris.
       const s = aproximacionesHoy(dia, e, lista, f)[r.aprox];
