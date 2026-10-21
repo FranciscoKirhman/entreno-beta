@@ -3,7 +3,7 @@
 // También "Ajustar hoy", que comparten Hoy y la hoja ＋ del Coach.
 import { E, C, hoy, ctxNucleo, cambiarPlan, avisar } from './comun.js';
 import { sesionDe } from '../nucleo/agenda.js';
-import { duracionSesion } from '../nucleo/motor-plan.js';
+import { abrirTiempo } from './tiempo-ui.js';
 import { nombreAsistente } from './cuestionario.js';
 import { srcArticulacion } from './articulaciones.js';
 import { responder, aplicarOpcion } from '../nucleo/coach.js';
@@ -66,7 +66,7 @@ export function abrirAjustarHoy({ titulo = 'Ajustar hoy', volver = null, alCambi
     titulo, volver,
     nota: 'Te muestro cómo quedaría y te pregunto antes de cambiar algo.',
     opciones: [
-      { valor: 'tiempo', icono: icono('reloj'), nombre: 'Tengo poco tiempo' },
+      { valor: 'tiempo', icono: icono('reloj'), nombre: 'Ajustar el tiempo' },
       { valor: 'cansado', icono: icono('luna'), nombre: 'Dormí mal o estoy cansado' },
       { valor: 'maquina', icono: icono('cambiar'), nombre: 'Una máquina está ocupada' },
       { valor: 'otra', icono: icono('calendario'), nombre: 'Prefiero entrenar otra cosa' },
@@ -82,14 +82,8 @@ export function abrirAjustarHoy({ titulo = 'Ajustar hoy', volver = null, alCambi
 export function accionHoy(v, { titulo = 'Ajustar hoy', volver = null, alCambiar, alDolor = null } = {}) {
   const fecha = hoy(), dia = sesionDe(E.plan, fecha), o = { titulo, volver, alCambiar };
   if (!dia && v !== 'dolor') return seguir(responder('hoy no quiero hacer esto, ¿qué otra opción tienes?', ctxNucleo()), { ...o, titulo: 'Hoy no tienes sesión' });
-  if (v === 'tiempo') {
-    const min = duracionSesion(dia);
-    abrirHoja({
-      titulo: '¿Cuánto tiempo tienes?', volver, nota: `La sesión completa toma unos ${min} minutos.`,
-      opciones: [20, 30, 40, 45, 60].filter(x => x < min).map(x => ({ valor: String(x), icono: icono('reloj'), nombre: `${x} minutos` })),
-      alElegir: x => preguntar(`solo tengo ${x} minutos`, o),
-    });
-  }
+  // La rueda: elige los minutos (más o menos que el plan, o sin límite) y muestra cómo queda antes de cambiar.
+  if (v === 'tiempo') abrirTiempo({ volver, alCambiar: () => alCambiar?.({ ir: 'hoy' }) });
   else if (v === 'cansado') preguntar('dormí mal y estoy cansado', o);
   else if (v === 'maquina') preguntar('la máquina está ocupada', { ...o, titulo: '¿Qué máquina está ocupada?' });
   else if (v === 'otra') preguntar('hoy no quiero hacer esto, ¿qué otra opción tienes?', { ...o, titulo: 'Otra opción para hoy' });

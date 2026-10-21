@@ -34,6 +34,7 @@ import { icono } from './iconos.js';
 import { miniatura } from './imagenes.js';
 import { NOMBRE_MUSCULO, lista, mayuscula, imagenesMusculos } from './musculos.js';
 import { proponer, seguir, abrirAjustarHoy } from './cambios-ui.js';
+import { abrirTiempo, etiquetaTiempo } from './tiempo-ui.js';
 import { aplicarOpcion } from '../nucleo/coach.js';
 import { nombreAsistente } from './cuestionario.js';
 import * as nube from './nube.js';
@@ -684,6 +685,7 @@ function sesionHoy(dia) {
       <button type="button" class="boton-icono" id="ver-detalles-sesion" aria-label="Detalles de la sesión">${icono('info')}</button>
     </div>
   </section>
+  ${dia.ejercicios.length && !guardada ? `<div class="fila-tiempo"><button type="button" class="boton chico boton-tiempo" id="ajustar-tiempo" aria-haspopup="dialog">${icono('reloj')}<span>${esc(etiquetaTiempo(dia))}</span><b>Ajustar el tiempo</b></button></div>` : ''}
   ${filaPasosHtml(dia, f, 'cal')}
   ${dia.ejercicios.length ? '' : `<div class="sesion-vacia-estado">${icono('pesa')}<h2>Comienza</h2><p class="suave">Agrega un ejercicio para empezar tu sesión</p></div>`}
   <ol class="ejercicios-hoy">${dia.ejercicios.map((e, k) => ejercicioHoy(e, k, f, e.ejercicio_id ? anteriorEj(e.ejercicio_id, f, dia.foco) : null, notas[idDe(e, k)] || {}, dia)).join('')}</ol>
@@ -920,6 +922,7 @@ function enlazar(ir, dia) {
       titulo: dia.foco, volver: b,
       opciones: [
         { valor: 'ajustar', icono: icono('ajustes'), nombre: 'Ajustar hoy' },
+        ...(dia.ejercicios.length ? [{ valor: 'tiempo', icono: icono('reloj'), nombre: 'Ajustar el tiempo' }] : []),
         { valor: 'detalles', icono: icono('info'), nombre: 'Detalles de la sesión' },
         ...(dia.ejercicios.length > 1 ? [{ valor: 'ordenar', icono: icono('cambiar'), nombre: 'Ordenar ejercicios' }] : []),
         { valor: 'ajustes', icono: icono('ajustes'), nombre: 'Ajustes de la sesión' },
@@ -929,6 +932,7 @@ function enlazar(ir, dia) {
       alElegir: v => {
         if (v === 'pausa') { cambiarPausa(f); return repintar(); }
         if (v === 'ordenar') return ordenarSesion({ volver: b, alCambiar: repintar });
+        if (v === 'tiempo') return abrirTiempo({ volver: b, alCambiar: repintar });
         const boton = { ajustar: 'ajustar-hoy', detalles: 'ver-detalles-sesion', ajustes: 'ajustes-sesion', descartar: 'descartar-sesion' }[v];
         if (boton) $(boton)?.click();
       },
@@ -1568,6 +1572,8 @@ function enlazar(ir, dia) {
     volver: $('ajustar-hoy'), alCambiar: r => (r.ir === 'semana' ? ir('semana') : repintar()),
     alDolor: texto => ir('coach', texto), alChat: () => ir('coach'),
   });
+  // La rueda del tiempo (app/tiempo-ui.js): cuántos minutos hay hoy, antes de empezar o a mitad de la sesión.
+  if ($('ajustar-tiempo')) $('ajustar-tiempo').onclick = () => abrirTiempo({ volver: $('ajustar-tiempo'), alCambiar: repintar });
 
   // Terminar sesión (abajo o en la solapa): queda en el historial local y, con cuenta, en el servidor.
   let terminando = false;

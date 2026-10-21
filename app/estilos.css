@@ -980,3 +980,24 @@ main:has(#vista-coach){padding-bottom:calc(var(--coach-redaccion-alto,100px) + v
 #ideas-chat{margin-top:4px}
 .aviso.neutro{background:var(--surface-2);color:var(--ink);border:1px solid var(--line)}
 .burbuja{overflow-wrap:anywhere;min-width:0}
+
+/* Ajustar el tiempo (app/tiempo-ui.js): el botón de Hoy y la rueda que se gira, como en Down Dog. */
+.fila-tiempo{margin:6px 0 2px}
+.boton-tiempo{display:flex;align-items:center;gap:8px;width:100%;justify-content:flex-start;text-align:left}
+.boton-tiempo span{font-variant-numeric:tabular-nums;color:var(--ink)}
+.boton-tiempo b{margin-left:auto;color:var(--accent);font-weight:600;white-space:nowrap}
+.tiempo-rueda{position:relative;display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;justify-items:center;gap:4px;margin:0 0 6px}
+.rueda{width:100%;max-width:240px;aspect-ratio:1;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+.rueda:active{cursor:grabbing}
+.rueda-pista,.rueda-valor{fill:none;stroke-width:18;stroke-linecap:round}
+.rueda-pista{stroke:var(--fill)}
+.rueda-valor{stroke:var(--accent)}
+.rueda-plan{fill:var(--ink-muted);stroke:var(--surface);stroke-width:2}
+.rueda-perilla{fill:var(--surface);stroke:var(--accent);stroke-width:4;filter:drop-shadow(0 1px 3px rgba(0,0,0,.3))}
+.rueda-centro{grid-column:2;grid-row:1;display:flex;flex-direction:column;align-items:center;pointer-events:none;border-radius:16px;padding:4px 10px}
+.rueda-centro strong{font-size:52px;line-height:1;font-weight:700;color:var(--ink)}
+.rueda-centro span{font-size:15px;color:var(--ink-muted)}
+.rueda-centro:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.tiempo-menos,.tiempo-mas{width:44px;height:44px;border-radius:22px;font-size:26px;line-height:1;background:var(--surface);color:var(--ink);border:1px solid var(--line)}
+.tiempo-rueda .rueda{grid-column:2;grid-row:1}
+.tiempo-resumen{text-align:center;margin:0 4px 12px;color:var(--ink);min-height:2.9em;line-height:1.4}

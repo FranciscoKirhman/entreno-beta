@@ -40,6 +40,8 @@ function arrastrarParaCerrar(fondo) {
   };
   hoja.addEventListener('touchstart', ev => {
     if (ev.touches.length !== 1 || fondo.classList.contains('cerrando')) { toque = null; return; }
+    // Una rueda o un control que se arrastra (data-sin-arrastre) no cierra la hoja al moverlo hacia abajo.
+    if (ev.target.closest('[data-sin-arrastre]')) { toque = null; return; }
     const p = ev.touches[0];
     const agarre = ev.target.closest('.asa, h3') && !ev.target.closest('button');
     toque = { x: p.clientX, y: p.clientY, puede: Boolean(agarre) || hoja.scrollTop <= 0, activo: false, dy: 0, velocidad: 0, ultimo: { y: p.clientY, t: performance.now() } };
