@@ -1,0 +1,89 @@
+// La fatiga dentro de una sesión: un ejercicio que llega después de otros del mismo músculo no rinde como fresco.
+// Nace de un error real (21 de octubre de 2026): un día de pecho con banca 4 series a RPE 8 a 9 y press inclinado 4 a
+// RIR 1, y después el press en máquina con el peso de cuando se hace fresco (75 para 10 a 12). Salió 75 × 6 al fallo.
+// Las cargas iniciales salen de la mejor serie de las últimas semanas, que casi siempre se hizo fresco, así que hay que
+// descontar lo que viene antes en el mismo día. Es una regla práctica, calibrada con ese caso, no un resultado de
+// ensayos: el orden de los ejercicios sí cambia las repeticiones que salen (ver contenido/evidencia/01-ganar-musculo.md).
+
+const POR_SERIE = 0.02, PISO = 0.8;
+// Sobre este número de series de un músculo en una misma sesión, cada serie extra rinde poco y cansa igual.
+export const SERIES_SESION = { aviso: 12, tope: 16 };
+
+const cuenta = ej => ej && ej.tipo !== 'core' && ej.tipo !== 'cardio' && ej.tipo !== 'movilidad';
+const comparten = (a, b) => a.musculos_primarios.some(m => b.musculos_primarios.includes(m));
+
+/**
+ * Series de trabajo del mismo músculo (principal) que van antes del ejercicio `k` en el día. Cuentan en proporción a
+ * los músculos que comparten: la sentadilla (cuádriceps y glúteo) después del hip thrust (glúteo) suma media serie
+ * por cada una, porque el cuádriceps llega fresco.
+ */
+export function seriesPrevias(ejercicios, k, porId) {
+  const ej = porId.get(ejercicios[k]?.ejercicio_id);
+  if (!cuenta(ej)) return 0;
+  const total = ejercicios.slice(0, k).reduce((n, e) => {
+    const otro = porId.get(e.ejercicio_id);
+    if (!cuenta(otro) || (e.unidad || 'reps') !== 'reps') return n;
+    const parte = ej.musculos_primarios.filter(m => otro.musculos_primarios.includes(m)).length / ej.musculos_primarios.length;
+    return n + (e.series || 0) * parte;
+  }, 0);
+  return Math.round(total * 10) / 10;
+}
+
+/** Cuánto rinde un ejercicio después de `previas` series del mismo músculo: 2% menos por serie, hasta un 20%. */
+export const factorFatiga = previas => Math.max(PISO, 1 - POR_SERIE * previas);
+
+/**
+ * Las cargas del día descontando la fatiga de lo que va antes del mismo músculo. Solo toca cargas en kilos de
+ * ejercicios por repeticiones (no la ayuda de un asistido) y deja una nota corta con el porqué.
+ * @param incrementoDe (ej) => kg del escalón de ese ejercicio en el lugar
+ * @param esAsistido   (ej) => true si el peso es ayuda
+ */
+export function conFatigaPrevia(ejercicios, porId, incrementoDe, esAsistido = () => false) {
+  return ejercicios.map((e, k) => {
+    const ej = porId.get(e.ejercicio_id);
+    if (e.carga_kg == null || !ej || esAsistido(ej) || (e.unidad || 'reps') !== 'reps') return e;
+    const previas = seriesPrevias(ejercicios, k, porId);
+    const f = factorFatiga(previas);
+    if (f >= 0.97) return e;
+    const inc = incrementoDe(ej) || 2.5;
+    const carga = Math.max(inc, Math.floor((e.carga_kg * f) / inc + 1e-9) * inc);
+    if (carga >= e.carga_kg) return e;
+    const nota = `Más liviano que fresco (unos ${Math.round((1 - f) * 100)}% menos): llegas con ${String(Math.round(previas)).replace('.', ',')} series del mismo músculo.`;
+    return { ...e, carga_kg: Number(carga.toFixed(2)), nota: e.nota ? `${e.nota} ${nota}` : nota };
+  });
+}
+
+/** Series de trabajo por músculo principal en un día (para el tope por sesión del validador). */
+export function seriesPorMusculo(ejercicios, porId) {
+  const v = {};
+  for (const e of ejercicios) {
+    const ej = porId.get(e.ejercicio_id);
+    if (!cuenta(ej)) continue;
+    for (const m of ej.musculos_primarios) v[m] = (v[m] || 0) + (e.series || 0);
+  }
+  return v;
+}
+
+/**
+ * Durante la sesión: si lo hecho hoy en ejercicios anteriores del mismo músculo salió más duro de lo pedido, el peso
+ * del siguiente baja. Un punto de reserva menos en promedio, 5%; dos o más, 10%.
+ * @param hechas {[ejercicio_id]: [{rpe?, rir?, hecho, tipo?}]} filas de hoy
+ * @returns {{factor, falta}} falta: puntos de reserva que faltaron en promedio
+ */
+export function ajusteDelDia(ejercicios, k, porId, hechas = {}) {
+  const ej = porId.get(ejercicios[k]?.ejercicio_id);
+  if (!cuenta(ej)) return { factor: 1, falta: 0 };
+  const faltas = [];
+  for (const e of ejercicios.slice(0, k)) {
+    const otro = porId.get(e.ejercicio_id);
+    if (!cuenta(otro) || !comparten(ej, otro) || e.rir == null) continue;
+    for (const s of hechas[e.ejercicio_id] || []) {
+      if (!s?.hecho || ['calentamiento', 'drop'].includes(s.tipo)) continue;
+      const reserva = s.tipo === 'fallo' ? 0 : s.rir != null ? Number(s.rir) : s.rpe != null ? 10 - Number(s.rpe) : null;
+      if (reserva != null) faltas.push(e.rir - reserva);
+    }
+  }
+  if (!faltas.length) return { factor: 1, falta: 0 };
+  const falta = faltas.reduce((a, b) => a + b, 0) / faltas.length;
+  return { factor: falta >= 2 ? 0.9 : falta >= 1 ? 0.95 : 1, falta: Math.round(falta * 10) / 10 };
+}

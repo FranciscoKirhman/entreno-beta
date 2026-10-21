@@ -4,6 +4,7 @@ import { tieneEquipo, nivelAlcanza, articulacionesBloqueadas, cargaZonaBloqueada
 import { incrementoPara, duracionSesion, volumenSemanal } from './motor-plan.js';
 import { grupos } from './superseries.js';
 import { conSemanasPrevias } from './semanas-plan.js';
+import { seriesPorMusculo, SERIES_SESION } from './fatiga-sesion.js';
 
 const CONTADOS = ['femoral', 'gluteo', 'cuadriceps', 'aductor_abductor', 'espalda', 'pecho', 'hombro', 'biceps', 'triceps'];
 
@@ -83,6 +84,24 @@ export function validarPlan(plan, { derivados: d, respuestas: r, indice, hoy, ed
     if (dia.semana !== 0 && (minutos === null || minutos > d.duracion_min)) {
       const grave = minutos === null || minutos > d.duracion_min + margen;
       (edicionPersona || !grave ? adv : err)('duracion', `${dia.fecha}: la sesión dura unos ${minutos} minutos y tienes ${d.duracion_min}.`, { ...donde, valor: minutos });
+    }
+    // Series de un mismo músculo en una sesión (nucleo/fatiga-sesion.js): sobre 12 se avisa; sobre 16, un plan armado
+    // por la app o la IA se rechaza (una edición de la persona solo avisa).
+    if (dia.semana !== 0) {
+      for (const [m, n] of Object.entries(seriesPorMusculo(dia.ejercicios || [], indice.porId))) {
+        if (n <= SERIES_SESION.aviso) continue;
+        const texto = `${dia.fecha}: ${n} series de ${m} en una sola sesión. Sobre ${SERIES_SESION.aviso}, cada serie extra rinde poco y cansa igual.`;
+        (n > SERIES_SESION.tope && !edicionPersona ? err : adv)('series_sesion', texto, { ...donde, musculo: m, valor: n });
+      }
+      // Un básico casi al fallo temprano, con más trabajo del mismo músculo después, deja sin margen lo que sigue. La
+      // semana 3 baja la reserva a propósito.
+      const ejs = dia.ejercicios || [];
+      ejs.forEach((e, k) => {
+        const ej = indice.porId.get(e.ejercicio_id);
+        if (dia.semana === 3 || !ej || ej.tipo !== 'compuesto' || !(e.rir <= 1)) return;
+        const sigue = ejs.slice(k + 1).some(x => { const o = indice.porId.get(x.ejercicio_id); return o && o.tipo !== 'core' && o.musculos_primarios.some(m => ej.musculos_primarios.includes(m)); });
+        if (sigue) adv('reserva_temprana', `${dia.fecha}: ${ej.nombre} con ${e.rir} de reserva y después viene más del mismo músculo. Conviene dejar 2 y acercarse al fallo al final.`, { ...donde, ejercicio: e.ejercicio_id });
+      });
     }
   }
 

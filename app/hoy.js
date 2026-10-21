@@ -17,6 +17,7 @@ import { enlaceVideo } from '../nucleo/explicar.js';
 import { sesionDe } from '../nucleo/agenda.js';
 import { duracionSesion, incrementoPara, cargaSugerida, registrosParaCarga } from '../nucleo/motor-plan.js';
 import { prioridadEsfuerzo, consejoSerie } from '../nucleo/series.js';
+import { ajusteDelDia } from '../nucleo/fatiga-sesion.js';
 import { TIPOS_SERIE, tipoDe, etiquetas, cuantasFilas, anterior, cifras, tipoParaGuardar } from '../nucleo/registro.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { avisoCheckin } from './checkin.js';
@@ -281,6 +282,21 @@ function cargaPlanDe(e, dia, f) {
   if (e.carga_kg != null || !e.ejercicio_id) return e.carga_kg ?? null;
   return cargaSugerida({ e, ej: indice.porId.get(e.ejercicio_id), lugar: lugarDe(dia),
     registros: registrosParaCarga(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f) });
+}
+/**
+ * La carga de hoy: la del plan, con menos peso si lo hecho hoy en ejercicios anteriores del mismo músculo salió más duro
+ * de lo pedido (nucleo/fatiga-sesion.js: ajusteDelDia). Así el press en máquina no parte con el peso de cuando se hace
+ * fresco después de una banca casi al fallo.
+ */
+function cargaHoyDe(e, dia, f) {
+  const base = cargaPlanDe(e, dia, f);
+  const k = dia.ejercicios.indexOf(e), ej = indice.porId.get(e.ejercicio_id);
+  if (base == null || k < 1 || !ej || esAsistido(ej)) return { kg: base, fatiga: null };
+  const a = ajusteDelDia(dia.ejercicios, k, indice.porId, E.registro[f] || {});
+  if (a.factor >= 1) return { kg: base, fatiga: null };
+  const inc = incrementoPara(ej, lugarDe(dia)) || 2.5;
+  const kg = Number(Math.max(inc, Math.floor((base * a.factor) / inc + 1e-9) * inc).toFixed(2));
+  return kg < base ? { kg, fatiga: { ...a, base } } : { kg: base, fatiga: null };
 }
 /**
  * Las series de calentamiento de un ejercicio, como en el tablero: las que indica el plan o, si no, las que calcula la
@@ -749,7 +765,8 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
   const queEs = esAsistido(ejCat) ? 'ayuda' : conLastre(ejCat) ? 'lastre' : '';
   let iTrabajo = 0; // posición entre las series de trabajo, para mostrar lo de la vez anterior
   let kgHoy = null; // el último peso escrito hoy en una serie de trabajo: pasa a ser el gris de las siguientes
-  const cargaPlan = cardio ? null : cargaPlanDe(e, dia, f);
+  const cargaHoy = cardio ? { kg: null, fatiga: null } : cargaHoyDe(e, dia, f);
+  const cargaPlan = cargaHoy.kg;
   // El consejo del entrenador va solo bajo la última serie de trabajo hecha: las anteriores ya se leyeron.
   const ultimaHecha = filas.reduce((u, x, j) => (x.hecho && deTrabajo(tipoDe(x)) ? j : u), -1);
   const filasHtml = filas.map((r, i) => {
@@ -800,6 +817,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
       <button type="button" class="boton-icono menu-ej" data-mas="${id}" aria-label="Más opciones de ${esc(nombre)}">${icono('puntos')}</button>
     </div>
     <textarea class="nota-ej" rows="1" data-nota="${id}" data-p="nota" data-visible placeholder="Nota para tu entrenador" aria-label="Nota para tu entrenador sobre ${esc(nombre)}">${esc(nota.nota || '')}</textarea>
+    ${cargaHoy.fatiga && !filas.some(x => x.hecho && deTrabajo(tipoDe(x))) ? `<p class="consejo bajar">Lo anterior del mismo músculo te salió más duro de lo pedido (unos ${esc(coma(cargaHoy.fatiga.falta))} de reserva menos): parte con ${esc(coma(enUnidad(cargaHoy.kg)))} en vez de ${esc(coma(enUnidad(cargaHoy.fatiga.base)))}.</p>` : ''}
     ${g && g.pos < g.total ? `<p class="linea-descanso sin-toque">${icono('reloj')} ${esc(descTexto)}</p>` : `<button type="button" class="linea-descanso" data-descanso-ej="${id}">${icono('reloj')} ${esc(descTexto)}</button>`}
     <div class="tabla-series${cardio ? ' cardio' : seg ? ' seg' : dist ? ' dist' : !conEsfuerzo ? ' sin-esfuerzo' : ''}">
       ${cardio ? `<div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span><span aria-hidden="true">${cardio === 'pisos' ? 'Pisos' : 'Km'}</span><span aria-hidden="true">Tiempo</span><span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>` : `<div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${queEs || u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : dist ? 'Metros' : 'Reps'}</span>${seg ? '<span aria-hidden="true"></span>' : dist || !conEsfuerzo ? '' : `<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el ${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}">${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}</button>`}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>`}
@@ -1320,7 +1338,7 @@ function enlazar(ir, dia) {
     const prev = e.ejercicio_id ? anteriorEj(e.ejercicio_id, f, dia.foco)?.series[posicion] : null;
     const hoyAntes = [...lista.slice(0, i)].reverse().find(x => deTrabajo(tipoDe(x)) && x.kg != null);
     // Si el consejo de la serie anterior sugirió otro peso, ese es el que va (lo que se ve en gris).
-    return { kg: (hoyAntes?.hecho ? hoyAntes.consejo?.kg : null) ?? hoyAntes?.kg ?? cargaPlanDe(e, dia, f) ?? prev?.carga_kg ?? null, prev };
+    return { kg: (hoyAntes?.hecho ? hoyAntes.consejo?.kg : null) ?? hoyAntes?.kg ?? cargaHoyDe(e, dia, f).kg ?? prev?.carga_kg ?? null, prev };
   }
   function marcarSerie(id, i) {
     const { e, k } = ejercicioDe(id);

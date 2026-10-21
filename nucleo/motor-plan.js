@@ -1,6 +1,7 @@
 // Motor de reglas: arma un plan de 4 semanas sin IA. Es el plan del plan Gratis y la base que el coach
 // Pro ajusta. Todo lo que hace está explicado en contenido/evidencia/.
 import { calentamientoDeSesion, minutosCalentamiento } from './calentamiento-sesion.js';
+import { conFatigaPrevia } from './fatiga-sesion.js';
 import { grupos } from './superseries.js';
 import { nivelAlcanza, tieneEquipo, articulacionesBloqueadas, cargaZonaBloqueada, esAsistido } from './catalogo.js';
 
@@ -634,6 +635,8 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     if (dia.ejercicios.every(e => e.series === 1) && dia.ejercicios.length > 1) dia.ejercicios.pop();
     preparar(dia);
   }
+  // Lo que va después de otros ejercicios del mismo músculo no rinde como fresco: su carga baja (nucleo/fatiga-sesion.js).
+  for (const dia of diasPlan) dia.ejercicios = conFatigaPrevia(dia.ejercicios, porId, ej => incrementoPara(ej, lugar), esAsistido);
   diasPlan.sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
   // Lo que se dice del primer básico, según cómo quedó la semana 1 después de los recortes.
   const conPrincipal = diasPlan.filter(x => x.semana === 1 && principalDe.get(x.plantilla));
