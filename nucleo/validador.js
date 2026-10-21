@@ -77,7 +77,13 @@ export function validarPlan(plan, { derivados: d, respuestas: r, indice, hoy, ed
     const minutos = duracionSesion(dia);
     // La semana 0 son los días que quedan del bloque anterior al armar el siguiente: ya cumplían el plan del que vienen
     // y no se rearman, así que acortar los minutos del bloque nuevo no los vuelve inválidos.
-    if (dia.semana !== 0 && (minutos === null || minutos > d.duracion_min)) (edicionPersona ? adv : err)('duracion', `${dia.fecha}: la sesión dura unos ${minutos} minutos y tienes ${d.duracion_min}.`, { ...donde, valor: minutos });
+    // Los minutos son una estimación: pasarse un poco es un aviso, no un veto (Francisco, 21 de octubre de 2026). Bloquea
+    // solo si se pasa más que el margen: un 20% del tiempo disponible, entre 5 y 15 minutos (90 min aguanta hasta 105).
+    const margen = Math.min(15, Math.max(5, Math.round(d.duracion_min * 0.2)));
+    if (dia.semana !== 0 && (minutos === null || minutos > d.duracion_min)) {
+      const grave = minutos === null || minutos > d.duracion_min + margen;
+      (edicionPersona || !grave ? adv : err)('duracion', `${dia.fecha}: la sesión dura unos ${minutos} minutos y tienes ${d.duracion_min}.`, { ...donde, valor: minutos });
+    }
   }
 
   // Volumen por músculo en una semana normal (la 1) y que la descarga baje.
