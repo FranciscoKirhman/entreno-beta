@@ -7,7 +7,7 @@ import { E, guardar, guardarPronto, R, D, C, K, indice, hoy, ahora, esc, $, fech
 import { estadoDelPlan } from '../nucleo/registrado.js';
 import { sesionesPorRevisar } from '../nucleo/sin-registro.js';
 import { recordsDeSerie } from '../nucleo/records.js';
-import { esAsistido, conLastre, sinCargaExterna } from '../nucleo/catalogo.js';
+import { esAsistido, conLastre, sinCargaExterna, tieneEquipo } from '../nucleo/catalogo.js';
 import { sufijo, porReps, camposGuardados, modoCardio, relojTexto, leerReloj } from '../nucleo/unidades.js';
 import { evaluarDia, ajustarSesion, TEXTO_RECOMENDACION } from '../nucleo/bienestar.js';
 import { cicloActivo, estadoCiclo, registrarInicio, NOMBRE_FASE, SINTOMAS } from '../nucleo/ciclo-menstrual.js';
@@ -15,9 +15,12 @@ import { discosPorLado, discosDisponibles, BARRAS_KG, BARRAS_LB } from '../nucle
 import { checklist } from '../nucleo/suplementos.js';
 import { enlaceVideo } from '../nucleo/explicar.js';
 import { sesionDe } from '../nucleo/agenda.js';
-import { duracionSesion, incrementoPara, cargaSugerida, registrosParaCarga } from '../nucleo/motor-plan.js';
+import { duracionSesion, incrementoPara, cargaSugerida, registrosParaCarga, prescripcion } from '../nucleo/motor-plan.js';
 import { prioridadEsfuerzo, consejoSerie } from '../nucleo/series.js';
 import { ajusteDelDia } from '../nucleo/fatiga-sesion.js';
+import { sesionViva, aplicarViva, SEGUNDOS_PARA_ACEPTAR } from '../nucleo/sesion-viva.js';
+import { alternativas } from '../nucleo/checkin.js';
+import { filasTrasAjuste } from '../nucleo/tiempo-sesion.js';
 import { TIPOS_SERIE, tipoDe, etiquetas, cuantasFilas, anterior, cifras, tipoParaGuardar } from '../nucleo/registro.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { avisoCheckin } from './checkin.js';
@@ -688,8 +691,50 @@ function detallesSesionHtml(dia) {
 `;
 }
 
+/**
+ * La sesión viva de hoy (nucleo/sesion-viva.js). Cada cambio se muestra con su porqué, lo que había antes y lo que queda
+ * ahora; se aplica solo a los 10 segundos o al tocar "Aceptar", y "Rechazar" lo descarta por hoy. Uno a la vez. Lo
+ * aplicado queda escrito en su ejercicio todo el día (E.vivaHecho), y lo rechazado no vuelve (E.vivaNo).
+ */
+let vivaActual = null, relojViva = null;
+function vivaDe(dia, f) {
+  if (!enCurso(f)) return null;
+  const lugar = lugarDe(dia), equipo = lugar?.equipamiento || [];
+  const enPlan = new Set((E.plan?.dias || []).flatMap(d => d.ejercicios.map(e => e.ejercicio_id)));
+  const conHistorial = new Set(seriesAnotadas(E.sesiones, {}).map(s => s.ejercicio_id));
+  const candidato = (m, excluir) => indice.ejercicios
+    .filter(ej => ej.musculos_primarios[0] === m && ej.tipo === 'aislamiento' && !ej.propio && !ej.extra && !excluir.has(ej.id) && tieneEquipo(ej, equipo))
+    .sort((a, b) => (enPlan.has(b.id) - enPlan.has(a.id)) || (conHistorial.has(b.id) - conHistorial.has(a.id)) || a.preferencia - b.preferencia)[0] || null;
+  const alternativa = (id, excluir) => alternativas(id, { indice, equipamiento: equipo, bloqueadas: articulacionesBloqueadas(R().lesiones, f), nivel: D().nivel, excluir: [...excluir] })[0] || null;
+  const g = E.tiempoHoy?.[f];
+  const disponibles = g && g.minutos === null ? null : Number(g?.minutos ?? R().duracion_min) || null;
+  const notas = Object.fromEntries(Object.entries(E.notas[f] || {}).map(([id, n]) => [id, n?.nota || '']));
+  const v = sesionViva(dia, E.registro[f] || {}, { notas, porId: indice.porId, minutos: avance(dia).cifras.minutos, disponibles,
+    prioridad: R().musculos_prioridad || [], candidato, alternativa, incrementoDe: ej => incrementoPara(ej, lugar) });
+  const ya = { ...(E.vivaNo?.[f] || {}), ...(E.vivaHecho?.[f] || {}) };
+  const nuevas = v.propuestas.filter(p => !ya[p.id]);
+  if (!E.vivaPend?.[f] && nuevas.length) { (E.vivaPend ||= {})[f] = { ...nuevas[0], desde: Date.now() }; guardar(); }
+  // Vista previa del cambio pendiente: lo que hay y lo que quedaría, siempre a la vista.
+  const pend = E.vivaPend?.[f] || null;
+  const previa = pend && aplicarViva(dia.ejercicios, pend, E.registro[f] || {}, (id, orden, como) => {
+    const ej = indice.porId.get(id);
+    return { ejercicio_id: id, nombre: ej.nombre, orden, ...(como ? { series: como.series, reps_min: como.reps_min, reps_max: como.reps_max, rir: como.rir } : { ...prescripcion(ej, 3, D()), series: 3 }) };
+  });
+  return { ...v, pendiente: pend && { ...pend, antes: previa.antes, ahora: previa.ahora }, hechos: Object.values(E.vivaHecho?.[f] || {}) };
+}
+const restanAceptar = p => Math.max(0, SEGUNDOS_PARA_ACEPTAR - Math.floor((Date.now() - p.desde) / 1000));
+const vivaHtml = (o, ejercicioId) => {
+  const pend = o?.pendiente && (o.pendiente.ejercicio_id === ejercicioId || (ejercicioId == null && o.pendiente.tipo === 'agregar_ejercicio')) ? o.pendiente : null;
+  const hechos = (o?.hechos || []).filter(h => (ejercicioId == null ? h.tipo === 'agregar_ejercicio' : h.ejercicio_id === ejercicioId && h.tipo !== 'agregar_ejercicio'));
+  return `${hechos.map(h => `<div class="ajuste-vivo hecho"><p><b>Ajuste en vivo:</b> ${esc(h.hecho)}, porque ${esc(h.motivo)}.</p><p class="pequeno antes-ahora">Antes: ${esc(h.antes)} · Ahora: ${esc(h.ahora)}</p></div>`).join('')}
+  ${pend ? `<div class="ajuste-vivo pendiente" data-viva-pendiente><p><b>Voy a ${esc(pend.accion)}</b>, porque ${esc(pend.motivo)}.</p>
+    <p class="pequeno antes-ahora">Antes: ${esc(pend.antes)} · Quedaría: ${esc(pend.ahora)}</p>
+    <div class="fila-propuesta"><button type="button" class="boton chico primario" data-viva-si>Aceptar (<span data-viva-cuenta>${restanAceptar(pend)}</span>)</button><button type="button" class="boton chico" data-viva-no>Rechazar</button></div></div>` : ''}`;
+};
+
 function sesionHoy(dia) {
   const f = dia.fecha;
+  vivaActual = vivaDe(dia, f);
   const notas = E.notas[f] || {};
   const progreso = avance(dia), guardada = guardadaHoy(f);
   const todas = seriesAnotadas(E.sesiones, E.registro);
@@ -705,6 +750,7 @@ function sesionHoy(dia) {
   ${filaPasosHtml(dia, f, 'cal')}
   ${dia.ejercicios.length ? '' : `<div class="sesion-vacia-estado">${icono('pesa')}<h2>Comienza</h2><p class="suave">Agrega un ejercicio para empezar tu sesión</p></div>`}
   <ol class="ejercicios-hoy">${dia.ejercicios.map((e, k) => ejercicioHoy(e, k, f, e.ejercicio_id ? anteriorEj(e.ejercicio_id, f, dia.foco) : null, notas[idDe(e, k)] || {}, dia)).join('')}</ol>
+  ${vivaHtml(vivaActual, null)}
   ${cardioHtml(dia.cardio)}
   ${filaPasosHtml(dia, f, 'est')}
   ${progreso.total && progreso.hechas === progreso.total ? sesionCompletaHtml({ guardada }) : ''}
@@ -766,6 +812,9 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
   let iTrabajo = 0; // posición entre las series de trabajo, para mostrar lo de la vez anterior
   let kgHoy = null; // el último peso escrito hoy en una serie de trabajo: pasa a ser el gris de las siguientes
   let repsHoy = null; // las repeticiones que sugirió el consejo de la última serie hecha
+  // Un ajuste en vivo que cambió el peso (nota "pesado", "fácil"…): manda en las filas que quedan.
+  let ajusteKg = Object.values(E.vivaHecho?.[f] || {}).filter(h => h.ejercicio_id === e.ejercicio_id && h.carga_kg != null).sort((a, b) => b.t - a.t)[0] || null;
+  if (ajusteKg) ajusteKg = { kg: ajusteKg.carga_kg, t: ajusteKg.t };
   const cargaHoy = cardio ? { kg: null, fatiga: null } : cargaHoyDe(e, dia, f);
   const cargaPlan = cargaHoy.kg;
   // El consejo del entrenador va solo bajo la última serie de trabajo hecha: las anteriores ya se leyeron.
@@ -779,9 +828,10 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     // historial si el plan no trae peso) o la vez anterior.
     // Las de calentamiento puestas por la app traen su peso y repeticiones en gris (aproximacionesHoy).
     const sug = r.aprox != null ? aprox[r.aprox] : null;
-    const kgGris = trabajo ? (kgHoy ?? cargaPlan ?? prev?.carga_kg ?? null) : sug?.kg ?? null;
+    const kgGris = trabajo ? ((!r.hecho && ajusteKg ? ajusteKg.kg : null) ?? kgHoy ?? cargaPlan ?? prev?.carga_kg ?? null) : sug?.kg ?? null;
     if (trabajo && r.kg != null) kgHoy = r.kg;
     if (trabajo && r.hecho && r.consejo?.kg != null) kgHoy = r.consejo.kg; // el peso que sugirió el consejo pasa al gris
+    if (trabajo && r.hecho && ajusteKg && (r.t || 0) > ajusteKg.t) ajusteKg = null; // ya se hizo una serie después del ajuste
     const repsGris = seg ? e.reps_min : trabajo && repsHoy != null ? repsHoy : trabajo || dist ? e.reps_max : sug?.reps ?? null;
     if (trabajo && r.hecho) repsHoy = r.consejo?.reps ?? null;
     const antes = prev ? (seg ? ((prev.duracion_seg ?? prev.reps) != null ? `${prev.duracion_seg ?? prev.reps} s` : '')
@@ -819,6 +869,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
       <button type="button" class="boton-icono menu-ej" data-mas="${id}" aria-label="Más opciones de ${esc(nombre)}">${icono('puntos')}</button>
     </div>
     <textarea class="nota-ej" rows="1" data-nota="${id}" data-p="nota" data-visible placeholder="Nota para tu entrenador" aria-label="Nota para tu entrenador sobre ${esc(nombre)}">${esc(nota.nota || '')}</textarea>
+    ${vivaHtml(vivaActual, e.ejercicio_id)}
     ${cargaHoy.fatiga && !filas.some(x => x.hecho && deTrabajo(tipoDe(x))) ? `<p class="consejo bajar">Lo anterior del mismo músculo te salió más duro de lo pedido (unos ${esc(coma(cargaHoy.fatiga.falta))} de reserva menos): parte con ${esc(coma(enUnidad(cargaHoy.kg)))} en vez de ${esc(coma(enUnidad(cargaHoy.fatiga.base)))}.</p>` : ''}
     ${g && g.pos < g.total ? `<p class="linea-descanso sin-toque">${icono('reloj')} ${esc(descTexto)}</p>` : `<button type="button" class="linea-descanso" data-descanso-ej="${id}">${icono('reloj')} ${esc(descTexto)}</button>`}
     <div class="tabla-series${cardio ? ' cardio' : seg ? ' seg' : dist ? ' dist' : !conEsfuerzo ? ' sin-esfuerzo' : ''}">
@@ -1600,6 +1651,57 @@ function enlazar(ir, dia) {
   });
   // La rueda del tiempo (app/tiempo-ui.js): cuántos minutos hay hoy, antes de empezar o a mitad de la sesión.
   if ($('ajustar-tiempo')) $('ajustar-tiempo').onclick = () => abrirTiempo({ volver: $('ajustar-tiempo'), alCambiar: repintar });
+  // Sesión viva (nucleo/sesion-viva.js): el cambio pendiente se acepta solo a los 10 segundos, o con "Aceptar".
+  const aceptarViva = async () => {
+    const p = E.vivaPend?.[f];
+    if (!p) return;
+    delete E.vivaPend[f];
+    const nuevo = structuredClone(E.plan), d = sesionDe(nuevo, f);
+    if (!d) { guardar(); return; }
+    const lugar = lugarDe(d), registros = id => registrosParaCarga(seriesAnotadas(E.sesiones, E.registro), id, f);
+    const nuevoEjercicio = (id, orden, como = null) => {
+      const ej = indice.porId.get(id), pr = como ? { series: como.series, reps_min: como.reps_min, reps_max: como.reps_max, unidad: como.unidad || 'reps', rir: como.rir, descanso_seg: como.descanso_seg } : { ...prescripcion(ej, 3, D()), series: 3 };
+      const carga = cargaSugerida({ e: pr, ej, lugar, registros: registros(id) });
+      return { ejercicio_id: id, nombre: ej.nombre, ...pr, prioridad: como?.prioridad ?? 3, orden, carga_kg: carga,
+        nota: carga == null ? `Ajuste en vivo. Elige un peso con el que te sobren ${pr.rir} repeticiones.` : `Ajuste en vivo: ${p.motivo}.` };
+    };
+    const r = aplicarViva(d.ejercicios, p, E.registro[f] || {}, nuevoEjercicio);
+    d.ejercicios = r.ejercicios;
+    const aviso = await cambiarPlan(nuevo, `Ajuste en vivo: ${p.hecho}.`, nube);
+    if (E.plan !== nuevo) { if (aviso) avisar(aviso); return; }
+    for (const e of d.ejercicios) {
+      const lista = E.registro[f]?.[e.ejercicio_id];
+      if (!lista) continue;
+      const t = filasTrasAjuste(lista, e.series);
+      E.registro[f][e.ejercicio_id] = t.lista;
+      if (E.filas?.[f]?.[e.ejercicio_id] != null) E.filas[f][e.ejercicio_id] = t.filas;
+    }
+    const destino = p.tipo === 'reemplazar' ? p.a : p.ejercicio_id;
+    ((E.vivaHecho ||= {})[f] ||= {})[p.id] = { tipo: p.tipo, ejercicio_id: destino, hecho: p.hecho, motivo: p.motivo, antes: r.antes, ahora: r.ahora,
+      carga_kg: p.tipo === 'ajustar' || p.tipo === 'agregar_serie' ? p.carga_kg ?? null : null, t: Date.now() };
+    guardar();
+    repintar();
+  };
+  clearInterval(relojViva); relojViva = null;
+  if (E.vivaPend?.[f]) {
+    if (restanAceptar(E.vivaPend[f]) <= 0) aceptarViva();
+    else relojViva = setInterval(() => {
+      const p = E.vivaPend?.[f], el = document.querySelector('[data-viva-cuenta]');
+      if (!p || !el) { clearInterval(relojViva); relojViva = null; return; }
+      const n = restanAceptar(p);
+      el.textContent = n;
+      if (n <= 0) { clearInterval(relojViva); relojViva = null; aceptarViva(); }
+    }, 1000);
+  }
+  raiz.querySelector('[data-viva-si]')?.addEventListener('click', () => { clearInterval(relojViva); relojViva = null; aceptarViva(); });
+  raiz.querySelector('[data-viva-no]')?.addEventListener('click', () => {
+    clearInterval(relojViva); relojViva = null;
+    const p = E.vivaPend?.[f];
+    if (p) { ((E.vivaNo ||= {})[f] ||= {})[p.id] = true; delete E.vivaPend[f]; guardar(); }
+    repintar();
+  });
+  // Al terminar de escribir una nota de ejercicio, se lee: "pesado", "fácil", "me duele", "ocupada" cambian lo que queda.
+  raiz.addEventListener('focusout', ev => { if (ev.target.matches?.('textarea[data-nota]') && enCurso(f)) setTimeout(repintar, 0); });
 
   // Terminar sesión (abajo o en la solapa): queda en el historial local y, con cuenta, en el servidor.
   let terminando = false;

@@ -1001,3 +1001,11 @@ main:has(#vista-coach){padding-bottom:calc(var(--coach-redaccion-alto,100px) + v
 .tiempo-menos,.tiempo-mas{width:44px;height:44px;border-radius:22px;font-size:26px;line-height:1;background:var(--surface);color:var(--ink);border:1px solid var(--line)}
 .tiempo-rueda .rueda{grid-column:2;grid-row:1}
 .tiempo-resumen{text-align:center;margin:0 4px 12px;color:var(--ink);min-height:2.9em;line-height:1.4}
+
+/* Ajuste en vivo (app/hoy.js, nucleo/sesion-viva.js): el cambio que viene, con su cuenta, y los ya hechos con su antes y ahora. */
+.ajuste-vivo{margin:8px 0;padding:10px 12px;border-radius:12px;background:var(--accent-soft);color:var(--ink)}
+.ajuste-vivo p{margin:0}
+.ajuste-vivo.hecho{background:var(--surface);border:1px solid var(--line)}
+.ajuste-vivo .antes-ahora{margin-top:4px;color:var(--ink-muted)}
+.fila-propuesta{display:flex;gap:8px;margin-top:8px}
+.fila-propuesta .boton{flex:1}
