@@ -743,7 +743,7 @@ const vivaHtml = (o, ejercicioId) => {
   return `${hechos.map(h => `<div class="ajuste-vivo hecho"><p><b>Ajuste en vivo:</b> ${esc(h.hecho)}, porque ${esc(h.motivo)}.</p><p class="pequeno antes-ahora">Antes: ${esc(h.antes)} · Ahora: ${esc(h.ahora)}</p></div>`).join('')}
   ${pend ? `<div class="ajuste-vivo pendiente" data-viva-pendiente><p><b>Voy a ${esc(pend.accion)}</b>, porque ${esc(pend.motivo)}.</p>
     <p class="pequeno antes-ahora">Antes: ${esc(pend.antes)} · Quedaría: ${esc(pend.ahora)}</p>
-    <div class="fila-propuesta"><button type="button" class="boton chico primario" data-viva-si>Aceptar (<span data-viva-cuenta>${restanAceptar(pend)}</span>)</button><button type="button" class="boton chico" data-viva-no>Rechazar</button></div></div>` : ''}`;
+    <div class="fila-propuesta"><button type="button" class="boton chico primario" data-viva-si><span>Aceptar (<span data-viva-cuenta>${restanAceptar(pend)}</span>)</span></button><button type="button" class="boton chico" data-viva-no>Rechazar</button></div></div>` : ''}`;
 };
 
 function sesionHoy(dia) {
