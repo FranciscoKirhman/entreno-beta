@@ -118,6 +118,116 @@ function ajustarAsistido({ objetivo: o, hechas, subioRecien, incremento, calidad
   return mantener('repetir', 'Algunas series quedaron bajo el rango: repite la misma ayuda.');
 }
 
+/** La carga con que se hicieron las series de trabajo: la más repetida; con empate, la de la primera serie. */
+function cargaUsada(hechas) {
+  const cuenta = new Map();
+  for (const s of hechas) { const c = Number(s.carga_kg); if (c > 0) cuenta.set(c, (cuenta.get(c) || 0) + 1); }
+  if (!cuenta.size) return null;
+  const max = Math.max(...cuenta.values());
+  return hechas.map(s => Number(s.carga_kg)).find(c => cuenta.get(c) === max);
+}
+
+const valores = e => ({ carga_kg: e.carga_kg == null ? null : Number(e.carga_kg), reps_min: Number(e.reps_min), reps_max: Number(e.reps_max), rango_extendido: Boolean(e.rango_extendido) });
+const iguales = (a, b) => a.carga_kg === b.carga_kg && a.reps_min === b.reps_min && a.reps_max === b.reps_max && Boolean(a.rango_extendido) === Boolean(b.rango_extendido);
+
+/**
+ * Lo que la sesión de hoy pide cambiar en las próximas: para cada ejercicio hecho, las próximas veces que vuelve en el
+ * plan con la misma carga y el mismo rango que pedía hoy toman lo que sale de lo hecho, con las reglas del check-in
+ * semanal (ajustarEjercicio), sin esperar a que alguien lo haga. Si la carga usada no fue la del plan (medio escalón o
+ * más de diferencia), manda lo hecho: el ajuste parte de esa carga. Antes el plan seguía con la suya y la sesión
+ * siguiente volvía a mostrar un peso que ya no servía (en la beta, una búlgara hecha con 40 seguía en 20 el jueves
+ * siguiente, y otro plan seguía con los pesos de un mes antes).
+ * Una serie sin esfuerzo anotado toma el más duro anotado en ese ejercicio ese día (casi siempre se deja en blanco la
+ * primera, la más fácil); sin ninguno, no se sube nada. Cuentan las series que pedía el plan, no las de más. La
+ * descarga no sube por progresión: solo toma la carga nueva si es menor o si corrige un peso que estaba mal. Lo que ya
+ * pasó, lo que alguien cambió aparte en un día y lo indicado por un profesional no se tocan. No aplica nada: devuelve
+ * el plan como quedaría, para mostrarlo y pedir el sí (regla 10 de AGENTS.md).
+ * @param plan             plan vigente {dias: [{fecha, semana, plantilla, ejercicios}], semana_descarga}
+ * @param fecha            día de la sesión 'AAAA-MM-DD'
+ * @param series           series de trabajo de la sesión [{ejercicio_id, carga_kg, reps, rir?, rpe?}]
+ * @param historialSemanas mejor 1RM estimado por semana antes de la sesión (semanal.js: historialPorSemana)
+ * @param calidades        respuestas del desplegable de cada ejercicio (forma, rango, molestia, dolor)
+ * @returns {{plan, cambios}} plan nuevo (copia) y un cambio por ejercicio: {ejercicio_id, nombre, accion, regla,
+ *          motivo, reanclado, desde, antes, despues, dias: [{fecha, descarga, antes, despues}]}
+ */
+export function ajustarTrasSesion({ plan, fecha, series, indice, lugar = null, historialSemanas = {}, calidades = {} }) {
+  const nuevo = structuredClone(plan);
+  const cambios = [];
+  if (!Array.isArray(nuevo?.dias)) return { plan: nuevo, cambios };
+  const delDia = nuevo.dias.find(d => d.fecha === fecha) || null;
+  const porEj = new Map();
+  for (const s of series || []) if (s.ejercicio_id) { if (!porEj.has(s.ejercicio_id)) porEj.set(s.ejercicio_id, []); porEj.get(s.ejercicio_id).push(s); }
+  const descarga = d => d.semana != null && d.semana === nuevo.semana_descarga;
+  for (const [id, todas] of porEj) {
+    const ej = indice.porId.get(id);
+    if (!ej) continue;
+    const conEj = nuevo.dias.filter(d => d.fecha > fecha && d.tipo !== 'descanso' && d.ejercicios?.some(e => e.ejercicio_id === id)).sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
+    if (!conEj.length) continue;
+    // Lo que pedía hoy el plan; si el ejercicio no estaba (se agregó o se cambió), lo que pide la próxima vez.
+    const deHoy = delDia?.ejercicios?.find(e => e.ejercicio_id === id) || null;
+    const base = deHoy || conEj[0].ejercicios.find(e => e.ejercicio_id === id);
+    const pedido = valores(base);
+    const destino = conEj.filter(d => d.ejercicios.some(e => e.ejercicio_id === id && (e.unidad || 'reps') === (base.unidad || 'reps')
+      && valores(e).carga_kg === pedido.carga_kg && valores(e).reps_min === pedido.reps_min && valores(e).reps_max === pedido.reps_max));
+    if (!destino.length) continue;
+    const incremento = incrementoPara(ej, lugar);
+    const asistido = esAsistido(ej);
+    const usada = asistido ? null : cargaUsada(todas);
+    const planeada = pedido.carga_kg;
+    const reanclado = usada != null && planeada != null && Math.abs(usada - planeada) >= (incremento || 2.5) / 2 - 1e-9;
+    const conCarga = reanclado ? todas.filter(s => Number(s.carga_kg) === usada) : todas;
+    const cuentan = conCarga.slice(0, Math.max(1, Number(base.series) || conCarga.length));
+    const anotadas = cuentan.map(reserva).filter(x => x != null && Number.isFinite(x));
+    const peor = anotadas.length ? Math.min(...anotadas) : null;
+    const hechas = cuentan.map(s => (reserva(s) == null && peor != null ? { ...s, rir: peor, rpe: null } : s));
+    // La regla de anclaje mira si la carga de hoy subió respecto de la vez anterior de esta misma sesión del plan.
+    const previo = delDia?.plantilla && deHoy ? nuevo.dias.filter(d => d.fecha < fecha && d.plantilla === delDia.plantilla).sort((a, b) => (a.fecha < b.fecha ? 1 : -1))[0]?.ejercicios.find(e => e.ejercicio_id === id) : null;
+    const subioRecien = !reanclado && previo?.carga_kg != null && planeada != null && planeada > Number(previo.carga_kg);
+    const r = ajustarEjercicio({
+      objetivo: reanclado ? { ...base, carga_kg: usada } : base, hechas, semanas: historialSemanas[id] || [], subioRecien,
+      incremento, calidad: calidades[id] || null, asistido,
+    });
+    if (r.accion === 'mantener' && !reanclado) continue;
+    const dias = [];
+    for (const d of destino) {
+      for (const e of d.ejercicios.filter(x => x.ejercicio_id === id)) {
+        const antes = valores(e);
+        if (antes.carga_kg !== pedido.carga_kg || antes.reps_min !== pedido.reps_min || antes.reps_max !== pedido.reps_max) continue;
+        // En la descarga, una carga corregida (reanclada) se usa tal cual; una subida, no.
+        const despues = descarga(d)
+          ? { ...antes, carga_kg: r.carga_kg != null && antes.carga_kg != null && (reanclado || r.carga_kg < antes.carga_kg) ? r.carga_kg : antes.carga_kg }
+          : { carga_kg: r.carga_kg ?? antes.carga_kg, reps_min: r.reps_min, reps_max: r.reps_max, rango_extendido: r.rango_extendido ?? antes.rango_extendido };
+        if (iguales(antes, despues)) continue;
+        // La nota "elige un peso" sobra cuando la carga ya quedó fijada.
+        if (e.carga_kg == null && despues.carga_kg != null && /^Elige (un peso|la ayuda)/.test(e.nota || '')) e.nota = null;
+        Object.assign(e, despues);
+        dias.push({ fecha: d.fecha, descarga: descarga(d), antes, despues });
+      }
+    }
+    if (!dias.length) continue;
+    const primero = dias.find(x => !x.descarga) || dias[0];
+    const motivoReanclado = reanclado ? `Hiciste las series con ${kg(usada)} y el plan decía ${kg(planeada)}: lo que hiciste manda. ` : '';
+    cambios.push({ ejercicio_id: id, nombre: ej.nombre || id, accion: r.accion, regla: reanclado ? 'reanclado' : r.regla, motivo: `${motivoReanclado}${r.motivo}`,
+      reanclado, desde: primero.fecha, antes: primero.antes, despues: primero.despues, dias });
+  }
+  return { plan: nuevo, cambios };
+}
+
+/** Vuelve atrás los ajustes de una sesión (ajustarTrasSesion), solo donde el plan sigue como ellos lo dejaron: si
+ *  después la persona o el coach cambió ese ejercicio, se respeta ese cambio. */
+export function deshacerAjustes(plan, cambios = []) {
+  const nuevo = structuredClone(plan);
+  for (const c of cambios) {
+    for (const { fecha, antes, despues } of c.dias || []) {
+      const d = nuevo.dias?.find(x => x.fecha === fecha);
+      for (const e of d?.ejercicios?.filter(x => x.ejercicio_id === c.ejercicio_id) || []) {
+        if (iguales(valores(e), despues)) Object.assign(e, antes);
+      }
+    }
+  }
+  return nuevo;
+}
+
 /** Semana de descarga adelantada: dos semanas de energía baja, o rendimiento cayendo en 2+ ejercicios principales. */
 export function descargaAnticipada({ energias = [], caidas = 0, suenoMalo = [], estres = [] }) {
   const dos = (xs, f) => xs.length >= 2 && xs.slice(-2).every(f);

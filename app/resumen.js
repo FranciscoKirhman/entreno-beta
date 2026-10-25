@@ -17,6 +17,7 @@ import { cuerpoHtml, intensidades } from './cuerpo.js';
 import { guardarComoRutina } from './rutinas.js';
 import { editarDuracionGuardada } from './duracion-sesion.js';
 import { icono } from './iconos.js';
+import { ajustesHtml, enlazarAjustes } from './progresion-sesion.js';
 
 const nombreEj = (id, respaldo) => indice.porId.get(id)?.nombre || respaldo || 'Ejercicio';
 // Insignia de cada récord (hoja RS01 del banco de imágenes). Mientras no esté cortada, se muestra la etiqueta "Récord".
@@ -163,6 +164,7 @@ export function vistaResumen(ir, { id, desde = null } = {}) {
     ${(() => { const t = intensidades((sesion.series || []).filter(x => x.tipo !== 'calentamiento' && x.ejercicio_id)); return Object.keys(t.porMusculo).length ? `<section class="tarjeta cuerpo-resumen"><h3>Lo que entrenaste</h3>${cuerpoHtml(t.intensidad, { tamano: 'grande', etiqueta: 'Lo que entrenaste' })}</section>` : ''; })()}
     ${n ? `<section class="tarjeta"><h3>Récords</h3><ul class="lista-resumen record">${r.records.map(x => `<li>${insignia(x.tipo)} ${esc(nombreEj(x.ejercicio_id))}: ${esc(textoRecord(x))}</li>`).join('')}</ul></section>` : ''}
     <section class="tarjeta" id="coach-dice" aria-live="polite">${comentarioCoachHtml(sesion)}</section>
+    ${(() => { const html = ajustesHtml(sesion); return html ? `<section class="tarjeta" id="ajustes-proxima" aria-live="polite">${html}</section>` : ''; })()}
     <section class="tarjeta"><h3>Cada ejercicio</h3><ul class="pequeno detalle-h">${r.porEjercicio.map(g => `<li><strong>${esc(nombreEj(g.ejercicio_id, g.nombre))}</strong>: ${esc(textoSeries(g.series))}${g.anterior.length ? `<br><span class="suave">La vez anterior: ${esc(textoSeries(g.anterior))}</span>` : ''}</li>`).join('')}</ul></section>
     <button type="button" class="boton fila-boton guardar-rutina" id="guardar-como-rutina">Guardar como rutina</button>
     <details class="extra" id="resumen-ia"><summary>Preguntarle a tu IA por esta sesión</summary>
@@ -177,6 +179,7 @@ export function vistaResumen(ir, { id, desde = null } = {}) {
     <div class="fila-botones"><button type="button" class="boton primario" id="volver-hoy">Listo</button></div>
   </div>`;
   $('volver-hoy').onclick = () => ir('hoy');
+  enlazarAjustes($('ajustes-proxima'), sesion);
   // El comentario llega cuando responde la IA: se repinta solo esa tarjeta mientras el resumen está abierto.
   const caja = $('coach-dice');
   caja.addEventListener('click', ev => {

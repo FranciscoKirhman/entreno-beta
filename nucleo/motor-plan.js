@@ -120,6 +120,27 @@ export function cargaSugerida({ e, ej, registros = [], lugar = null }) {
   return cargaInicial(registros, Math.min(e.reps_min + 1, e.reps_max ?? Infinity), e.rir ?? 2, incrementoPara(ej, lugar), maxMancuerna);
 }
 
+/**
+ * Las repeticiones que se piden en una serie de trabajo: las que dejan la reserva del plan (RIR) con ese peso, según el
+ * mejor máximo estimado de las dos últimas sesiones del ejercicio, dentro del rango. Antes se pedía siempre el tope del
+ * rango, pero el peso se calcula para pocas repeticiones sobre el mínimo (cargaSugerida): con 70 kg en 6 a 10 y RIR 2
+ * el gris decía 10 y la serie terminaba al fallo (remo con barra en la beta, 20 de octubre de 2026: 8, 10 y 9 a RPE 9,5 a 10).
+ * Sin peso, sin historial o en un asistido (el peso es la ayuda), el tope del rango, como antes.
+ * @param e         prescripción {reps_min, reps_max, rir, unidad}
+ * @param carga     kg de la serie (lo que está en gris)
+ * @param registros series de trabajo anteriores del ejercicio [{fecha, carga_kg, reps, rir?, rpe?}] (registrosParaCarga)
+ */
+export function repsObjetivo({ e, carga, registros = [], asistido = false }) {
+  const tope = e.reps_max ?? e.reps_min ?? null;
+  if (asistido || !(n(carga) > 0) || (e.unidad && e.unidad !== 'reps') || !(e.reps_min > 0) || !tope) return tope;
+  const validas = registros.filter(s => n(s.carga_kg) > 0 && n(s.reps) > 0);
+  if (!validas.length) return tope;
+  const ultimas = [...new Set(validas.map(s => s.fecha || ''))].sort().slice(-2);
+  const mejor = Math.max(...validas.filter(s => ultimas.includes(s.fecha || '')).map(e1rm));
+  const reps = Math.floor(30 * (mejor / n(carga) - 1) + 1e-9) - (e.rir ?? 2);
+  return Math.max(e.reps_min, Math.min(tope, reps));
+}
+
 export function prescripcion(ej, prioridad, d) {
   const obj = d.objetivo;
   const fuerza = obj === 'ganar_fuerza' || (obj === 'deporte' && prioridad === 1);

@@ -15,7 +15,7 @@ import { discosPorLado, discosDisponibles, BARRAS_KG, BARRAS_LB } from '../nucle
 import { checklist } from '../nucleo/suplementos.js';
 import { enlaceVideo } from '../nucleo/explicar.js';
 import { sesionDe } from '../nucleo/agenda.js';
-import { duracionSesion, incrementoPara, cargaSugerida, registrosParaCarga, prescripcion } from '../nucleo/motor-plan.js';
+import { duracionSesion, incrementoPara, cargaSugerida, registrosParaCarga, prescripcion, repsObjetivo } from '../nucleo/motor-plan.js';
 import { prioridadEsfuerzo, consejoSerie } from '../nucleo/series.js';
 import { ajusteDelDia } from '../nucleo/fatiga-sesion.js';
 import { sesionViva, aplicarViva, SEGUNDOS_PARA_ACEPTAR } from '../nucleo/sesion-viva.js';
@@ -302,6 +302,19 @@ function cargaHoyDe(e, dia, f) {
   return kg < base ? { kg, fatiga: { ...a, base } } : { kg: base, fatiga: null };
 }
 /**
+ * Las repeticiones en gris de una serie de trabajo: las que dejan la reserva del plan con ese peso, según las dos últimas
+ * sesiones del ejercicio (nucleo/motor-plan.js: repsObjetivo), en vez del tope del rango, que llevaba las series al
+ * fallo. Con menos peso por fatiga (cargaHoyDe) se piden las mismas que con el peso fresco: para eso se bajó.
+ */
+function repsObjetivoDe(e, kg, f, dia) {
+  if (e.unidad === 'seg') return e.reps_min;
+  if (!e.ejercicio_id || e.unidad === 'm') return e.reps_max;
+  const delDia = dia ? cargaHoyDe(e, dia, f) : null;
+  const carga = delDia?.fatiga && Number(kg) === delDia.kg ? delDia.fatiga.base : kg;
+  return repsObjetivo({ e, carga, asistido: esAsistido(indice.porId.get(e.ejercicio_id)),
+    registros: registrosParaCarga(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f) });
+}
+/**
  * Las series de calentamiento de un ejercicio, como en el tablero: las que indica el plan o, si no, las que calcula la
  * app desde el peso de trabajo (lo escrito hoy, el plan o la vez anterior). Se calculan cada vez, así siguen al peso.
  */
@@ -562,7 +575,8 @@ function siguienteSerieHtml(dia, f) {
   const aproximacion = r.aprox != null ? aproximacionesHoy(dia, e, filas, f)[r.aprox] : null;
   const anteriorHoy = [...filas.slice(0, i)].reverse().find(x => deTrabajo(tipoDe(x)) && x.kg != null);
   const kg = r.kg ?? (deTrabajo(tipo) ? anteriorHoy?.kg ?? cargaPlanDe(e, dia, f) ?? previo?.carga_kg : aproximacion?.kg);
-  const reps = r.reps ?? (e.unidad === 'seg' ? e.reps_min : deTrabajo(tipo) || e.unidad === 'm' ? e.reps_max : aproximacion?.reps);
+  const hechaAntes = [...filas.slice(0, i)].reverse().find(x => x?.hecho && deTrabajo(tipoDe(x)));
+  const reps = r.reps ?? (e.unidad === 'seg' ? e.reps_min : e.unidad === 'm' ? e.reps_max : deTrabajo(tipo) ? hechaAntes?.consejo?.reps ?? repsObjetivoDe(e, kg, f, dia) : aproximacion?.reps);
   const dosis = e.unidad === 'seg' ? `${reps ?? ''} s` : `${kg != null ? `${peso(kg)} × ` : ''}${reps ?? ''}${e.unidad === 'm' ? ' m' : ' reps'}`;
   return `<div class="acc-pasos acc-siguiente" id="acc-siguiente">
     <button type="button" class="acc-abrir" data-siguiente-serie aria-label="${esc(`Sigue: ${nombreDe(e)}, serie ${etiqueta}, ${dosis}. Ir a la serie`)}">
@@ -832,7 +846,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     if (trabajo && r.kg != null) kgHoy = r.kg;
     if (trabajo && r.hecho && r.consejo?.kg != null) kgHoy = r.consejo.kg; // el peso que sugirió el consejo pasa al gris
     if (trabajo && r.hecho && ajusteKg && (r.t || 0) > ajusteKg.t) ajusteKg = null; // ya se hizo una serie después del ajuste
-    const repsGris = seg ? e.reps_min : trabajo && repsHoy != null ? repsHoy : trabajo || dist ? e.reps_max : sug?.reps ?? null;
+    const repsGris = seg ? e.reps_min : trabajo && repsHoy != null ? repsHoy : dist ? e.reps_max : trabajo ? repsObjetivoDe(e, kgGris, f, dia) : sug?.reps ?? null;
     if (trabajo && r.hecho) repsHoy = r.consejo?.reps ?? null;
     const antes = prev ? (seg ? ((prev.duracion_seg ?? prev.reps) != null ? `${prev.duracion_seg ?? prev.reps} s` : '')
       : dist ? `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.distancia_m != null ? `${prev.distancia_m} m` : ''}`
@@ -1122,7 +1136,7 @@ function enlazar(ir, dia) {
     const { e, k } = ejercicioDe(id), modo = modoEsfuerzo(R());
     const { lista } = materializar(f, e, k), r = lista[i] || {};
     const sigla = modo === 'rir' ? 'RIR' : 'RPE', etiq = etiquetas(filasDe(f, e, k))[i];
-    const kgVer = r.kg ?? sugerencia(e, lista, i).kg, repsVer = r.reps ?? e.reps_max;
+    const kgVer = r.kg ?? sugerencia(e, lista, i).kg, repsVer = r.reps ?? repsObjetivoDe(e, kgVer, f, dia);
     let elegido = deRpe(rpeDeSerie(r), modo);
     const delPlan = e.rir != null ? deRpe(10 - e.rir, modo) : null;
     // La caja de debajo se vuelve a dibujar al guardar. El cierre debe enfocar la caja nueva, no el nodo retirado.
@@ -1408,7 +1422,7 @@ function enlazar(ir, dia) {
       const { kg, prev } = sugerencia(e, lista, i);
       if (r.kg == null && e.unidad !== 'seg') r.kg = kg;
       const hechaAntes = [...lista.slice(0, i)].reverse().find(x => x?.hecho && deTrabajo(tipoDe(x)));
-      if (r.reps == null) r.reps = (e.unidad === 'seg' ? e.reps_min : hechaAntes?.consejo?.reps ?? e.reps_max) ?? prev?.reps ?? null;
+      if (r.reps == null) r.reps = (e.unidad === 'seg' ? e.reps_min : hechaAntes?.consejo?.reps ?? repsObjetivoDe(e, r.kg, f, dia)) ?? prev?.reps ?? null;
     } else if (!r.hecho && r.aprox != null) {
       // Una serie de calentamiento sin escribir se marca con el peso y las repeticiones que estaban en gris.
       const s = aproximacionesHoy(dia, e, lista, f)[r.aprox];
