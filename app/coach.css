@@ -108,6 +108,9 @@ body.escribiendo-coach .coach-cabecera,body.escribiendo-coach:has(.barra #modo:n
 body.escribiendo-coach #coach-redaccion,body.escribiendo-coach.con-mini-sesion #coach-redaccion{position:sticky;left:auto;right:auto;bottom:0;max-width:none;margin:8px 0 0;padding:0 0 8px}
 body.escribiendo-coach #coach-redaccion::before{left:-16px;right:-16px;bottom:0}
 body.escribiendo-coach #mini-sesion,body.escribiendo-coach #descanso:not(.grande){display:none}
+/* iOS 26 y 27: un momento después de abrir el teclado, la barra de las flechas y el ✓ pasa a contar como zona visible
+   (medido en el simulador: 401 px y luego 469). La caja queda sobre ella; si la barra no cuenta, queda un poco de aire. */
+body.escribiendo-coach.barra-teclado-ios #coach-redaccion{padding-bottom:64px}
 /* Mientras escribes, la conversación manda: la cabecera pasa a una línea (cara chica, nombre y estado) y se ocultan los
    avisos de arriba y el dibujo grande del saludo. Todo vuelve al cerrar el teclado. */
 body.escribiendo-coach .coach-cabecera{padding-top:calc(env(safe-area-inset-top,0px) + 2px);padding-bottom:4px;margin-bottom:4px;grid-template-columns:36px 1fr 36px}
