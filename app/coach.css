@@ -105,12 +105,10 @@ body.escribiendo-coach #vista-coach{position:fixed;z-index:6;left:0;right:0;top:
    ganaba a min-height:0, el chat medía más que la zona visible y la caja quedaba detrás de la barra del ✓ y del teclado. */
 body.escribiendo-coach:has(.barra #modo:not([hidden])) #vista-coach{min-height:0}
 body.escribiendo-coach .coach-cabecera,body.escribiendo-coach:has(.barra #modo:not([hidden])) .coach-cabecera{top:0;padding-top:calc(env(safe-area-inset-top,0px) + 6px)}
-body.escribiendo-coach #coach-redaccion,body.escribiendo-coach.con-mini-sesion #coach-redaccion{position:sticky;left:auto;right:auto;bottom:0;max-width:none;margin:8px 0 0;padding:0 0 8px}
+/* La caja va justo sobre la barra del ✓ de iOS; si iOS la pasa a la zona visible, sube lo que midió app/coach-ui.js. */
+body.escribiendo-coach #coach-redaccion,body.escribiendo-coach.con-mini-sesion #coach-redaccion{position:sticky;left:auto;right:auto;bottom:0;max-width:none;margin:8px 0 0;padding:0 0 calc(8px + var(--coach-barra-ios,0px))}
 body.escribiendo-coach #coach-redaccion::before{left:-16px;right:-16px;bottom:0}
 body.escribiendo-coach #mini-sesion,body.escribiendo-coach #descanso:not(.grande){display:none}
-/* iOS 26 y 27: un momento después de abrir el teclado, la barra de las flechas y el ✓ pasa a contar como zona visible
-   (medido en el simulador: 401 px y luego 469). La caja queda sobre ella; si la barra no cuenta, queda un poco de aire. */
-body.escribiendo-coach.barra-teclado-ios #coach-redaccion{padding-bottom:64px}
 /* Mientras escribes, la conversación manda: la cabecera pasa a una línea (cara chica, nombre y estado) y se ocultan los
    avisos de arriba y el dibujo grande del saludo. Todo vuelve al cerrar el teclado. */
 body.escribiendo-coach .coach-cabecera{padding-top:calc(env(safe-area-inset-top,0px) + 2px);padding-bottom:4px;margin-bottom:4px;grid-template-columns:36px 1fr 36px}

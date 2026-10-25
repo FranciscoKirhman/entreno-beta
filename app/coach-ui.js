@@ -422,14 +422,11 @@ function prepararRedaccion() {
   // así que innerHeight y visualViewport miden lo mismo y la diferencia no sirve para saber si está abierto.
   const tactil = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
   const escribiendo = () => document.activeElement === editor && (tactil || (vv && innerHeight - vv.height > 120));
-  // Desde iOS 26 la barra de las flechas y el ✓ flota sobre la página y visualViewport la cuenta como visible: la caja
-  // sube su alto (body.barra-teclado-ios, app/coach.css). Antes de iOS 26 esa barra era parte del teclado. iOS 26 se
-  // reconoce al revés: su agente quedó congelado en "OS 18_6", así que solo un sistema que dice ser anterior a 18.6 lleva
-  // la barra dentro del teclado. Reconocerlo por funciones de CSS falló en el iPhone de Francisco (19 de octubre): la caja
-  // quedaba detrás de la barra. Un iOS 18.6 o 18.7 queda con un poco de aire sobre el teclado, nunca tapado.
-  const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const version = String(navigator.userAgent || '').match(/OS (\d+)_(\d+)/);
-  const ios26 = ios && !(version && Number(version[1]) * 100 + Number(version[2]) < 1806);
+  // La barra de las flechas y el ✓ de iOS queda fuera de la zona visible, así que la caja va justo encima (en el iPhone
+  // de Francisco, 25 de octubre, el relleno fijo de 64 px dejaba un hueco). A veces iOS la pasa adentro un momento
+  // después: con el teclado abierto, la zona visible crece de 40 a 100 px (401 y luego 469 en el simulador). Entonces
+  // la caja sube justo lo que creció (--coach-barra-ios, app/coach.css), para no quedar detrás de la barra.
+  let menor = 0;
   const ubicar = () => {
     if (!panel.isConnected) { limpiar(); return; }
     const teclado = Boolean(escribiendo()), cuerpo = document.body;
@@ -439,13 +436,16 @@ function prepararRedaccion() {
     if (teclado) {
       cuerpo.style.setProperty('--coach-vv-arriba', `${vv ? Math.max(0, vv.offsetTop) : 0}px`);
       cuerpo.style.setProperty('--coach-vv-alto', vv ? `${vv.height}px` : '100dvh');
+      const alto = vv ? vv.height : 0;
+      if (!menor || alto < menor) menor = alto;
+      const crecio = alto - menor;
+      cuerpo.style.setProperty('--coach-barra-ios', `${crecio >= 40 && crecio <= 100 ? Math.round(crecio) : 0}px`);
     }
     if (teclado !== activo) {
       const alFinal = teclado || vista.scrollHeight - vista.scrollTop - vista.clientHeight < 40, desde = vista.scrollTop;
       activo = teclado;
       cuerpo.classList.toggle('escribiendo-coach', teclado);
-      cuerpo.classList.toggle('barra-teclado-ios', teclado && ios26);
-      if (!teclado) scrollTo(0, alFinal ? document.documentElement.scrollHeight : desde);
+      if (!teclado) { menor = 0; scrollTo(0, alFinal ? document.documentElement.scrollHeight : desde); }
     }
     if (pegado) vista.scrollTop = vista.scrollHeight;
   };
@@ -460,7 +460,7 @@ function prepararRedaccion() {
   const alSalir = () => setTimeout(ubicar, 0);
   function limpiar() {
     observador?.disconnect(); vv?.removeEventListener('resize', ubicar); vv?.removeEventListener('scroll', ubicar);
-    document.body?.classList.remove('escribiendo-coach', 'barra-teclado-ios'); activo = false;
+    document.body?.classList.remove('escribiendo-coach'); activo = false; menor = 0;
   }
   medir();
   if (typeof ResizeObserver !== 'undefined') { observador = new ResizeObserver(medir); observador.observe(panel); }

@@ -68,7 +68,7 @@ export function vistaMiPlan(ir, extra = {}) {
   raiz.querySelectorAll('[data-mp-ir]').forEach(b => b.onclick = () => {
     const v = b.dataset.mpIr;
     if (v === 'ciclo') return ir('miplan', { panel: 'ciclo' });
-    if (v === 'banco') return ir('banco', { desde: 'miplan' });
+    if (v === 'banco') return ir('banco', { desde: 'miplan', despues: null });
     ir(v);
   });
   $('mp-semana')?.addEventListener('click', () => ir('semana'));

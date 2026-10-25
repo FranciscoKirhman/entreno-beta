@@ -18,7 +18,12 @@ const elegidos = new Set();
 /** Los ejercicios hechos hace poco, del más reciente al más antiguo (para la sección Recientes). */
 const recientes = () => [...new Set([...E.sesiones].sort((a, b) => b.fecha.localeCompare(a.fecha)).flatMap(x => (x.series || []).map(y => y.ejercicio_id)))].filter(id => indice.porId.get(id)).slice(0, 8);
 const EQUIPO = Object.fromEntries(C.secciones.flatMap(s => s.preguntas || []).find(p => p.equipamiento)?.equipamiento || []);
-export function vistaBanco(ir, { desde = ultimoDesde, despues = despuesDe } = {}) {
+export function vistaBanco(ir, entrada = {}) {
+  const { desde = ultimoDesde, despues = despuesDe } = entrada;
+  // Entrar desde un botón (Agregar ejercicio, Agregar ejercicio aquí, Mi plan, una rutina) dice dónde va lo agregado y
+  // parte sin la búsqueda de la vez anterior. Volver de una ficha o cambiar un filtro conserva las dos cosas: antes, el
+  // "aquí" de una vez anterior se quedaba y "Agregar ejercicio" metía el ejercicio en medio, no al final.
+  if ('despues' in entrada) texto = '';
   despuesDe = despues;
   if (desde !== ultimoDesde) elegidos.clear();
   ultimoDesde = desde;
@@ -58,8 +63,8 @@ export function vistaBanco(ir, { desde = ultimoDesde, despues = despuesDe } = {}
     ${sesion ? '<div class="banco-elegidos" id="banco-elegidos" hidden></div>' : ''}
   </div>`;
   const letra = e => e.nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').charAt(0).toUpperCase();
-  const fila = e => {
-    const motivo = motivoNoAgregar(e, ctxNucleo());
+  const fila = (e, ctx) => {
+    const motivo = motivoNoAgregar(e, ctx);
     const detalle = [e.musculos_primarios.map(m => mayuscula(NOMBRE_MUSCULO[m] || m)).slice(0, 2).join(', '), e.equipamiento.map(q => EQUIPO[q] || q.replaceAll('_', ' ')).slice(0, 2).join(', ') || 'Peso del cuerpo'].filter(Boolean).join(' · ');
     const texto = `${miniatura(e.id).replace('<img ', '<img loading="lazy" ')}<span class="banco-item-texto"><strong>${esc(e.nombre)}${e.propio ? ' <span class="chip">Tuyo</span>' : e.extra ? ' <span class="chip chip-sin-revision">Sin revisión</span>' : ''}</strong><small>${esc(detalle)}</small>${motivo ? `<small class="banco-motivo">${esc(motivo)}</small>` : ''}</span>`;
     // En la sesión, tocar la fila la elige (como Hevy) y la ficha queda en el botón de información.
@@ -73,12 +78,19 @@ export function vistaBanco(ir, { desde = ultimoDesde, despues = despuesDe } = {}
     </li>`;
   };
   const pintar = () => {
-    const enHoy = new Set(ctxNucleo().plan?.dias.find(d => d.fecha === ctxNucleo().hoy)?.ejercicios.map(e => e.ejercicio_id) || []);
+    // Un solo contexto por dibujo: armarlo en cada fila (unas 1.300 con el banco ampliado) tomaba unos 250 ms al abrir
+    // el banco y en cada letra escrita (medido en el simulador el 25 de octubre).
+    const ctx = ctxNucleo();
+    const enHoy = new Set(ctx.plan?.dias.find(d => d.fecha === ctx.hoy)?.ejercicios.map(e => e.ejercicio_id) || []);
     const xs = buscarEjercicios(indice, { texto, musculo, equipo, nombresMusculos: NOMBRE_MUSCULO, nombresEquipos: EQUIPO }).filter(e => (!soloFuera || !enHoy.has(e.id)) && (conAmpliado || !e.extra));
-    pintarRecomendaciones(xs, ir);
+    // Mientras escribes, los resultados van justo bajo el buscador, como Hevy: sin los accesos ni las recomendaciones,
+    // que los dejaban unos 900 px más abajo, detrás del teclado.
+    const buscando = Boolean(texto.trim());
+    $('vista-banco').classList.toggle('buscando', buscando);
+    if (!buscando) pintarRecomendaciones(xs, ir, despuesDe);
     // Recientes, como Hevy: lo último que hiciste, arriba de la lista completa (sin buscar ni filtrar).
     const rec = !texto && !musculo && !equipo ? recientes().filter(id => xs.some(e => e.id === id)).map(id => indice.porId.get(id)) : [];
-    $('banco-recientes').innerHTML = rec.length ? `<h2 class="banco-titulo-lista">Recientes</h2><ul class="banco-grupo banco-lista-recientes">${rec.map(fila).join('')}</ul>` : '';
+    $('banco-recientes').innerHTML = rec.length ? `<h2 class="banco-titulo-lista">Recientes</h2><ul class="banco-grupo banco-lista-recientes">${rec.map(e => fila(e, ctx)).join('')}</ul>` : '';
     pintarElegidos();
     $('banco-cantidad').textContent = `${xs.length} ${xs.length === 1 ? 'ejercicio' : 'ejercicios'}`;
     document.querySelectorAll('#vista-banco .banco-filtro-casilla').forEach(l => l.classList.toggle('activo', Boolean(l.querySelector('input:checked'))));
@@ -87,7 +99,8 @@ export function vistaBanco(ir, { desde = ultimoDesde, despues = despuesDe } = {}
     for (const e of xs) { const l = letra(e); if (!grupos.has(l)) grupos.set(l, []); grupos.get(l).push(e); }
     // En cada letra, primero los revisados; después los del banco ampliado (sin revisión).
     for (const es of grupos.values()) es.sort((a, b) => Number(Boolean(a.extra)) - Number(Boolean(b.extra)));
-    $('banco-lista').innerHTML = [...grupos].map(([l, es]) => `<section class="banco-letra" aria-label="${esc(l)}"><h3 aria-hidden="true">${esc(l)}</h3><ul class="banco-grupo">${es.map(fila).join('')}</ul></section>`).join('');
+    // Cada letra lleva su alto aproximado: fuera de la pantalla no se diagrama (content-visibility en banco.css).
+    $('banco-lista').innerHTML = [...grupos].map(([l, es]) => `<section class="banco-letra" aria-label="${esc(l)}" style="contain-intrinsic-size:auto ${es.length * 72 + 34}px"><h3 aria-hidden="true">${esc(l)}</h3><ul class="banco-grupo">${es.map(e => fila(e, ctx)).join('')}</ul></section>`).join('');
   };
   // La barra de abajo con lo elegido: "Agregar N ejercicios" y, con dos o más, "Como superserie".
   function pintarElegidos() {

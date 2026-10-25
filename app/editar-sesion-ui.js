@@ -58,7 +58,9 @@ export function ordenarSesion({ volver, alCambiar }) {
   const estado = E;
   let orden = dia.ejercicios.map((e, i) => ({ id: e.ejercicio_id || `i${i}`, nombre: e.nombre || 'Ejercicio', ss: e.superserie }));
   const n = cuantasSiguen();
-  const lista = () => orden.map((x, i) => `<li data-i="${i}"><span class="asa-orden" aria-hidden="true">${icono('ajustes', 'icono')}</span><span class="num suave">${i + 1}</span><span class="nombre-orden">${esc(x.nombre)}${x.ss ? ` <span class="chip">${esc(x.ss)}</span>` : ''}</span>
+  // El asa no arrastra la hoja (data-sin-arrastre, app/hoja.js): antes, arrastrarla hacia abajo movía la hoja entera con
+  // el dedo, así que nunca cambiaba el orden, y la hoja quedaba corrida al soltar.
+  const lista = () => orden.map((x, i) => `<li data-i="${i}"><span class="asa-orden" data-sin-arrastre aria-hidden="true">${icono('ajustes', 'icono')}</span><span class="num suave">${i + 1}</span><span class="nombre-orden">${esc(x.nombre)}${x.ss ? ` <span class="chip">${esc(x.ss)}</span>` : ''}</span>
     <button type="button" class="boton-icono" data-subir="${i}" aria-label="Subir ${esc(x.nombre)}"${i === 0 ? ' disabled' : ''}>${icono('flecha', 'icono flecha-arriba')}</button>
     <button type="button" class="boton-icono" data-bajar="${i}" aria-label="Bajar ${esc(x.nombre)}"${i === orden.length - 1 ? ' disabled' : ''}>${icono('flecha', 'icono flecha-abajo')}</button></li>`).join('');
   abrirHoja({

@@ -36,8 +36,9 @@ export async function seguir(r, { titulo, alCambiar, volver = null }) {
     volver,
     opciones: r.opciones.map((o, i) => {
       const [ic, clase] = iconoDe(o.accion || {});
-      // Al elegir con qué cambiar un ejercicio, se ve su dibujo o su máquina.
-      const imagen = o.accion?.tipo === 'reemplazar_hoy' ? srcMiniatura(o.accion.a) : null;
+      // Al elegir con qué cambiar un ejercicio, se ve su dibujo o su máquina (también cuando elegirlo ya lo confirma).
+      const cambio = o.accion?.tipo === 'confirmar' ? o.accion.accion : o.accion;
+      const imagen = cambio?.tipo === 'reemplazar_hoy' ? srcMiniatura(cambio.a) : null;
       return { valor: String(i), ...(imagen ? { imagen } : { icono: icono(ic) }), clase, nombre: o.etiqueta };
     }),
     alElegir: v => seguir(aplicarOpcion(r.opciones[Number(v)].accion, ctxNucleo()), { titulo, alCambiar, volver }),

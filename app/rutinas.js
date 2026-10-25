@@ -93,7 +93,7 @@ export function vistaRutina(ir) {
   $('vista-rutina').addEventListener('change', ev => { const t = ev.target; if (t.tagName === 'SELECT') b.ejercicios[Number(t.dataset.i)].descanso_seg = Number(t.value); });
   document.querySelectorAll('[data-quitar-ej]').forEach(x => x.onclick = () => { b.ejercicios.splice(Number(x.dataset.quitarEj), 1); vistaRutina(ir); });
   if ($('rutina-lista')) arrastrable($('rutina-lista'), indices => { b.ejercicios = indices.map(i => b.ejercicios[i]); vistaRutina(ir); });
-  $('rutina-agregar').onclick = () => ir('banco', { desde: 'rutina' });
+  $('rutina-agregar').onclick = () => ir('banco', { desde: 'rutina', despues: null });
   $('rutina-cancelar').onclick = () => { borrador = null; ir('entrenar'); };
   $('rutina-guardar').onclick = () => {
     const nombre = b.nombre.trim();

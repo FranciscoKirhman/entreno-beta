@@ -984,7 +984,10 @@ main:has(#vista-coach){padding-bottom:calc(var(--coach-redaccion-alto,100px) + v
 /* Ajustar el tiempo (app/tiempo-ui.js): el botón de Hoy y la rueda que se gira, como en Down Dog. */
 .fila-tiempo{margin:6px 0 2px}
 .boton-tiempo{display:flex;align-items:center;gap:8px;width:100%;justify-content:flex-start;text-align:left}
-.boton-tiempo span{font-variant-numeric:tabular-nums;color:var(--ink)}
+/* Con "Quedan unos 48 min · terminas 19:49" el texto pasa a dos líneas: antes no se achicaba, "Ajustar el tiempo"
+   se salía del botón y el reloj quedaba de ancho cero (iPhone de 390 pt). */
+.boton-tiempo .icono{flex:none}
+.boton-tiempo span{flex:1;min-width:0;white-space:normal;line-height:1.25;font-variant-numeric:tabular-nums;color:var(--ink)}
 .boton-tiempo b{margin-left:auto;color:var(--accent);font-weight:600;white-space:nowrap}
 .tiempo-rueda{position:relative;display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;justify-items:center;gap:4px;margin:0 0 6px}
 .rueda{width:100%;max-width:240px;aspect-ratio:1;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}

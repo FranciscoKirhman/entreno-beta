@@ -4,7 +4,8 @@ import { miniatura } from './imagenes.js';
 import { NOMBRE_MUSCULO } from './musculos.js';
 import { proponerEdicion } from './editar-sesion-ui.js';
 
-export function pintarRecomendaciones(candidatos, ir) {
+/** despues: el ejercicio tras el que va lo agregado (Agregar ejercicio aquí); sin él, al final de la sesión. */
+export function pintarRecomendaciones(candidatos, ir, despues = null) {
   const caja = $('banco-recomendaciones');
   const ctx = { ...ctxNucleo(), sesiones: E.sesiones, registro: E.registro };
   const xs = recomendarEjercicios(ctx, { candidatos });
@@ -16,6 +17,6 @@ export function pintarRecomendaciones(candidatos, ir) {
     const ver = ev.target.closest('[data-recom-ver]');
     if (ver) return ir('ejercicio', { id: ver.dataset.recomVer, desde: 'banco' });
     const agregar = ev.target.closest('[data-recom-agregar]');
-    if (agregar) proponerEdicion({ tipo: 'agregar', ejercicio: agregar.dataset.recomAgregar }, { volver: agregar, alCambiar: () => ir('hoy') });
+    if (agregar) proponerEdicion({ tipo: 'agregar', ejercicio: agregar.dataset.recomAgregar, ...(despues ? { despues } : {}) }, { volver: agregar, alCambiar: () => ir('hoy') });
   };
 }

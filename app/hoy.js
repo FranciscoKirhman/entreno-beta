@@ -37,7 +37,7 @@ import { grupos, unir, separar, copiarSuperseries, despuesDeSerie, etiquetaSuper
 import { icono } from './iconos.js';
 import { miniatura } from './imagenes.js';
 import { NOMBRE_MUSCULO, lista, mayuscula, imagenesMusculos } from './musculos.js';
-import { proponer, seguir, abrirAjustarHoy } from './cambios-ui.js';
+import { seguir, abrirAjustarHoy } from './cambios-ui.js';
 import { abrirTiempo, etiquetaTiempo } from './tiempo-ui.js';
 import { aplicarOpcion } from '../nucleo/coach.js';
 import { nombreAsistente } from './cuestionario.js';
@@ -680,7 +680,11 @@ function cajaEsfuerzo(id, i, r, e, etiqueta) {
 /** Series hechas y totales de la sesión, y sus cifras. */
 function avance(dia) {
   // La ayuda de la máquina (asistidos) no es peso levantado: cuenta la serie, pero no suma al volumen.
-  const filas = dia.ejercicios.flatMap((e, k) => filasDe(dia.fecha, e, k).map(x => (esAsistido(indice.porId.get(e.ejercicio_id)) ? { ...x, kg: null } : x)));
+  const conPeso = (id, x) => (esAsistido(indice.porId.get(id)) ? { ...x, kg: null } : x);
+  // Lo hecho de un ejercicio que salió de hoy (reemplazado o quitado) se guarda al terminar, así que también cuenta.
+  const fuera = Object.keys(E.retirados?.[dia.fecha] || {}).filter(id => !dia.ejercicios.some(e => e.ejercicio_id === id))
+    .flatMap(id => (E.registro[dia.fecha]?.[id] || []).filter(x => x?.hecho).map(x => conPeso(id, x)));
+  const filas = [...dia.ejercicios.flatMap((e, k) => filasDe(dia.fecha, e, k).map(x => conPeso(e.ejercicio_id, x))), ...fuera];
   // Las de calentamiento cuentan solo si se hicieron: saltarlas no deja la sesión incompleta.
   const cuentan = filas.filter(x => x.hecho || tipoDe(x) !== 'calentamiento');
   return { hechas: cuentan.filter(x => x.hecho).length, total: cuentan.length, cifras: cifras(filas) };
@@ -956,7 +960,7 @@ function enlazar(ir, dia) {
   });
   document.querySelectorAll('[data-ir-checkin]').forEach(b => b.onclick = () => ir('checkin', b.dataset.irCheckin));
   document.querySelectorAll('[data-ir-semana]').forEach(b => b.onclick = () => ir('semana'));
-  $('agregar-ejercicio-hoy')?.addEventListener('click', () => ir('banco', { desde: 'hoy' }));
+  $('agregar-ejercicio-hoy')?.addEventListener('click', () => ir('banco', { desde: 'hoy', despues: null }));
   document.querySelectorAll('[data-elegir-cardio]').forEach(b => b.onclick = () => elegirCardio({ volver: b, alCambiar: () => vistaHoy(ir) }));
   if (!dia) return;
 
@@ -1557,16 +1561,20 @@ function enlazar(ir, dia) {
 
   // Reemplazar, como Hevy desde julio de 2026: solo en esta sesión o en todas las que vienen. Elegir el reemplazo es la
   // confirmación del cambio (regla 10: el plan no cambia sin que la persona lo elija).
+  // Reemplazar, como Hevy: se elige el alcance y después el ejercicio, y elegirlo es la confirmación (la hoja dice qué
+  // cambia). Antes, "Solo en esta sesión" volvía a preguntar "¿solo hoy o desde hoy en adelante?". Las series ya hechas
+  // se guardan igual al terminar (app/comun.js, cambiarPlan).
   function reemplazar(e, b) {
     const nombre = nombreDe(e);
+    const hechas = (E.registro[f]?.[e.ejercicio_id] || []).filter(x => x?.hecho).length;
     abrirHoja({
       titulo: `Reemplazar ${nombre}`, volver: b,
       opciones: [{ valor: 'hoy', icono: icono('cambiar'), nombre: 'Solo en esta sesión' }, { valor: 'adelante', icono: icono('calendario'), nombre: 'En esta y las que vienen' }],
       alElegir: alcance => {
-        if (alcance === 'hoy') return proponer({ tipo: 'elegir_alternativa', fecha: f, ejercicio: e.ejercicio_id }, { titulo: `Reemplazar ${nombre}`, volver: b, alCambiar: repintar });
         const alt = aplicarOpcion({ tipo: 'elegir_alternativa', fecha: f, ejercicio: e.ejercicio_id }, ctxNucleo());
         if (!alt.opciones?.length) { avisar(alt.texto); return; }
-        seguir({ texto: `Desde hoy en adelante, en vez de ${nombre}:`, opciones: alt.opciones.map(o => ({ etiqueta: o.etiqueta, accion: { tipo: 'confirmar', accion: { ...o.accion, alcance: 'adelante' } } })) },
+        const guardadas = hechas ? `${hechas === 1 ? 'La serie que ya hiciste se guarda' : `Las ${hechas} series que ya hiciste se guardan`} igual. ` : '';
+        seguir({ texto: `${guardadas}${alcance === 'hoy' ? 'Solo hoy' : 'Desde hoy en adelante'}, en vez de ${nombre}:`, opciones: alt.opciones.map(o => ({ etiqueta: o.etiqueta, accion: { tipo: 'confirmar', accion: { ...o.accion, alcance } } })) },
           { titulo: `En vez de ${nombre}`, volver: b, alCambiar: repintar });
       },
     });

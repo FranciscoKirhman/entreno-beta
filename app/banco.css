@@ -43,6 +43,11 @@
 #vista-banco .banco-titulo-lista{margin:26px 0 2px}
 .banco-cantidad{margin:0 0 6px;font-size:13px}
 .banco-letra h3{position:sticky;top:0;z-index:1;margin:0;padding:10px 4px 4px;background:var(--bg);font-size:13px;font-weight:600;color:var(--ink-muted)}
+/* Con unas 1.300 filas, las letras fuera de la pantalla no se diagraman hasta acercarse (su alto aproximado va en el
+   estilo de cada una, app/banco.js). Buscando, los resultados quedan bajo el buscador, sobre el teclado: sin accesos,
+   recomendaciones, las dos casillas ni el título de la lista (sus filtros siguen valiendo). */
+.banco-letra{content-visibility:auto}
+#vista-banco.buscando :is(.banco-accesos,.banco-recomendaciones,.banco-filtro-casilla,.banco-titulo-lista){display:none}
 .banco-grupo{list-style:none;margin:0 0 6px;padding:0;border-radius:18px;background:var(--surface);overflow:hidden}
 .banco-item{display:flex;align-items:center;gap:4px;padding:0 6px 0 12px}
 .banco-item+.banco-item{border-top:1px solid var(--line)}

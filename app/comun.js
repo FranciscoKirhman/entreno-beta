@@ -15,6 +15,7 @@ import { estadoDeCopia } from '../nucleo/copia-segura.js';
 import { revisarTrasladoCuenta } from '../nucleo/consentimiento-nube.js';
 import { corregirHistorial } from '../nucleo/corregir-historial.js';
 import { compactarChat } from '../nucleo/compactar-chat.js';
+import { retiradosAlCambiar } from '../nucleo/series-retiradas.js';
 
 // La portada de la versión de prueba ya pidió estos archivos (herramientas/beta.mjs, precargas): se usa esa respuesta.
 const pedir = u => { const p = globalThis.entrenoPrecarga?.[u]; if (p) delete globalThis.entrenoPrecarga[u]; return p || fetch(u); };
@@ -359,6 +360,8 @@ export async function cambiarPlan(plan, mensaje, nube) {
     E.cambiosPlan = [{ cuando: new Date().toISOString(), mensaje: mensaje || 'Cambio del plan', plan: structuredClone(E.plan) }, ...(E.cambiosPlan || [])].slice(0, 3);
   }
   const anterior = E.plan;
+  // Un ejercicio que sale de la sesión en curso (reemplazado, ajustado) conserva sus series hechas para guardarlas.
+  if (Object.keys(E.registro || {}).length) E.retirados = retiradosAlCambiar(anterior, plan, { registro: E.registro, sesiones: E.sesiones, retirados: E.retirados || {} });
   E.plan = plan; E.mensaje = mensaje || null; guardar();
   for (const fn of alCambiarPlan) fn(anterior, plan);
   // El plan libre (entrenar sin plan) queda en el teléfono; las sesiones sí se sincronizan.
