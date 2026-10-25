@@ -605,10 +605,16 @@ body:not(.en-sesion) .medalla-record{top:calc(env(safe-area-inset-top,0px) + 16p
 .ajustar-duracion label{display:flex;flex-direction:column;gap:6px;font-size:.9rem;color:var(--ink-muted)}
 .ajustar-duracion input{font-size:1.4rem;font-variant-numeric:tabular-nums;min-height:48px}
 
-/* Mantener apretado el nombre para ordenar: el iPhone no selecciona el texto ni abre su menú (app/ordenar-arrastre.js) */
-#vista-hoy .ej-textos{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-#vista-hoy .ej.arrastrada{position:relative;z-index:3;box-shadow:0 10px 28px rgba(0,0,0,.22);transform:scale(1.02)}
-.orden-compacto>.ej.arrastrada{background:color-mix(in srgb,var(--accent) 14%,var(--surface));outline-color:var(--accent)}
+/* Ordenar como Hevy (app/ordenar-arrastre.js): mantener apretada la foto o el nombre no selecciona texto ni abre el
+   menú del iPhone. Mientras se arrastra, la sesión es una lista de fotos y nombres (sin series ni lo de alrededor) y la
+   fila levantada sigue al dedo. El aire de abajo deja subir la lista hasta el dedo aunque sea el último ejercicio. */
+#vista-hoy .ej-cab{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#vista-hoy .ej-cab img{-webkit-user-drag:none}
+#vista-hoy.reordenando>:not(.cab-sesion,.ejercicios-hoy),#vista-hoy.reordenando :is(.cab-sesion-cifras,.cab-avance){display:none}
+#vista-hoy.reordenando .ejercicios-hoy{padding-bottom:100vh}
+#vista-hoy.reordenando .ejercicios-hoy>li.ej.tarjeta{margin:0 0 6px;padding:8px 10px;border-radius:14px;transition:transform .2s cubic-bezier(.2,.8,.2,1)}
+#vista-hoy.reordenando .ejercicios-hoy>.ej>:not(.ej-cab),#vista-hoy.reordenando .ej-cab :is(.ej-sub,.chip,.nota-fija,.menu-ej){display:none}
+#vista-hoy.reordenando .ejercicios-hoy>li.ej.levantada{position:relative;z-index:5;transition:none;background:var(--surface);box-shadow:0 12px 32px rgba(0,0,0,.2)}
 
 /* Descanso de calentamiento: variable, así que la barra compacta dice por qué dura lo que dura (app/hoy.js) */
 #descanso.calentando .etiqueta{display:block!important;font-size:12px;line-height:1.25;color:var(--ink-muted);white-space:normal;text-align:center}

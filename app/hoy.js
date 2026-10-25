@@ -1033,10 +1033,15 @@ function enlazar(ir, dia) {
     guardar(); repintarConservando(() => vistaHoy(ir), b);
   });
   raiz.querySelectorAll('[data-agregar-despues]').forEach(b=>b.onclick=()=>ir('banco',{desde:'hoy',despues:b.dataset.agregarDespues}));
+  // La lista ya quedó en el orden nuevo al soltar: se repinta de inmediato (cambiarPlan cambia el plan antes de esperar
+  // a la cuenta) para que los botones usen el orden nuevo, y si el cambio no se acepta vuelve el de antes.
   enlazarOrdenArrastre(raiz, async orden => {
-    const r=editarSesion({tipo:'ordenar',orden}, {...ctxNucleo(),hoy:f,registro:E.registro,sesiones:E.sesiones});
-    if(r.error)return avisar(r.error);
-    await cambiarPlan(r.plan,'Orden de hoy actualizado.',nube);repintar();
+    const r = editarSesion({ tipo: 'ordenar', orden }, { ...ctxNucleo(), hoy: f, registro: E.registro, sesiones: E.sesiones });
+    if (r.error) { avisar(r.error); return repintar(); }
+    const guardando = cambiarPlan(r.plan, 'Orden de hoy actualizado.', nube);
+    repintar();
+    const aviso = await guardando;
+    if (aviso) avisar(aviso);
   });
   const repintar = () => vistaHoyMantener(ir);
   const marcaCardioActual = () => {

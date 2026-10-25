@@ -101,13 +101,13 @@ body:has(.barra #modo:not([hidden])) #vista-coach{min-height:calc(100svh - env(s
    se desplaza por dentro. La cabecera queda arriba y la caja abajo, sin el espacio del menú (oculto) ni huecos. */
 body.escribiendo-coach #vista-coach{position:fixed;z-index:6;left:0;right:0;top:var(--coach-vv-arriba,0px);height:var(--coach-vv-alto,100dvh);min-height:0;
   max-width:560px;margin:0 auto;padding:0 16px;overflow-y:auto;overscroll-behavior:contain;background:var(--bg)}
+/* Con la barra de arriba a la vista (tu correo, el ejemplo o sin señal), su alto mínimo de arriba no rige mientras escribes:
+   ganaba a min-height:0, el chat medía más que la zona visible y la caja quedaba detrás de la barra del ✓ y del teclado. */
+body.escribiendo-coach:has(.barra #modo:not([hidden])) #vista-coach{min-height:0}
 body.escribiendo-coach .coach-cabecera,body.escribiendo-coach:has(.barra #modo:not([hidden])) .coach-cabecera{top:0;padding-top:calc(env(safe-area-inset-top,0px) + 6px)}
 body.escribiendo-coach #coach-redaccion,body.escribiendo-coach.con-mini-sesion #coach-redaccion{position:sticky;left:auto;right:auto;bottom:0;max-width:none;margin:8px 0 0;padding:0 0 8px}
 body.escribiendo-coach #coach-redaccion::before{left:-16px;right:-16px;bottom:0}
 body.escribiendo-coach #mini-sesion,body.escribiendo-coach #descanso:not(.grande){display:none}
-/* iOS 26: la barra de las flechas y el ✓ flota encima de la página, dentro de la zona visible. La caja queda sobre
-   ella (unos 56 pt desde el teclado, medido en un iPhone); el vidrio de atrás llena ese espacio. */
-body.escribiendo-coach.barra-teclado-ios #coach-redaccion{padding-bottom:64px}
 /* Mientras escribes, la conversación manda: la cabecera pasa a una línea (cara chica, nombre y estado) y se ocultan los
    avisos de arriba y el dibujo grande del saludo. Todo vuelve al cerrar el teclado. */
 body.escribiendo-coach .coach-cabecera{padding-top:calc(env(safe-area-inset-top,0px) + 2px);padding-bottom:4px;margin-bottom:4px;grid-template-columns:36px 1fr 36px}
