@@ -1559,25 +1559,11 @@ function enlazar(ir, dia) {
     });
   });
 
-  // Reemplazar, como Hevy desde julio de 2026: solo en esta sesión o en todas las que vienen. Elegir el reemplazo es la
-  // confirmación del cambio (regla 10: el plan no cambia sin que la persona lo elija).
-  // Reemplazar, como Hevy: se elige el alcance y después el ejercicio, y elegirlo es la confirmación (la hoja dice qué
-  // cambia). Antes, "Solo en esta sesión" volvía a preguntar "¿solo hoy o desde hoy en adelante?". Las series ya hechas
-  // se guardan igual al terminar (app/comun.js, cambiarPlan).
-  function reemplazar(e, b) {
-    const nombre = nombreDe(e);
-    const hechas = (E.registro[f]?.[e.ejercicio_id] || []).filter(x => x?.hecho).length;
-    abrirHoja({
-      titulo: `Reemplazar ${nombre}`, volver: b,
-      opciones: [{ valor: 'hoy', icono: icono('cambiar'), nombre: 'Solo en esta sesión' }, { valor: 'adelante', icono: icono('calendario'), nombre: 'En esta y las que vienen' }],
-      alElegir: alcance => {
-        const alt = aplicarOpcion({ tipo: 'elegir_alternativa', fecha: f, ejercicio: e.ejercicio_id }, ctxNucleo());
-        if (!alt.opciones?.length) { avisar(alt.texto); return; }
-        const guardadas = hechas ? `${hechas === 1 ? 'La serie que ya hiciste se guarda' : `Las ${hechas} series que ya hiciste se guardan`} igual. ` : '';
-        seguir({ texto: `${guardadas}${alcance === 'hoy' ? 'Solo hoy' : 'Desde hoy en adelante'}, en vez de ${nombre}:`, opciones: alt.opciones.map(o => ({ etiqueta: o.etiqueta, accion: { tipo: 'confirmar', accion: { ...o.accion, alcance } } })) },
-          { titulo: `En vez de ${nombre}`, volver: b, alCambiar: repintar });
-      },
-    });
+  // Reemplazar, como Hevy: se abre el banco entero, con lo que trabaja los mismos músculos arriba y marcado (app/banco.js,
+  // nucleo/reemplazar.js). Se elige uno y abajo dice cómo quedaría; "Solo hoy" o "Hoy y las que vienen" es la
+  // confirmación (regla 10). Las series ya hechas se guardan igual al terminar (app/comun.js, cambiarPlan).
+  function reemplazar(e) {
+    ir('banco', { desde: 'hoy', despues: null, reemplazar: { id: e.ejercicio_id, fecha: f } });
   }
 
   // Descanso entre series de un ejercicio (en una superserie, el de la vuelta, que se guarda en el último ejercicio).

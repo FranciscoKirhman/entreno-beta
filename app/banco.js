@@ -1,10 +1,13 @@
 import { datoCambiado } from './datos-nube.js';
-import { C, E, indice, esc, $, ctxNucleo, guardar, avisar, IMAGENES, asegurarExtras, EXTRAS } from './comun.js';
+import { C, E, indice, esc, $, ctxNucleo, guardar, avisar, cambiarPlan, IMAGENES, asegurarExtras, EXTRAS } from './comun.js';
+import * as nube from './nube.js';
+import { aplicarOpcion, calcularCambio } from '../nucleo/coach.js';
+import { paraReemplazar, musculosEnComun } from '../nucleo/reemplazar.js';
 import { abrirHoja, cerrarHoja } from './hoja.js';
 import { crearPropio, TIPOS_PROPIO } from '../nucleo/propios.js';
 import { buscarEjercicios, motivoNoAgregar } from '../nucleo/editar-sesion.js';
 import { miniatura } from './imagenes.js';
-import { NOMBRE_MUSCULO, mayuscula } from './musculos.js';
+import { NOMBRE_MUSCULO, mayuscula, nombresMusculos } from './musculos.js';
 import { icono } from './iconos.js';
 import { proponerEdicion, agregarVarios } from './editar-sesion-ui.js';
 import { elegirCardio } from './cardio-ui.js';
@@ -12,6 +15,8 @@ import { pintarRecomendaciones } from './recomendaciones-ui.js';
 import { agregarARutina } from './rutinas.js';
 
 let despuesDe = null;
+// Reemplazar desde la sesión ({ id, fecha }): el banco elige uno y destaca los que trabajan los mismos músculos.
+let reemplazo = null;
 let texto = '', musculo = '', equipo = '', ultimoDesde = 'miplan', soloFuera = true, conAmpliado = true;
 // Desde la sesión, como el "Agregar ejercicio" de Hevy: se eligen varios y se agregan juntos (o como superserie).
 const elegidos = new Set();
@@ -23,20 +28,24 @@ export function vistaBanco(ir, entrada = {}) {
   // Entrar desde un botón (Agregar ejercicio, Agregar ejercicio aquí, Mi plan, una rutina) dice dónde va lo agregado y
   // parte sin la búsqueda de la vez anterior. Volver de una ficha o cambiar un filtro conserva las dos cosas: antes, el
   // "aquí" de una vez anterior se quedaba y "Agregar ejercicio" metía el ejercicio en medio, no al final.
-  if ('despues' in entrada) texto = '';
+  if ('despues' in entrada) { texto = ''; reemplazo = entrada.reemplazar || null; if (reemplazo) elegidos.clear(); }
   despuesDe = despues;
   if (desde !== ultimoDesde) elegidos.clear();
   ultimoDesde = desde;
   const sesion = desde === 'hoy' || desde === 'rutina'; // elegir varios: para la sesión o para una rutina
   document.body.classList.toggle('en-sesion', sesion); // encima de la sesión, sin pestañas
+  const base = sesion && reemplazo ? indice.porId.get(reemplazo.id) : null;
+  if (!base) reemplazo = null;
   const opciones = (xs, nombres, valor) => xs.map(x => `<option value="${esc(x)}"${x === valor ? ' selected' : ''}>${esc(nombres[x] || mayuscula(x.replaceAll('_', ' ')))}</option>`).join('');
   const musculos = [...new Set(indice.ejercicios.flatMap(e => [...e.musculos_primarios, ...e.musculos_secundarios]))].sort();
   const equipos = [...new Set(indice.ejercicios.flatMap(e => e.equipamiento))].sort();
   const propios = E.ejerciciosPropios?.length || 0, conTecnica = indice.ejercicios.filter(e => !e.propio && !e.extra).length;
   // Como en la app de Apple: título, buscador, filtros en píldoras, accesos en una lista agrupada y el banco en filas
   // ordenadas por letra, cada una con su miniatura y un + para sumarla a hoy (con vista previa antes de cambiar).
-  $('app').innerHTML = `<div id="vista-banco">
-    ${sesion ? `<div class="banco-cab-sesion"><button type="button" class="enlace" id="banco-volver" data-vuelve-a="${desde}">Cancelar</button><h1>Agregar ejercicio</h1><button type="button" class="enlace" id="banco-crear">Crear</button></div>`
+  $('app').innerHTML = `<div id="vista-banco"${base ? ' class="reemplazando"' : ''}>
+    ${base ? `<div class="banco-cab-sesion"><button type="button" class="enlace" id="banco-volver" data-vuelve-a="${desde}">Cancelar</button><h1>Reemplazar</h1><span class="enlace banco-cab-espacio" aria-hidden="true">Cancelar</span></div>
+    <p class="banco-reemplazo-de">En vez de <strong>${esc(base.nombre)}</strong>. Arriba, lo que trabaja ${esc(nombresMusculos(base.musculos_primarios))}.</p>`
+      : sesion ? `<div class="banco-cab-sesion"><button type="button" class="enlace" id="banco-volver" data-vuelve-a="${desde}">Cancelar</button><h1>Agregar ejercicio</h1><button type="button" class="enlace" id="banco-crear">Crear</button></div>`
       : `<button type="button" class="volver" id="banco-volver" data-vuelve-a="${esc(desde)}">${icono('flecha', 'icono flecha-atras')} ${desde === 'miplan' ? 'Mi plan' : 'Perfil'}</button>
     <h1>Banco de ejercicios</h1>
     <p class="banco-resumen suave">${conTecnica} con técnica${propios ? ` y ${propios} ${propios === 1 ? 'creado' : 'creados'} por ti` : ''}. Toca uno para ver cómo se hace; con + lo sumas a hoy, aunque hoy descanses.</p>`}
@@ -48,7 +57,7 @@ export function vistaBanco(ir, entrada = {}) {
     <div class="banco-filtros" role="group" aria-label="Filtros del banco">
       <button type="button" class="banco-filtro${equipo ? ' activo' : ''}" data-filtro="equipo" aria-haspopup="dialog">${esc(equipo ? EQUIPO[equipo] || mayuscula(equipo.replaceAll('_', ' ')) : 'Todo el equipo')}</button>
       <button type="button" class="banco-filtro${musculo ? ' activo' : ''}" data-filtro="musculo" aria-haspopup="dialog">${esc(musculo ? mayuscula(NOMBRE_MUSCULO[musculo] || musculo) : 'Todos los músculos')}</button>
-      <label class="banco-filtro banco-filtro-casilla${soloFuera ? ' activo' : ''}"><input type="checkbox" id="banco-fuera"${soloFuera ? ' checked' : ''}> Solo los que no están hoy</label>
+      <label class="banco-filtro banco-filtro-casilla banco-filtro-fuera${soloFuera ? ' activo' : ''}"><input type="checkbox" id="banco-fuera"${soloFuera ? ' checked' : ''}> Solo los que no están hoy</label>
       <label class="banco-filtro banco-filtro-casilla${conAmpliado ? ' activo' : ''}"><input type="checkbox" id="banco-ampliado"${conAmpliado ? ' checked' : ''}> Incluir el banco ampliado (sin revisión)</label>
     </div>
     <div class="banco-accesos">
@@ -57,7 +66,8 @@ export function vistaBanco(ir, entrada = {}) {
     </div>
     <section class="banco-recomendaciones" id="banco-recomendaciones" aria-label="Recomendaciones de ejercicios"></section>
     <div id="banco-recientes"></div>
-    <h2 class="banco-titulo-lista">Todos los ejercicios</h2>
+    <section id="banco-mismos" class="banco-mismos" aria-label="Ejercicios que trabajan los mismos músculos" hidden></section>
+    <h2 class="banco-titulo-lista" id="banco-titulo-todos">Todos los ejercicios</h2>
     <p id="banco-cantidad" class="banco-cantidad suave" role="status" aria-live="polite"></p>
     <div id="banco-lista" class="banco-indice"></div>
     ${sesion ? '<div class="banco-elegidos" id="banco-elegidos" hidden></div>' : ''}
@@ -66,7 +76,10 @@ export function vistaBanco(ir, entrada = {}) {
   const fila = (e, ctx) => {
     const motivo = motivoNoAgregar(e, ctx);
     const detalle = [e.musculos_primarios.map(m => mayuscula(NOMBRE_MUSCULO[m] || m)).slice(0, 2).join(', '), e.equipamiento.map(q => EQUIPO[q] || q.replaceAll('_', ' ')).slice(0, 2).join(', ') || 'Peso del cuerpo'].filter(Boolean).join(' · ');
-    const texto = `${miniatura(e.id).replace('<img ', '<img loading="lazy" ')}<span class="banco-item-texto"><strong>${esc(e.nombre)}${e.propio ? ' <span class="chip">Tuyo</span>' : e.extra ? ' <span class="chip chip-sin-revision">Sin revisión</span>' : ''}</strong><small>${esc(detalle)}</small>${motivo ? `<small class="banco-motivo">${esc(motivo)}</small>` : ''}</span>`;
+    // Al reemplazar, los que comparten un músculo principal lo dicen en color: "Mismo músculo: cuádriceps y glúteo".
+    const comunes = base ? musculosEnComun(base, e) : [];
+    const mismo = comunes.length ? `<small class="banco-mismo-musculo">Mismo músculo: ${esc(nombresMusculos(comunes))}</small>` : '';
+    const texto = `${miniatura(e.id).replace('<img ', '<img loading="lazy" ')}<span class="banco-item-texto"><strong>${esc(e.nombre)}${e.propio ? ' <span class="chip">Tuyo</span>' : e.extra ? ' <span class="chip chip-sin-revision">Sin revisión</span>' : ''}</strong>${mismo}<small>${esc(detalle)}</small>${motivo ? `<small class="banco-motivo">${esc(motivo)}</small>` : ''}</span>`;
     // En la sesión, tocar la fila la elige (como Hevy) y la ficha queda en el botón de información.
     if (sesion) return `<li class="banco-item${elegidos.has(e.id) ? ' elegido' : ''}">
       <button type="button" class="banco-item-ficha" data-banco-elegir="${e.id}" aria-pressed="${elegidos.has(e.id)}"${motivo ? ' disabled' : ''} aria-label="${esc(motivo ? `${e.nombre}: ${motivo}` : `Elegir ${e.nombre}`)}">${texto}</button>
@@ -82,19 +95,34 @@ export function vistaBanco(ir, entrada = {}) {
     // el banco y en cada letra escrita (medido en el simulador el 25 de octubre).
     const ctx = ctxNucleo();
     const enHoy = new Set(ctx.plan?.dias.find(d => d.fecha === ctx.hoy)?.ejercicios.map(e => e.ejercicio_id) || []);
-    const xs = buscarEjercicios(indice, { texto, musculo, equipo, nombresMusculos: NOMBRE_MUSCULO, nombresEquipos: EQUIPO }).filter(e => (!soloFuera || !enHoy.has(e.id)) && (conAmpliado || !e.extra));
+    // Al reemplazar, lo que ya está hoy nunca se ofrece (quedaría repetido).
+    let xs = buscarEjercicios(indice, { texto, musculo, equipo, nombresMusculos: NOMBRE_MUSCULO, nombresEquipos: EQUIPO }).filter(e => (!(soloFuera || base) || !enHoy.has(e.id)) && (conAmpliado || !e.extra));
     // Mientras escribes, los resultados van justo bajo el buscador, como Hevy: sin los accesos ni las recomendaciones,
     // que los dejaban unos 900 px más abajo, detrás del teclado.
     const buscando = Boolean(texto.trim());
     $('vista-banco').classList.toggle('buscando', buscando);
-    if (!buscando) pintarRecomendaciones(xs, ir, despuesDe);
+    if (!buscando && !base) pintarRecomendaciones(xs, ir, despuesDe);
+    // Reemplazar: arriba "Trabajan lo mismo" (las alternativas de siempre, después el mismo patrón y más músculos en
+    // común); sin buscar, los 12 primeros y abajo todo el banco por letra. Buscando, todos los que calzan arriba y el
+    // resto debajo, en "Otros ejercicios". Solo se ofrecen los que se miden igual (nucleo/reemplazar.js).
+    if (base) {
+      const motivos = new Map(), disponible = e => { if (!motivos.has(e.id)) motivos.set(e.id, motivoNoAgregar(e, ctx)); return !motivos.get(e.id); };
+      const sugeridos = (aplicarOpcion({ tipo: 'elegir_alternativa', fecha: reemplazo.fecha, ejercicio: base.id }, ctx).opciones || []).map(o => o.accion?.a).filter(Boolean);
+      const { mismos, otros } = paraReemplazar(base, xs, { sugeridos, disponible });
+      const arriba = buscando ? mismos : mismos.slice(0, 12);
+      $('banco-mismos').hidden = !arriba.length;
+      $('banco-mismos').innerHTML = arriba.length ? `<h2 class="banco-mismos-titulo">Trabajan lo mismo</h2><ul class="banco-grupo">${arriba.map(x => fila(x.ejercicio, ctx)).join('')}</ul>` : '';
+      $('banco-titulo-todos').textContent = buscando ? 'Otros ejercicios' : 'Todos los ejercicios';
+      xs = buscando ? otros : [...mismos.map(x => x.ejercicio), ...otros].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+      $('banco-titulo-todos').hidden = !xs.length;
+    }
     // Recientes, como Hevy: lo último que hiciste, arriba de la lista completa (sin buscar ni filtrar).
     const rec = !texto && !musculo && !equipo ? recientes().filter(id => xs.some(e => e.id === id)).map(id => indice.porId.get(id)) : [];
     $('banco-recientes').innerHTML = rec.length ? `<h2 class="banco-titulo-lista">Recientes</h2><ul class="banco-grupo banco-lista-recientes">${rec.map(e => fila(e, ctx)).join('')}</ul>` : '';
     pintarElegidos();
     $('banco-cantidad').textContent = `${xs.length} ${xs.length === 1 ? 'ejercicio' : 'ejercicios'}`;
     document.querySelectorAll('#vista-banco .banco-filtro-casilla').forEach(l => l.classList.toggle('activo', Boolean(l.querySelector('input:checked'))));
-    if (!xs.length) { $('banco-lista').innerHTML = '<p class="banco-vacio">No encontré ejercicios con esos filtros. Prueba otra palabra o elige Todos.</p>'; return; }
+    if (!xs.length) { $('banco-lista').innerHTML = base && !$('banco-mismos').hidden ? '' : '<p class="banco-vacio">No encontré ejercicios con esos filtros. Prueba otra palabra o elige Todos.</p>'; return; }
     const grupos = new Map();
     for (const e of xs) { const l = letra(e); if (!grupos.has(l)) grupos.set(l, []); grupos.get(l).push(e); }
     // En cada letra, primero los revisados; después los del banco ampliado (sin revisión).
@@ -107,9 +135,34 @@ export function vistaBanco(ir, entrada = {}) {
     const barra = $('banco-elegidos');
     if (!barra) return;
     barra.hidden = !elegidos.size;
+    barra.classList.toggle('reemplazo', Boolean(base));
+    if (base) { barra.innerHTML = elegidos.size ? barraReemplazo([...elegidos][0]) : ''; return; }
     barra.innerHTML = elegidos.size ? `${elegidos.size > 1 && desde === 'hoy' ? '<button type="button" class="boton" data-agregar-elegidos="superserie">Como superserie</button>' : ''}<button type="button" class="boton primario" data-agregar-elegidos="juntos">Agregar ${elegidos.size === 1 ? '1 ejercicio' : `${elegidos.size} ejercicios`}</button>` : '';
   }
+  // Reemplazar: cómo quedaría (las mismas series y repeticiones, el peso de tu historial y las series ya hechas, que se
+  // guardan) y el alcance en los dos botones. Tocar uno es la confirmación (AGENTS.md, regla 10).
+  function barraReemplazo(id) {
+    const accion = { tipo: 'reemplazar_hoy', fecha: reemplazo.fecha, de: base.id, a: id, alcance: 'hoy' };
+    const r = calcularCambio(accion, ctxNucleo());
+    const hechas = (E.registro[reemplazo.fecha]?.[base.id] || []).filter(x => x?.hecho).length;
+    const guardadas = hechas ? ` ${hechas === 1 ? 'La serie que ya hiciste se guarda' : `Las ${hechas} series que ya hiciste se guardan`}.` : '';
+    const siguen = E.plan?.dias.some(d => d.fecha > reemplazo.fecha && d.ejercicios.some(e => e.ejercicio_id === base.id));
+    return `<p class="banco-reemplazo-nota">${esc(r.error || r.propone)}${esc(guardadas)}</p>
+      ${r.error ? '' : `<button type="button" class="boton primario" data-reemplazar="hoy">Solo hoy</button>${siguen ? '<button type="button" class="boton" data-reemplazar="adelante">Hoy y las que vienen</button>' : ''}`}`;
+  }
   $('banco-elegidos')?.addEventListener('click', async ev => {
+    const cambio = ev.target.closest('[data-reemplazar]');
+    if (cambio && base) {
+      const a = [...elegidos][0];
+      cambio.disabled = true;
+      const r = aplicarOpcion({ tipo: 'confirmar', accion: { tipo: 'reemplazar_hoy', fecha: reemplazo.fecha, de: base.id, a, alcance: cambio.dataset.reemplazar } }, ctxNucleo());
+      if (!r.plan) { avisar(r.texto); cambio.disabled = false; return; }
+      const aviso = await cambiarPlan(r.plan, r.texto, nube);
+      if (aviso) avisar(aviso);
+      elegidos.clear(); reemplazo = null;
+      ir('hoy', { sesion: true, ej: a });
+      return;
+    }
     const b = ev.target.closest('[data-agregar-elegidos]');
     if (!b) return;
     b.disabled = true;
@@ -125,17 +178,20 @@ export function vistaBanco(ir, entrada = {}) {
     const b = ev.target.closest('[data-banco-elegir]');
     if (!b || b.disabled) return;
     const id = b.dataset.bancoElegir;
-    elegidos.has(id) ? elegidos.delete(id) : elegidos.add(id);
-    document.querySelectorAll(`#vista-banco [data-banco-elegir="${CSS.escape(id)}"]`).forEach(x => { x.setAttribute('aria-pressed', String(elegidos.has(id))); x.closest('.banco-item')?.classList.toggle('elegido', elegidos.has(id)); });
+    // Al reemplazar se elige uno solo: tocar otro cambia la elección.
+    const marcar = sel => document.querySelectorAll(sel).forEach(x => { const si = elegidos.has(x.dataset.bancoElegir); x.setAttribute('aria-pressed', String(si)); x.closest('.banco-item')?.classList.toggle('elegido', si); });
+    if (base) { const ya = elegidos.has(id); elegidos.clear(); if (!ya) elegidos.add(id); marcar('#vista-banco .banco-item.elegido [data-banco-elegir]'); }
+    else elegidos.has(id) ? elegidos.delete(id) : elegidos.add(id);
+    marcar(`#vista-banco [data-banco-elegir="${CSS.escape(id)}"]`);
     pintarElegidos();
   });
   $('vista-banco').addEventListener('click', ev => {
-    const ver = ev.target.closest('#banco-recientes [data-banco-ver]');
+    const ver = ev.target.closest(':is(#banco-recientes, #banco-mismos) [data-banco-ver]');
     if (ver) return ir('ejercicio', { id: ver.dataset.bancoVer, desde: 'banco' });
     const agregar = ev.target.closest('#banco-recientes [data-banco-agregar]');
     if (agregar && !agregar.disabled) proponerEdicion({ tipo: 'agregar', ejercicio: agregar.dataset.bancoAgregar }, { volver: agregar, alCambiar: () => ir('hoy', { sesion: true }) });
   });
-  $('banco-volver').onclick = () => { elegidos.clear(); ir(desde, desde === 'hoy' ? { sesion: true } : undefined); };
+  $('banco-volver').onclick = () => { elegidos.clear(); reemplazo = null; ir(desde, desde === 'hoy' ? { sesion: true } : undefined); };
   // Crear ejercicio, como la pantalla de Hevy: nombre y filas para el equipo, el músculo principal, otros músculos y el
   // tipo; cada fila abre su lista. Lo elegido se conserva mientras se va y vuelve de cada lista.
   const borrador = { nombre: '', equipo: [], principal: '', otros: [], clase: 'peso' };

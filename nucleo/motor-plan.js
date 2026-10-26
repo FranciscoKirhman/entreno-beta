@@ -43,6 +43,9 @@ const DIAS_PREFERIDOS = { 2: [1, 4], 3: [1, 3, 5], 4: [1, 2, 4, 5], 5: [1, 2, 3,
 
 const TIPO_ORDEN = { compuesto: 0, aislamiento: 1, core: 2, cardio: 3, movilidad: 3 };
 const ISOMETRICOS = new Set(['plancha', 'plancha_rodillas', 'plancha_lateral', 'plancha_lateral_elevacion', 'colgarse']);
+/** Cómo se mide un ejercicio, para cambiarlo por otro que se anote igual (nucleo/reemplazar.js). */
+export const medidaDe = ej => (ej.tipo === 'cardio' ? 'cardio' : ej.tipo === 'movilidad' ? 'movilidad' : ej.patron === 'transporte' ? 'm'
+  : ISOMETRICOS.has(ej.id) || ej.medida === 'seg' ? 'seg' : 'reps');
 const DIA_MS = 864e5;
 const sumarDias = (iso, n) => new Date(Date.parse(iso + 'T12:00:00Z') + n * DIA_MS).toISOString().slice(0, 10);
 const diaSemana = iso => new Date(iso + 'T12:00:00Z').getUTCDay();
