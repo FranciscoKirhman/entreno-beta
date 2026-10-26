@@ -211,6 +211,46 @@ try { const a = localStorage.getItem('entreno-acento'); if (a && /^[a-z]+$/.test
   <button type="button" data-ir="miplan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 4.5h-2A1.5 1.5 0 0 0 5 6v13.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5h-2M9 3h6v3H9zM8.5 11h7M8.5 15h5"/></svg>Mi plan</button>
   <button type="button" data-ir="mas"><svg viewBox="0 0 24 24" aria-hidden="true"><circle class="trazo" cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>Perfil</button>
 </nav>
+<script>
+// Si la app no termina de abrir (un archivo que no llega, un error al cargar, el navegador que no deja guardar datos),
+// en vez de quedarse en "Cargando…" para siempre dice qué pasó y ofrece reintentar o reparar. Reparar borra la copia de
+// los archivos de la app (service worker y caché), nunca lo anotado. Nace de un iPhone donde Safari se quedaba en
+// "Cargando…" y Chrome abría bien.
+(() => {
+  const errores = [];
+  let almacenamiento = true;
+  try { localStorage.setItem('entreno-arranque', '1'); localStorage.removeItem('entreno-arranque'); } catch { almacenamiento = false; }
+  const revisar = () => {
+    const c = document.querySelector('#app > .cargando');
+    if (!c) return;
+    const esc = t => String(t).replace(/[&<>"]/g, x => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[x]));
+    c.outerHTML = `<section class="tarjeta sin-arranque" role="alert">
+      <h2>No pude abrir la app en este navegador</h2>
+      <p>${almacenamiento ? 'Puede ser la señal o una copia vieja de la app guardada en el teléfono. Reparar la baja de nuevo; lo que anotaste no se borra.'
+        : 'Este navegador no deja que la app guarde datos en el teléfono. En Safari: Ajustes, Apps, Safari, desactiva "Bloquear todas las cookies" y no uses la navegación privada. Después vuelve a abrir el enlace.'}</p>
+      <div class="fila-botones"><button type="button" class="boton primario" data-arranque="reparar">Reparar y reintentar</button><button type="button" class="boton" data-arranque="reintentar">Reintentar</button></div>
+      <p class="pequeno suave">Mientras tanto, la app abre en Chrome con la misma cuenta.</p>
+      ${errores.length ? `<details class="pequeno"><summary>Detalle para soporte</summary><p>${esc(errores.slice(0, 3).join(' · '))}</p></details>` : ''}
+    </section>`;
+    document.querySelector('[data-arranque="reintentar"]').onclick = () => location.reload();
+    document.querySelector('[data-arranque="reparar"]').onclick = async ev => {
+      ev.currentTarget.disabled = true;
+      try { for (const r of (await navigator.serviceWorker?.getRegistrations?.()) || []) await r.unregister(); } catch {}
+      try { for (const k of (await caches?.keys?.()) || []) await caches.delete(k); } catch {}
+      location.reload();
+    };
+  };
+  const antes = () => setTimeout(revisar, 2500);
+  addEventListener('error', e => {
+    if (e instanceof ErrorEvent) errores.push(e.message || 'Error al cargar');
+    else if (e.target?.tagName === 'SCRIPT') errores.push(`No llegó ${e.target.src || 'un archivo de la app'}`);
+    else return;
+    antes();
+  }, true);
+  addEventListener('unhandledrejection', e => { errores.push(String(e.reason?.message || e.reason || 'Error al cargar')); antes(); });
+  setTimeout(revisar, almacenamiento ? 12000 : 2500);
+})();
+</script>
 <script type="module" src="app.js"></script>
 </body>
 </html>

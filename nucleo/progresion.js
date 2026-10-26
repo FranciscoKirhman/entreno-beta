@@ -45,6 +45,26 @@ export function ajustarEjercicio({ objetivo: o, hechas, semanas = [], subioRecie
       motivo: `Con ${kg(carga)} no salió el rango completo. Vuelves a ${kg(carga - incremento)} una semana antes de intentarlo de nuevo.` };
   }
 
+  // Pesado: con la carga pedida, la mitad o más de las series quedó bajo el rango con 1 de reserva o menos (o se bajó el
+  // peso para terminar después de una así), y el máximo estimado de la sesión no da para el rango con la reserva pedida.
+  // Baja lo que haga falta: al menos un escalón y como mucho un 15%. Si el máximo sí da (la caída fue por cansancio o por
+  // poco descanso), se mantiene. Antes un peso que no salía se repetía igual la vez siguiente (en la beta, un rumano con
+  // 40 que salió 10 y 6 a RPE 9,5, y la tercera con 30).
+  if (incremento && carga) {
+    const aCarga = hechas.filter(s => Number(s.carga_kg) === Number(carga));
+    const bajoDuro = aCarga.filter(s => s.reps < o.reps_min && reserva(s) != null && reserva(s) <= 1);
+    const bajoElPeso = hechas.some(s => Number(s.carga_kg) > 0 && Number(s.carga_kg) < Number(carga));
+    if (bajoDuro.length && (bajoDuro.length * 2 >= aCarga.length || bajoElPeso)) {
+      const mejor = Math.max(...hechas.filter(s => Number(s.carga_kg) > 0 && Number(s.reps) > 0).map(e1rm));
+      const alcanza = mejor / (1 + (o.reps_min + 1 + (o.rir ?? 2)) / 30);
+      if (alcanza < carga) {
+        const nueva = Math.max(Math.ceil((carga * 0.85) / incremento - 1e-9) * incremento, Math.min(carga - incremento, Math.floor(alcanza / incremento + 1e-9) * incremento));
+        return { accion: 'bajar_carga', carga_kg: Number(nueva.toFixed(2)), reps_min: o.reps_min, reps_max: o.reps_max, regla: 'pesado',
+          motivo: `Con ${kg(carga)} las series quedaron bajo ${o.reps_min} casi al fallo. Bajas a ${kg(Number(nueva.toFixed(2)))} para hacer el rango con la reserva pedida.` };
+      }
+    }
+  }
+
   // Estancamiento: tres semanas sin mejorar el 1RM estimado.
   const actual = Math.max(...hechas.filter(s => s.carga_kg > 0 && s.reps > 0).map(e1rm), 0);
   const ultimas = [...semanas, actual].slice(-4);
