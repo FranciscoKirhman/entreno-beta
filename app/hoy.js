@@ -339,7 +339,10 @@ function ponerAproximaciones(dia, f) {
     const id = idDe(e, k), puestas = ((E.aproxPuestas ||= {})[f] ||= {});
     const lista = E.registro[f]?.[id];
     if (!puestas[id]) {
-      if ((lista || []).some(x => tipoDe(x) === 'calentamiento')) { puestas[id] = true; cambio = true; return; }
+      // Ya empezado (una serie hecha o algo escrito), no se le meten aproximaciones encima: al mover arriba un ejercicio
+      // ya hecho, pasaba a ser de los dos primeros compuestos y aparecían dos series C sin hacer sobre las suyas, como si
+      // el ejercicio se hubiera reiniciado (Francisco, 27 de octubre de 2026).
+      if ((lista || []).some(x => tipoDe(x) === 'calentamiento' || x?.hecho || x?.kg != null || x?.reps != null)) { puestas[id] = true; cambio = true; return; }
       const { lista: l, n } = materializar(f, e, k);
       const aprox = aproximacionesHoy(dia, e, l, f);
       l.splice(0, 0, ...aprox.map((_, j) => ({ tipo: 'calentamiento', aprox: j })));
