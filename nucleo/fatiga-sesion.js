@@ -65,24 +65,30 @@ export function seriesPorMusculo(ejercicios, porId) {
 }
 
 /**
- * Durante la sesión: si lo hecho hoy en ejercicios anteriores del mismo músculo salió más duro de lo pedido, el peso
- * del siguiente baja. Un punto de reserva menos en promedio, 5%; dos o más, 10%.
- * @param hechas {[ejercicio_id]: [{rpe?, rir?, hecho, tipo?}]} filas de hoy
+ * Durante la sesión: si lo ya hecho hoy de otro ejercicio del mismo músculo salió más duro de lo pedido, el peso de
+ * este baja. Un punto de reserva menos en promedio, 5%; dos o más, 10%. Cuenta lo que se hizo antes de empezar este
+ * ejercicio, esté arriba o abajo en la lista: antes contaba solo lo de arriba, así que mover un ejercicio sobre otro ya
+ * hecho le devolvía el peso de fresco y bajarlo se lo quitaba (Francisco, 26 de octubre: "al mover los ejercicios los
+ * pesos cambian"). Las series sin hora (registros antiguos) cuentan como antes, por posición.
+ * @param hechas {[ejercicio_id]: [{rpe?, rir?, hecho, tipo?, t?}]} filas de hoy; t: cuándo se marcó
  * @returns {{factor, falta}} falta: puntos de reserva que faltaron en promedio
  */
 export function ajusteDelDia(ejercicios, k, porId, hechas = {}) {
-  const ej = porId.get(ejercicios[k]?.ejercicio_id);
+  const id = ejercicios[k]?.ejercicio_id, ej = porId.get(id);
   if (!cuenta(ej)) return { factor: 1, falta: 0 };
+  const propias = (hechas[id] || []).filter(s => s?.hecho && s.t != null).map(s => s.t);
+  const empezo = propias.length ? Math.min(...propias) : Infinity;
   const faltas = [];
-  for (const e of ejercicios.slice(0, k)) {
+  ejercicios.forEach((e, j) => {
     const otro = porId.get(e.ejercicio_id);
-    if (!cuenta(otro) || !comparten(ej, otro) || e.rir == null) continue;
+    if (j === k || e.ejercicio_id === id || !cuenta(otro) || !comparten(ej, otro) || e.rir == null) return;
     for (const s of hechas[e.ejercicio_id] || []) {
       if (!s?.hecho || ['calentamiento', 'drop'].includes(s.tipo)) continue;
+      if (s.t != null ? s.t >= empezo : j > k) continue;
       const reserva = s.tipo === 'fallo' ? 0 : s.rir != null ? Number(s.rir) : s.rpe != null ? 10 - Number(s.rpe) : null;
       if (reserva != null) faltas.push(e.rir - reserva);
     }
-  }
+  });
   if (!faltas.length) return { factor: 1, falta: 0 };
   const falta = faltas.reduce((a, b) => a + b, 0) / faltas.length;
   return { factor: falta >= 2 ? 0.9 : falta >= 1 ? 0.95 : 1, falta: Math.round(falta * 10) / 10 };

@@ -287,14 +287,14 @@ function cargaPlanDe(e, dia, f) {
     registros: registrosParaCarga(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f) });
 }
 /**
- * La carga de hoy: la del plan, con menos peso si lo hecho hoy en ejercicios anteriores del mismo músculo salió más duro
- * de lo pedido (nucleo/fatiga-sesion.js: ajusteDelDia). Así el press en máquina no parte con el peso de cuando se hace
- * fresco después de una banca casi al fallo.
+ * La carga de hoy: la del plan, con menos peso si lo ya hecho hoy de otro ejercicio del mismo músculo salió más duro de
+ * lo pedido (nucleo/fatiga-sesion.js: ajusteDelDia). Así el press en máquina no parte con el peso de cuando se hace
+ * fresco después de una banca casi al fallo, y moverlo en la lista no le cambia el peso.
  */
 function cargaHoyDe(e, dia, f) {
   const base = cargaPlanDe(e, dia, f);
   const k = dia.ejercicios.indexOf(e), ej = indice.porId.get(e.ejercicio_id);
-  if (base == null || k < 1 || !ej || esAsistido(ej)) return { kg: base, fatiga: null };
+  if (base == null || k < 0 || !ej || esAsistido(ej)) return { kg: base, fatiga: null };
   const a = ajusteDelDia(dia.ejercicios, k, indice.porId, E.registro[f] || {});
   if (a.factor >= 1) return { kg: base, fatiga: null };
   const inc = incrementoPara(ej, lugarDe(dia)) || 2.5;
@@ -888,7 +888,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     </div>
     <textarea class="nota-ej" rows="1" data-nota="${id}" data-p="nota" data-visible placeholder="Nota para tu entrenador" aria-label="Nota para tu entrenador sobre ${esc(nombre)}">${esc(nota.nota || '')}</textarea>
     ${vivaHtml(vivaActual, e.ejercicio_id)}
-    ${cargaHoy.fatiga && !filas.some(x => x.hecho && deTrabajo(tipoDe(x))) ? `<p class="consejo bajar">Lo anterior del mismo músculo te salió más duro de lo pedido (unos ${esc(coma(cargaHoy.fatiga.falta))} de reserva menos): parte con ${esc(coma(enUnidad(cargaHoy.kg)))} en vez de ${esc(coma(enUnidad(cargaHoy.fatiga.base)))}.</p>` : ''}
+    ${cargaHoy.fatiga && !filas.some(x => x.hecho && deTrabajo(tipoDe(x))) ? `<p class="consejo bajar">Lo que ya hiciste del mismo músculo te salió más duro de lo pedido (unos ${esc(coma(cargaHoy.fatiga.falta))} de reserva menos): parte con ${esc(coma(enUnidad(cargaHoy.kg)))} en vez de ${esc(coma(enUnidad(cargaHoy.fatiga.base)))}.</p>` : ''}
     ${g && g.pos < g.total ? `<p class="linea-descanso sin-toque">${icono('reloj')} ${esc(descTexto)}</p>` : `<button type="button" class="linea-descanso" data-descanso-ej="${id}">${icono('reloj')} ${esc(descTexto)}</button>`}
     <div class="tabla-series${cardio ? ' cardio' : seg ? ' seg' : dist ? ' dist' : !conEsfuerzo ? ' sin-esfuerzo' : ''}">
       ${cardio ? `<div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span><span aria-hidden="true">${cardio === 'pisos' ? 'Pisos' : 'Km'}</span><span aria-hidden="true">Tiempo</span><span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>` : `<div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${queEs || u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : dist ? 'Metros' : 'Reps'}</span>${seg ? '<span aria-hidden="true"></span>' : dist || !conEsfuerzo ? '' : `<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el ${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}">${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}</button>`}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>`}
