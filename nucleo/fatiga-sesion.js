@@ -84,6 +84,34 @@ export function cargasAlReordenar(antes, despues, porId, incrementoDe, esAsistid
   });
 }
 
+/**
+ * Hoy, lo que ya se hizo de verdad del mismo músculo antes de empezar un ejercicio, aunque en la lista vaya más abajo:
+ * la carga del plan supone lo que va arriba en la lista (conFatigaPrevia, cargasAlReordenar), pero lo hecho cansa
+ * esté donde esté. Si se subió un ejercicio sobre otro del mismo músculo ya hecho, o se hizo algo fuera de orden, su
+ * peso no puede volver a ser de fresco. Lo de arriba que todavía no se hace se cuenta como lo espera la lista.
+ * Solo baja (como mucho, lo que la lista ya descontó queda igual) y se suma a ajusteDelDia, que mira el esfuerzo.
+ * @param hechas {[ejercicio_id]: [{hecho, tipo?, t?}]} filas de hoy; t: cuándo se marcó
+ * @returns {{factor, previas, hechas}} hechas: series del mismo músculo hechas antes (por la parte que comparten)
+ */
+export function previasDeHoy(ejercicios, k, porId, hechas = {}) {
+  const e = ejercicios[k], ej = porId.get(e?.ejercicio_id);
+  if (!cuenta(ej)) return { factor: 1, previas: 0, hechas: 0 };
+  const propias = (hechas[e.ejercicio_id] || []).filter(s => s?.hecho && s.t != null).map(s => s.t);
+  const empezo = propias.length ? Math.min(...propias) : Infinity;
+  let previas = 0, antes = 0;
+  ejercicios.forEach((x, j) => {
+    const otro = porId.get(x.ejercicio_id);
+    if (j === k || x.ejercicio_id === e.ejercicio_id || !cuenta(otro) || (x.unidad || 'reps') !== 'reps') return;
+    const parte = ej.musculos_primarios.filter(m => otro.musculos_primarios.includes(m)).length / ej.musculos_primarios.length;
+    if (!parte) return;
+    const n = (hechas[x.ejercicio_id] || []).filter(s => s?.hecho && !['calentamiento', 'drop'].includes(s.tipo) && (s.t != null ? s.t < empezo : j < k)).length;
+    antes += parte * n;
+    previas += parte * (j < k ? Math.max(n, x.series || 0) : n);
+  });
+  const factor = Math.min(1, aplicado(previas) / aplicado(seriesPrevias(ejercicios, k, porId)));
+  return { factor, previas: Math.round(previas * 10) / 10, hechas: Math.round(antes * 10) / 10 };
+}
+
 /** Series de trabajo por músculo principal en un día (para el tope por sesión del validador). */
 export function seriesPorMusculo(ejercicios, porId) {
   const v = {};

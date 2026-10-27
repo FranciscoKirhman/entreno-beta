@@ -17,7 +17,7 @@ import { enlaceVideo } from '../nucleo/explicar.js';
 import { sesionDe } from '../nucleo/agenda.js';
 import { duracionSesion, incrementoPara, cargaSugerida, registrosParaCarga, prescripcion, repsObjetivo } from '../nucleo/motor-plan.js';
 import { prioridadEsfuerzo, consejoSerie } from '../nucleo/series.js';
-import { ajusteDelDia } from '../nucleo/fatiga-sesion.js';
+import { ajusteDelDia, previasDeHoy } from '../nucleo/fatiga-sesion.js';
 import { sesionViva, aplicarViva, SEGUNDOS_PARA_ACEPTAR } from '../nucleo/sesion-viva.js';
 import { alternativas } from '../nucleo/checkin.js';
 import { filasTrasAjuste } from '../nucleo/tiempo-sesion.js';
@@ -296,10 +296,25 @@ function cargaHoyDe(e, dia, f) {
   const k = dia.ejercicios.indexOf(e), ej = indice.porId.get(e.ejercicio_id);
   if (base == null || k < 0 || !ej || esAsistido(ej)) return { kg: base, fatiga: null };
   const a = ajusteDelDia(dia.ejercicios, k, indice.porId, E.registro[f] || {});
-  if (a.factor >= 1) return { kg: base, fatiga: null };
+  // Además, lo ya hecho del mismo músculo que en la lista va más abajo (subido sobre uno ya hecho, o hecho fuera de
+  // orden) también cansa: la carga del plan solo supone lo de arriba (nucleo/fatiga-sesion.js: previasDeHoy).
+  const p = previasDeHoy(dia.ejercicios, k, indice.porId, E.registro[f] || {});
+  if (a.factor >= 1 && p.factor >= 1) return { kg: base, fatiga: null };
   const inc = incrementoPara(ej, lugarDe(dia)) || 2.5;
-  const kg = Number(Math.max(inc, Math.floor((base * a.factor) / inc + 1e-9) * inc).toFixed(2));
-  return kg < base ? { kg, fatiga: { ...a, base } } : { kg: base, fatiga: null };
+  // Con esfuerzo de más, hacia abajo como siempre; solo por volumen, al escalón más cercano (como al mover).
+  const redondeo = a.factor < 1 ? Math.floor : Math.round;
+  const kg = Number(Math.max(inc, redondeo((base * a.factor * p.factor) / inc + 1e-9) * inc).toFixed(2));
+  return kg < base ? { kg, fatiga: { ...a, base, porVolumen: p.factor < 1, hechas: p.hechas } } : { kg: base, fatiga: null };
+}
+/** Por qué parte más liviano: por lo que ya hiciste del mismo músculo (volumen), porque salió más duro de lo pedido, o
+ *  las dos cosas. Solo dice "más duro" cuando lo fue. */
+function textoFatiga({ kg, fatiga: x }) {
+  const duro = x.factor < 1;
+  const series = `${coma(x.hechas)} ${x.hechas === 1 ? 'serie' : 'series'}`;
+  const porque = x.porVolumen && duro ? `Ya hiciste ${series} del mismo músculo antes que este y te salieron más duras de lo pedido (unos ${coma(x.falta)} de reserva menos)`
+    : x.porVolumen ? `Ya hiciste ${series} del mismo músculo antes que este`
+    : `Lo que ya hiciste del mismo músculo te salió más duro de lo pedido (unos ${coma(x.falta)} de reserva menos)`;
+  return `${porque}: parte con ${coma(enUnidad(kg))} en vez de ${coma(enUnidad(x.base))}.`;
 }
 /**
  * Las repeticiones en gris de una serie de trabajo: las que dejan la reserva del plan con ese peso, según las dos últimas
@@ -891,7 +906,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     </div>
     <textarea class="nota-ej" rows="1" data-nota="${id}" data-p="nota" data-visible placeholder="Nota para tu entrenador" aria-label="Nota para tu entrenador sobre ${esc(nombre)}">${esc(nota.nota || '')}</textarea>
     ${vivaHtml(vivaActual, e.ejercicio_id)}
-    ${cargaHoy.fatiga && !filas.some(x => x.hecho && deTrabajo(tipoDe(x))) ? `<p class="consejo bajar">Lo que ya hiciste del mismo músculo te salió más duro de lo pedido (unos ${esc(coma(cargaHoy.fatiga.falta))} de reserva menos): parte con ${esc(coma(enUnidad(cargaHoy.kg)))} en vez de ${esc(coma(enUnidad(cargaHoy.fatiga.base)))}.</p>` : ''}
+    ${cargaHoy.fatiga && !filas.some(x => x.hecho && deTrabajo(tipoDe(x))) ? `<p class="consejo bajar">${esc(textoFatiga(cargaHoy))}</p>` : ''}
     ${g && g.pos < g.total ? `<p class="linea-descanso sin-toque">${icono('reloj')} ${esc(descTexto)}</p>` : `<button type="button" class="linea-descanso" data-descanso-ej="${id}">${icono('reloj')} ${esc(descTexto)}</button>`}
     <div class="tabla-series${cardio ? ' cardio' : seg ? ' seg' : dist ? ' dist' : !conEsfuerzo ? ' sin-esfuerzo' : ''}">
       ${cardio ? `<div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span><span aria-hidden="true">${cardio === 'pisos' ? 'Pisos' : 'Km'}</span><span aria-hidden="true">Tiempo</span><span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>` : `<div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${queEs || u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : dist ? 'Metros' : 'Reps'}</span>${seg ? '<span aria-hidden="true"></span>' : dist || !conEsfuerzo ? '' : `<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el ${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}">${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}</button>`}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>`}
