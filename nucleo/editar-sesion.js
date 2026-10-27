@@ -1,8 +1,9 @@
 // Edición manual de hoy: agregar, quitar y ordenar ejercicios, solo hoy o desde hoy en adelante (las sesiones que
 // vienen con la misma plantilla). Prepara una copia, no toca lo demás y valida antes de guardar.
 import { modoCardio } from './unidades.js';
-import { normalizar, tieneEquipo, nivelAlcanza, articulacionesBloqueadas, cargaZonaBloqueada } from './catalogo.js';
-import { prescripcion, comoDescarga, duracionSesion } from './motor-plan.js';
+import { normalizar, tieneEquipo, nivelAlcanza, articulacionesBloqueadas, cargaZonaBloqueada, esAsistido } from './catalogo.js';
+import { prescripcion, comoDescarga, duracionSesion, incrementoPara } from './motor-plan.js';
+import { cargasAlReordenar } from './fatiga-sesion.js';
 import { validarCambio } from './validador.js';
 import { grupos } from './superseries.js';
 import { seriesRetiradas } from './series-retiradas.js';
@@ -94,8 +95,17 @@ export function editarSesion(accion, ctx) {
     // El orden nuevo, por id. Lo que no venga en la lista queda al final, en su orden de antes.
     if (!dia?.ejercicios.length) return { error: 'Hoy no hay ejercicios para ordenar.' };
     const pos = id => { const i = (accion.orden || []).indexOf(id); return i < 0 ? Infinity : i; };
-    const ordenar = x => { x.ejercicios = x.ejercicios.map((e, i) => [e, i]).sort(([a, i], [b, j]) => pos(a.ejercicio_id || `i${i}`) - pos(b.ejercicio_id || `i${j}`) || i - j).map(([e]) => e); sinSuperseriesSueltas(x); };
-    ordenar(dia);
+    const lugarDe = x => ctx.respuestas.lugares?.find(l => l.nombre === x.lugar) || ctx.respuestas.lugares?.find(l => l.principal) || ctx.respuestas.lugares?.[0];
+    // Cada carga va a su lugar nuevo (nucleo/fatiga-sesion.js: cargasAlReordenar): cuenta lo que queda antes del mismo
+    // músculo, aunque salga con la reserva pedida. Lo que ya se empezó hoy (una serie hecha o algo escrito) no cambia.
+    const empezado = e => (ctx.registro?.[hoy]?.[e.ejercicio_id] || []).some(x => x?.hecho || x?.kg != null || x?.reps != null);
+    const ordenar = (x, tocar) => {
+      const antes = [...x.ejercicios];
+      x.ejercicios = x.ejercicios.map((e, i) => [e, i]).sort(([a, i], [b, j]) => pos(a.ejercicio_id || `i${i}`) - pos(b.ejercicio_id || `i${j}`) || i - j).map(([e]) => e);
+      sinSuperseriesSueltas(x);
+      x.ejercicios = cargasAlReordenar(antes, x.ejercicios, indice.porId, ej => incrementoPara(ej, lugarDe(x)), esAsistido, tocar);
+    };
+    ordenar(dia, e => !empezado(e));
     for (const x of siguientes(nuevo, dia, accion)) { const antes = x.ejercicios.map(e => e.ejercicio_id).join(); ordenar(x); if (x.ejercicios.map(e => e.ejercicio_id).join() !== antes) afectados++; }
   } else return { error: 'No reconozco ese cambio.' };
   // La preparación y sus minutos siguen a los ejercicios elegidos; las indicaciones importadas se conservan.

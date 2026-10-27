@@ -53,6 +53,37 @@ export function conFatigaPrevia(ejercicios, porId, incrementoDe, esAsistido = ()
   });
 }
 
+const NOTA_FATIGA = /\s*Más liviano que fresco \(unos \d+% menos\): llegas con [\d,]+ series del mismo músculo\./g;
+// Lo que conFatigaPrevia descuenta de verdad: bajo 3% no toca la carga.
+const aplicado = previas => { const f = factorFatiga(previas); return f >= 0.97 ? 1 : f; };
+
+/**
+ * Al cambiar el orden de un día, cada carga se lleva a su lugar nuevo con la regla del plan (conFatigaPrevia): se
+ * deshace lo que tenía por las series del mismo músculo que iban antes y se aplica lo que va antes ahora, aunque esas
+ * series salgan con la reserva pedida. Antes un ejercicio movido más abajo seguía con su peso de fresco, salvo que lo
+ * anterior saliera más duro de lo pedido (Francisco, 27 de octubre de 2026: la banca después del press inclinado). Se
+ * redondea al escalón más cercano, así mover y devolver un ejercicio deja la carga como estaba. No toca lo que `tocar`
+ * excluye (un ejercicio ya empezado hoy), ni la ayuda de un asistido, ni lo que va por tiempo o metros.
+ * @param antes        ejercicios del día en el orden anterior (los mismos objetos que `despues`)
+ * @param despues      los mismos ejercicios en el orden nuevo
+ * @param incrementoDe (ej) => kg del escalón de ese ejercicio en el lugar
+ * @returns los ejercicios de `despues`, con la carga y la nota de fatiga al día
+ */
+export function cargasAlReordenar(antes, despues, porId, incrementoDe, esAsistido = () => false, tocar = () => true) {
+  return despues.map((e, k) => {
+    const ej = porId.get(e.ejercicio_id), j = antes.indexOf(e);
+    if (j < 0 || e.carga_kg == null || !ej || esAsistido(ej) || (e.unidad || 'reps') !== 'reps' || !tocar(e)) return e;
+    const previas = seriesPrevias(despues, k, porId);
+    const fAntes = aplicado(seriesPrevias(antes, j, porId)), fAhora = aplicado(previas);
+    if (fAntes === fAhora) return e;
+    const inc = incrementoDe(ej) || 2.5;
+    const carga = Number(Math.max(inc, Math.round((Number(e.carga_kg) / fAntes * fAhora) / inc) * inc).toFixed(2));
+    const sinNota = String(e.nota || '').replace(NOTA_FATIGA, '').trim();
+    const nota = fAhora < 1 ? `Más liviano que fresco (unos ${Math.round((1 - fAhora) * 100)}% menos): llegas con ${String(Math.round(previas)).replace('.', ',')} series del mismo músculo.` : '';
+    return { ...e, carga_kg: carga, nota: [sinNota, nota].filter(Boolean).join(' ') || null };
+  });
+}
+
 /** Series de trabajo por músculo principal en un día (para el tope por sesión del validador). */
 export function seriesPorMusculo(ejercicios, porId) {
   const v = {};
