@@ -66,6 +66,9 @@ body:has(.barra :is(#modo, #campana):not([hidden])) .cab-sesion{top:calc(env(saf
 .linea-descanso{display:inline-flex;align-items:center;gap:6px;min-height:36px;margin:0 0 4px;padding:4px 0;border:0;background:none;color:var(--accent);font:600 15px/1.2 var(--f-texto);cursor:pointer}
 .linea-descanso .icono{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .linea-descanso.sin-toque{color:var(--ink-muted);cursor:default}
+/* Entre los ejercicios de una superserie, "Separar" a la derecha de la línea (app/hoy.js, separarSuperserie). */
+.linea-descanso.linea-ss{display:flex;width:100%}
+.linea-ss .separar-ss{margin-left:auto;min-height:36px;padding:4px 0 4px 12px;border:0;background:none;color:var(--accent);font:600 15px/1.2 var(--f-texto);cursor:pointer}
 #vista-hoy .ej-cab + .nota-fija,#vista-hoy .nota-fija{margin-top:4px}
 
 /* Superserie: barra de color a la izquierda de los ejercicios unidos. */
@@ -619,6 +622,10 @@ body:not(.en-sesion) .medalla-record{top:calc(env(safe-area-inset-top,0px) + 16p
    fila levantada sigue al dedo. El aire de abajo deja subir la lista hasta el dedo aunque sea el último ejercicio. */
 #vista-hoy .ej-cab{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 #vista-hoy .ej-cab img{-webkit-user-drag:none}
+/* Ordenar se hace manteniendo apretada la tarjeta entera (app/ordenar-arrastre.js): fuera de los campos y la tabla, sin
+   selección de texto ni el menú de la imagen del iPhone, que cortaban la espera. La nota y las series se escriben igual. */
+#vista-hoy .ejercicios-hoy>li.ej>:not(.tabla-series,.nota-ej,.fila-agregar){-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#vista-hoy .ej-cab :is(.ej-abrir,img){-webkit-user-drag:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 #vista-hoy.reordenando>:not(.cab-sesion,.ejercicios-hoy),#vista-hoy.reordenando :is(.cab-sesion-cifras,.cab-avance){display:none}
 #vista-hoy.reordenando .ejercicios-hoy{padding-bottom:100vh}
 #vista-hoy.reordenando .ejercicios-hoy>li.ej.tarjeta{margin:0 0 6px;padding:8px 10px;border-radius:14px;transition:transform .2s cubic-bezier(.2,.8,.2,1)}

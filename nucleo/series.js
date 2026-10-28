@@ -43,16 +43,18 @@ export function prioridadEsfuerzo(e, ej, d = {}, zonasConMolestia = []) {
  * @param incremento kg que se pueden sumar o restar (null en peso corporal)
  * @param o.previas  series de trabajo ya hechas hoy en este ejercicio, antes de esta (para ver si va bajando)
  * @param o.quedan   series de trabajo que faltan; con 0 no se habla de "la siguiente". Sin contexto (null), como antes.
+ * @param o.lastre   el ejercicio de peso corporal tiene versión con lastre (dominadas, fondos): con eso se le suma peso
  * @returns {{tipo, texto, kg?}} kg: el peso sugerido para la serie siguiente, que la app deja en gris
  */
-export function consejoSerie(e, s, incremento = null, { asistido = false, previas = [], quedan = null } = {}) {
-  const c = consejoSolo(e, s, incremento, { asistido });
+export function consejoSerie(e, s, incremento = null, { asistido = false, lastre = false, previas = [], quedan = null } = {}) {
+  const c = consejoSolo(e, s, incremento, { asistido, lastre });
   if (!c || quedan == null) return c;
   const r = reservaDe(s), reps = Number(s.reps), kg = Number(s.kg);
   const pasada = pasoDe(r, e.rir);
   if (quedan === 0) {
-    const cierre = c.tipo === 'bien' ? 'Justo lo pedido.' : c.tipo === 'subir' ? 'Te sobró: la próxima vez puede subir.'
-      : pasada || s.fallo ? 'Terminaste más cerca del fallo que lo pedido: la próxima vez parte con la misma carga.' : 'Quedaste bajo el rango: la próxima vez parte con la misma carga.';
+    const misma = corporalDe(s, incremento, asistido) ? 'la próxima vez apunta a lo mismo.' : `la próxima vez parte con la misma ${asistido ? 'ayuda' : 'carga'}.`;
+    const cierre = c.tipo === 'bien' ? 'Justo lo pedido.' : c.tipo === 'subir' ? `Te sobró: ${proximaVez(s, incremento, { asistido, lastre })}`
+      : pasada || s.fallo ? `Terminaste más cerca del fallo que lo pedido: ${misma}` : `Quedaste bajo el rango: ${misma}`;
     return { tipo: c.tipo, texto: `Listo con este ejercicio. ${cierre}` };
   }
   // Rango objetivo de la serie siguiente: desde `desde` hasta 2 más, sin salir del rango del plan. En gris va el mínimo.
@@ -93,9 +95,9 @@ export function consejoSerie(e, s, incremento = null, { asistido = false, previa
     return { tipo: 'bajar', texto: `${por}. La siguiente con ${n(nuevo)} kg para ${o.texto} repeticiones: te lo dejé en gris.`, kg: nuevo, reps: o.reps, rango: o.rango };
   }
   if (c.tipo === 'subir') {
-    // Con un escalón más se pierden un par de repeticiones.
+    // Con un escalón más se pierden un par de repeticiones. Se dice el peso, no "un escalón", como cuando baja.
     const o = rango(reps - 2);
-    return { ...c, texto: `${c.texto.replace(/\.$/, '')}. Te dejé ${n(kg + incremento)} kg en gris, para ${o.texto} repeticiones.`, kg: kg + incremento, reps: o.reps, rango: o.rango };
+    return { ...c, texto: `${c.texto.replace(/:.*$/, '')}. La siguiente con ${n(kg + incremento)} kg para ${o.texto} repeticiones: te lo dejé en gris.`, kg: kg + incremento, reps: o.reps, rango: o.rango };
   }
   // Más cerca del fallo pero con el peso bien: con el cansancio sale una menos, así que se apunta a eso, no al tope.
   if (pasada) {
@@ -109,20 +111,64 @@ export function consejoSerie(e, s, incremento = null, { asistido = false, previa
  *  "justo lo pedido" (Francisco, 21 de octubre de 2026). Con más reserva pedida, medio punto es ruido de la escala. */
 const pasoDe = (r, rir) => r != null && (r < rir - 0.5 || (rir <= 1 && r <= rir - 0.5));
 
-function consejoSolo(e, s, incremento = null, { asistido = false } = {}) {
+const kgTexto = x => `${String(Math.round(x * 100) / 100).replace('.', ',')} kg`;
+/** Sin peso anotado ni escalón de equipo (dominadas, fondos): no hay kilos que subir o bajar en la serie siguiente. */
+const corporalDe = (s, incremento, asistido) => !asistido && !(Number(s.kg) > 0) && !incremento;
+const MAS_LENTA = 'hazla más lenta: 3 segundos al bajar y 1 de pausa en la parte más difícil';
+const CON_LASTRE = 'agrega 2,5 kg con cinturón o un disco';
+
+/**
+ * Qué cambiar en la serie siguiente, en concreto: el peso al que ir y no "un escalón" (Francisco, 28 de octubre de 2026:
+ * "sube un escalón es muy genérico"). En los asistidos el peso es ayuda: costar más es bajarla. Sin peso que tocar,
+ * menos es null y el texto pide parar antes.
+ */
+function cambioDe(s, incremento, asistido) {
+  const kg = Number(s.kg) > 0 ? Number(s.kg) : null, paso = incremento || (kg ? 2.5 : null);
+  if (asistido) return {
+    mas: kg && paso ? (kg - paso > 0 ? `baja la ayuda a ${kgTexto(kg - paso)}` : 'hazla sin ayuda') : paso ? `baja la ayuda ${kgTexto(paso)}` : 'baja la ayuda',
+    menos: kg && paso ? `sube la ayuda a ${kgTexto(kg + paso)}` : paso ? `sube la ayuda ${kgTexto(paso)}` : 'sube la ayuda',
+  };
+  if (!kg) return { mas: `súbele ${kgTexto(paso)}`, menos: `bájale ${kgTexto(paso)}` };
+  return { mas: `sube a ${kgTexto(kg + paso)}`, menos: kg - paso > 0 ? `baja a ${kgTexto(kg - paso)}` : null };
+}
+
+/** "Te sobró: …" al terminar el ejercicio: con qué partir la próxima vez. */
+function proximaVez(s, incremento, { asistido, lastre }) {
+  const kg = Number(s.kg) > 0 ? Number(s.kg) : null, paso = incremento || (kg ? 2.5 : null);
+  if (corporalDe(s, incremento, asistido)) return lastre ? `la próxima vez ${CON_LASTRE}.` : 'la próxima vez hazla más lenta o con más repeticiones.';
+  if (!kg || !paso) return 'la próxima vez puede costar un poco más.';
+  if (asistido) return kg - paso > 0 ? `la próxima vez puede ir con ${kgTexto(kg - paso)} de ayuda.` : 'la próxima vez prueba sin ayuda.';
+  return `la próxima vez puede ir con ${kgTexto(kg + paso)}.`;
+}
+
+function consejoSolo(e, s, incremento = null, { asistido = false, lastre = false } = {}) {
   const reps = Number(s.reps);
   if (!reps || e.unidad === 'seg' || e.unidad === 'm') return null;
   const r = reservaDe(s);
-  const ajuste = incremento ? ` (${String(incremento).replace('.', ',')} kg)` : '';
-  // En los asistidos el peso es ayuda: costar más es subir la ayuda, y progresar es bajarla.
-  const masDificil = asistido ? `baja la ayuda un escalón${ajuste}` : `sube un escalón${ajuste}`;
-  const masFacil = asistido ? `sube la ayuda un escalón${ajuste}` : `baja la carga un escalón${ajuste}`;
-  if (s.fallo && e.rir >= 1) return { tipo: 'bajar', texto: `Llegaste al fallo y el plan pedía dejar ${e.rir}. En la siguiente serie ${masFacil} o haz 1 a 2 repeticiones menos.` };
-  if (reps < e.reps_min && r != null && r < e.rir) return { tipo: 'bajar', texto: `No llegaste a ${e.reps_min} y quedaste más cerca del fallo de lo pedido: ${masFacil} para la siguiente.` };
+  if (corporalDe(s, incremento, asistido)) return consejoCorporal(e, reps, r, s.fallo, lastre);
+  const { mas, menos } = cambioDe(s, incremento, asistido);
+  const antes = menos ? `${menos} o haz 1 a 2 repeticiones menos` : 'haz 1 a 2 repeticiones menos';
+  if (s.fallo && e.rir >= 1) return { tipo: 'bajar', texto: `Llegaste al fallo y el plan pedía dejar ${e.rir}. En la siguiente serie ${antes}.` };
+  if (reps < e.reps_min && r != null && r < e.rir) return { tipo: 'bajar', texto: `No llegaste a ${e.reps_min} y quedaste más cerca del fallo de lo pedido: ${menos ? `${menos} para la siguiente` : 'en la siguiente haz 1 a 2 repeticiones menos'}.` };
   if (reps < e.reps_min && (r == null || r >= e.rir)) return { tipo: 'mantener', texto: `Paraste antes del rango con reserva de sobra. Si te sentías bien, en la siguiente intenta llegar a ${e.reps_min}.` };
-  if (reps > e.reps_max && (r == null || r >= e.rir)) return { tipo: 'subir', texto: `Te pasaste del rango con reserva: en la siguiente serie ${masDificil}.` };
-  if (r != null && r > e.rir + 1.5) return { tipo: 'subir', texto: `Te sobraban más repeticiones de las pedidas: ${masDificil} o haz más repeticiones.` };
-  if (r != null && r < e.rir - 1.5) return { tipo: 'bajar', texto: `Quedaste mucho más cerca del fallo que lo pedido (${e.rir} en reserva): ${masFacil} para la siguiente.` };
+  if (reps > e.reps_max && (r == null || r >= e.rir)) return { tipo: 'subir', texto: `Te pasaste del rango con reserva: en la siguiente serie ${mas}.` };
+  if (r != null && r > e.rir + 1.5) return { tipo: 'subir', texto: `Te sobraban más repeticiones de las pedidas: ${mas} o haz más repeticiones.` };
+  if (r != null && r < e.rir - 1.5) return { tipo: 'bajar', texto: `Quedaste mucho más cerca del fallo que lo pedido (${e.rir} en reserva): ${menos ? `${menos} para la siguiente` : 'en la siguiente haz 1 a 2 repeticiones menos'}.` };
   if (pasoDe(r, e.rir)) return { tipo: 'mantener', texto: `Quedaste más cerca del fallo que lo pedido (${e.rir} en reserva). Mantén ${asistido ? 'la ayuda' : 'la carga'} y no fuerces más.` };
+  return { tipo: 'bien', texto: 'Justo lo pedido. Sigue igual.' };
+}
+
+/** Con el cuerpo (dominadas, fondos, flexiones): más difícil es más lenta o, si quedó sobre el rango, con lastre; más
+ *  fácil es parar antes. */
+function consejoCorporal(e, reps, r, fallo, lastre) {
+  const sobra = reps >= e.reps_max ? `En la siguiente serie, ${MAS_LENTA}.${lastre ? ` Si igual te sobra, la próxima sesión ${CON_LASTRE}.` : ''}`
+    : `En la siguiente haz más, hasta ${e.reps_max}, o ${MAS_LENTA}.`;
+  if (fallo && e.rir >= 1) return { tipo: 'bajar', texto: `Llegaste al fallo y el plan pedía dejar ${e.rir}. En la siguiente serie para 1 a 2 repeticiones antes.` };
+  if (reps < e.reps_min && r != null && r < e.rir) return { tipo: 'bajar', texto: `No llegaste a ${e.reps_min} y quedaste más cerca del fallo de lo pedido. En la siguiente para con ${e.rir} en reserva, aunque salgan menos.` };
+  if (reps < e.reps_min && (r == null || r >= e.rir)) return { tipo: 'mantener', texto: `Paraste antes del rango con reserva de sobra. Si te sentías bien, en la siguiente intenta llegar a ${e.reps_min}.` };
+  if (reps > e.reps_max && (r == null || r >= e.rir)) return { tipo: 'subir', texto: `Te pasaste del rango con reserva. ${sobra}` };
+  if (r != null && r > e.rir + 1.5) return { tipo: 'subir', texto: `Te sobraban más repeticiones de las pedidas. ${sobra}` };
+  if (r != null && r < e.rir - 1.5) return { tipo: 'bajar', texto: `Quedaste mucho más cerca del fallo que lo pedido (${e.rir} en reserva). En la siguiente para 1 a 2 repeticiones antes.` };
+  if (pasoDe(r, e.rir)) return { tipo: 'mantener', texto: `Quedaste más cerca del fallo que lo pedido (${e.rir} en reserva). En la siguiente para antes y no fuerces más.` };
   return { tipo: 'bien', texto: 'Justo lo pedido. Sigue igual.' };
 }

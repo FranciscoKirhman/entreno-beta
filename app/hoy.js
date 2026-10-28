@@ -27,13 +27,13 @@ import { avisoCheckin } from './checkin.js';
 import { avisoDescargaCorto } from './temporada.js';
 import { subirACuenta } from './cola.js';
 import { iniciarDescanso, detenerDescanso, iniciarTramos } from './descanso.js';
-import { tramosDePaso, tramosDeCardio, seriesDeCalentamiento, descansoCalentamiento, rangoDescansoCalentamiento } from '../nucleo/calentamiento.js';
+import { tramosDePaso, tramosDeCardio, seriesDeCalentamiento, descansoCalentamiento, rangoDescansoCalentamiento, modoCalentamiento, textoCalentamientoCorporal } from '../nucleo/calentamiento.js';
 import { calentamientoDeSesion, minutosCalentamiento, partePaso, aproximacionesDelPlan, conAproximaciones, zonasDeSesion } from '../nucleo/calentamiento-sesion.js';
 import { estiramientoDeSesion } from '../nucleo/estiramiento-sesion.js';
 import { articulacionesBloqueadas } from '../nucleo/catalogo.js';
 import { actualizarPantalla } from './pantalla.js';
 import { abrirHoja } from './hoja.js';
-import { grupos, unir, separar, copiarSuperseries, despuesDeSerie, etiquetaSuperserie } from '../nucleo/superseries.js';
+import { grupos, unir, separar, deshacer, copiarSuperseries, despuesDeSerie, etiquetaSuperserie } from '../nucleo/superseries.js';
 import { icono } from './iconos.js';
 import { miniatura } from './imagenes.js';
 import { NOMBRE_MUSCULO, lista, mayuscula, imagenesMusculos } from './musculos.js';
@@ -339,7 +339,8 @@ function aproximacionesHoy(dia, e, lista, f) {
   const ej = indice.porId.get(e.ejercicio_id);
   const prev = e.ejercicio_id ? anterior(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f)?.series[0] : null;
   const kgTrabajo = (lista || []).find(x => deTrabajoFila(x) && x.kg != null)?.kg ?? cargaPlanDe(e, dia, f) ?? prev?.carga_kg ?? null;
-  return seriesDeCalentamiento(kgTrabajo, { incremento: (ej && incrementoPara(ej, lugarDe(dia))) || 2.5, barra: ej?.equipamiento.includes('barra_rack') ? 20 : 0, esquema: ajuste('esquemaCal') });
+  // Con el cuerpo (dominadas, fondos) o con ayuda no hay "la mitad del peso": repeticiones fáciles (calentamientoCorporal).
+  return seriesDeCalentamiento(kgTrabajo, { incremento: (ej && incrementoPara(ej, lugarDe(dia))) || 2.5, barra: ej?.equipamiento.includes('barra_rack') ? 20 : 0, esquema: ajuste('esquemaCal'), modo: modoCalentamiento(ej), repsMin: e.reps_min });
 }
 /**
  * Pone las series de calentamiento al comienzo de los ejercicios que las llevan (una vez por día y ejercicio: si la
@@ -554,7 +555,7 @@ function pantallaPasosHtml(dia, f) {
       ${tramos.length ? `<button type="button" class="boton reloj-paso pasos-reloj" data-tramos="${esc(JSON.stringify(tramos))}" aria-label="Cronómetro de ${esc(reloj(total))}">▶ <span class="num">${reloj(total)}</span></button>` : ''}
       ${p.how ? `<p class="paso-instruccion">${esc(p.how)}</p>` : ''}
       ${p.por_que ? `<p class="paso-motivo pequeno">${esc(p.por_que)}</p>` : ''}
-      ${i === 0 && conFilasC ? '<p class="pequeno suave">Las series livianas con peso están en cada ejercicio, en las filas C.</p>' : ''}
+      ${i === 0 && conFilasC ? '<p class="pequeno suave">Las series livianas de cada ejercicio están en su tabla, en las filas C.</p>' : ''}
       ${i === 0 && tipo === 'est' ? '<p class="pequeno suave">Opcional. Ayuda a mantener la movilidad, pero no reduce de forma importante el dolor muscular de los días siguientes. Estira hasta sentir tensión, sin dolor.</p>' : ''}
     </div>
     <div class="pasos-pie">
@@ -830,6 +831,11 @@ function filaCardio({ id, i, r, t, prev, e, cardio, etiq, nombre }) {
     </div></div>`;
 }
 
+/** Dominadas, fondos o asistidos con su fila C sin hacer: se dice en palabras qué hacer, porque no hay "la mitad del
+ *  peso" que leer en la fila (Francisco, 28 de octubre de 2026: "calentamiento dominadas poco claro"). */
+const calentarCorporal = (ej, aprox, filas) => Boolean(modoCalentamiento(ej) && aprox[0]?.reps
+  && filas.some(x => x?.aprox != null && !x.hecho) && !filas.some(x => x?.hecho && deTrabajo(tipoDe(x))));
+
 function ejercicioHoy(e, k, f, previas, nota, dia) {
   const id = idDe(e, k);
   const aprox = filasDe(f, e, k).some(x => x?.aprox != null) ? aproximacionesHoy(dia, e, E.registro[f]?.[id], f) : [];
@@ -907,7 +913,8 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     <textarea class="nota-ej" rows="1" data-nota="${id}" data-p="nota" data-visible placeholder="Nota para tu entrenador" aria-label="Nota para tu entrenador sobre ${esc(nombre)}">${esc(nota.nota || '')}</textarea>
     ${vivaHtml(vivaActual, e.ejercicio_id)}
     ${cargaHoy.fatiga && !filas.some(x => x.hecho && deTrabajo(tipoDe(x))) ? `<p class="consejo bajar">${esc(textoFatiga(cargaHoy))}</p>` : ''}
-    ${g && g.pos < g.total ? `<p class="linea-descanso sin-toque">${icono('reloj')} ${esc(descTexto)}</p>` : `<button type="button" class="linea-descanso" data-descanso-ej="${id}">${icono('reloj')} ${esc(descTexto)}</button>`}
+    ${calentarCorporal(ejCat, aprox, filas) ? `<p class="nota-sesion pequeno"><strong>Calentamiento, fila C:</strong> ${esc(textoCalentamientoCorporal(aprox, modoCalentamiento(ejCat)))}</p>` : ''}
+    ${g && g.pos < g.total ? `<div class="linea-descanso sin-toque linea-ss">${icono('reloj')} <span>${esc(descTexto)}</span><button type="button" class="separar-ss" data-separar-ss="${id}" aria-label="Separar la superserie ${g.letra}">Separar</button></div>` : `<button type="button" class="linea-descanso" data-descanso-ej="${id}">${icono('reloj')} ${esc(descTexto)}</button>`}
     <div class="tabla-series${cardio ? ' cardio' : seg ? ' seg' : dist ? ' dist' : !conEsfuerzo ? ' sin-esfuerzo' : ''}">
       ${cardio ? `<div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span><span aria-hidden="true">${cardio === 'pisos' ? 'Pisos' : 'Km'}</span><span aria-hidden="true">Tiempo</span><span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>` : `<div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${queEs || u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : dist ? 'Metros' : 'Reps'}</span>${seg ? '<span aria-hidden="true"></span>' : dist || !conEsfuerzo ? '' : `<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el ${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}">${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}</button>`}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>`}
       ${filasHtml}
@@ -1096,7 +1103,8 @@ function enlazar(ir, dia) {
     const ej = indice.porId.get(e.ejercicio_id);
     const previas = lista.slice(0, Math.max(0, i)).filter(x => x?.hecho && deTrabajo(tipoDe(x))).map(x => ({ ...x, fallo: tipoDe(x) === 'fallo' }));
     const quedan = i < 0 ? null : lista.slice(i + 1).filter(x => !x?.hecho && deTrabajo(tipoDe(x))).length;
-    return deTrabajo(tipoDe(r)) ? consejoSerie(e, { ...r, fallo: tipoDe(r) === 'fallo' }, ej ? incrementoPara(ej, lugar) : null, { asistido: esAsistido(ej), previas, quedan }) : null;
+    // lastre: las de peso corporal con versión con lastre (dominadas, fondos), donde sumar peso es cómo seguir.
+    return deTrabajo(tipoDe(r)) ? consejoSerie(e, { ...r, fallo: tipoDe(r) === 'fallo' }, ej ? incrementoPara(ej, lugar) : null, { asistido: esAsistido(ej), lastre: Boolean(ej && indice.porId.has(`${ej.id}_lastre`)), previas, quedan }) : null;
   };
 
   // Escribir kilos (o libras) y repeticiones: se guarda en kilos, sin volver a dibujar.
@@ -1272,9 +1280,12 @@ function enlazar(ir, dia) {
       volver: b,
       opciones: [
         ...otros.map(({ x, j }) => ({ valor: String(j), letra: g[j] ? etiquetaSuperserie(g[j]) : '+', nombre: `${g[k] ? 'Sumar' : 'Con'} ${nombreDe(x)}` })),
-        ...(g[k] ? [{ valor: 'separar', letra: '✕', clase: 'quitar', nombre: 'Sacar de la superserie', peligro: true }] : []),
+        // Con dos, sacar uno ya la deshace: queda solo "Separar", que además no cambia el orden.
+        ...(g[k]?.total > 2 ? [{ valor: 'separar', letra: '✕', clase: 'quitar', nombre: 'Sacar de la superserie', peligro: true }] : []),
+        ...(g[k] ? [{ valor: 'deshacer', letra: '✕', clase: 'quitar', nombre: `Separar la superserie ${g[k].letra}`, peligro: true }] : []),
       ],
       alElegir: async v => {
+        if (v === 'deshacer') return separarSuperserie(id, b);
         const nuevo = structuredClone(E.plan);
         const d = sesionDe(nuevo, f);
         d.ejercicios = v === 'separar' ? separar(d.ejercicios, k) : unir(d.ejercicios, k, Number(v));
@@ -1286,6 +1297,35 @@ function enlazar(ir, dia) {
       },
     });
   };
+
+  // Separar la superserie entera, a un toque desde la tarjeta (Francisco, 28 de octubre de 2026): cada ejercicio vuelve a
+  // su lugar con su descanso y lo hecho se conserva. Si la superserie sigue en las próximas semanas, se pregunta hasta dónde.
+  const separarSuperserie = (id, b) => {
+    const { k } = ejercicioDe(id);
+    const g = grupos(dia.ejercicios)[k];
+    if (!g) return;
+    const ids = new Set(g.miembros.map(m => dia.ejercicios[m].ejercicio_id).filter(Boolean));
+    const nombres = lista(g.miembros.map(m => nombreDe(dia.ejercicios[m])));
+    const conSuperserie = x => grupos(x.ejercicios).some((s, j) => s && ids.has(x.ejercicios[j].ejercicio_id));
+    const siguen = (E.plan.dias || []).filter(x => x.plantilla && x.plantilla === dia.plantilla && x.fecha > f && conSuperserie(x));
+    const aplicar = async adelante => {
+      const nuevo = structuredClone(E.plan);
+      const d = sesionDe(nuevo, f);
+      d.ejercicios = deshacer(d.ejercicios, ids);
+      if (adelante) for (const x of nuevo.dias.filter(x => x.plantilla && x.plantilla === d.plantilla && x.fecha > f)) x.ejercicios = deshacer(x.ejercicios, ids);
+      await cambiarPlan(nuevo, `Superserie ${g.letra} separada${adelante ? ', también en las próximas semanas' : ' por hoy'}: ${nombres} van cada uno con su descanso.`, nube);
+      repintar();
+    };
+    if (!siguen.length) return aplicar(false);
+    abrirHoja({
+      titulo: `Separar la superserie ${g.letra}`,
+      nota: `${mayuscula(nombres)} vuelven a ir por separado, cada uno con su descanso. Lo que ya hiciste se conserva.`,
+      volver: b,
+      opciones: [{ valor: 'hoy', icono: icono('calendario'), nombre: 'Solo hoy' }, { valor: 'adelante', icono: icono('calendario'), nombre: 'Hoy y las próximas semanas' }],
+      alElegir: v => aplicar(v === 'adelante'),
+    });
+  };
+  raiz.querySelectorAll('[data-separar-ss]').forEach(b => b.onclick = () => separarSuperserie(b.dataset.separarSs, b));
 
   // Agregar una serie al final, o un calentamiento al principio.
   const agregarFila = (id, calentar) => {

@@ -68,6 +68,18 @@ export function separar(ejercicios, i) {
 }
 
 /**
+ * Deshace entera la superserie de los ejercicios dados (por id): cada uno vuelve a ir solo, en el mismo lugar y con su
+ * propio descanso. Las demás superseries quedan como estaban. Para "Separar" (Francisco, 28 de octubre de 2026).
+ */
+export function deshacer(ejercicios, ids) {
+  return limpiar(ejercicios.map(e => {
+    const x = { ...e };
+    if (ids.has(e.ejercicio_id)) delete x.superserie;
+    return x;
+  }));
+}
+
+/**
  * Copia las superseries de un día a otro de la misma plantilla (las semanas siguientes): por ejercicio, con los
  * de cada superserie juntos en el mismo orden. Lo que no está en el día de origen queda como estaba.
  */

@@ -1,6 +1,6 @@
 // Preparación por movimientos. Contenido general adaptado del tablero anterior, sin sus datos personales.
 // Los pasos propios de un plan importado se conservan; solo se reemplaza el antiguo esquema genérico.
-import { seriesDeCalentamiento, tramosDePaso } from './calentamiento.js';
+import { seriesDeCalentamiento, tramosDePaso, modoCalentamiento, textoCalentamientoCorporal } from './calentamiento.js';
 
 export function aproximacionesDelPlan(dia, ejercicio) {
   return ejercicio.aproximaciones?.length ? ejercicio.aproximaciones : (dia.calentamiento || []).find(p => p.aproximaciones?.[ejercicio.ejercicio_id])?.aproximaciones[ejercicio.ejercicio_id] || [];
@@ -141,6 +141,9 @@ export function calentamientoDeSesion({ dia, porId, equipo = [], bloqueadas = ne
     const tiron = ejercicios.find(x => x.ej.patron.startsWith('tiron'));
     if (tiron && equipo.includes('bandas')) {
       agregar('face-banda', 'Face pull con banda, 15 repeticiones', 'Banda fija a la altura de la cara. Tira separando las manos y llevando los codos atrás. Hombros abajo, sin encogerlos. Usa una resistencia liviana.', 'Activa la espalda alta antes de los tirones de esta sesión.', '3 · Activación', ['hombro', 'codo', 'muneca'], 'img/equipos/bandas.webp', 60);
+    } else if (tiron?.ej.patron === 'tiron_vertical' && modoCalentamiento(tiron.ej)) {
+      // Unas dominadas no se hacen "12 livianas": con el cuerpo se ensaya colgado, sin doblar los codos.
+      agregar(`ensayo:${tiron.ej.id}`, 'Dominadas escapulares, 8 repeticiones', 'Cuelga de la barra con los brazos estirados. Sin doblar los codos, baja los hombros lejos de las orejas, aguanta 1 segundo y vuelve lento.', `Prepara hombros y espalda para ${tiron.ej.nombre.toLowerCase()} sin cansar los brazos.`, '3 · Activación', ['hombro'], 'img/ejercicios/mini/dominadas_escapulares.webp', 60);
     } else if (tiron) {
       agregar(`ensayo:${tiron.ej.id}`, `${tiron.ej.nombre}, 12 repeticiones livianas`, 'Usa una carga fácil y haz el recorrido lento, sin balancear el tronco. Mantén los hombros lejos de las orejas. Esta serie prepara el movimiento, sin buscar el fallo.', 'Ensaya el tirón que aparece en tu sesión, usando su mismo equipo.', '3 · Activación', tiron.ej.carga_articular || [], `img/ejercicios/mini/${tiron.ej.id}.webp`, 60);
     }
@@ -173,8 +176,11 @@ export function calentamientoDeSesion({ dia, porId, equipo = [], bloqueadas = ne
   for (const { e, ej } of principales.length ? principales : ejercicios.slice(0, 1)) {
     if ((ej.carga_articular || []).some(z => bloqueadas.has(z))) continue;
     const indicadas = aproximacionesDelPlan(dia, e);
-    const series = indicadas.length ? indicadas.map(s => ({ ...s })) : seriesDeCalentamiento(cargas[ej.id] ?? e.carga_kg, opcionesCarga[ej.id] || { barra: ej.equipamiento.includes('barra_rack') ? 20 : 0 });
-    pasos.push({ clave: `aprox:${ej.id}`, name: `Aproximación: ${ej.nombre}`, how: 'Sube la carga de a poco y mantén varias repeticiones en reserva. Descansa 45 a 60 s entre aproximaciones y el descanso de tu ejercicio antes de la primera serie de trabajo. Si no hay un peso indicado, elige una carga fácil y regístrala.', por_que: 'Prepara este ejercicio con su propio peso. Estas series no cuentan como trabajo ni como volumen efectivo.', fase: '4 · Aproximación', imagen: `img/ejercicios/mini/${ej.id}.webp`, series, agregar_id: ej.id, seg_estimados: series.length * 75, origen: 'sesion-v1' });
+    const modo = modoCalentamiento(ej);
+    const series = indicadas.length ? indicadas.map(s => ({ ...s })) : seriesDeCalentamiento(cargas[ej.id] ?? e.carga_kg, { ...(opcionesCarga[ej.id] || { barra: ej.equipamiento.includes('barra_rack') ? 20 : 0 }), modo, repsMin: e.reps_min });
+    const how = modo && !indicadas.length ? textoCalentamientoCorporal(series, modo)
+      : 'Sube la carga de a poco y mantén varias repeticiones en reserva. Descansa 45 a 60 s entre aproximaciones y el descanso de tu ejercicio antes de la primera serie de trabajo. Si no hay un peso indicado, elige una carga fácil y regístrala.';
+    pasos.push({ clave: `aprox:${ej.id}`, name: `Aproximación: ${ej.nombre}`, how, por_que: modo ? 'Prepara el movimiento sin cansarte: con el cuerpo no hay un peso que subir de a poco. Esta serie no cuenta como trabajo ni como volumen efectivo.' : 'Prepara este ejercicio con su propio peso. Estas series no cuentan como trabajo ni como volumen efectivo.', fase: '4 · Aproximación', imagen: `img/ejercicios/mini/${ej.id}.webp`, series, agregar_id: ej.id, seg_estimados: series.length * 75, origen: 'sesion-v1' });
   }
   // Las marcas del antiguo cardio se conservan; la antigua aproximación no marca ejercicios diferentes.
   const anterior = actuales.findIndex(p => /^5 minutos de cardio suave$/.test(p.name));

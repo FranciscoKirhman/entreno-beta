@@ -1,5 +1,5 @@
-// Ordenar la sesión como en Hevy: mantener apretada la foto o el nombre de un ejercicio (0,4 s casi sin moverse)
-// encoge todos a su foto y su nombre. La fila apretada queda levantada bajo el dedo y las demás se corren para hacerle
+// Ordenar la sesión como en Hevy: mantener apretada la tarjeta de un ejercicio (su foto, su nombre o el espacio
+// alrededor; 0,4 s casi sin moverse) encoge todos a su foto y su nombre. La fila apretada queda levantada bajo el dedo y las demás se corren para hacerle
 // lugar; al soltar cae en su lugar, vuelven las series y se guarda el orden de hoy. Es un solo gesto: no hay un modo de
 // ordenar que cerrar después. Las series siguen a su ejercicio por id.
 // En el iPhone el dedo se sigue con touch*: pointer* se cancela apenas Safari empieza a desplazar la página. El touchmove
@@ -126,32 +126,38 @@ export function enlazarOrdenArrastre(raiz, alGuardar) {
   };
   cancelarActual = () => { dejarDeEsperar(); if (a) cancelar(); };
 
-  for (const cab of lista.querySelectorAll(':scope > .ej > .ej-cab')) {
-    const tarjeta = cab.parentElement;
-    // El ⋯ y la nota fija siguen siendo solo botones.
-    const sirve = t => !t.closest('.menu-ej, .nota-fija');
-    const delDedo = (ev, id) => [...ev.changedTouches].find(t => t.identifier === id);
-    cab.addEventListener('touchstart', ev => {
-      if (a || cayendo || ev.touches.length > 1 || !sirve(ev.target)) { dejarDeEsperar(); return; }
-      const t = ev.changedTouches[0];
-      esperar(tarjeta, t.clientX, t.clientY, t.identifier, false);
-    }, { passive: true });
-    cab.addEventListener('touchmove', ev => {
-      if (a && !a.mouse) { const t = delDedo(ev, a.dedo); if (t) { ev.preventDefault(); mover(t.clientY); } return; }
-      const t = espera && !espera.mouse && delDedo(ev, espera.dedo);
-      if (t && Math.hypot(t.clientX - espera.x, t.clientY - espera.y) > HOLGURA) dejarDeEsperar();
-    }, { passive: false });
-    // Ya levantada, soltar no es un toque: ni abre la ficha ni marca nada.
-    cab.addEventListener('touchend', ev => {
-      if (a && !a.mouse && delDedo(ev, a.dedo)) { ev.preventDefault(); soltar(); } else dejarDeEsperar();
-    }, { passive: false });
-    cab.addEventListener('touchcancel', () => { if (a && !a.mouse) cancelar(); else dejarDeEsperar(); });
-    cab.addEventListener('pointerdown', ev => {
-      if (ev.pointerType === 'touch' || ev.button !== 0 || a || cayendo || !sirve(ev.target)) return;
-      esperar(tarjeta, ev.clientX, ev.clientY, ev.pointerId, true);
-      addEventListener('pointermove', alMoverMouse); addEventListener('pointerup', alSoltarMouse); addEventListener('pointercancel', alSoltarMouse);
-    });
-    cab.addEventListener('contextmenu', ev => ev.preventDefault());
-    cab.addEventListener('dragstart', ev => ev.preventDefault());
-  }
+  // Se ordena manteniendo apretada la tarjeta: su foto, su nombre o el espacio alrededor, no solo el texto (Francisco,
+  // 28 de octubre de 2026: "se hace difícil mover los ejercicios"). Lo que se escribe o se toca sigue siendo lo suyo: los
+  // campos, la tabla de series, el ⋯, la nota fija y los demás botones. La foto sí: un toque abre la ficha, mantenerla
+  // ordena. Se escucha en la lista, así cada tarjeta entera sirve.
+  const NO_SIRVE = 'input, textarea, select, a, .tabla-series, .fila-agregar, .menu-ej, .nota-fija, button:not(.ej-abrir)';
+  const tarjetaDe = t => {
+    const x = t?.closest?.('.ej');
+    return x?.parentElement === lista && !t.closest(NO_SIRVE) ? x : null;
+  };
+  const delDedo = (ev, id) => [...ev.changedTouches].find(t => t.identifier === id);
+  lista.addEventListener('touchstart', ev => {
+    const tarjeta = tarjetaDe(ev.target);
+    if (a || cayendo || ev.touches.length > 1 || !tarjeta) { dejarDeEsperar(); return; }
+    const t = ev.changedTouches[0];
+    esperar(tarjeta, t.clientX, t.clientY, t.identifier, false);
+  }, { passive: true });
+  lista.addEventListener('touchmove', ev => {
+    if (a && !a.mouse) { const t = delDedo(ev, a.dedo); if (t) { ev.preventDefault(); mover(t.clientY); } return; }
+    const t = espera && !espera.mouse && delDedo(ev, espera.dedo);
+    if (t && Math.hypot(t.clientX - espera.x, t.clientY - espera.y) > HOLGURA) dejarDeEsperar();
+  }, { passive: false });
+  // Ya levantada, soltar no es un toque: ni abre la ficha ni marca nada.
+  lista.addEventListener('touchend', ev => {
+    if (a && !a.mouse && delDedo(ev, a.dedo)) { ev.preventDefault(); soltar(); } else dejarDeEsperar();
+  }, { passive: false });
+  lista.addEventListener('touchcancel', () => { if (a && !a.mouse) cancelar(); else dejarDeEsperar(); });
+  lista.addEventListener('pointerdown', ev => {
+    const tarjeta = tarjetaDe(ev.target);
+    if (ev.pointerType === 'touch' || ev.button !== 0 || a || cayendo || !tarjeta) return;
+    esperar(tarjeta, ev.clientX, ev.clientY, ev.pointerId, true);
+    addEventListener('pointermove', alMoverMouse); addEventListener('pointerup', alSoltarMouse); addEventListener('pointercancel', alSoltarMouse);
+  });
+  lista.addEventListener('contextmenu', ev => { if (tarjetaDe(ev.target)) ev.preventDefault(); });
+  lista.addEventListener('dragstart', ev => { if (tarjetaDe(ev.target)) ev.preventDefault(); });
 }

@@ -84,13 +84,15 @@ export function sesionViva(dia, registro = {}, { notas = {}, porId, minutos = nu
         if (otro) return poner({ ...base, id, tipo: 'reemplazar', a: otro.id, accion: `cambiarlo por ${otro.nombre}`, hecho: `Lo cambié por ${otro.nombre}`, motivo: 'anotaste que la máquina está ocupada' });
       }
       if (nota === 'dolor_fuerte' && quedan) return poner({ ...base, id, tipo: 'quitar_series', series: h.length, accion: quedan === 1 ? 'quitar la serie que queda' : `quitar las ${quedan} que quedan`, hecho: quedan === 1 ? 'Quité la serie que quedaba' : `Quité las ${quedan} que quedaban`, motivo: 'anotaste que duele bastante; si sigue, cuéntaselo al coach' });
+      // El peso al que va, no "un escalón": así se lee sin hacer la cuenta (28 de octubre de 2026).
       if ((nota === 'molestia' || nota === 'pesado') && quedan && e.carga_kg) {
-        const f = nota === 'molestia' ? 0.9 : 0.95;
-        return poner({ ...base, id, tipo: 'ajustar', carga_kg: bajarA(Number(e.carga_kg), f, inc), rir: Math.min(4, (e.rir ?? 2) + (nota === 'molestia' ? 1 : 0)),
-          accion: 'bajar el peso de lo que queda', hecho: 'Bajé el peso de lo que queda', motivo: nota === 'molestia' ? 'anotaste una molestia: más liviano y con una de reserva más' : 'anotaste que te está costando' });
+        const f = nota === 'molestia' ? 0.9 : 0.95, nuevo = bajarA(Number(e.carga_kg), f, inc);
+        return poner({ ...base, id, tipo: 'ajustar', carga_kg: nuevo, rir: Math.min(4, (e.rir ?? 2) + (nota === 'molestia' ? 1 : 0)),
+          accion: `bajar a ${kgTexto(nuevo)} lo que queda`, hecho: `Bajé a ${kgTexto(nuevo)} lo que queda`, motivo: nota === 'molestia' ? 'anotaste una molestia: más liviano y con una de reserva más' : 'anotaste que te está costando' });
       }
       if (nota === 'facil' && quedan && e.carga_kg) {
-        return poner({ ...base, id, tipo: 'ajustar', carga_kg: Number(e.carga_kg) + inc, accion: 'subir un escalón lo que queda', hecho: 'Subí un escalón lo que queda', motivo: 'anotaste que está fácil' });
+        const nuevo = Number(e.carga_kg) + inc;
+        return poner({ ...base, id, tipo: 'ajustar', carga_kg: nuevo, accion: `subir a ${kgTexto(nuevo)} lo que queda`, hecho: `Subí a ${kgTexto(nuevo)} lo que queda`, motivo: 'anotaste que está fácil' });
       }
     }
 

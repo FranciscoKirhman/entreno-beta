@@ -1,5 +1,6 @@
 // Calentamiento y cronómetros por tramos, como en el tablero, y series de calentamiento con su peso, como la
 // calculadora de Hevy. Funciones puras: la pantalla Hoy las usa para dibujar y para el cronómetro.
+import { esAsistido, conLastre, sinCargaExterna } from './catalogo.js';
 
 /** Tramos de un paso que va por tiempo ("5 minutos", "5 a 6 min", "30 s por lado", "3 × 45 s"); [] si va por
  *  repeticiones ("2 × 15", "10 por lado"). Solo se mira el nombre del paso: la explicación puede nombrar otros tiempos. */
@@ -50,6 +51,8 @@ export function tramosDeCardio(texto) {
  * @param kgTrabajo   peso de la primera serie de trabajo (escrito hoy, del plan o de la vez anterior)
  * @param incremento  lo mínimo que se puede subir con ese equipo (motor-plan.incrementoPara)
  * @param barra       peso de la barra sola, si el ejercicio usa barra
+ * @param modo        'corporal' o 'asistido' (modoCalentamiento): sin una carga que subir de a poco, calentamientoCorporal
+ * @param repsMin     repeticiones mínimas de las series de trabajo (las usa el modo corporal)
  */
 /** Esquemas de la calculadora de calentamiento (como la de Hevy): [porcentaje del peso de trabajo, repeticiones]. */
 export const ESQUEMAS_CALENTAMIENTO = {
@@ -58,7 +61,8 @@ export const ESQUEMAS_CALENTAMIENTO = {
   largo: [[0.4, 10], [0.6, 6], [0.8, 3], [0.9, 1]],
   uno: [[0.6, 8]],
 };
-export function seriesDeCalentamiento(kgTrabajo, { incremento = 2.5, barra = 0, esquema = 'auto' } = {}) {
+export function seriesDeCalentamiento(kgTrabajo, { incremento = 2.5, barra = 0, esquema = 'auto', modo = null, repsMin = null } = {}) {
+  if (modo) return calentamientoCorporal(kgTrabajo, { modo, repsMin, incremento });
   if (!(kgTrabajo > 0)) return [{ tipo: 'calentamiento' }];
   const pasos = ESQUEMAS_CALENTAMIENTO[esquema] || (kgTrabajo >= 60 ? [[0.5, 8], [0.75, 5], [0.85, 2]] : [[0.5, 10], [0.75, 5]]);
   const redondo = x => Math.max(barra, Math.round(x / incremento) * incremento);
@@ -68,6 +72,35 @@ export function seriesDeCalentamiento(kgTrabajo, { incremento = 2.5, barra = 0, 
     if (kg > 0 && kg < kgTrabajo && kg !== out.at(-1)?.kg) out.push({ tipo: 'calentamiento', kg, reps });
   }
   return out.length ? out : [{ tipo: 'calentamiento' }];
+}
+
+/** Cómo se calienta un ejercicio: con su peso (null), con el cuerpo ('corporal', también con lastre) o con la ayuda de
+ *  la máquina ('asistido'). */
+export const modoCalentamiento = ej => (esAsistido(ej) ? 'asistido' : conLastre(ej) || sinCargaExterna(ej) ? 'corporal' : null);
+
+/**
+ * Calentamiento con el cuerpo (dominadas, fondos), donde "la mitad del peso" no existe: una serie con la mitad de las
+ * repeticiones mínimas, lejos del fallo (para 8 a 12 dominadas, 4 fáciles). Con lastre, después otra con la mitad del
+ * lastre. En los asistidos el peso es ayuda: va con más ayuda que la de trabajo, porque menos ayuda es más difícil.
+ * Antes salía una fila C vacía, sin peso ni repeticiones (Francisco, 28 de octubre de 2026: "poco claro").
+ */
+export function calentamientoCorporal(kgTrabajo, { modo = 'corporal', repsMin = null, incremento = 2.5 } = {}) {
+  const reps = Math.max(2, Math.min(6, Math.round((Number(repsMin) || 8) / 2)));
+  const redondo = x => Math.round(Math.round(x / incremento) * incremento * 100) / 100;
+  if (modo === 'asistido') return [{ tipo: 'calentamiento', ...(kgTrabajo > 0 ? { kg: redondo(kgTrabajo + Math.max(incremento, kgTrabajo / 2)) } : {}), reps }];
+  const out = [{ tipo: 'calentamiento', reps }];
+  const mitad = kgTrabajo > 0 ? redondo(kgTrabajo / 2) : 0;
+  if (mitad > 0 && mitad < kgTrabajo) out.push({ tipo: 'calentamiento', kg: mitad, reps: Math.max(2, Math.round(reps / 2)) });
+  return out;
+}
+
+/** Cómo se hace la serie de calentamiento con el cuerpo, en palabras: "4 repeticiones fáciles, lejos del fallo". */
+export function textoCalentamientoCorporal(series, modo) {
+  const [a, b] = series, kg = x => `${String(x).replace('.', ',')} kg`;
+  const primera = modo === 'asistido'
+    ? `${a.reps} repeticiones fáciles con más ayuda que en tus series de trabajo${a.kg ? ` (${kg(a.kg)})` : ''}: menos ayuda es más difícil`
+    : `${a.reps} repeticiones fáciles, sin lastre y lejos del fallo`;
+  return `${primera}${b ? `; después ${b.reps} con ${kg(b.kg)} de lastre` : ''}. Descansa 1 a 2 minutos antes de la primera serie de trabajo. No cuenta${b ? 'n' : ''} como trabajo.`;
 }
 
 /**

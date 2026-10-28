@@ -33,8 +33,38 @@ body:has(.barra #modo:not([hidden])) .coach-cabecera{top:calc(env(safe-area-inse
 .coach-hola .coach-acciones{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:6px}
 .coach-acciones .boton{min-height:44px;border-radius:999px;padding:8px 18px;font-weight:600}
 
-/* "Para ti": las tarjetas de arriba (sesiones sin registro, cómo vienes) con el mismo marco liviano. */
-#vista-coach .revision-registro,#vista-coach .aviso-sensacion{border-radius:18px;margin:0 0 12px}
+/* "Para ti": la tarjeta de arriba (cómo vienes) con el mismo marco liviano. */
+#vista-coach .aviso-sensacion{border-radius:18px;margin:0 0 12px}
+
+/* La pregunta por las sesiones sin registro: abajo en el chat, como un mensaje del coach (app/coach-ui.js, revisionHtml). */
+#vista-coach .chat .burbuja.revision-registro{margin:6px 0 0 32px;padding:12px 14px;max-width:calc(100% - 32px);border-radius:20px;border-bottom-left-radius:4px;background:var(--surface)}
+#vista-coach .revision-registro h2{margin:0 0 4px;font:400 17px/1.35 var(--f-texto)}
+#vista-coach .revision-registro h2 strong{font-weight:650}
+#vista-coach .revision-registro>p{margin:0}
+#vista-coach .revision-registro .revision-botones{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
+#vista-coach .revision-registro .revision-botones .boton{border-radius:14px;white-space:nowrap}
+/* Con dos o más: el calendario de esas semanas (rojo, sin registro; se toca y queda verde) y la lista de las que faltan. */
+#vista-coach .rev-cal{gap:3px;margin:10px 0 4px}
+#vista-coach .rev-cal .cal-letra{font-size:11.5px;color:var(--ink-muted);padding-bottom:2px}
+#vista-coach .rev-cal .cal-dia{min-width:0;min-height:42px;padding:0;border:0;border-radius:9px;font-size:14px}
+#vista-coach .rev-cal .rev-otro{cursor:default;opacity:.55}
+#vista-coach .rev-cal .rev-libre{color:var(--ink-muted)}
+.rev-lista{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:6px}
+#vista-coach .rev-fila{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:48px;padding:6px 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.rev-fila>span:first-child{display:flex;flex-direction:column;min-width:0}
+.rev-fila strong{font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.rev-fila small{font-size:12.5px;color:var(--ink-muted)}
+.rev-estado{flex:none;display:inline-flex;align-items:center;gap:4px;font-size:13.5px;font-weight:600;color:var(--ink-muted)}
+#vista-coach .rev-fila.hecha{border-color:color-mix(in srgb,var(--good) 45%,transparent);background:var(--good-soft)}
+.rev-fila.hecha .rev-estado{color:var(--good)}
+
+/* Ir a lo último: un círculo sobre la caja, a la derecha, cuando subiste a leer (como Mensajes y WhatsApp). */
+#vista-coach .coach-abajo{position:fixed;z-index:5;right:max(16px,calc(50% - 264px));bottom:calc(var(--coach-redaccion-alto,100px) + var(--coach-menu-distancia,78px) + 14px);
+  width:44px;height:44px;min-width:44px;min-height:44px;padding:0;border-radius:50%;border:.5px solid var(--line);display:grid;place-items:center;cursor:pointer;
+  background:color-mix(in srgb,var(--surface) 92%,transparent);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);color:var(--accent);box-shadow:0 2px 10px rgba(0,0,0,.14)}
+#vista-coach .coach-abajo .icono{width:22px;height:22px}
+body.con-mini-sesion #vista-coach .coach-abajo{bottom:calc(var(--coach-redaccion-alto,100px) + var(--coach-menu-distancia,78px) + 78px)}
+#vista-coach .coach-abajo[hidden],body.escribiendo-coach #vista-coach .coach-abajo{display:none}
 
 /* Burbujas: el mini avatar va junto a la última burbuja de cada racha del coach, como en Mensajes de grupo. */
 #vista-coach .chat{gap:6px;padding-top:0}
@@ -116,7 +146,7 @@ body.escribiendo-coach .coach-cabecera .coach-quien{display:flex;align-items:cen
 body.escribiendo-coach .coach-cabecera .coach-avatar{width:28px;height:28px;flex:none}
 body.escribiendo-coach .coach-cabecera .coach-quien strong{font-size:15px}
 body.escribiendo-coach .coach-cabecera .coach-mas{width:32px;height:32px;min-width:32px;min-height:32px}
-body.escribiendo-coach #vista-coach .revision-registro,body.escribiendo-coach #vista-coach .aviso-sensacion,body.escribiendo-coach .coach-hola .asistente-grande{display:none}
+body.escribiendo-coach #vista-coach .aviso-sensacion,body.escribiendo-coach .coach-hola .asistente-grande{display:none}
 body.escribiendo-coach .coach-hola{padding-top:4px}
 
 /* Hoja ＋: grupos con íconos como la de iMessage. */

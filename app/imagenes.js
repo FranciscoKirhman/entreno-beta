@@ -29,10 +29,10 @@ export function miniatura(id, clase = 'miniatura') {
   const ej = indice.porId.get(id);
   if (!ej) return `<span class="${clase} vacia" aria-hidden="true"></span>`;
   const mini = `img/ejercicios/mini/${id}.webp`;
-  if (hayImagen(mini)) return `<img class="${clase}" src="${mini}" alt="" width="96" height="96" decoding="async">`;
+  if (hayImagen(mini)) return `<img class="${clase}" src="${mini}" alt="" width="96" height="96" decoding="async" draggable="false">`;
   const m = maquinaDe(ej);
-  if (m) return `<img class="${clase} maquina" src="${m.src}" alt="" width="96" height="96" decoding="async">`;
+  if (m) return `<img class="${clase} maquina" src="${m.src}" alt="" width="96" height="96" decoding="async" draggable="false">`;
   const mu = imagenMusculo(ej.musculos_primarios[0]);
-  if (mu) return `<img class="${clase} maquina" src="${mu}" alt="" width="96" height="96" decoding="async">`;
+  if (mu) return `<img class="${clase} maquina" src="${mu}" alt="" width="96" height="96" decoding="async" draggable="false">`;
   return `<span class="${clase} sin-imagen" aria-hidden="true">${icono('pesa')}</span>`;
 }

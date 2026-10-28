@@ -11,7 +11,10 @@ import { E, guardar, esc, $, ctxNucleo, cambiarPlan, hoy, avisar, IMAGENES } fro
 import { aplicarOpcion } from '../nucleo/coach.js';
 import * as nube from './nube.js';
 import { sesionesPorRevisar, diaCorto } from '../nucleo/sin-registro.js';
-import { sesionDe } from '../nucleo/agenda.js';
+import { sesionDe, sumarDias, diaSemana } from '../nucleo/agenda.js';
+import { calendarioAsistencia } from '../nucleo/calendario-asistencia.js';
+import { datoCambiado } from './datos-nube.js';
+import { lista } from './musculos.js';
 import { borradorNuevo } from '../nucleo/dia-pasado.js';
 import { icono } from './iconos.js';
 import { semanaPorRevisar, mensajeRevision } from '../nucleo/revision-semanal.js';
@@ -115,11 +118,11 @@ export function vistaCoach(ir, mensajeInicial) {
   $('app').innerHTML = `<div id="vista-coach" style="--coach-mini:url('${srcPose('explica')}')">
     ${cabeceraHtml()}
     ${E.chatModo === 'plan' ? `<div class="modo-plan"><span>${icono('calendario', 'icono icono-chico')} Afinando tu plan</span><button type="button" class="enlace" id="salir-modo-plan">Volver al chat</button></div>` : ''}
-    ${revisionHtml(porRevisar)}
     ${sensacionHtml()}
     ${E.chat.length ? '' : holaHtml()}
-    <div class="chat" id="chat" aria-live="polite">${E.chat.map(burbuja).join('')}</div>
+    <div class="chat" id="chat" aria-live="polite">${E.chat.map(burbuja).join('')}${E.chat.some(m => m.pendiente) ? '' : revisionHtml(porRevisar.filter(x => !abiertaEnChat(x.fecha)))}</div>
     <section id="permisos-chat" class="tarjeta" hidden></section>
+    <button type="button" class="coach-abajo" id="coach-abajo" aria-label="Ir a lo último" hidden>${icono('flecha', 'icono icono-abajo')}</button>
     <div id="coach-redaccion">
       <div id="ideas-ia" class="coach-ideas" role="group" aria-label="Ideas del coach">${ideasHtml(sobre)}</div>
       <form id="form-chat" class="coach-campo">
@@ -215,25 +218,43 @@ export function vistaCoach(ir, mensajeInicial) {
       guardar();
     } finally { decisiones.delete(msg); if (vigente()) vistaCoach(ir, { respuesta: true, enfocarAlternativas: true }); }
   });
-  // La revisión de sesiones sin registro: cada respuesta se ve en el chat, como si se hubiera escrito.
-  $('revision-registro')?.addEventListener('click', async ev => {
+  // La pregunta por las sesiones sin registro (abajo, como mensaje del coach): cada respuesta se ve en el chat, como si
+  // se hubiera escrito. Con dos o más, en el calendario se tocan las que se hicieron y "Guardar" las anota todas.
+  chat.addEventListener('click', async ev => {
+    const dia = ev.target.closest('[data-rev-dia]');
+    if (dia) {
+      if (!vigente()) return;
+      const f = dia.dataset.revDia;
+      if (marcadasRevision.has(f)) marcadasRevision.delete(f); else marcadasRevision.add(f);
+      $('revision-registro').outerHTML = revisionHtml(porRevisar.filter(x => !abiertaEnChat(x.fecha)));
+      // El foco queda en la fila de la lista (el calendario está oculto para el lector de pantalla).
+      document.querySelector(`.rev-lista [data-rev-dia="${f}"]`)?.focus({ preventScroll: true });
+      return;
+    }
     const b = ev.target.closest('[data-revision]');
     if (!b) return;
     const { revision: r, fecha } = b.dataset, foco = sesionDe(E.plan, fecha)?.foco || 'la sesión';
-    if (r === 'despues') {
-      (E.revisarDespues ||= {})[fecha] = hoy();
-      guardar(); vistaCoach(ir, { revisar: true }); avisar(`Te pregunto de nuevo mañana por ${foco} del ${diaCorto(fecha)}.`);
+    if (r === 'despues' || r === 'despues-todas') {
+      const fechas = r === 'despues' ? [fecha] : porRevisar.map(x => x.fecha);
+      for (const x of fechas) (E.revisarDespues ||= {})[x] = hoy();
+      guardar(); vistaCoach(ir);
+      avisar(r === 'despues' ? `Te pregunto de nuevo mañana por ${foco} del ${diaCorto(fecha)}.` : 'Te pregunto de nuevo mañana.');
       return;
     }
     if (b.disabled || !vigente()) return;
     b.disabled = true;
+    if (r === 'guardar') {
+      guardarRevision(porRevisar);
+      vistaCoach(ir, { respuesta: true, enfocarAlternativas: true });
+      return;
+    }
     try { await decidir(r === 'hice' ? { tipo: 'la_hice', fecha } : { tipo: 'no_hecha', fecha }, r === 'hice' ? `La hice: ${foco} del ${diaCorto(fecha)}` : `No hice ${foco} del ${diaCorto(fecha)}`, ir); }
     finally { if (vigente()) vistaCoach(ir, { respuesta: true, enfocarAlternativas: true }); }
   });
-  // Desde el aviso de Hoy: la revisión ya está arriba; el foco va a su pregunta para que se lea primero.
-  if (revisar && porRevisar.length) {
-    const titulo = $('revision-titulo');
-    requestAnimationFrame(() => { if (vigente() && titulo?.isConnected) titulo.focus({ preventScroll: true }); });
+  const pregunta = $('revision-registro');
+  // Desde el aviso de Hoy: la pregunta está abajo, en lo último; el foco va a ella para que se lea primero.
+  if (revisar && pregunta) {
+    requestAnimationFrame(() => { if (vigente()) { alFinal(); $('revision-titulo')?.focus({ preventScroll: true }); } });
   }
   else if (redaccionActiva) {
     const editor = $('mensaje');
@@ -242,7 +263,10 @@ export function vistaCoach(ir, mensajeInicial) {
       editor.focus({ preventScroll: true }); editor.setSelectionRange(...seleccion);
     });
   }
-  if (!revisar && (mensajeInicial?.respuesta || E.chat.length && !mensajeInicial && !porRevisar.length)) mostrarUltimaRespuesta(estadoVista, usuarioVista, !redaccionActiva);
+  // El chat se abre abajo, en lo último, como Mensajes (Francisco, 28 de octubre de 2026). Antes, con una sesión sin
+  // registro se quedaba arriba. Una respuesta nueva se muestra desde sus opciones (mostrarUltimaRespuesta).
+  if (mensajeInicial?.respuesta) mostrarUltimaRespuesta(estadoVista, usuarioVista, !redaccionActiva);
+  else if (!revisar) requestAnimationFrame(() => { if (vigente()) alFinal(); });
   if (typeof mensajeInicial === 'string') enviar(mensajeInicial, ir);
   else if (sobre) { const m = $('mensaje'); if (!borrador.texto) { m.value = `Sobre ${sobre.nombre}: `; borrador.texto = E.borradorChat = m.value; guardar(); } m.focus(); m.setSelectionRange(m.value.length, m.value.length); }
   if (desdePlan) enviar(desdePlan === 'explicar' ? 'Explícame mi plan día por día: qué trabaja cada día y por qué.' : 'Quiero afinar mi plan. Hazme las preguntas que necesites antes de cambiarlo.', ir);
@@ -417,7 +441,7 @@ function crecer(t) {
 function prepararRedaccion() {
   const panel = $('coach-redaccion'), app = $('app'), nav = $('nav'), editor = $('mensaje'), vista = $('vista-coach');
   const vv = typeof visualViewport !== 'undefined' ? visualViewport : null;
-  let observador, activo = false;
+  let observador, activo = false, pegadoAbajo = true; // se abre abajo, en lo último
   // En el teléfono basta con que el campo tenga el foco: en iOS reciente la ventana se achica junto con el teclado,
   // así que innerHeight y visualViewport miden lo mismo y la diferencia no sirve para saber si está abierto.
   const tactil = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
@@ -454,14 +478,26 @@ function prepararRedaccion() {
     const distancia = nav && !nav.hidden ? `calc(env(safe-area-inset-bottom,0px) + ${nav.offsetHeight + 16}px)` : 'calc(env(safe-area-inset-bottom,0px) + 12px)';
     app.style.setProperty('--coach-menu-distancia', distancia);
     app.style.setProperty('--coach-redaccion-alto', `${Math.round(panel.offsetHeight)}px`);
-    // Con el teclado, si la caja crece con el texto, lo último sigue a la vista.
+    // Con el teclado, si la caja crece con el texto, lo último sigue a la vista. Sin teclado, igual si estabas abajo:
+    // las ideas llegan después de abrir y la caja crece encima de lo último.
     if (activo && vista.scrollHeight - vista.scrollTop - vista.clientHeight < 80) vista.scrollTop = vista.scrollHeight;
+    else if (!activo && pegadoAbajo) alFinal();
   };
   const alSalir = () => setTimeout(ubicar, 0);
+  // Ir a lo último: aparece al subir a leer (más de unos 240 px del final), como en Mensajes y WhatsApp.
+  const abajo = $('coach-abajo');
+  const revisarAbajo = () => {
+    if (!abajo?.isConnected) { limpiar(); return; }
+    const d = distanciaAlFinal();
+    abajo.hidden = d < 240; pegadoAbajo = d < 80;
+  };
+  if (abajo) abajo.onclick = () => { abajo.hidden = true; alFinal({ suave: true }); };
   function limpiar() {
     observador?.disconnect(); vv?.removeEventListener('resize', ubicar); vv?.removeEventListener('scroll', ubicar);
+    window.removeEventListener?.('scroll', revisarAbajo); vista?.removeEventListener('scroll', revisarAbajo);
     document.body?.classList.remove('escribiendo-coach'); activo = false; menor = 0;
   }
+  window.addEventListener?.('scroll', revisarAbajo, { passive: true }); vista.addEventListener('scroll', revisarAbajo, { passive: true });
   medir();
   if (typeof ResizeObserver !== 'undefined') { observador = new ResizeObserver(medir); observador.observe(panel); }
   vv?.addEventListener('resize', ubicar); vv?.addEventListener('scroll', ubicar);
@@ -517,8 +553,12 @@ async function decidir(accion, etiqueta, ir) {
     E.consentimientos[r.consentimiento] = true;
     if (nube.conectado()) nube.consentir(r.consentimiento).catch(() => {});
   }
-  if (r.marca) (E.marcasPlan ||= {})[r.marca.fecha] = r.marca.valor; // "la hice" o "la salto": manda sobre lo deducido
+  // "la hice" o "la salto": manda sobre lo deducido. Se sube a la cuenta como el calendario de asistencia (antes quedaba
+  // solo en el teléfono).
+  if (r.marca) { (E.marcasPlan ||= {})[r.marca.fecha] = r.marca.valor; datoCambiado('calendario_asistencia'); }
   const aviso = r.plan ? await cambiarPlan(r.plan, null, nube) : null;
+  // Recuperada en otro día: ya no es una falta (el calendario de la pregunta la había dejado como no hecha).
+  if (accion.tipo === 'aceptar_alternativa' && r.plan && E.plan === r.plan && E.marcasPlan?.[accion.fecha] === 'saltada') { delete E.marcasPlan[accion.fecha]; datoCambiado('calendario_asistencia'); }
   if (!vigente()) return false;
   if (r.plan && E.plan !== r.plan) aceptada = false;
   const cambio = Boolean(r.plan && !aviso) || r.marca?.valor === 'saltada';
@@ -528,21 +568,113 @@ async function decidir(accion, etiqueta, ir) {
 }
 
 const NUMEROS = ['', 'una', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete'];
-/** "Hay dos sesiones sin registro. ¿Las realizaste?": cada una con su fecha y tres respuestas. */
+const mayus = t => t.replace(/^./, c => c.toUpperCase());
+/** En el calendario de la pregunta: las fechas que la persona tocó como hechas (se olvidan si cambian las preguntadas). */
+let marcadasRevision = new Set(), fechasRevision = '';
+
+/**
+ * La pregunta por las sesiones sin registro va abajo, en el chat, como un mensaje del coach: es lo primero que se ve al
+ * abrir (Francisco, 28 de octubre de 2026: "que parta preguntando si hice la última sesión, o las sesiones en un
+ * calendario si me faltan"). Una: "¿Hiciste Glúteo A el martes 27?" con La hice, No la hice o Revisar después. Dos o
+ * más: un calendario de esas semanas donde se tocan las que se hicieron; lo demás queda como no hecho al guardar.
+ */
 function revisionHtml(xs) {
   if (!xs.length) return '';
-  const una = xs.length === 1;
-  return `<section class="revision-registro" id="revision-registro" aria-labelledby="revision-titulo">
-    <h2 id="revision-titulo" tabindex="-1">Hay ${NUMEROS[xs.length] || xs.length} ${una ? 'sesión' : 'sesiones'} sin registro. ¿${una ? 'La' : 'Las'} realizaste?</h2>
-    <p class="pequeno suave">No tener registro no significa que faltaste. Si no la hiciste, te muestro alternativas antes de cambiar nada.</p>
-    <ul class="revision-lista">${xs.map(x => `<li>
-      <div class="revision-sesion">${icono('calendario')}<span><strong>${esc(x.foco)}</strong><small>${esc(diaCorto(x.fecha))}</small></span></div>
+  if (xs.length === 1) {
+    const [x] = xs;
+    return `<section class="burbuja coach revision-registro" id="revision-registro" aria-labelledby="revision-titulo">
+      <h2 id="revision-titulo" tabindex="-1">¿Hiciste <strong>${esc(x.foco)}</strong> el ${esc(diaCorto(x.fecha))}?</h2>
+      <p class="pequeno suave">No tengo su registro. Si no la hiciste, te muestro alternativas antes de cambiar nada.</p>
       <div class="revision-botones" role="group" aria-label="${esc(`${x.foco} del ${diaCorto(x.fecha)}`)}">
         <button type="button" class="boton primario" data-revision="hice" data-fecha="${x.fecha}">La hice</button>
         <button type="button" class="boton" data-revision="no" data-fecha="${x.fecha}">No la hice</button>
         <button type="button" class="enlace" data-revision="despues" data-fecha="${x.fecha}">Revisar después</button>
-      </div></li>`).join('')}</ul>
+      </div>
+    </section>`;
+  }
+  const clave = xs.map(x => x.fecha).join();
+  if (clave !== fechasRevision) { fechasRevision = clave; marcadasRevision = new Set(); }
+  const porFecha = new Map(xs.map(x => [x.fecha, x])), f0 = hoy();
+  const hechas = xs.filter(x => marcadasRevision.has(x.fecha)).length;
+  const celda = d => {
+    const x = porFecha.get(d.fecha), num = Number(d.fecha.slice(8));
+    if (x) {
+      const si = marcadasRevision.has(d.fecha);
+      return `<button type="button" class="cal-dia rev-dia ${si ? 'cal-verde' : 'cal-rojo'}" data-rev-dia="${d.fecha}" aria-pressed="${si}" tabindex="-1" aria-hidden="true"><span>${num}</span><small>${si ? '✓' : '?'}</small></button>`;
+    }
+    // Lo demás, solo para ubicarse: lo registrado, hoy, lo que viene y los días libres.
+    const clase = d.color === 'verde' ? 'cal-verde' : d.fecha === f0 ? 'cal-azul' : d.dia ? 'cal-gris' : 'rev-libre';
+    const marca = d.color === 'verde' ? '✓' : d.fecha === f0 ? 'Hoy' : d.etiqueta === 'Falta confirmada' ? '×' : d.dia ? '•' : '';
+    return `<span class="cal-dia rev-otro ${clase}" aria-hidden="true"><span>${num}</span><small>${marca}</small></span>`;
+  };
+  return `<section class="burbuja coach revision-registro revision-calendario" id="revision-registro" aria-labelledby="revision-titulo">
+    <h2 id="revision-titulo" tabindex="-1">Tienes ${NUMEROS[xs.length] || xs.length} sesiones sin registro. ¿Cuáles hiciste?</h2>
+    <p class="pequeno suave">Toca las que hiciste. Las demás quedan como no hechas y tu semana sigue igual.</p>
+    <div class="cal-grid rev-cal">
+      ${['L', 'M', 'Mi', 'J', 'V', 'S', 'D'].map(d => `<span class="cal-letra" aria-hidden="true">${d}</span>`).join('')}
+      ${diasRevision(xs).map(celda).join('')}
+    </div>
+    <ul class="rev-lista" aria-label="Sesiones sin registro">${xs.map(x => {
+      const si = marcadasRevision.has(x.fecha);
+      return `<li><button type="button" class="rev-fila${si ? ' hecha' : ''}" data-rev-dia="${x.fecha}" aria-pressed="${si}"><span><strong>${esc(x.foco)}</strong><small>${esc(mayus(diaCorto(x.fecha)))}</small></span><span class="rev-estado">${si ? `${icono('visto', 'icono icono-chico')} La hice` : 'No la hice'}</span></button></li>`;
+    }).join('')}</ul>
+    <div class="revision-botones">
+      <button type="button" class="boton primario" data-revision="guardar">${hechas ? 'Guardar' : 'No hice ninguna'}</button>
+      <button type="button" class="enlace" data-revision="despues-todas">Revisar después</button>
+    </div>
   </section>`;
+}
+
+/** Los días del calendario de la pregunta: desde el lunes de la primera sesión sin registro hasta el domingo de esta
+ *  semana, con lo que dice el calendario de asistencia de cada uno (registrado, hoy, planificado). */
+function diasRevision(xs) {
+  const f0 = hoy(), desde = sumarDias(xs[0].fecha, -((diaSemana(xs[0].fecha) + 6) % 7)), hasta = sumarDias(f0, 6 - ((diaSemana(f0) + 6) % 7));
+  const info = new Map();
+  for (const mes of new Set([desde.slice(0, 7), hasta.slice(0, 7)])) {
+    for (const d of calendarioAsistencia(E.plan, E.sesiones, { hoy: f0, mes, marcas: E.marcasPlan || {} }).dias) info.set(d.fecha, d);
+  }
+  const out = [];
+  for (let f = desde; f <= hasta; f = sumarDias(f, 1)) out.push({ fecha: f, ...(info.get(f) || {}) });
+  return out;
+}
+
+/** "No la hice" de esa fecha sigue abierto (sus alternativas son lo último del chat): no se vuelve a preguntar debajo. */
+const abiertaEnChat = fecha => { const m = E.chat.at(-1); return m?.rol === 'coach' && (m.opciones || []).some(o => o.accion?.fecha === fecha); };
+
+/** Guarda lo marcado en el calendario: las tocadas como hechas (sin inventar series) y las demás como no hechas, sin
+ *  mover nada. Queda escrito en el chat, con botones para anotar lo hecho o recuperar lo que faltó. */
+function guardarRevision(xs) {
+  const hechas = xs.filter(x => marcadasRevision.has(x.fecha)), no = xs.filter(x => !marcadasRevision.has(x.fecha));
+  E.marcasPlan ||= {};
+  for (const x of hechas) E.marcasPlan[x.fecha] = 'hecha';
+  for (const x of no) E.marcasPlan[x.fecha] = 'saltada';
+  datoCambiado('calendario_asistencia');
+  const de = x => `${x.foco} del ${diaCorto(x.fecha)}`;
+  E.chat.push({ rol: 'persona', texto: [hechas.length && `Hice ${lista(hechas.map(de))}.`, no.length && `No hice ${lista(no.map(de))}.`].filter(Boolean).join(' ') });
+  E.chat.push({ rol: 'coach', app: true,
+    texto: `Anotado. ${hechas.length ? `${mayus(lista(hechas.map(de)))} ${hechas.length === 1 ? 'quedó como hecha' : 'quedaron como hechas'}, sin series anotadas. ` : ''}${no.length ? `${mayus(lista(no.map(de)))} ${no.length === 1 ? 'quedó' : 'quedaron'} sin hacer y tu semana sigue igual. ` : ''}${hechas.length ? 'Si quieres, anota lo que hiciste' : ''}${hechas.length && no.length ? ' o recupera lo que faltó.' : no.length ? 'Si quieres, recupera lo que faltó.' : '.'}`,
+    opciones: [...hechas.slice(-2).map(x => ({ etiqueta: `Anotar ${x.foco}`, accion: { tipo: 'anotar_pasado', fecha: x.fecha } })),
+      ...no.slice(-2).reverse().map(x => ({ etiqueta: `Recuperar ${x.foco}`, accion: { tipo: 'no_hecha', fecha: x.fecha } }))] });
+  marcadasRevision = new Set(); fechasRevision = '';
+  guardar();
+}
+
+/** Con el teclado abierto el chat se desplaza por dentro; sin teclado, la página. */
+const conTeclado = () => Boolean(document.body?.classList.contains('escribiendo-coach'));
+/** Cuánto falta para ver lo último del chat. */
+function distanciaAlFinal() {
+  const vista = $('vista-coach'), pagina = document.documentElement;
+  if (!vista) return 0;
+  if (conTeclado()) return vista.scrollHeight - vista.scrollTop - vista.clientHeight;
+  return pagina ? pagina.scrollHeight - (window.scrollY || 0) - (window.innerHeight || 0) : 0;
+}
+/** Lleva a lo último del chat. */
+function alFinal({ suave = false } = {}) {
+  const vista = $('vista-coach');
+  if (!vista) return;
+  const behavior = suave && !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'smooth' : 'auto';
+  if (conTeclado()) vista.scrollTo?.({ top: vista.scrollHeight, behavior });
+  else if (document.documentElement) window.scrollTo?.({ top: document.documentElement.scrollHeight, behavior });
 }
 
 /** Botones para ir a ver lo que cambió. */
