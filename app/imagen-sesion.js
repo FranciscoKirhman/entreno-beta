@@ -29,9 +29,10 @@ function caja(ctx, x, y, w, h, r, color) {
 
 /**
  * @param datos { titulo, fecha (texto ya formateado), cifras: [[valor, texto]], ejercicios: [[nombre, detalle]], records: [texto] }
+ * @param datos.seccion el título de la lista: "EJERCICIOS" en una sesión; "MÚSCULOS" o "FAVORITOS" en las historias
  * @returns Promise<Blob> PNG
  */
-export function imagenSesion({ titulo, fecha, cifras, ejercicios, records }) {
+export function imagenSesion({ titulo, fecha, cifras, ejercicios, records, seccion = 'EJERCICIOS' }) {
   const lienzo = document.createElement('canvas');
   lienzo.width = ANCHO; lienzo.height = ALTO;
   const ctx = lienzo.getContext('2d');
@@ -64,7 +65,7 @@ export function imagenSesion({ titulo, fecha, cifras, ejercicios, records }) {
   y += 320;
   // Ejercicios
   ctx.fillStyle = C.suave; ctx.font = `700 36px ${FUENTE}`;
-  ctx.fillText('EJERCICIOS', M, y); y += 34;
+  ctx.fillText(seccion, M, y); y += 34;
   const maxEj = records.length ? 6 : 10;
   for (const [nombre, detalle] of ejercicios.slice(0, maxEj)) {
     if (y > ALTO - 420) break; // deja lugar a los récords y al pie

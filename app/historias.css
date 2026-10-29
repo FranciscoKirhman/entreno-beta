@@ -1,0 +1,179 @@
+/* Historias de la semana, el mes y el año (app/historias.js). A pantalla completa y con su propio color, igual en modo
+   claro y oscuro, como el resumen anual de Spotify. Todos los fondos dan 5,3:1 o más con texto blanco; las tarjetas
+   oscurecen el fondo en vez de aclararlo, para no bajar ese contraste. */
+.historias{
+  --hist-fondo:#B4441C;--hist-tarjeta:rgba(0,0,0,.2);--hist-grande:#fff;
+  position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;overflow:hidden;
+  padding:max(10px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom));
+  color:#fff;background-color:var(--hist-fondo);
+  background-image:radial-gradient(130% 70% at 90% -10%,rgba(255,255,255,.16),transparent 60%);
+  font-family:var(--f-titulo);transition:background-color .45s ease;touch-action:none;user-select:none;-webkit-user-select:none;outline:none
+}
+.historias[data-tema="naranjo"]{--hist-fondo:#B4441C}
+.historias[data-tema="azul"]{--hist-fondo:#2F4FA2}
+.historias[data-tema="verde"]{--hist-fondo:#1F7A4A}
+.historias[data-tema="morado"]{--hist-fondo:#6A3FB0}
+.historias[data-tema="turquesa"]{--hist-fondo:#0F6F78}
+.historias[data-tema="ambar"]{--hist-fondo:#8F5C0B}
+.historias[data-tema="rojo"]{--hist-fondo:#B3303F}
+.historias[data-tema="grafito"]{--hist-fondo:#1B2024;--hist-tarjeta:rgba(255,255,255,.09)}
+/* Los récords, como un trofeo: casi negro con la cifra en dorado (11:1). */
+.historias[data-tema="oro"]{--hist-fondo:#1F1A12;--hist-tarjeta:rgba(255,255,255,.09);--hist-grande:#F2C14E}
+/* Dos círculos grandes y suaves dan profundidad sin distraer. */
+.historias::before,.historias::after{content:"";position:absolute;border-radius:50%;pointer-events:none;z-index:0}
+.historias::before{width:118vw;height:118vw;right:-58vw;top:-34vw;background:rgba(255,255,255,.07)}
+.historias::after{width:96vw;height:96vw;left:-50vw;bottom:-30vw;background:rgba(0,0,0,.12)}
+html.con-historias,html.con-historias body{overflow:hidden}
+
+/* Barras de avance, una por pantalla */
+.hist-barras{position:relative;z-index:3;display:flex;gap:4px}
+.hist-barras span{flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.34);overflow:hidden}
+.hist-barras i{display:block;width:0;height:100%;border-radius:2px;background:#fff}
+.hist-barras .llena i{width:100%}
+.hist-barras .actual i{animation:hist-avance var(--hist-dur,7s) linear forwards}
+.historias.en-pausa .hist-barras .actual i{animation-play-state:paused}
+@keyframes hist-avance{from{width:0}to{width:100%}}
+
+/* Cabecera: el coach que cuenta la historia, pausar y cerrar */
+.hist-cab{position:relative;z-index:3;display:flex;align-items:center;gap:4px;margin-top:8px}
+.hist-quien{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+/* Las caras van en un marco redondo, con la imagen acercada a la cara como en la cabecera del Coach */
+.hist-marco{display:block;width:100%;height:100%;overflow:hidden;border-radius:50%}
+.hist-marco img{width:100%;height:100%;display:block;object-fit:cover;object-position:50% 18%;transform:scale(1.55);transform-origin:50% 20%}
+.hist-cara{width:36px;height:36px;flex:none;background:rgba(0,0,0,.18);border:2px solid rgba(255,255,255,.85)}
+.hist-quien strong{display:block;font-size:15px;line-height:1.2}
+.hist-quien small{display:block;font-size:13px;line-height:1.2}
+.hist-boton{width:44px;height:44px;flex:none;display:grid;place-items:center;border:0;border-radius:50%;background:transparent;color:#fff;cursor:pointer}
+.hist-boton:focus-visible,.hist-zona:focus-visible,.hist-accion:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.hist-boton .icono{width:24px;height:24px}
+
+/* Tocar a la izquierda vuelve y a la derecha avanza; el contenido queda encima, pero los toques pasan a estas zonas */
+.hist-zona{position:absolute;z-index:1;top:88px;bottom:0;padding:0;border:0;background:transparent;cursor:pointer}
+.hist-zona.antes{left:0;width:30%}
+.hist-zona.despues{right:0;width:70%}
+.hist-escena{position:relative;z-index:2;flex:1;min-height:0;display:flex;flex-direction:column;pointer-events:none}
+.hist-escena button,.hist-escena a{pointer-events:auto}
+.hist-contenido{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;padding:12px 2px 8px}
+
+/* Textos */
+.hist-etiqueta{margin:0;font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+.hist-titulo{margin:6px 0 0;font:800 30px/1.1 var(--f-titulo);letter-spacing:-.01em;text-wrap:balance}
+.hist-grande{margin:18px 0 0;color:var(--hist-grande);font:800 min(clamp(72px,24vw,120px),calc((100vw - 36px) / (var(--n,3) * .62)))/.92 var(--f-titulo);letter-spacing:-.045em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.hist-unidad{margin:6px 0 0;font:700 22px/1.2 var(--f-titulo);text-wrap:balance}
+.hist-detalle{margin:12px 0 0;font-size:17px;line-height:1.4;font-weight:500;text-wrap:pretty}
+.hist-nota{margin:14px 0 0;padding:12px 14px;border-radius:14px;background:var(--hist-tarjeta);font-size:15px;line-height:1.4}
+.hist-chip{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;margin:14px 0 0;padding:7px 12px 7px 10px;border-radius:999px;background:var(--hist-tarjeta);font-size:15px;font-weight:700}
+.hist-chip .icono{width:18px;height:18px}
+.hist-meta{margin:16px 0 0;font:800 30px/1.15 var(--f-titulo);letter-spacing:-.01em;text-wrap:balance}
+.hist-privado{margin:14px 0 0;font-size:14px;line-height:1.4;text-align:center}
+.centrado{text-align:center}
+
+/* La semana: un círculo por día */
+.hist-dias{list-style:none;margin:24px 0 0;padding:0;display:flex;justify-content:space-between;gap:4px}
+.hist-dias li{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:13px;font-weight:700}
+.hist-dias i{width:36px;height:36px;display:grid;place-items:center;border-radius:50%;border:2px solid rgba(255,255,255,.4)}
+.hist-dias .hecho i{border-color:#fff;background:#fff;color:var(--hist-fondo)}
+.hist-dias .hecho i .icono{width:20px;height:20px;stroke-width:2.6}
+.hist-dias .planeado i{border-style:dashed;border-color:#fff}
+
+/* El mes: un calendario con los días entrenados en blanco */
+.hist-cal{display:grid;grid-template-columns:repeat(7,minmax(0,38px));justify-content:space-between;gap:6px 0;margin-top:18px}
+.hist-cal span{display:grid;place-items:center;aspect-ratio:1;border-radius:50%;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.hist-cal .cab{aspect-ratio:auto;font-weight:700;letter-spacing:.06em}
+.hist-cal .hecho{background:#fff;color:var(--hist-fondo);font-weight:800}
+.hist-contenido:has(.hist-cal) .hist-grande{font-size:min(clamp(56px,18vw,84px),calc((100vw - 36px) / (var(--n,3) * .62)))}
+
+/* Listas: récords, lo que viene y la fuerza */
+.hist-lista{list-style:none;margin:20px 0 0;padding:0;display:grid;gap:10px}
+.hist-lista li{display:flex;align-items:center;gap:12px;min-height:56px;padding:10px 14px;border-radius:16px;background:var(--hist-tarjeta)}
+.hist-lista li>span{flex:1;min-width:0}
+.hist-lista strong{display:block;font-size:17px;line-height:1.25}
+.hist-lista small{display:block;margin-top:2px;font-size:14px;line-height:1.35}
+.hist-insignia-chica{width:40px;height:40px;flex:none;display:grid;place-items:center;border-radius:50%;background:rgba(255,255,255,.16)}
+.hist-insignia-chica .icono{width:22px;height:22px}
+.hist-fecha{flex:none;min-width:84px;font-size:14px;font-weight:700}
+.hist-fuerza .hist-pct{font:800 22px/1 var(--f-titulo);font-variant-numeric:tabular-nums}
+.hist-fuerza .destacado{background:#fff;color:var(--hist-fondo)}
+
+/* Músculos: una barra por músculo y una marca con la referencia */
+.hist-leyenda{display:flex;align-items:center;gap:8px;margin:10px 0 0;font-size:14px}
+.hist-leyenda i,.hist-barras-m .marca{width:3px;height:16px;border-radius:2px;background:#1B2024;box-shadow:0 0 0 1.5px #fff}
+.hist-barras-m{list-style:none;margin:18px 0 0;padding:0;display:grid;gap:14px}
+.hist-barras-m li{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:baseline}
+.hist-barras-m .nombre{font-size:16px;font-weight:700}
+.hist-barras-m .valor{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+.hist-barras-m .pista{grid-column:1 / -1;position:relative;height:10px;border-radius:5px;background:rgba(0,0,0,.22)}
+.hist-barras-m .relleno{position:absolute;inset:0 auto 0 0;width:var(--p);border-radius:5px;background:#fff;transform-origin:left center}
+.hist-barras-m .marca{position:absolute;top:-3px;left:calc(var(--m) - 1.5px)}
+
+/* El año: los favoritos como ranking y la insignia de tu forma de entrenar */
+.hist-ranking{list-style:none;margin:18px 0 0;padding:0;display:grid;gap:12px}
+.hist-ranking li{display:grid;grid-template-columns:40px minmax(0,1fr) auto;align-items:baseline;gap:10px}
+.hist-ranking .pos{font:800 34px/1 var(--f-titulo);font-variant-numeric:tabular-nums}
+.hist-ranking .nombre{font-size:18px;font-weight:700;line-height:1.25}
+.hist-ranking .veces{font-size:14px;font-weight:600}
+.hist-ranking li:first-child{padding:12px 14px;margin:0 -14px 2px;border-radius:18px;background:var(--hist-tarjeta)}
+.hist-ranking li:first-child .pos{font-size:46px}
+.hist-ranking li:first-child .nombre{font-size:21px}
+.hist-insignia{width:min(184px,48vw);aspect-ratio:1;margin:18px auto 0;display:grid;place-items:center;border-radius:50%;background:rgba(0,0,0,.2);box-shadow:0 0 0 6px rgba(255,255,255,.14)}
+.hist-insignia img{width:86%;height:86%;object-fit:contain}
+.hist-insignia .icono{width:46%;height:46%;stroke-width:1.6}
+
+/* El cierre */
+.hist-acciones{display:grid;gap:10px;margin-top:26px}
+.hist-accion{min-height:52px;display:flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:16px;background:#fff;color:var(--hist-fondo);font:700 17px/1 var(--f-titulo);cursor:pointer}
+.hist-accion.secundaria{background:var(--hist-tarjeta);color:#fff}
+/* El cierre repasa las tres cifras de la historia */
+.hist-repaso{list-style:none;margin:20px 0 0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.hist-repaso li{padding:12px 10px;border-radius:16px;background:var(--hist-tarjeta);text-align:center}
+.hist-repaso strong{display:block;font:800 clamp(18px,6vw,26px)/1.05 var(--f-titulo);font-variant-numeric:tabular-nums;letter-spacing:-.02em;white-space:nowrap}
+.hist-repaso span{display:block;margin-top:4px;font-size:13px;font-weight:600;line-height:1.2}
+.hist-accion .icono{width:20px;height:20px}
+.hist-accion:disabled{opacity:.6}
+
+/* El coach narra abajo, con su globo */
+.hist-coach{display:flex;align-items:flex-end;gap:10px;padding-top:6px}
+.hist-pose{width:84px;height:84px;flex:none;object-fit:contain}
+.hist-globo{position:relative;margin:0 0 14px;padding:11px 14px;border-radius:18px 18px 18px 6px;background:#fff;color:#1B2024;font-size:16px;line-height:1.35;font-weight:500;box-shadow:0 6px 20px rgba(0,0,0,.18);text-wrap:pretty}
+
+/* Entrada de cada pantalla */
+.hist-escena.entra .hist-contenido{animation:hist-sube .5s cubic-bezier(.2,.7,.3,1) both}
+.hist-escena.entra .hist-coach{animation:hist-coach .55s .12s cubic-bezier(.2,.7,.3,1) both}
+.hist-escena.entra .hist-dias li,.hist-escena.entra .hist-lista li,.hist-escena.entra .hist-ranking li,.hist-escena.entra .hist-barras-m li{animation:hist-sube .45s calc(.18s + var(--i,0) * 70ms) cubic-bezier(.2,.7,.3,1) both}
+.hist-escena.entra .hist-barras-m .relleno{animation:hist-crece .9s calc(.25s + var(--i,0) * 70ms) cubic-bezier(.2,.7,.3,1) both}
+.hist-escena.entra .hist-cal .hecho{animation:hist-pop .4s .2s cubic-bezier(.2,.7,.3,1.4) both}
+.hist-escena.entra .hist-insignia{animation:hist-pop .6s .15s cubic-bezier(.2,.7,.3,1.4) both}
+@keyframes hist-sube{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes hist-coach{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:none}}
+@keyframes hist-crece{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes hist-pop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){
+  .historias{transition:none}
+  .hist-escena.entra .hist-contenido,.hist-escena.entra .hist-coach,.hist-escena.entra .hist-dias li,.hist-escena.entra .hist-lista li,
+  .hist-escena.entra .hist-ranking li,.hist-escena.entra .hist-barras-m li,.hist-escena.entra .hist-barras-m .relleno,
+  .hist-escena.entra .hist-cal .hecho,.hist-escena.entra .hist-insignia{animation:none}
+}
+/* Teléfonos bajos (iPhone SE): todo un poco más chico para que quepa sin desplazar */
+@media (max-height:700px){
+  .hist-grande{font-size:min(clamp(60px,19vw,92px),calc((100vw - 36px) / (var(--n,3) * .62)));margin-top:12px}
+  .hist-titulo,.hist-meta{font-size:26px}
+  .hist-pose{width:64px;height:64px}
+  .hist-globo{font-size:15px;padding:9px 12px}
+  .hist-lista{gap:8px;margin-top:14px}
+  .hist-lista li{min-height:50px;padding:8px 12px}
+  .hist-barras-m{gap:10px}
+  .hist-cal{gap:4px 0;grid-template-columns:repeat(7,minmax(0,32px))}
+}
+
+/* La entrada en Entrenar: un círculo por historia, con anillo de color si es nueva */
+.hist-fila{list-style:none;display:flex;gap:16px;margin:6px 0 12px;padding:4px 2px 2px;overflow-x:auto;scrollbar-width:none}
+.hist-fila::-webkit-scrollbar{display:none}
+.hist-burbuja{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:72px;padding:0;border:0;background:none;color:var(--ink);font:600 13px/1.2 var(--f-titulo);cursor:pointer}
+.hist-anillo{width:70px;height:70px;padding:3px;border-radius:50%;background:var(--border);display:block}
+.hist-burbuja.nueva .hist-anillo{background:conic-gradient(from 210deg,#F5B33A,var(--accent),#D93A5E,#F5B33A)}
+.hist-anillo .hist-marco{border:3px solid var(--bg);background:var(--surface-2)}
+.hist-burbuja:focus-visible{outline:none}
+.hist-burbuja:focus-visible .hist-anillo{outline:3px solid var(--accent);outline-offset:2px}
+.hist-burbuja-nombre{max-width:84px;text-align:center}
+/* Y en la cara del coach, en el chat */
+.coach-avatar.con-historia{box-shadow:0 0 0 2px var(--bg),0 0 0 4.5px var(--accent);cursor:pointer;border:0;padding:0}

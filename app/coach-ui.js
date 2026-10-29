@@ -24,6 +24,7 @@ import { abrirHoja } from './hoja.js';
 import { duracionSesion } from '../nucleo/motor-plan.js';
 import { senalesSobrecarga, propuestaSobrecarga } from '../nucleo/sobrecarga.js';
 import { esAsistido } from '../nucleo/catalogo.js';
+import { historiasDeHoy, idHistoria } from '../nucleo/historias.js';
 
 const borradores = new WeakMap(), decisiones = new WeakSet();
 let consultaActual = null, limpiarRedaccion = () => {}, irActual = null, estadoChatTexto = null, pidiendoIdeas = null;
@@ -139,6 +140,8 @@ export function vistaCoach(ir, mensajeInicial) {
     </div>
   </div>`;
   $('perfil-chat')?.addEventListener('click', () => ir('perfil'));
+  // El visor se carga al tocar el anillo: app/historias.js usa app/resumen.js, que importa este archivo.
+  $('coach-historia')?.addEventListener('click', ev => { const b = ev.currentTarget; import('./historias.js').then(m => m.abrirPrimera({ volver: b, alCerrar: () => { if (vigente()) vistaCoach(ir, { respuesta: true }); } })); });
   revisarEstadoChat(ir);
   pedirIdeas(sobre);
   const vigente = () => E === estadoVista && nube.usuarioId() === usuarioVista && $('vista-coach')?.isConnected;
@@ -292,10 +295,14 @@ function cabeceraHtml() {
     : espera ? ['en-espera', `${espera} en espera`]
     : ['en-linea', E.chatModo === 'plan' ? 'Afinando tu plan' : 'Tu coach'];
   return `<header class="coach-cabecera"><h1 class="sr-only">Coach</h1>
-    <div class="coach-quien"><span class="coach-avatar">${imagenAsistente(sinSenal() ? 'sin_senal' : 'saludo', 'asistente-mini')}</span><strong>${esc(nombreAsistente())}</strong><small><span class="punto-estado ${clase}"></span>${esc(texto)}</small></div>
+    <div class="coach-quien">${historiaNueva()
+      ? `<button type="button" class="coach-avatar con-historia" id="coach-historia" aria-label="${esc(`${nombreAsistente()} tiene una historia nueva: verla`)}">${imagenAsistente('saludo', 'asistente-mini')}</button>`
+      : `<span class="coach-avatar">${imagenAsistente(sinSenal() ? 'sin_senal' : 'saludo', 'asistente-mini')}</span>`}<strong>${esc(nombreAsistente())}</strong><small><span class="punto-estado ${clase}"></span>${esc(texto)}</small></div>
     <button type="button" class="coach-mas" id="coach-menu" aria-label="Más opciones del chat" aria-haspopup="dialog">${icono('puntos')}</button>
   </header>`;
 }
+/** Una historia de la semana, el mes o el año que todavía no se vio: un anillo en la cara del coach, como Instagram. */
+const historiaNueva = () => historiasDeHoy({ sesiones: E.sesiones || [], plan: E.plan, hoy: hoy() }).some(x => !E.historiasVistas?.[idHistoria(x)]);
 /** Con el chat vacío: saludo según la hora, lo que toca hoy en una línea y botones para actuar. */
 function holaHtml() {
   const h = new Date().getHours(), saludo = h < 12 ? 'Buenos días' : h < 20 ? 'Buenas tardes' : 'Buenas noches';

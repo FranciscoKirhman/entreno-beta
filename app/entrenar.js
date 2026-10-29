@@ -21,6 +21,7 @@ import { misRutinasHtml, enlazarRutinas } from './rutinas.js';
 import { recordsPorSesion } from '../nucleo/records.js';
 import { esAsistido } from '../nucleo/catalogo.js';
 import { volumenTexto } from './comun.js';
+import { filaHistoriasHtml, abrirPorId } from './historias.js';
 
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const nombreDia = iso => DIAS[new Date(iso + 'T12:00:00Z').getUTCDay()];
@@ -119,6 +120,7 @@ export function vistaEntrenar(ir) {
   $('app').innerHTML = `<div id="vista-entrenar">
     <span class="sobretitulo">${esc(fecha)}</span>
     <h1>Entrenar</h1>
+    ${filaHistoriasHtml()}
     ${mesHtml(s.f)}
     ${hoyHtml(s)}
     <button type="button" class="boton fila-boton boton-vacia" id="sesion-vacia">${icono('mas')} Empezar entrenamiento vacío</button>
@@ -141,6 +143,8 @@ export function vistaEntrenar(ir) {
   </div>`;
   const raiz = $('vista-entrenar');
   raiz.querySelectorAll('[data-ir-sesion]').forEach(b => b.onclick = () => ir('hoy', { sesion: true }));
+  // Las historias de la semana, el mes y el año (app/historias.js): al cerrar, el anillo deja de estar nuevo.
+  raiz.querySelectorAll('[data-historia]').forEach(b => b.onclick = () => abrirPorId(b.dataset.historia, { volver: b, alCerrar: () => vistaEntrenar(ir) }));
   raiz.querySelectorAll('[data-empezar-hoy]').forEach(b => b.onclick = () => { empezarHoy(); ir('hoy', { sesion: true }); });
   $('entrenar-igual')?.addEventListener('click', () => ir('coach', 'Hoy no tenía sesión pero quiero entrenar, ¿qué otra opción tienes?'));
   $('sesion-vacia').onclick = ev => proponerSesionVacia({ volver: ev.currentTarget, alCambiar: () => { empezarHoy(); ir('hoy', { sesion: true }); } });

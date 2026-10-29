@@ -28,6 +28,7 @@ import { ritmoDe, textoRitmo } from './progreso-ejercicio.js';
 import { miniatura } from './imagenes.js';
 import { icono } from './iconos.js';
 import { ajuste } from './ajustes-sesion.js';
+import { abrirPorId } from './historias.js';
 import { graficoSemanasHtml, tableroProgresoHtml, enlazarProgresoHevy, esfuerzoHtml, enlazarEsfuerzo, anioHtml, enlazarAnio, musculosMapaHtml, enlazarMusculosMapa, seccionProgreso, elegirSeccionProgreso, TITULO_SECCION } from './progreso-hevy.js';
 
 const nombreEj = id => indice.porId.get(id)?.nombre || id;
@@ -131,7 +132,8 @@ function resumenPeriodoHtml() {
       <ul class="pequeno lista-simple">${r.musculos.filter(m => m.series || m.antes).slice(0, 10).map(m => `<li><span>${esc(mayuscula(NOMBRE_MUSCULO[m.musculo] || m.musculo))}</span><span><strong class="num">${n(m.series)}</strong> series <span class="suave">(${esc(comparado(m.series, m.antes))})</span></span></li>`).join('')}</ul>
       <p class="sobretitulo">Ejercicios más hechos</p>
       <ol class="pequeno">${a.ejercicios.map(e => `<li>${esc(e.nombre)}: ${e.sesiones} ${e.sesiones === 1 ? 'sesión' : 'sesiones'}</li>`).join('')}</ol>
-    </details>` : `<p class="pequeno">Sin sesiones en ${esc(nombreP(r.periodo.desde))} todavía.</p>`}
+    </details>
+    <button type="button" class="boton fila-boton" data-historia="${tipo === 'año' ? `año|${r.periodo.desde.slice(0, 4)}` : `mes|${r.periodo.desde.slice(0, 7)}`}">${icono('reproducir')} Ver como historia</button>` : `<p class="pequeno">Sin sesiones en ${esc(nombreP(r.periodo.desde))} todavía.</p>`}
   </section>`;
 }
 
@@ -407,6 +409,7 @@ export async function vistaProgreso(ir) {
   $('buscar-historial')?.addEventListener('input', ev => { buscar = ev.target.value; verTodo = false; $('lista-historial').innerHTML = listaHistorialHtml(); enlazarHistorial(ir); });
   document.querySelectorAll('[data-ficha]').forEach(b => b.onclick = () => { ir('ejercicio', { id: b.dataset.ficha, desde: 'progreso' }); scrollTo(0, 0); });
   document.querySelectorAll('[data-periodo-resumen]').forEach(b => b.onclick = () => { periodoElegido = b.dataset.periodoResumen; const y = scrollY; vistaProgreso(ir); scrollTo(0, y); });
+  document.querySelectorAll('#vista-progreso [data-historia]').forEach(b => b.onclick = () => abrirPorId(b.dataset.historia, { volver: b }));
   $('todos-ejercicios')?.addEventListener('click', () => { todosEjercicios = !todosEjercicios; const y = scrollY; vistaProgreso(ir); scrollTo(0, y); });
   // Medidas del cuerpo
   const repintarMedidas = () => { const y = scrollY; vistaProgreso(ir); scrollTo(0, y); };
