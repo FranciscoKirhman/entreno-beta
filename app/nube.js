@@ -382,6 +382,8 @@ export const cargarDatosTelefono = async () => ok(await supa.from('datos_telefon
 export async function guardarDatoTelefono(clave, valor) {
   ok(await supa.from('datos_telefono').upsert({ user_id: uid(), clave, valor, actualizado: new Date().toISOString() }));
 }
+/** Una sola clave de datos_telefono ({valor, actualizado} o null), sin traer las demás. */
+export const cargarDatoTelefono = async clave => ok(await supa.from('datos_telefono').select('valor, actualizado').eq('clave', clave).maybeSingle());
 export async function borrarDatoTelefono(clave) { ok(await supa.from('datos_telefono').delete().eq('clave', clave)); }
 export const cargarIniciosRegla = async () => ok(await supa.from('ciclo_registros').select('inicio_regla')).map(x => x.inicio_regla);
 /** Deja en la cuenta exactamente estas fechas de inicio de la regla. */

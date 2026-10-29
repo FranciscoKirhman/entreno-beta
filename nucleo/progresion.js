@@ -7,6 +7,11 @@ import { calidadPermiteSubir } from './notas.js';
 /** Kilos con coma decimal, como se escriben en Chile. */
 const kg = x => `${String(x).replace('.', ',')} kg`;
 const reserva = s => (s.rir != null ? s.rir : s.rpe != null ? 10 - s.rpe : null);
+/** La serie de comprobación va al fallo a propósito (nucleo/comprobacion-rir.js): cuenta como lo que habría sido en el
+ *  tope del rango, con lo que sobraba como reserva. 15 al fallo pidiendo 8 a 10 es un 10 con 5 de reserva, no "más duro
+ *  de lo pedido". La usan "Para la próxima" (ajustarTrasSesion) y el check-in semanal (ajustarSemana). */
+const comoLoPedido = (series, repsMax) => series.map(s => (s.comprobacion && Number(s.reps) > 0
+  ? { ...s, reps: Math.min(Number(s.reps), repsMax), rir: Math.max(0, Number(s.reps) - repsMax), rpe: null } : s));
 
 /**
  * Decide la carga y las repeticiones de la próxima semana para un ejercicio.
@@ -216,10 +221,7 @@ export function ajustarTrasSesion({ plan, fecha, series, indice, lugar = null, h
     if (!destino.length) continue;
     const incremento = incrementoPara(ej, lugar);
     const asistido = esAsistido(ej);
-    // La serie de comprobación va al fallo a propósito (nucleo/comprobacion-rir.js): cuenta como lo que habría sido en el
-    // tope del rango, con lo que sobraba como reserva. 15 al fallo pidiendo 8 a 10 es un 10 con 5 de reserva, no "más
-    // duro de lo pedido".
-    const comoPedidas = todas.map(s => (s.comprobacion && Number(s.reps) > 0 ? { ...s, reps: Math.min(Number(s.reps), pedido.reps_max), rir: Math.max(0, Number(s.reps) - pedido.reps_max), rpe: null } : s));
+    const comoPedidas = comoLoPedido(todas, pedido.reps_max);
     const usada = asistido ? null : cargaUsada(comoPedidas);
     const planeada = pedido.carga_kg;
     const reanclado = usada != null && planeada != null && Math.abs(usada - planeada) >= (incremento || 2.5) / 2 - 1e-9;
@@ -295,10 +297,11 @@ export function ajusteAdherencia(adherencias, energias = [], hayDolor = false) {
  * @param registros series efectivas de la semana: [{ejercicio_id, carga_kg, reps, rir?, rpe?, plantilla?}]. Con
  *                  plantilla, cada día usa solo sus series (un ejercicio puede ir en dos días con otra prescripción).
  * @param aceptar   claves "plantilla|ejercicio_id" que la persona confirmó; sin esto se aplica todo
+ * @param correccion lo que suele quedarle de más según su serie de comprobación (ajustarEjercicio)
  * @returns {{plan, cambios, resultados}} plan nuevo (copia), los cambios aplicados y lo propuesto para cada
  *          ejercicio (también lo que se mantiene), con lo de esta semana (antes) y lo que había en la siguiente
  */
-export function ajustarSemana({ plan, semana, registros, historialSemanas = {}, subidas = new Set(), indice, lugar, calidades = {}, aceptar = null }) {
+export function ajustarSemana({ plan, semana, registros, historialSemanas = {}, subidas = new Set(), indice, lugar, calidades = {}, aceptar = null, correccion = 0 }) {
   const nuevo = structuredClone(plan);
   const cambios = [], resultados = [];
   const descarga = semana + 1 === plan.semana_descarga; // la descarga mantiene la carga
@@ -311,11 +314,11 @@ export function ajustarSemana({ plan, semana, registros, historialSemanas = {}, 
       const ej = indice.porId.get(e.ejercicio_id);
       const clave = `${dia.plantilla}|${e.ejercicio_id}`;
       const objetivo = previo?.ejercicios.find(y => y.ejercicio_id === e.ejercicio_id) || e;
-      const hechas = registros.filter(s => s.ejercicio_id === e.ejercicio_id && (!s.plantilla || s.plantilla === dia.plantilla));
+      const hechas = comoLoPedido(registros.filter(s => s.ejercicio_id === e.ejercicio_id && (!s.plantilla || s.plantilla === dia.plantilla)), Number(objetivo.reps_max));
       const r = ajustarEjercicio({
         objetivo, hechas, semanas: historialSemanas[e.ejercicio_id] || [], subioRecien: subidas.has(e.ejercicio_id),
         incremento: ej ? incrementoPara(ej, lugar) : null,
-        calidad: calidades[e.ejercicio_id] || null, asistido: esAsistido(ej),
+        calidad: calidades[e.ejercicio_id] || null, asistido: esAsistido(ej), correccion,
       });
       const aplica = !descarga && (!aceptar || aceptar.has(clave));
       if (!vistos.has(clave)) {

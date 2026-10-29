@@ -9,6 +9,8 @@ import { detectarBanderas } from './checkin.js';
 import { sumarDias, diaSemana } from './agenda.js';
 import { esDeTrabajo, esDeTrabajoGuardada, tipoDe as tipoSerie } from './registro.js';
 import { POR_DISTANCIA } from './unidades.js';
+import { comprobaciones, punteria } from './comprobacion-rir.js';
+import { tecnicaPendiente } from './tecnica-primero.js';
 
 const lunesDe = iso => sumarDias(iso, -((diaSemana(iso) + 6) % 7));
 const ZONA = { hombro: 'el hombro', codo: 'el codo', muneca: 'la muñeca', lumbar: 'la zona lumbar', cadera: 'la cadera', rodilla: 'la rodilla', tobillo: 'el tobillo', cuello: 'el cuello' };
@@ -66,13 +68,19 @@ export function datosDeLaSemana({ plan, semana, sesiones = [], registro = {}, no
     const ses = asignadas.get(dia.fecha)?.sesion;
     let series = [];
     if (ses) {
-      series = (ses.series || []).filter(s => s.ejercicio_id && esDeTrabajoGuardada(s))
-        .map(s => ({ ejercicio_id: s.ejercicio_id, carga_kg: s.carga_kg ?? null, reps: s.reps ?? s.distancia_m ?? null, rir: s.tipo === 'fallo' ? 0 : s.rir ?? null, rpe: s.rpe ?? null }));
+      // Las series al fallo llevan su marca (la puntería no las corrige) y la de comprobación la suya: la última al fallo
+      // del ejercicio cuya nota la trae (nucleo/comprobacion-rir.js).
+      const comprobadas = new Set((ses.notas || []).filter(n => n.respuestas?.comprobacion).map(n => n.ejercicio_id));
+      const trabajo = (ses.series || []).filter(s => s.ejercicio_id && esDeTrabajoGuardada(s));
+      const ultima = new Map(trabajo.map((s, i) => [s, i]).filter(([s]) => s.tipo === 'fallo').map(([s, i]) => [s.ejercicio_id, i]));
+      series = trabajo.map((s, i) => ({ ejercicio_id: s.ejercicio_id, carga_kg: s.carga_kg ?? null, reps: s.reps ?? s.distancia_m ?? null, rir: s.tipo === 'fallo' ? 0 : s.rir ?? null, rpe: s.rpe ?? null,
+        ...(s.tipo !== 'fallo' ? {} : comprobadas.has(s.ejercicio_id) && ultima.get(s.ejercicio_id) === i ? { comprobacion: true } : { fallo: true }) }));
     } else {
       for (const e of dia.ejercicios.filter(x => x.ejercicio_id)) {
         for (const x of (registro[dia.fecha]?.[e.ejercicio_id] || []).filter(y => y?.hecho && esDeTrabajo(y))) {
           series.push({ ejercicio_id: e.ejercicio_id, carga_kg: e.unidad === 'seg' ? null : x.kg ?? null, reps: x.reps ?? null,
-            rpe: x.rpe ?? null, rir: tipoSerie(x) === 'fallo' ? 0 : x.rpe != null ? 10 - x.rpe : null });
+            rpe: x.rpe ?? null, rir: tipoSerie(x) === 'fallo' ? 0 : x.rpe != null ? 10 - x.rpe : null,
+            ...(tipoSerie(x) !== 'fallo' ? {} : x.comprobacion ? { comprobacion: true } : { fallo: true }) });
         }
       }
     }
@@ -168,11 +176,18 @@ function entrada({ plan, semana, sesiones = [], registro = {}, notas = {}, indic
       }
     }
   }
-  const desde = semanasDelPlan(plan).find(s => s.semana === semana)?.desde || plan.inicio;
+  const estaSemana = semanasDelPlan(plan).find(s => s.semana === semana), desde = estaSemana?.desde || plan.inicio;
+  // Técnica antes que peso, como en "Para la próxima": si se rompió antes y esta semana no se anotó cómo salió, no sube.
+  for (const id of new Set(datos.registros.map(s => s.ejercicio_id))) {
+    const c = calidades[id] || {}, pendiente = !c.forma && !c.rango && tecnicaPendiente(id, sesiones, desde);
+    if (pendiente) calidades[id] = { ...c, tecnica_pendiente: pendiente };
+  }
+  // La puntería de sus series de comprobación hasta el fin de la semana: a quien le queda más de lo que anota, se le corrige.
+  const correccion = punteria(comprobaciones(sesiones), estaSemana?.hasta || desde)?.correccion || 0;
   return {
     datos,
     banderas: checkin ? detectarBanderas({ dolores: doloresDeNotas(datos.notas) }, checkin) : [],
-    args: { plan, semana, registros: datos.registros, historialSemanas: historialPorSemana(sesiones, desde), subidas: subidasDelPlan(plan, semana), indice, lugar, calidades },
+    args: { plan, semana, registros: datos.registros, historialSemanas: historialPorSemana(sesiones, desde), subidas: subidasDelPlan(plan, semana), indice, lugar, calidades, correccion },
   };
 }
 

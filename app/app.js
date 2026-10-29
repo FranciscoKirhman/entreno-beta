@@ -4,6 +4,7 @@ import { recuperarCuentaPrincipal } from './recuperar-cuenta.js';
 //
 //   node herramientas/servir.mjs  →  http://127.0.0.1:5173/app/
 import { sincronizarDatosTelefono } from './datos-nube.js';
+import { revisarSesionEnCuenta, alReponerSesion } from './sesion-nube.js';
 import { hevyAlAbrir } from './hevy-auto.js';
 import { conPropios, idsPropios } from '../nucleo/propios.js';
 import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo, entrarEjemplo, salirEjemplo, modoEjemplo, errorGuardado, errorRetornoCuenta, activarCuenta, perfilDePrueba, recuperarCopia, claveSesionCuenta, marcarCuentaRecuperada, EXTRAS, asegurarExtras, usaExtras } from './comun.js';
@@ -143,7 +144,7 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
   const [respuestas, plan] = await consultar(() => Promise.all([nube.cargarRespuestas(), nube.cargarPlan()]));
   if (respuestas) {
     const borrador = E.firmaPlan && firmaRespuestas(E.firmaPlan) !== firmaRespuestas();
-    if (!E.planPendiente && !borrador && JSON.stringify(E.respuestas) === respuestasAlEntrar) E.respuestas = { ...respuestas, escala_esfuerzo: R().escala_esfuerzo };
+    if (!E.planPendiente && !borrador && JSON.stringify(E.respuestas) === respuestasAlEntrar) E.respuestas = { ...respuestas, escala_esfuerzo: R().escala_esfuerzo ?? respuestas.escala_esfuerzo, mancuernas: R().mancuernas ?? respuestas.mancuernas };
   }
   if (plan) { if (!E.planPendiente && JSON.stringify(E.plan) === planAlEntrar) E.plan = conPropios(plan, E.plan); }
   else if (!planIntentado && !E.planPendiente && R().objetivo_principal && E.plan?.dias?.length && !E.plan.bloqueado && !E.plan.id && !E.plan.libre) {
@@ -196,6 +197,10 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
   E.sesiones = unirSesiones(E.sesiones, idsPropios(cambiadas.sesiones, [...(E.ejerciciosPropios || []), ...EXTRAS]), E.pendientes || []);
   if (cambiadas.hasta) E.sincSesiones = { usuario, hasta: cambiadas.hasta };
   E.bienestar = { ...bienestarCuenta, ...Object.fromEntries(Object.entries(E.bienestar).filter(([, b]) => !b.enCuenta)) };
+  // La sesión que quedó empezada en otro teléfono (app/sesion-nube.js), si aquí no hay otra. Va después de traer las
+  // sesiones: una que allá ya se guardó no revive.
+  try { if (await consultar(() => revisarSesionEnCuenta())) E.mensaje = SESION_REPUESTA; }
+  catch { comprobar(); /* sin señal: se mira antes de la primera subida */ }
   const pendientes = E.pendientes?.length || 0;
   const partes = avisos.map(x => `${x.parte}: ${x.mensaje}`);
   if (E.planPendiente && !avisos.some(x => x.parte === 'Plan')) partes.push('plan pendiente');
@@ -363,6 +368,9 @@ function repintarSinMover() {
   const y = scrollY; ir(E.vista, extraActual); scrollTo(0, y);
 }
 document.addEventListener('focusout', () => setTimeout(() => { if (repintadoPendiente) repintarSinMover(); }, 0));
+// Abierta sin señal: la sesión de otro teléfono puede llegar después, antes de la primera subida (app/sesion-nube.js).
+const SESION_REPUESTA = 'Seguimos con la sesión que empezaste en otro teléfono.';
+alReponerSesion.add(() => { E.mensaje = SESION_REPUESTA; guardar(); repintarSinMover(); });
 document.addEventListener('click', () => { if (repintadoPendiente) setTimeout(repintarSinMover, 250); });
 // Al pasar al fondo o cerrar, la pantalla para volver entra en el único guardado de ese momento (comun.js: alOcultar).
 const guardarPantalla = () => { E.pantallaGuardada = pantallaGuardada(E.vista, extraActual, scrollY, E.vista === 'hoy' ? fechaSesionActiva(E, hoy()) : hoy()); };

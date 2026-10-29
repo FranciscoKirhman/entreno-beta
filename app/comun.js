@@ -101,6 +101,8 @@ export const claveSesionCuenta = () => claveSesionPerfilPrueba(perfilDePrueba?.i
 let CLAVE = CLAVE_PERSONAL;
 export let ambitoDatos = AMBITO_LOCAL;
 export let modoEjemplo = false;
+/** Avisos de cada guardado, sin argumentos (app/sesion-nube.js sube la sesión en curso). Nunca impiden guardar. */
+export const alGuardar = new Set();
 export let errorGuardado = errorPerfilPrueba;
 let lecturaFallida = Boolean(errorPerfilPrueba);
 const VACIO = () => ({
@@ -139,6 +141,7 @@ export function guardar() {
   if (esperaPronto) { clearTimeout(esperaPronto); esperaPronto = 0; } // lo escrito hasta ahora entra en este guardado
   revisionLocal += 1;
   alinearPropios();
+  for (const fn of alGuardar) try { fn(); } catch { /* un aviso nunca impide guardar */ }
   try {
     if (lecturaFallida) throw new Error('Los datos anteriores no se pudieron leer');
     if (ambitoDatos !== AMBITO_LOCAL && !modoEjemplo && E.firmaPreferenciasCuenta) {

@@ -15,7 +15,7 @@ import { discosPorLado, discosDisponibles, BARRAS_KG, BARRAS_LB } from '../nucle
 import { checklist } from '../nucleo/suplementos.js';
 import { enlaceVideo } from '../nucleo/explicar.js';
 import { sesionDe } from '../nucleo/agenda.js';
-import { duracionSesion, incrementoPara, cargaSugerida, registrosParaCarga, prescripcion, repsObjetivo } from '../nucleo/motor-plan.js';
+import { duracionSesion, incrementoPara, cargaSugerida, registrosParaCarga, prescripcion, repsObjetivo, lugaresDe, conDosMancuernas } from '../nucleo/motor-plan.js';
 import { prioridadEsfuerzo, consejoSerie } from '../nucleo/series.js';
 import { ajusteDelDia, previasDeHoy } from '../nucleo/fatiga-sesion.js';
 import { sesionViva, aplicarViva, SEGUNDOS_PARA_ACEPTAR } from '../nucleo/sesion-viva.js';
@@ -35,6 +35,7 @@ import { comprobacionHoy, comprobaciones, punteria, textoComprobacion } from '..
 import { tecnicaPendiente, avisoTecnica } from '../nucleo/tecnica-primero.js';
 import { tecnicaDe } from '../nucleo/ficha.js';
 import { sumarDias } from '../nucleo/agenda.js';
+import { senalesSobrecarga } from '../nucleo/sobrecarga.js';
 import { actualizarPantalla } from './pantalla.js';
 import { abrirHoja } from './hoja.js';
 import { grupos, unir, separar, deshacer, copiarSuperseries, despuesDeSerie, etiquetaSuperserie } from '../nucleo/superseries.js';
@@ -278,7 +279,8 @@ function materializar(f, e, k) {
   return { lista, n };
 }
 const fijarFilas = (f, id, n) => { ((E.filas ||= {})[f] ||= {})[id] = n; };
-const lugarDe = dia => (R().lugares || []).find(x => x.nombre === dia?.lugar) || (R().lugares || []).find(x => x.principal) || (R().lugares || [])[0];
+// Con la forma de anotar las mancuernas (Más, Unidades): con "El par", el escalón de las de dos mancuernas es 4.
+const lugarDe = dia => { const l = lugaresDe(R()); return l.find(x => x.nombre === dia?.lugar) || l.find(x => x.principal) || l[0]; };
 const deTrabajoFila = x => ['normal', 'fallo'].includes(tipoDe(x));
 /**
  * El peso de un ejercicio según el plan o, si el plan no lo trae (recién cambiado o de un plan importado), el que sale
@@ -740,7 +742,20 @@ function detallesSesionHtml(dia) {
 let vivaActual = null, relojViva = null;
 // Fase 2 del plan del 28 de octubre de 2026: la serie de comprobación de hoy, la técnica pendiente de cada ejercicio y la
 // puntería de RIR con que se corrige el consejo de cada serie. Se calculan al pintar la sesión (sesionHoy).
-let extrasHoy = { comprobacion: null, tecnica: new Map(), correccion: 0, ultima: null };
+let extrasHoy = { comprobacion: null, tecnica: new Map(), correccion: 0, ultima: null, sePasa: false, actual: null };
+// Si viene entrenando más duro de lo pedido (nucleo/sobrecarga.js): al fallo cuando el plan pedía reserva, o con más
+// peso que el del plan. Basta el esfuerzo; la propuesta de descarga del coach pide además alguna señal de costo.
+// Se calcula una vez por día y por sesión guardada.
+let sobrecargaHoy = { clave: null, sePasa: false };
+function sePasaHoy(f) {
+  const clave = `${f}|${E.plan?.inicio}|${(E.sesiones || []).length}|${(E.sesiones || []).at(-1)?.id || ''}`;
+  if (sobrecargaHoy.clave !== clave) {
+    const asistidos = new Set(indice.ejercicios.filter(esAsistido).map(e => e.id));
+    const s = E.plan?.dias?.length ? senalesSobrecarga({ plan: E.plan, sesiones: E.sesiones || [], bienestar: E.bienestar || {}, hoy: f, asistidos }) : null;
+    sobrecargaHoy = { clave, sePasa: Boolean(s && s.sesiones >= 3 && s.senales.some(x => x.tipo === 'esfuerzo')) };
+  }
+  return sobrecargaHoy.sePasa;
+}
 function extrasDe(dia, f) {
   const tecnica = new Map(dia.ejercicios.filter(e => e.ejercicio_id).map(e => [e.ejercicio_id, tecnicaPendiente(e.ejercicio_id, E.sesiones, f)]).filter(([, m]) => m));
   const hechas = comprobaciones(E.sesiones.filter(s => s.fecha < f));
@@ -753,7 +768,9 @@ function extrasDe(dia, f) {
     const zonas = [...articulacionesBloqueadas(R().lesiones, f), ...molestias.filter(Boolean)];
     comprobacion = comprobacionHoy({ dia, sesiones: E.sesiones, hoy: f, indice, plan: E.plan, zonas, pendiente: id => tecnica.get(id) || null, saltada: E.comprobacionNo || null })?.ejercicio_id || null;
   }
-  return { comprobacion, tecnica, correccion: punteria(hechas, f)?.correccion || 0, ultima: hechas.at(-1) || null };
+  // "Para aquí" va solo en el ejercicio de la serie que sigue: en todos a la vez sería ruido.
+  const actual = siguienteSerie(dia, dia.ejercicios.map((e, k) => filasDe(f, e, k)))?.ejercicioIndice ?? null;
+  return { comprobacion, tecnica, correccion: punteria(hechas, f)?.correccion || 0, ultima: hechas.at(-1) || null, sePasa: sePasaHoy(f), actual };
 }
 function vivaDe(dia, f) {
   if (!enCurso(f)) return null;
@@ -872,6 +889,14 @@ function tecnicaHtml(e, id, nota, ej) {
     </div>`;
 }
 
+/** "Para aquí" (fase 2 del plan del 28 de octubre de 2026): a quien viene entrenando más duro de lo pedido, el número
+ *  donde parar en la serie que sigue para dejar la reserva del plan. Con la sesión de hoy ya hecha, nada. */
+function paraAquiHtml(e, k, siguiente) {
+  if (!extrasHoy.sePasa || k !== extrasHoy.actual || !siguiente?.reps || !(e.rir > 0) || ['seg', 'm'].includes(e.unidad) || modoCardio(e) || extrasHoy.comprobacion === e.ejercicio_id) return '';
+  const cual = /^\d+$/.test(String(siguiente.etiqueta)) ? `En la serie ${siguiente.etiqueta}` : 'En la serie que sigue';
+  return `<div class="aviso-ej para-aqui"><p><b>Para aquí.</b> ${cual}, para en ${siguiente.reps} aunque te queden ganas: deja ${e.rir} en reserva. La última tiene que salir igual de limpia que la primera.</p></div>`;
+}
+
 /** La serie de comprobación de hoy (nucleo/comprobacion-rir.js): antes, cuántas cree que salen; después, la puntería. */
 function comprobacionHtml(e, id, nota, filas) {
   if (extrasHoy.comprobacion !== e.ejercicio_id) return '';
@@ -904,9 +929,14 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
   // Qué es el peso anotado: la ayuda de la máquina (asistidos) o lo que se agrega al cuerpo (lastre).
   const ejCat = indice.porId.get(e.ejercicio_id);
   const queEs = esAsistido(ejCat) ? 'ayuda' : conLastre(ejCat) ? 'lastre' : '';
+  // Con dos mancuernas, el encabezado dice si va el peso de cada una o el del par (Más, Unidades): así se anota igual.
+  const dos = !queEs && conDosMancuernas(ejCat), par = dos && R().mancuernas === 'par';
+  const cabKg = queEs || (dos ? `${u} ${par ? 'par' : 'c/u'}` : u);
+  const nombreKg = `${u === 'lb' ? 'Libras' : 'Kilos'}${queEs ? ` de ${queEs}` : dos ? (par ? ' del par' : ' de cada mancuerna') : ''}`;
   let iTrabajo = 0; // posición entre las series de trabajo, para mostrar lo de la vez anterior
   let kgHoy = null; // el último peso escrito hoy en una serie de trabajo: pasa a ser el gris de las siguientes
   let repsHoy = null; // las repeticiones que sugirió el consejo de la última serie hecha
+  let siguiente = null; // la primera serie de trabajo por hacer, con sus repeticiones en gris (para "Para aquí")
   // Un ajuste en vivo que cambió el peso (nota "pesado", "fácil"…): manda en las filas que quedan.
   let ajusteKg = Object.values(E.vivaHecho?.[f] || {}).filter(h => h.ejercicio_id === e.ejercicio_id && h.carga_kg != null).sort((a, b) => b.t - a.t)[0] || null;
   if (ajusteKg) ajusteKg = { kg: ajusteKg.carga_kg, t: ajusteKg.t };
@@ -928,6 +958,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     if (trabajo && r.hecho && r.consejo?.kg != null) kgHoy = r.consejo.kg; // el peso que sugirió el consejo pasa al gris
     if (trabajo && r.hecho && ajusteKg && (r.t || 0) > ajusteKg.t) ajusteKg = null; // ya se hizo una serie después del ajuste
     const repsGris = seg ? e.reps_min : trabajo && repsHoy != null ? repsHoy : dist ? e.reps_max : trabajo ? repsObjetivoDe(e, kgGris, f, dia) : sug?.reps ?? null;
+    if (trabajo && !r.hecho && !siguiente) siguiente = { etiqueta: etiq[i], reps: repsGris };
     if (trabajo && r.hecho) repsHoy = r.consejo?.reps ?? null;
     const antes = prev ? (seg ? ((prev.duracion_seg ?? prev.reps) != null ? `${prev.duracion_seg ?? prev.reps} s` : '')
       : dist ? `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.distancia_m != null ? `${prev.distancia_m} m` : ''}`
@@ -941,7 +972,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     return `<div class="serie-contenedor"><button type="button" class="quitar-serie" data-quitar-serie="${id}" data-i="${i}" aria-label="Quitar la serie ${etiq[i]} de ${esc(e.nombre || ej?.nombre || id)}" tabindex="-1" hidden>Quitar</button><div class="serie tipo-${t}${r.hecho ? ' hecha' : ''}${seg ? ' seg' : dist ? ' dist' : !conEsfuerzo ? ' sin-esfuerzo' : ''}${r.record?.length && r.hecho ? ' con-record' : ''}">
       <button type="button" class="tipo-serie" data-tipo-serie="${id}" data-i="${i}" aria-label="Serie ${etiq[i]}, ${TIPOS_SERIE[t].nombre.toLowerCase()}${r.record?.length && r.hecho ? ', récord' : ''}. Cambiar el tipo">${etiq[i]}${r.record?.length && r.hecho ? icono('trofeo', 'icono trofeo-serie') : ''}</button>
       ${copiar ? `<button type="button" class="antes num"${copiar} aria-label="${esc(`La vez anterior: ${antes} ${esfPrev}. Copiar a la serie ${etiq[i]}`)}">${antesHtml}</button>` : `<span class="antes num">${antesHtml}</span>`}
-      ${seg ? '' : `<input type="text" inputmode="decimal" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="kg" value="${esc(coma(enUnidad(r.kg)))}" placeholder="${esc(coma(enUnidad(kgGris)))}" aria-label="${u === 'lb' ? 'Libras' : 'Kilos'}${queEs ? ` de ${queEs}` : ''}, serie ${etiq[i]}">`}
+      ${seg ? '' : `<input type="text" inputmode="decimal" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="kg" value="${esc(coma(enUnidad(r.kg)))}" placeholder="${esc(coma(enUnidad(kgGris)))}" aria-label="${nombreKg}, serie ${etiq[i]}">`}
       <input type="text" inputmode="numeric" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="reps"${seg ? ' data-tiempo' : ''} value="${esc(seg ? relojTexto(r.reps) : r.reps ?? '')}" placeholder="${esc(seg ? relojTexto(repsGris) : repsGris ?? '')}" aria-label="${seg ? 'Tiempo, en minutos y segundos' : dist ? 'Metros' : 'Repeticiones'}, serie ${etiq[i]}">
       ${seg ? (r.hecho || !ajuste('cronoFila') ? '<span aria-hidden="true"></span>' : `<button type="button" class="crono-serie" data-crono="${id}" data-i="${i}" aria-label="Contar los segundos de la serie ${etiq[i]}">${icono('reloj', 'icono')}</button>`) : dist || !conEsfuerzo ? '' : trabajo ? cajaEsfuerzo(id, i, r, e, etiq[i]) : '<span aria-hidden="true"></span>'}
       <button type="button" class="check" data-hecho="${id}" data-i="${i}" aria-pressed="${Boolean(r.hecho)}" aria-label="Serie ${etiq[i]} hecha">${r.hecho ? icono('visto', 'visto-serie') : ''}</button>
@@ -969,9 +1000,10 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     ${calentarCorporal(ejCat, aprox, filas) ? `<p class="nota-sesion pequeno"><strong>Calentamiento, fila C:</strong> ${esc(textoCalentamientoCorporal(aprox, modoCalentamiento(ejCat)))}</p>` : ''}
     ${tecnicaHtml(e, id, nota, ej)}
     ${comprobacionHtml(e, id, nota, filas)}
+    ${paraAquiHtml(e, k, siguiente)}
     ${g && g.pos < g.total ? `<div class="linea-descanso sin-toque linea-ss">${icono('reloj')} <span>${esc(descTexto)}</span><button type="button" class="separar-ss" data-separar-ss="${id}" aria-label="Separar la superserie ${g.letra}">Separar</button></div>` : `<button type="button" class="linea-descanso" data-descanso-ej="${id}">${icono('reloj')} ${esc(descTexto)}</button>`}
     <div class="tabla-series${cardio ? ' cardio' : seg ? ' seg' : dist ? ' dist' : !conEsfuerzo ? ' sin-esfuerzo' : ''}">
-      ${cardio ? `<div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span><span aria-hidden="true">${cardio === 'pisos' ? 'Pisos' : 'Km'}</span><span aria-hidden="true">Tiempo</span><span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>` : `<div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${queEs || u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : dist ? 'Metros' : 'Reps'}</span>${seg ? '<span aria-hidden="true"></span>' : dist || !conEsfuerzo ? '' : `<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el ${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}">${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}</button>`}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>`}
+      ${cardio ? `<div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span><span aria-hidden="true">${cardio === 'pisos' ? 'Pisos' : 'Km'}</span><span aria-hidden="true">Tiempo</span><span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>` : `<div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${cabKg}</span>`}<span aria-hidden="true">${seg ? 'Seg' : dist ? 'Metros' : 'Reps'}</span>${seg ? '<span aria-hidden="true"></span>' : dist || !conEsfuerzo ? '' : `<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el ${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}">${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}</button>`}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>`}
       ${filasHtml}
     </div>
     <div class="fila-agregar"><button type="button" class="boton agregar-serie" data-agregar="${id}">+ Agregar serie</button><button type="button" class="boton" data-agregar-despues="${e.ejercicio_id}">+ Agregar ejercicio aquí</button></div>
@@ -1151,7 +1183,7 @@ function enlazar(ir, dia) {
   // 0:90 queda como 1:30 al salir del campo, como Hevy.
   $('cardio-tiempo')?.addEventListener('blur', ev => { const r = leerReloj(ev.target.value); if (r.seg) ev.target.value = relojTexto(r.seg); });
   const ejercicioDe = id => { const k = dia.ejercicios.findIndex((x, j) => idDe(x, j) === id); return { e: dia.ejercicios[k], k }; };
-  const lugar = (R().lugares || [])[0];
+  const lugar = lugaresDe(R())[0];
   /** Consejo para la serie siguiente (nucleo/series.js), según reps, esfuerzo y fallo. Solo en las de trabajo. */
   // Mira también las series ya hechas hoy y cuántas faltan: así dice cuánto bajar (o subir) y lo deja en gris.
   const consejo = (e, r, lista = [], i = -1) => {

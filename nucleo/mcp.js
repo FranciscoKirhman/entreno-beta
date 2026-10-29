@@ -17,7 +17,7 @@ import { leerPlanTexto, calendarizar } from './importar-plan.js';
 import { semanasDelPlan } from './semanal.js';
 import { fechaEnPalabras } from './prompts-coach.js';
 import { bloqueSiguienteDisponible, lunesDesde } from './bloque-siguiente.js';
-import { cargaSugerida, registrosParaCarga, TEXTO_DESCARGA } from './motor-plan.js';
+import { cargaSugerida, registrosParaCarga, TEXTO_DESCARGA, lugaresDe } from './motor-plan.js';
 
 export const VERSIONES = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 const SERVIDOR = { name: 'entreno', title: 'Entreno', version: '0.2.0' };
@@ -138,7 +138,7 @@ export const HERRAMIENTAS = [
         musculos_prioridad: d.musculos_prioridad || [],
         // Lo que la persona dejó elegido en Mi plan para su siguiente bloque (nucleo/ciclo-siguiente.js).
         ...(cicloParaIA(r, plan) ? { siguiente_ciclo_elegido: cicloParaIA(r, plan) } : {}),
-        plan: plan ? { inicio: plan.inicio, semana_descarga: plan.semana_descarga, bloque: bloqueDe(plan, hoy), proximos_dias: semana.map(x => diaParaIA(x, { historial: series, indice, lugares: r.lugares || [] })),
+        plan: plan ? { inicio: plan.inicio, semana_descarga: plan.semana_descarga, bloque: bloqueDe(plan, hoy), proximos_dias: semana.map(x => diaParaIA(x, { historial: series, indice, lugares: lugaresDe(r) })),
           sin_registro: await sinRegistro(plan, datos, hoy, sesiones) } : null,
         // Cómo vienes: sensaciones, esfuerzo, check-ins y tendencias (solo donde el servidor lo ofrece).
         ...(datos.contexto && indice ? { como_vienes: contextoIA({ historial: (sesiones || []).filter(s => fechaSesion(s) >= hace8), ...(await datos.contexto()), indice, hoy, respuestas: r, plan }) } : {}),
@@ -197,7 +197,7 @@ export const HERRAMIENTAS = [
       // Un ejercicio que entra sin peso (reemplazado o agregado) sale con el de su historial para ese día.
       const sinPeso = (cambios || []).some(c => ['reemplazar_ejercicio', 'agregar_ejercicio'].includes(c?.tipo) && c.carga_kg == null);
       const historial = sinPeso && datos.historial ? seriesConFecha(await datos.historial(52)) : [];
-      const r = aplicarCambios(plan, cambios, indice, { historial, lugares: respuestas.lugares || [] });
+      const r = aplicarCambios(plan, cambios, indice, { historial, lugares: lugaresDe(respuestas) });
       // Un cambio que deja el plan igual (el peso que ya tenía) no es una propuesta: se devuelve como rechazado para que
       // la IA no anuncie algo que no cambia nada.
       if (r.aplicados.length && JSON.stringify(r.plan.dias) === JSON.stringify(plan.dias)) {

@@ -12,9 +12,11 @@ import { sumarDias } from '../nucleo/agenda.js';
 import { SEGUNDOS_PARA_ACEPTAR } from '../nucleo/sesion-viva.js';
 import { comprobaciones, punteria } from '../nucleo/comprobacion-rir.js';
 import { tecnicaPendiente } from '../nucleo/tecnica-primero.js';
+import { lugaresDe } from '../nucleo/motor-plan.js';
 import * as nube from './nube.js';
 
-const lugarDe = dia => (R().lugares || []).find(x => x.nombre === dia?.lugar) || (R().lugares || []).find(x => x.principal) || (R().lugares || [])[0];
+// Con la forma de anotar las mancuernas: con "El par", las de dos mancuernas suben de a 4.
+const lugarDe = dia => { const l = lugaresDe(R()); return l.find(x => x.nombre === dia?.lugar) || l.find(x => x.principal) || l[0]; };
 const serieDeTrabajo = s => ({ ejercicio_id: s.ejercicio_id, carga_kg: s.carga_kg ?? null, reps: s.reps ?? null, rir: s.tipo === 'fallo' ? 0 : s.rir ?? null, rpe: s.rpe ?? null });
 const trabajo = sesion => (sesion.series || []).filter(s => s.ejercicio_id && esDeTrabajoGuardada(s)).map(serieDeTrabajo);
 // Para ajustar, además, qué series fueron al fallo (la puntería no las corrige) y cuál fue la de comprobación: la última

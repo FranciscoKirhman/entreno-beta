@@ -7,15 +7,27 @@ import { propiosDelPlan, conPropiosGuardados } from '../nucleo/propios.js';
 import { unirInicios } from '../nucleo/ciclo-menstrual.js';
 import * as nube from './nube.js';
 
+const PREFERENCIAS = ['escala_esfuerzo', 'mancuernas'];
 // clave en la cuenta → cómo leerla y ponerla en E. "Aviso con la pantalla bloqueada" es de cada teléfono (su
 // suscripción de avisos), así que no viaja con los ajustes de la sesión.
 const campo = (nombre, vacio) => ({ leer: () => E[nombre] ?? vacio, poner: v => { E[nombre] = v; } });
 const LOCAL = {
   ejercicios_propios: campo('ejerciciosPropios', []), medidas_cuerpo: campo('medidas', []), notas_fijas: campo('notasFijas', {}),
   calendario_asistencia: campo('marcasPlan', {}), rutinas: campo('rutinas', []), sensaciones: campo('sensaciones', {}),
+  // Con los ajustes de la sesión viajan dos preferencias de cómo se anota, que viven en las respuestas: RPE o RIR y
+  // las mancuernas de a una o el par. Una cuenta que aún no las tiene recibe las de este teléfono (falta).
   ajustes_sesion: {
-    leer: () => { const { avisoCerrada, ...resto } = E.ajustesSesion || {}; return resto; },
-    poner: v => { const aviso = E.ajustesSesion?.avisoCerrada; E.ajustesSesion = { ...v, ...(aviso ? { avisoCerrada: aviso } : {}) }; },
+    leer: () => {
+      const { avisoCerrada, ...resto } = E.ajustesSesion || {};
+      for (const k of PREFERENCIAS) if (R()?.[k]) resto[k] = R()[k];
+      return resto;
+    },
+    poner: v => {
+      const aviso = E.ajustesSesion?.avisoCerrada, ajustes = { ...v };
+      for (const k of PREFERENCIAS) { if (v?.[k] && R()) R()[k] = v[k]; delete ajustes[k]; }
+      E.ajustesSesion = { ...ajustes, ...(aviso ? { avisoCerrada: aviso } : {}) };
+    },
+    falta: v => PREFERENCIAS.some(k => R()?.[k] && !v?.[k]),
   },
   meta_peso: { leer: () => (E.metaPeso ? { kg: E.metaPeso } : {}), poner: v => { if (v?.kg) E.metaPeso = v.kg; else delete E.metaPeso; } },
   // El plan de la cuenta solo guarda ejercicios del catálogo: los propios y los del banco ampliado van aparte, con su
@@ -107,7 +119,11 @@ export async function sincronizarDatosTelefono() {
     if (E.nubeDatos?.[clave]?.pendiente || (!fila && tieneDatos(clave))) {
       await guardarDato(clave, contexto);
       contexto.comprobar();
-    } else if (fila && revisionDe(clave) === alLeer[clave]) LOCAL[clave].poner(fila.valor);
+    } else if (fila && revisionDe(clave) === alLeer[clave]) {
+      const falta = LOCAL[clave].falta?.(fila.valor);
+      LOCAL[clave].poner(fila.valor);
+      if (falta) { (E.nubeDatos ||= {})[clave] = { pendiente: true }; await guardarDato(clave, contexto); contexto.comprobar(); }
+    }
   }
   if (R().seguimiento_ciclo === true) {
     const remotos = await contexto.consultar(() => nube.cargarIniciosRegla());

@@ -2,7 +2,7 @@
 // vienen con la misma plantilla). Prepara una copia, no toca lo demás y valida antes de guardar.
 import { modoCardio } from './unidades.js';
 import { normalizar, tieneEquipo, nivelAlcanza, articulacionesBloqueadas, cargaZonaBloqueada, esAsistido } from './catalogo.js';
-import { prescripcion, comoDescarga, duracionSesion, incrementoPara } from './motor-plan.js';
+import { prescripcion, comoDescarga, duracionSesion, incrementoPara, lugaresDe } from './motor-plan.js';
 import { cargasAlReordenar } from './fatiga-sesion.js';
 import { validarCambio } from './validador.js';
 import { grupos } from './superseries.js';
@@ -95,7 +95,8 @@ export function editarSesion(accion, ctx) {
     // El orden nuevo, por id. Lo que no venga en la lista queda al final, en su orden de antes.
     if (!dia?.ejercicios.length) return { error: 'Hoy no hay ejercicios para ordenar.' };
     const pos = id => { const i = (accion.orden || []).indexOf(id); return i < 0 ? Infinity : i; };
-    const lugarDe = x => ctx.respuestas.lugares?.find(l => l.nombre === x.lugar) || ctx.respuestas.lugares?.find(l => l.principal) || ctx.respuestas.lugares?.[0];
+    const lugares = lugaresDe(ctx.respuestas);
+    const lugarDe = x => lugares.find(l => l.nombre === x.lugar) || lugares.find(l => l.principal) || lugares[0];
     // Cada carga va a su lugar nuevo (nucleo/fatiga-sesion.js: cargasAlReordenar): cuenta lo que queda antes del mismo
     // músculo, aunque salga con la reserva pedida. Lo que ya se empezó hoy (una serie hecha o algo escrito) no cambia.
     const empezado = e => (ctx.registro?.[hoy]?.[e.ejercicio_id] || []).some(x => x?.hecho || x?.kg != null || x?.reps != null);

@@ -14,7 +14,7 @@ import { contextoDolor } from './dolor.js';
 import { planDeCuidado } from './cuidado.js';
 import { reconocer } from './importar-plan.js';
 import { articulacionesBloqueadas } from './catalogo.js';
-import { duracionEstimada, cargaSugerida, registrosParaCarga } from './motor-plan.js';
+import { duracionEstimada, cargaSugerida, registrosParaCarga, lugaresDe } from './motor-plan.js';
 import { alternativasNoHecha, alternativaEnFecha, fechasLibres, fechaEscrita, semanaDe, firma, diaCorto } from './sin-registro.js';
 import { semanaDe as semanaDelBloque, adelantarDescarga } from './ciclos.js';
 
@@ -240,7 +240,7 @@ export function calcularCambio(accion, ctx) {
       const dias = nuevo.dias.filter(x => (adelante ? x.fecha >= accion.fecha : x.fecha === accion.fecha) && x.ejercicios.some(e => e.ejercicio_id === accion.de));
       // El peso del ejercicio nuevo sale de su historial para las repeticiones y la reserva de cada día (en una
       // descarga, más liviano): antes quedaba en blanco y Hoy copiaba el de la vez anterior tal cual.
-      const lugares = ctx.respuestas?.lugares || [];
+      const lugares = lugaresDe(ctx.respuestas);
       const lugarDe = x => lugares.find(l => l.nombre === x.lugar) || lugares.find(l => l.principal) || lugares[0] || null;
       for (const x of dias) x.ejercicios = x.ejercicios.map(e => {
         if (e.ejercicio_id !== accion.de) return e;

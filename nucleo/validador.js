@@ -1,7 +1,7 @@
 // Revisa un plan antes de guardarlo, venga del motor de reglas, del coach Pro o de la IA de la persona.
 // Si hay errores, el plan no se guarda: se reintenta o se usa el plan de reglas.
 import { tieneEquipo, nivelAlcanza, articulacionesBloqueadas, cargaZonaBloqueada } from './catalogo.js';
-import { incrementoPara, duracionSesion, volumenSemanal } from './motor-plan.js';
+import { incrementoPara, duracionSesion, volumenSemanal, lugaresDe, topeMancuerna, conDosMancuernas } from './motor-plan.js';
 import { grupos } from './superseries.js';
 import { conSemanasPrevias } from './semanas-plan.js';
 import { seriesPorMusculo, SERIES_SESION } from './fatiga-sesion.js';
@@ -23,7 +23,7 @@ export function validarPlan(plan, { derivados: d, respuestas: r, indice, hoy, ed
     return { ok: false, errores, advertencias };
   }
 
-  const lugares = r.lugares?.length ? r.lugares : [{ nombre: 'Casa', equipamiento: [] }];
+  const lugares = r.lugares?.length ? lugaresDe(r) : [{ nombre: 'Casa', equipamiento: [] }];
   const lugarDe = nombre => lugares.find(l => l.nombre === nombre) || lugares.find(l => l.principal) || lugares[0];
   const noPuedo = new Set(r.dias_no_puedo || []);
   // Quien empieza no llega al fallo: al menos 2 de reserva, o lo que pida una alerta médica.
@@ -64,8 +64,8 @@ export function validarPlan(plan, { derivados: d, respuestas: r, indice, hoy, ed
           && !(ej.equipamiento.includes('barra_rack') && (e.carga_kg - 20) % inc === 0)) {
           adv('incremento', `${ej.nombre}: ${e.carga_kg} kg no se arma con los discos de ${lugar.nombre || 'tu gimnasio'} (sube de a ${inc} kg).`, en);
         }
-        const max = Number(lugar.mancuerna_max_kg);
-        if (ej.equipamiento.includes('mancuernas') && max && e.carga_kg > max) err('mancuerna_max', `${ej.nombre}: ${e.carga_kg} kg y la mancuerna más pesada es de ${max} kg.`, en);
+        const max = topeMancuerna(ej, lugar), par = lugar.mancuernas === 'par' && conDosMancuernas(ej);
+        if (ej.equipamiento.includes('mancuernas') && max && e.carga_kg > max) err('mancuerna_max', `${ej.nombre}: ${e.carga_kg} kg y ${par ? `el par más pesado suma ${max} kg` : `la mancuerna más pesada es de ${max} kg`}.`, en);
       }
     }
     // Superseries: una letra de la A a la H; si quedó suelta o separada, no se aplica (se avisa).

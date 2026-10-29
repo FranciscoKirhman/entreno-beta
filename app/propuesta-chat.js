@@ -89,7 +89,7 @@ export async function actualizarChatConfirmado() {
   if (!vigente()) return false;
   const planVigente = plan && !E.planPendiente && sinEdicion('plan'), respuestasVigentes = respuestas && sinEdicion('respuestas');
   if (planVigente) E.plan = conPropios(plan, E.plan);
-  if (respuestasVigentes) E.respuestas = { ...respuestas, unidad: E.respuestas?.unidad, escala_esfuerzo: E.respuestas?.escala_esfuerzo };
+  if (respuestasVigentes) E.respuestas = { ...respuestas, unidad: E.respuestas?.unidad, escala_esfuerzo: E.respuestas?.escala_esfuerzo, mancuernas: E.respuestas?.mancuernas };
   if (planVigente && respuestasVigentes) E.firmaPlan = firmaPerfil(E.respuestas);
   const anteriores = k => previas[k] || {};
   const unidas = unirSesiones(E.sesiones, idsPropios(sesiones, [...(E.ejerciciosPropios || []), ...EXTRAS]), E.pendientes || []);

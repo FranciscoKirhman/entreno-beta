@@ -67,6 +67,8 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel = null }) {
       <p class="pequeno suave">Todo se guarda en kilos; en libras se muestra redondeado a media libra. Distancia y medidas del cuerpo se suman cuando la app las registre.</p>
       <div class="fila-unidad"><span>Esfuerzo</span><div class="segmentos" role="group" aria-label="Cómo anotar el esfuerzo de cada serie">${[['rpe', 'RPE'], ['rir', 'RIR']].map(([v, t]) => `<button type="button" data-escala-esfuerzo="${v}" aria-pressed="${(R().escala_esfuerzo === 'rir' ? 'rir' : 'rpe') === v}">${t}</button>`).join('')}</div></div>
       <p class="pequeno suave">RPE va de 6 a 10, con medios: 8,5 es que quizás salían 2 más. RIR cuenta las repeticiones que quedaban: 2 es que salían 2 más. Se guardan los dos, así puedes cambiar cuando quieras.</p>
+      <div class="fila-unidad"><span>Mancuernas</span><div class="segmentos" role="group" aria-label="Qué peso anotas en los ejercicios con dos mancuernas">${[['mano', 'Cada una'], ['par', 'El par']].map(([v, t]) => `<button type="button" data-mancuernas="${v}" aria-pressed="${(R().mancuernas === 'par' ? 'par' : 'mano') === v}">${t}</button>`).join('')}</div></div>
+      <p class="pequeno suave">Con dos de 12 kg, "Cada una" es anotar 12 y "El par", 24. Elige la forma en que ya lo anotas: lo anotado antes no se convierte. Con el par, el peso sube de a 4 kg (2 por mano); con una sola mancuerna, como en la sentadilla goblet, va su peso.</p>
     </section>
 
     <section class="tarjeta" id="pantalla">
@@ -124,7 +126,9 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel = null }) {
     vistaMas(ir, { armarPlan, sincronizarAlEntrar });
   });
   enlazarRecordatorios();
-  document.querySelectorAll('[data-escala-esfuerzo]').forEach(b => b.onclick = () => { R().escala_esfuerzo = b.dataset.escalaEsfuerzo; E.mensaje = `Esfuerzo en ${b.dataset.escalaEsfuerzo === 'rir' ? 'RIR (repeticiones en reserva)' : 'RPE (de 6 a 10)'}.`; guardar(); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); }, ir);
+  // RPE o RIR y las mancuernas viajan con la cuenta junto a los ajustes de la sesión (app/datos-nube.js).
+  document.querySelectorAll('[data-escala-esfuerzo]').forEach(b => b.onclick = () => { R().escala_esfuerzo = b.dataset.escalaEsfuerzo; E.mensaje = `Esfuerzo en ${b.dataset.escalaEsfuerzo === 'rir' ? 'RIR (repeticiones en reserva)' : 'RPE (de 6 a 10)'}.`; datoCambiado('ajustes_sesion'); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); }, ir);
+  document.querySelectorAll('[data-mancuernas]').forEach(b => b.onclick = () => { R().mancuernas = b.dataset.mancuernas; E.mensaje = b.dataset.mancuernas === 'par' ? 'Mancuernas: anotas el peso del par.' : 'Mancuernas: anotas el peso de cada una.'; datoCambiado('ajustes_sesion'); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); }, ir);
   document.querySelectorAll('[data-unidad]').forEach(b => b.onclick = () => { R().unidad = b.dataset.unidad; E.mensaje = `Peso en ${b.dataset.unidad === 'lb' ? 'libras' : 'kilos'}.`; guardar(); vistaMas(ir, { armarPlan, sincronizarAlEntrar }); }, ir);
   enlazarConexiones(() => vistaMas(ir, { armarPlan, sincronizarAlEntrar }));
   document.querySelectorAll("[data-elegir-acento]").forEach(b => b.onclick = () => {

@@ -29,6 +29,7 @@ import { miniatura } from './imagenes.js';
 import { icono } from './iconos.js';
 import { ajuste } from './ajustes-sesion.js';
 import { abrirPorId } from './historias.js';
+import { comprobaciones, punteria } from '../nucleo/comprobacion-rir.js';
 import { graficoSemanasHtml, tableroProgresoHtml, enlazarProgresoHevy, esfuerzoHtml, enlazarEsfuerzo, anioHtml, enlazarAnio, musculosMapaHtml, enlazarMusculosMapa, seccionProgreso, elegirSeccionProgreso, TITULO_SECCION } from './progreso-hevy.js';
 
 const nombreEj = id => indice.porId.get(id)?.nombre || id;
@@ -100,6 +101,30 @@ function franjaHtml() {
       ${filas.map(f => `<span class="nombre-musculo">${esc(nombre(f.musculo))}</span>${r.semanas.map(w => { const v = Math.round((w.porMusculo[f.musculo] || 0) * 10) / 10; return `<span class="num ${v >= lo ? 'estado-bien' : v >= lo / 2 ? 'estado-cerca' : 'estado-bajo'}">${n(v)}</span>`; }).join('')}`).join('')}</div>
       <p class="pequeno suave">Cada columna es una semana, desde el lunes que dice (día/mes). Lo que ayuda cuenta media serie.</p>
     </details>
+  </section>`;
+}
+
+/**
+ * Tu puntería de RIR (nucleo/comprobacion-rir.js): cuántas repeticiones te quedan de más, o de menos, de las que crees,
+ * con tus series de comprobación. Una cifra grande con lo que significa y, debajo, cada comprobación.
+ */
+function punteriaHtml() {
+  const lista = comprobaciones(E.sesiones || []);
+  const p = punteria(lista, hoy());
+  const intro = '<h3>Tu puntería de RIR</h3>';
+  if (!lista.length) return `<section class="tarjeta punteria">${intro}<p class="pequeno suave">Se mide con la serie de comprobación: cada 2 semanas, Hoy te pregunta antes de la última serie de un ejercicio seguro cuántas crees que salen, y esa serie va hasta que la técnica ya no sale limpia.</p></section>`;
+  const signo = d => `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(Math.round(d))}`;
+  const d = p ? Math.round(p.diferencia) : null;
+  const lectura = d == null ? 'Tu última comprobación tiene más de 12 semanas: la próxima la vuelve a medir.'
+    : d >= 3 ? `Te quedan unas ${d} más de las que crees. Por eso "Para la próxima" suma ${p.correccion} a la reserva que anotas y sube más rápido.`
+      : d >= 1 ? `Buena puntería: te ${d === 1 ? 'queda una' : `quedan unas ${d}`} más de las que crees. Tu reserva anotada es confiable.`
+        : d === 0 ? 'Puntería exacta: tu reserva anotada es confiable.'
+          : 'Llegas antes de lo que crees: cuando el plan pida 2 de reserva, deja una más.';
+  const fila = c => `<li><span>${esc(fechaCorta(c.fecha))} · ${esc(indice.porId.get(c.ejercicio_id)?.nombre || 'Ejercicio')}</span><span>creíste ${c.predichas}, salieron ${c.reales} <strong class="num">(${signo(c.diferencia)})</strong></span></li>`;
+  return `<section class="tarjeta punteria">${intro}
+    ${d == null ? '' : `<p class="punteria-cifra"><strong class="num">${signo(d)}</strong><span>${d === 0 ? 'de diferencia' : `repeticiones ${d > 0 ? 'más' : 'menos'} de las que crees`}${p.n > 1 ? `, la mediana de tus últimas ${p.n}` : ''}</span></p>`}
+    <p class="pequeno">${esc(lectura)}</p>
+    <ul class="lista-simple pequeno">${lista.slice(-5).reverse().map(fila).join('')}</ul>
   </section>`;
 }
 
@@ -370,6 +395,7 @@ export async function vistaProgreso(ir) {
     ${semanaHtml()}
     ${franjaHtml()}
     ${esfuerzoHtml(R().escala_esfuerzo === 'rir' ? 'rir' : 'rpe')}
+    ${punteriaHtml()}
     ${resumenPeriodoHtml()}
     ${llegasRindesHtml()}
     </div>

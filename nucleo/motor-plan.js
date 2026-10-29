@@ -63,10 +63,25 @@ export function elegirDias(cantidad, noPuedo = []) {
   return elegidos.sort((a, b) => orden(a) - orden(b));
 }
 
+// Mancuernas: cada persona anota el peso de cada una (lo habitual) o el total del par (Más, Unidades: "mancuernas" en
+// las respuestas). Lo anotado se guarda tal cual; con "El par", los ejercicios de dos mancuernas suben de a 4 (2 por
+// mano) y el tope del lugar es el doble. Los de una sola mancuerna (goblet, remo o tríceps a un brazo) no cambian: el
+// catálogo los nombra "con mancuerna", en singular.
+const UNA_MANCUERNA = new Set(['sentadilla_goblet', 'vuelta_al_mundo']);
+export const conDosMancuernas = ej => Boolean(ej?.equipamiento?.includes('mancuernas')) && !UNA_MANCUERNA.has(ej.id)
+  && !/con mancuerna(?!s)|goblet|a un brazo|a una mano/i.test(ej.nombre || '');
+/** Los lugares de la persona con su forma de anotar las mancuernas: incrementoPara y topeMancuerna la leen del lugar. */
+export const lugaresDe = r => (r?.lugares || []).map(l => (r.mancuernas === 'par' && l ? { ...l, mancuernas: 'par' } : l));
+/** La mancuerna más pesada del lugar, en lo que se anota: con "El par", el doble en los ejercicios de dos. */
+export function topeMancuerna(ej, lugar) {
+  const max = Number(lugar?.mancuerna_max_kg) || null;
+  return max && lugar?.mancuernas === 'par' && conDosMancuernas(ej) ? max * 2 : max;
+}
+
 export function incrementoPara(ej, lugar) {
   const disco = Number(lugar?.incremento_minimo_kg) || 2.5;
   if (ej.equipamiento.includes('barra_rack') || ej.equipamiento.includes('smith')) return disco * 2; // un disco por lado
-  if (ej.equipamiento.includes('mancuernas')) return 2;
+  if (ej.equipamiento.includes('mancuernas')) return lugar?.mancuernas === 'par' && conDosMancuernas(ej) ? 4 : 2;
   if (ej.equipamiento.includes('kettlebells')) return 4;
   if (ej.equipamiento.length === 0 || ej.equipamiento.every(e => ['banco', 'barra_dominadas', 'paralelas', 'bandas'].includes(e))) return null;
   return 2.5;
@@ -119,7 +134,7 @@ export function registrosParaCarga(series, id, fecha, semanas = 8) {
 export function cargaSugerida({ e, ej, registros = [], lugar = null }) {
   if (!ej || (e.unidad && e.unidad !== 'reps') || !(e.reps_min > 0)) return null;
   if (esAsistido(ej)) return ayudaInicial(registros);
-  const maxMancuerna = ej.equipamiento.includes('mancuernas') ? Number(lugar?.mancuerna_max_kg) || null : null;
+  const maxMancuerna = ej.equipamiento.includes('mancuernas') ? topeMancuerna(ej, lugar) : null;
   return cargaInicial(registros, Math.min(e.reps_min + 1, e.reps_max ?? Infinity), e.rir ?? 2, incrementoPara(ej, lugar), maxMancuerna);
 }
 
@@ -235,7 +250,7 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
   if (d.alerta === 'bloqueo') return { bloqueado: true, mensaje: d.mensaje_alerta };
   if (d.errores?.length) return { bloqueado: true, mensaje: d.errores.join(' ') };
 
-  const lugares = r.lugares?.length ? r.lugares : [{ nombre: 'Casa', tipo: 'casa', equipamiento: [] }];
+  const lugares = r.lugares?.length ? lugaresDe(r) : [{ nombre: 'Casa', tipo: 'casa', equipamiento: [] }];
   const lugar = lugares.find(l => l.principal) || lugares[0];
   const equipo = lugar.equipamiento || [];
   const bloqueadas = articulacionesBloqueadas(r.lesiones || [], hoy);

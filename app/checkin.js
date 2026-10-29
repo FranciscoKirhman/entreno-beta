@@ -5,6 +5,7 @@ import { E, guardar, R, K, esc, $, hoy, indice, fechaCorta, cambiarPlan, peso, s
 import { semanaParaCheckin, proponerCheckin, aplicarCheckin } from '../nucleo/semanal.js';
 import * as nube from './nube.js';
 import { esAsistido } from '../nucleo/catalogo.js';
+import { lugaresDe } from '../nucleo/motor-plan.js';
 import { criteriosAlargar, alargarBloque } from '../nucleo/alargar-bloque.js';
 import { nuevaMedida, agregarMedida } from '../nucleo/medidas.js';
 import { datoCambiado } from './datos-nube.js';
@@ -41,7 +42,7 @@ export function avisoCheckin(siempre = false) {
     <div class="fila-botones"><button type="button" class="boton${s.toca ? ' primario' : ''}" data-ir-checkin="${s.semana}">${s.toca ? 'Hacer el check-in' : 'Adelantarlo'}</button></div></section>`;
 }
 
-const entradaPara = semana => ({ plan: E.plan, semana, sesiones: E.sesiones, registro: E.registro, notas: E.notas, indice, lugar: (R().lugares || [])[0], checkin: K });
+const entradaPara = semana => ({ plan: E.plan, semana, sesiones: E.sesiones, registro: E.registro, notas: E.notas, indice, lugar: lugaresDe(R())[0], checkin: K });
 
 function propuestaTexto(it) {
   const rango = `${it.reps_min} a ${it.reps_max} reps`;
