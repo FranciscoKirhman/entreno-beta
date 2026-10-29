@@ -142,6 +142,8 @@ const coachHtml = p => (p.frase ? `<div class="hist-coach">${imagenAsistente(p.p
 
 // ── El visor ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 let abierta = null;
+// Safari y la app instalada tiñen su franja con theme-color: mientras dura la historia, el color de cada pantalla.
+const colorBarra = () => document.querySelector('meta[name="theme-color"]');
 
 /** Abre una historia armada (nucleo/historias.js). volver: dónde queda el foco al cerrar. */
 export function abrirHistoria(h, { volver = null, alCerrar = null } = {}) {
@@ -167,7 +169,7 @@ export function abrirHistoria(h, { volver = null, alCerrar = null } = {}) {
   for (const [el] of inertes) el.inert = true;
   document.body.append(raiz);
   document.documentElement.classList.add('con-historias');
-  abierta = { h, i: -1, raiz, volver, alCerrar, inertes, pausada: false, manteniendo: false, tragarClic: false };
+  abierta = { h, i: -1, raiz, volver, alCerrar, inertes, pausada: false, manteniendo: false, tragarClic: false, colorAntes: colorBarra()?.getAttribute('content') ?? null };
   enlazar(abierta);
   ir(0);
   raiz.focus({ preventScroll: true });
@@ -181,6 +183,7 @@ export function cerrarHistoria() {
   a.raiz.remove();
   for (const [el, antes] of a.inertes) el.inert = antes;
   document.documentElement.classList.remove('con-historias');
+  if (a.colorAntes != null) colorBarra()?.setAttribute('content', a.colorAntes);
   a.alCerrar?.();
   (a.volver?.isConnected ? a.volver : document.querySelector(`[data-historia="${CSS.escape(a.h.id)}"]`))?.focus?.({ preventScroll: true });
 }
@@ -193,6 +196,8 @@ function ir(i) {
   a.i = Math.max(0, i);
   const p = a.h.pantallas[a.i];
   a.raiz.dataset.tema = p.tema;
+  const color = getComputedStyle(a.raiz).getPropertyValue('--hist-fondo').trim();
+  if (color) colorBarra()?.setAttribute('content', color);
   a.raiz.querySelectorAll('.hist-barras span').forEach((s, k) => {
     s.className = k < a.i ? 'llena' : '';
     if (k === a.i) { s.style.setProperty('--hist-dur', `${DURACION[p.forma] || 7000}ms`); void s.offsetWidth; s.className = 'actual'; }
