@@ -1016,5 +1016,19 @@ main:has(#vista-coach){padding-bottom:calc(var(--coach-redaccion-alto,100px) + v
 .ajuste-vivo p{margin:0}
 .ajuste-vivo.hecho{background:var(--surface);border:1px solid var(--line)}
 .ajuste-vivo .antes-ahora{margin-top:4px;color:var(--ink-muted)}
+/* Técnica primero y serie de comprobación (fase 2): avisos dentro de la tarjeta del ejercicio, en Hoy. */
+.aviso-ej{margin:8px 0;padding:10px 12px;border-radius:12px;background:var(--fill);color:var(--ink);font-size:14px;line-height:1.4}
+.aviso-ej.comprobacion{background:var(--accent-soft)}
+.aviso-ej p{margin:0}
+.aviso-ej p+p,.aviso-ej p+.fila-pregunta,.aviso-ej .fila-pregunta{margin-top:8px}
+.aviso-ej details summary{padding:10px 0;font-weight:600;cursor:pointer}
+.aviso-ej ol{margin:0 0 6px;padding-left:20px}
+.aviso-ej .fila-pregunta{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.aviso-ej .fila-pregunta>span:first-child{flex:1 1 170px}
+.aviso-ej .fila-pregunta .botones{display:flex;gap:8px}
+.aviso-ej .fila-pregunta .boton{min-height:40px}
+.aviso-ej .boton[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.aviso-ej select{min-height:40px;padding:6px 10px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--ink);font:inherit}
+.aviso-ej .enlace{display:inline-flex;align-items:center;min-height:40px;margin-top:2px;padding:0}
 .fila-propuesta{display:flex;gap:8px;margin-top:8px}
 .fila-propuesta .boton{flex:1}

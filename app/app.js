@@ -21,7 +21,7 @@ import { elegirSeccionProgreso } from './progreso-hevy.js';
 import { vistaFicha } from './ficha.js';
 import { vistaDiaPasado } from './dia-pasado.js';
 import { vistaSemana } from './semana.js';
-import { vistaCoach, revisarSemanaSiToca, marcarNovedadCoach } from './coach-ui.js';
+import { vistaCoach, revisarSemanaSiToca, marcarNovedadCoach, proponerDescargaSiToca } from './coach-ui.js';
 import { vistaProgreso } from './progreso.js';
 import { vistaMiPlan, configurarMiPlan } from './mi-plan.js';
 import { borradorCiclo, aplicarBorrador } from '../nucleo/ciclo-siguiente.js';
@@ -255,6 +255,7 @@ function ir(vista, extra) {
   $('nav').hidden = !E.plan || E.plan.bloqueado;
   const pestana = ['ejercicio', 'resumen'].includes(vista) ? PESTANA[extra?.desde] || extra?.desde || 'hoy' : vista === 'seccion' && E.seccionDesde === 'miplan' ? 'miplan' : PESTANA[vista] || vista;
   document.querySelectorAll('#nav [data-ir]').forEach(b => b.setAttribute('aria-current', String(b.dataset.ir === pestana)));
+  if (E.plan && !E.plan.bloqueado) proponerDescargaSiToca();
   marcarNovedadCoach();
   pintarModo();
   pintarCampana();

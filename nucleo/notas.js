@@ -7,6 +7,8 @@
 export function calidadPermiteSubir(respuestas = {}) {
   if (respuestas.forma === 'rota') return { ok: false, motivo: 'La técnica se rompió: se repite la carga hasta que salga limpia.' };
   if (respuestas.rango === 'parcial') return { ok: false, motivo: 'El rango de movimiento quedó parcial: se repite la carga hasta completarlo.' };
+  // Técnica antes que peso: la vez anterior se rompió y hoy no se anotó cómo salió (nucleo/tecnica-primero.js).
+  if (respuestas.tecnica_pendiente) return { ok: false, motivo: respuestas.tecnica_pendiente === 'rango' ? 'La vez anterior el rango quedó parcial y hoy no anotaste cómo salió: mismo peso hasta que marques que salió completo.' : 'La vez anterior se rompió la técnica y hoy no anotaste cómo salió: mismo peso hasta que marques que salió limpia.' };
   if (respuestas.molestia === 'me_preocupa' || (respuestas.dolor ?? 0) >= 4) return { ok: false, motivo: 'Hubo dolor o una molestia que preocupa: no se sube carga en este ejercicio.' };
   // Dolor anotado en otro ejercicio que carga la misma zona (lo marca nucleo/semanal.js).
   if (respuestas.zona_con_dolor) return { ok: false, motivo: `Esta semana anotaste dolor en ${respuestas.zona_con_dolor}: no se sube carga en lo que carga esa zona.` };

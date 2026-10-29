@@ -88,8 +88,9 @@ export function propuestaDescarga(plan, hoy, registros) {
   return { semana: nueva, actual, desde: sumarDias(plan.inicio, (nueva - 1) * 7), quita: plan.semana_descarga, motivo: t.motivo };
 }
 
-/** La semana `nueva` pasa a ser la descarga y el bloque termina ahí (las semanas siguientes se quitan). */
-export function adelantarDescarga(plan, nueva) {
+/** La semana `nueva` pasa a ser la descarga y el bloque termina ahí (las semanas siguientes se quitan). `porque` va en
+ *  la justificación del plan: la energía baja (propuestaDescarga) o entrenar más duro de lo pedido (nucleo/sobrecarga.js). */
+export function adelantarDescarga(plan, nueva, porque = 'venías con poca energía') {
   const out = structuredClone(plan);
   out.dias = out.dias.filter(d => d.semana <= nueva);
   for (const d of out.dias.filter(x => x.semana === nueva)) {
@@ -100,7 +101,7 @@ export function adelantarDescarga(plan, nueva) {
   out.semana_descarga = nueva;
   if (out.justificacion) {
     out.justificacion = out.justificacion.replace(/^Plan de \d+ semanas/, `Plan de ${nueva} semanas`)
-      .replace(/La semana \d+ es de descarga\./, `La semana ${nueva} es de descarga: se adelantó porque venías con poca energía.`);
+      .replace(/La semana \d+ es de descarga\./, `La semana ${nueva} es de descarga: se adelantó porque ${porque}.`);
   }
   return out;
 }

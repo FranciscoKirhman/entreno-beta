@@ -31,6 +31,10 @@ import { tramosDePaso, tramosDeCardio, seriesDeCalentamiento, descansoCalentamie
 import { calentamientoDeSesion, minutosCalentamiento, partePaso, aproximacionesDelPlan, conAproximaciones, zonasDeSesion } from '../nucleo/calentamiento-sesion.js';
 import { estiramientoDeSesion } from '../nucleo/estiramiento-sesion.js';
 import { articulacionesBloqueadas } from '../nucleo/catalogo.js';
+import { comprobacionHoy, comprobaciones, punteria, textoComprobacion } from '../nucleo/comprobacion-rir.js';
+import { tecnicaPendiente, avisoTecnica } from '../nucleo/tecnica-primero.js';
+import { tecnicaDe } from '../nucleo/ficha.js';
+import { sumarDias } from '../nucleo/agenda.js';
 import { actualizarPantalla } from './pantalla.js';
 import { abrirHoja } from './hoja.js';
 import { grupos, unir, separar, deshacer, copiarSuperseries, despuesDeSerie, etiquetaSuperserie } from '../nucleo/superseries.js';
@@ -65,7 +69,7 @@ import { fechaSesionActiva } from '../nucleo/sesion-activa.js';
 import { serieCompleta } from '../nucleo/serie-completa.js';
 import { proponerSesionVacia } from './sesion-libre-ui.js';
 import { ilustracionesCalentamiento } from '../nucleo/imagenes-calentamiento.js';
-import { IMAGENES } from './comun.js';
+import { IMAGENES, TECNICA } from './comun.js';
 import { elegirCardio } from './cardio-ui.js';
 import { CARDIOS, registroCardio, esEscalera, cardioDeTexto } from '../nucleo/cardio.js';
 import { hayImagen, srcMiniatura } from './imagenes.js';
@@ -734,6 +738,23 @@ function detallesSesionHtml(dia) {
  * aplicado queda escrito en su ejercicio todo el día (E.vivaHecho), y lo rechazado no vuelve (E.vivaNo).
  */
 let vivaActual = null, relojViva = null;
+// Fase 2 del plan del 28 de octubre de 2026: la serie de comprobación de hoy, la técnica pendiente de cada ejercicio y la
+// puntería de RIR con que se corrige el consejo de cada serie. Se calculan al pintar la sesión (sesionHoy).
+let extrasHoy = { comprobacion: null, tecnica: new Map(), correccion: 0, ultima: null };
+function extrasDe(dia, f) {
+  const tecnica = new Map(dia.ejercicios.filter(e => e.ejercicio_id).map(e => [e.ejercicio_id, tecnicaPendiente(e.ejercicio_id, E.sesiones, f)]).filter(([, m]) => m));
+  const hechas = comprobaciones(E.sesiones.filter(s => s.fecha < f));
+  // La de hoy queda en el ejercicio donde se anotó la predicción, aunque después ya no "toque" (por ejemplo, al guardar).
+  const notas = E.notas[f] || {};
+  let comprobacion = dia.ejercicios.find((e, k) => notas[idDe(e, k)]?.prediccion != null || notas[idDe(e, k)]?.comprobacion)?.ejercicio_id || null;
+  if (!comprobacion && f === hoy() && !guardadaHoy(f)) {
+    // Lo que carga una zona con molestia no va al fallo: las lesiones del perfil y las molestias de las últimas 2 semanas.
+    const molestias = E.sesiones.filter(s => s.fecha >= sumarDias(f, -14)).flatMap(s => (s.notas || []).filter(n => ['leve', 'me_preocupa'].includes(n.respuestas?.molestia)).map(n => n.respuestas.dolor_zona));
+    const zonas = [...articulacionesBloqueadas(R().lesiones, f), ...molestias.filter(Boolean)];
+    comprobacion = comprobacionHoy({ dia, sesiones: E.sesiones, hoy: f, indice, plan: E.plan, zonas, pendiente: id => tecnica.get(id) || null, saltada: E.comprobacionNo || null })?.ejercicio_id || null;
+  }
+  return { comprobacion, tecnica, correccion: punteria(hechas, f)?.correccion || 0, ultima: hechas.at(-1) || null };
+}
 function vivaDe(dia, f) {
   if (!enCurso(f)) return null;
   const lugar = lugarDe(dia), equipo = lugar?.equipamiento || [];
@@ -772,6 +793,7 @@ const vivaHtml = (o, ejercicioId) => {
 function sesionHoy(dia) {
   const f = dia.fecha;
   vivaActual = vivaDe(dia, f);
+  extrasHoy = extrasDe(dia, f);
   const notas = E.notas[f] || {};
   const progreso = avance(dia), guardada = guardadaHoy(f);
   const todas = seriesAnotadas(E.sesiones, E.registro);
@@ -835,6 +857,37 @@ function filaCardio({ id, i, r, t, prev, e, cardio, etiq, nombre }) {
  *  peso" que leer en la fila (Francisco, 28 de octubre de 2026: "calentamiento dominadas poco claro"). */
 const calentarCorporal = (ej, aprox, filas) => Boolean(modoCalentamiento(ej) && aprox[0]?.reps
   && filas.some(x => x?.aprox != null && !x.hecho) && !filas.some(x => x?.hecho && deTrabajo(tipoDe(x))));
+
+/** Técnica primero (nucleo/tecnica-primero.js): qué pasó la vez anterior, los pasos de la ficha y la pregunta de hoy, que
+ *  queda en la nota del ejercicio como en "Cómo te fue". */
+function tecnicaHtml(e, id, nota, ej) {
+  const motivo = extrasHoy.tecnica.get(e.ejercicio_id);
+  if (!motivo) return '';
+  const a = avisoTecnica(motivo, ej ? tecnicaDe(ej, TECNICA).pasos : []), campo = Object.keys(a.si)[0];
+  return `<div class="aviso-ej tecnica-primero">
+      <p><b>Técnica primero.</b> ${esc(a.texto)}</p>
+      <details data-panel="tec-${id}"${abiertos.has(`tec-${id}`) ? ' open' : ''}><summary>Cómo hacerlo</summary>${a.pasos.length ? `<ol>${a.pasos.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}<p>${esc(a.como)}</p></details>
+      <div class="fila-pregunta" role="group" aria-label="${esc(a.pregunta)}"><span>${esc(a.pregunta)}</span>
+        <span class="botones"><button type="button" class="boton chico" data-tecnica="${id}" data-valor="si" aria-pressed="${nota[campo] === a.si[campo]}">Sí</button><button type="button" class="boton chico" data-tecnica="${id}" data-valor="no" aria-pressed="${nota[campo] === a.no[campo]}">Todavía no</button></span></div>
+    </div>`;
+}
+
+/** La serie de comprobación de hoy (nucleo/comprobacion-rir.js): antes, cuántas cree que salen; después, la puntería. */
+function comprobacionHtml(e, id, nota, filas) {
+  if (extrasHoy.comprobacion !== e.ejercicio_id) return '';
+  const c = nota.comprobacion;
+  if (c) return `<div class="aviso-ej comprobacion"><p><b>Serie de comprobación.</b> ${esc(textoComprobacion(c.predichas, c.reales))}</p></div>`;
+  const pred = nota.prediccion ?? null, u = extrasHoy.ultima;
+  // Sin una serie de trabajo por hacer ya no hay dónde comprobar: queda para otro día.
+  if (pred == null && !filas.some(x => deTrabajo(tipoDe(x)) && !x.hecho)) return '';
+  const opciones = Array.from({ length: 38 }, (_, i) => i + 3).map(n => `<option value="${n}"${pred === n ? ' selected' : ''}>${n}</option>`).join('');
+  return `<div class="aviso-ej comprobacion">
+      <p><b>Serie de comprobación.</b> La última serie de hoy va hasta que la repetición siguiente ya no salga con buena técnica: así sabes cuánto te queda de verdad.${u ? ` La vez anterior creíste ${u.predichas} y salieron ${u.reales}.` : ''}</p>
+      <label class="fila-pregunta"><span>${pred == null ? 'Antes de empezarla, ¿cuántas crees que salen?' : 'Creíste que salen'}</span><select data-comprobacion="${id}"><option value="">Elige</option>${opciones}</select></label>
+      ${pred == null ? '' : '<p class="pequeno suave">Es la serie F de abajo: escribe cuántas salieron y márcala.</p>'}
+      <button type="button" class="enlace" data-comprobacion-no="${id}">Hoy no</button>
+    </div>`;
+}
 
 function ejercicioHoy(e, k, f, previas, nota, dia) {
   const id = idDe(e, k);
@@ -914,6 +967,8 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     ${vivaHtml(vivaActual, e.ejercicio_id)}
     ${cargaHoy.fatiga && !filas.some(x => x.hecho && deTrabajo(tipoDe(x))) ? `<p class="consejo bajar">${esc(textoFatiga(cargaHoy))}</p>` : ''}
     ${calentarCorporal(ejCat, aprox, filas) ? `<p class="nota-sesion pequeno"><strong>Calentamiento, fila C:</strong> ${esc(textoCalentamientoCorporal(aprox, modoCalentamiento(ejCat)))}</p>` : ''}
+    ${tecnicaHtml(e, id, nota, ej)}
+    ${comprobacionHtml(e, id, nota, filas)}
     ${g && g.pos < g.total ? `<div class="linea-descanso sin-toque linea-ss">${icono('reloj')} <span>${esc(descTexto)}</span><button type="button" class="separar-ss" data-separar-ss="${id}" aria-label="Separar la superserie ${g.letra}">Separar</button></div>` : `<button type="button" class="linea-descanso" data-descanso-ej="${id}">${icono('reloj')} ${esc(descTexto)}</button>`}
     <div class="tabla-series${cardio ? ' cardio' : seg ? ' seg' : dist ? ' dist' : !conEsfuerzo ? ' sin-esfuerzo' : ''}">
       ${cardio ? `<div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span><span aria-hidden="true">${cardio === 'pisos' ? 'Pisos' : 'Km'}</span><span aria-hidden="true">Tiempo</span><span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>` : `<div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${queEs || u}</span>`}<span aria-hidden="true">${seg ? 'Seg' : dist ? 'Metros' : 'Reps'}</span>${seg ? '<span aria-hidden="true"></span>' : dist || !conEsfuerzo ? '' : `<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el ${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}">${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}</button>`}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>`}
@@ -1104,7 +1159,10 @@ function enlazar(ir, dia) {
     const previas = lista.slice(0, Math.max(0, i)).filter(x => x?.hecho && deTrabajo(tipoDe(x))).map(x => ({ ...x, fallo: tipoDe(x) === 'fallo' }));
     const quedan = i < 0 ? null : lista.slice(i + 1).filter(x => !x?.hecho && deTrabajo(tipoDe(x))).length;
     // lastre: las de peso corporal con versión con lastre (dominadas, fondos), donde sumar peso es cómo seguir.
-    return deTrabajo(tipoDe(r)) ? consejoSerie(e, { ...r, fallo: tipoDe(r) === 'fallo' }, ej ? incrementoPara(ej, lugar) : null, { asistido: esAsistido(ej), lastre: Boolean(ej && indice.porId.has(`${ej.id}_lastre`)), previas, quedan }) : null;
+    // tecnica y correccion: técnica primero y la puntería de RIR (extrasHoy). La serie de comprobación dice lo suyo arriba.
+    if (r.comprobacion) return null;
+    return deTrabajo(tipoDe(r)) ? consejoSerie(e, { ...r, fallo: tipoDe(r) === 'fallo' }, ej ? incrementoPara(ej, lugar) : null, { asistido: esAsistido(ej), lastre: Boolean(ej && indice.porId.has(`${ej.id}_lastre`)), previas, quedan,
+      tecnica: extrasHoy.tecnica.get(e.ejercicio_id) || null, correccion: extrasHoy.correccion }) : null;
   };
 
   // Escribir kilos (o libras) y repeticiones: se guarda en kilos, sin volver a dibujar.
@@ -1124,6 +1182,9 @@ function enlazar(ir, dia) {
         r.rir = rir; r.rpe = rir == null ? null : 10 - rir;
         if (r.hecho) r.consejo = consejo(e, r, lista, Number(t.dataset.i));
       } else r[t.dataset.c] = t.dataset.c === 'kg' ? aKilos(v) : v;
+      // Corregir lo anotado en la serie de comprobación corrige la puntería.
+      const nc = E.notas[f]?.[t.dataset.ej];
+      if (r.hecho && r.comprobacion && nc?.prediccion && Number(r.reps) > 0) nc.comprobacion = { predichas: nc.prediccion, reales: Number(r.reps), kg: r.kg ?? null };
       lista[t.dataset.i] = r;
       guardarPronto(); // cada tecla: se guarda al terminar de escribir (comun.js)
     } else if (t.dataset.nota && t.tagName === 'TEXTAREA') {
@@ -1258,6 +1319,7 @@ function enlazar(ir, dia) {
         else {
           const r = { ...lista[i], tipo: t };
           delete r.fallo;
+          if (t !== 'fallo') delete r.comprobacion;
           if (t === 'fallo') { r.rpe = 10; r.rir = 0; }
           else if (r.rpe === 10) { r.rpe = null; r.rir = null; }
           if (!deTrabajo(t)) { delete r.rpe; delete r.rir; delete r.consejo; }
@@ -1480,6 +1542,12 @@ function enlazar(ir, dia) {
     const r = { ...lista[i] };
     const t = tipoDe(r);
     const cardio = modoCardio(e);
+    // La serie de comprobación se anota con lo que salió de verdad: sin repeticiones escritas no se marca.
+    if (!r.hecho && r.comprobacion && r.reps == null) {
+      avisar('Escribe cuántas repeticiones salieron en la serie de comprobación y márcala.');
+      document.querySelector(`#vista-hoy input[data-ej="${CSS.escape(id)}"][data-i="${i}"][data-c="reps"]`)?.focus();
+      return;
+    }
     if (cardio && !r.hecho && r.seg == null && r.dist == null) {
       // Cardio marcado sin escribir: lo de la vez anterior o el tiempo del plan.
       const { prev } = sugerencia(e, lista, i);
@@ -1500,6 +1568,12 @@ function enlazar(ir, dia) {
     if (!r.hecho && enPausa(f)) (E.pausas ||= {})[f] = alternarPausa(pausaDe(f), Date.now()); // marcar una serie reanuda
     r.hecho = !r.hecho;
     r.consejo = r.hecho && !cardio ? consejo(e, r, lista, i) : null;
+    // Con la predicción anotada, la serie de comprobación da la puntería (nucleo/comprobacion-rir.js).
+    const nc = E.notas[f]?.[id];
+    if (r.comprobacion && nc?.prediccion) {
+      if (r.hecho) nc.comprobacion = { predichas: nc.prediccion, reales: Number(r.reps), kg: r.kg ?? null };
+      else delete nc.comprobacion;
+    }
     // Récord, como en Hevy: contra todo lo anterior de ese ejercicio y las series previas de hoy.
     let recs = [];
     if (r.hecho && deTrabajo(t) && e.ejercicio_id && !cardio) {
@@ -1555,6 +1629,41 @@ function enlazar(ir, dia) {
     if (t.dataset.p === 'molestia') repintar();
   });
   function guardarNota(id, p, v, escribiendo = false) { ((E.notas[f] ||= {})[id] ||= {})[p] = v; (escribiendo ? guardarPronto : guardar)(); }
+  // Técnica primero: "Sí" o "Todavía no" quedan en la nota del ejercicio, como en "Cómo te fue"; tocar de nuevo lo quita.
+  raiz.querySelectorAll('[data-tecnica]').forEach(b => b.onclick = () => {
+    const { e } = ejercicioDe(b.dataset.tecnica), motivo = e && extrasHoy.tecnica.get(e.ejercicio_id);
+    if (!motivo) return;
+    const a = avisoTecnica(motivo), [campo, valor] = Object.entries(b.dataset.valor === 'si' ? a.si : a.no)[0];
+    const n = (E.notas[f] ||= {})[b.dataset.tecnica] ||= {};
+    if (n[campo] === valor) delete n[campo]; else n[campo] = valor;
+    guardar(); repintar();
+  });
+  // Serie de comprobación: elegir cuántas salen deja la última serie de trabajo al fallo (F); "Hoy no" la deja para otro
+  // día y esa serie vuelve a ser normal.
+  const soltarComprobacion = lista => lista.forEach((x, j) => {
+    if (!x?.comprobacion || x.hecho) return;
+    const { comprobacion, ...resto } = x;
+    lista[j] = { ...resto, tipo: 'normal', rpe: null, rir: null };
+  });
+  raiz.querySelectorAll('select[data-comprobacion]').forEach(s => s.onchange = () => {
+    const id = s.dataset.comprobacion, { e, k } = ejercicioDe(id), { lista } = materializar(f, e, k);
+    const n = (E.notas[f] ||= {})[id] ||= {}, v = Number(s.value) || null;
+    soltarComprobacion(lista);
+    if (v) {
+      n.prediccion = v;
+      const i = lista.map(x => deTrabajo(tipoDe(x))).lastIndexOf(true);
+      if (i >= 0 && !lista[i].hecho) lista[i] = { ...lista[i], tipo: 'fallo', rpe: 10, rir: 0, comprobacion: true };
+    } else delete n.prediccion;
+    guardar(); repintar();
+  });
+  raiz.querySelectorAll('[data-comprobacion-no]').forEach(b => b.onclick = () => {
+    const id = b.dataset.comprobacionNo, { e, k } = ejercicioDe(id);
+    soltarComprobacion(materializar(f, e, k).lista);
+    const n = E.notas[f]?.[id];
+    if (n) { delete n.prediccion; delete n.comprobacion; }
+    E.comprobacionNo = f;
+    guardar(); repintar();
+  });
   raiz.querySelectorAll('details[data-panel]').forEach(d => d.addEventListener('toggle', () => { d.open ? abiertos.add(d.dataset.panel) : abiertos.delete(d.dataset.panel); }));
 
   // Ficha del ejercicio: cómo se hace, qué trabaja, tus marcas, por qué está en tu plan y alternativas.

@@ -10,11 +10,21 @@ import { esDeTrabajoGuardada } from '../nucleo/registro.js';
 import { huellaNotas } from '../nucleo/revision-semanal.js';
 import { sumarDias } from '../nucleo/agenda.js';
 import { SEGUNDOS_PARA_ACEPTAR } from '../nucleo/sesion-viva.js';
+import { comprobaciones, punteria } from '../nucleo/comprobacion-rir.js';
+import { tecnicaPendiente } from '../nucleo/tecnica-primero.js';
 import * as nube from './nube.js';
 
 const lugarDe = dia => (R().lugares || []).find(x => x.nombre === dia?.lugar) || (R().lugares || []).find(x => x.principal) || (R().lugares || [])[0];
-const trabajo = sesion => (sesion.series || []).filter(s => s.ejercicio_id && esDeTrabajoGuardada(s))
-  .map(s => ({ ejercicio_id: s.ejercicio_id, carga_kg: s.carga_kg ?? null, reps: s.reps ?? null, rir: s.tipo === 'fallo' ? 0 : s.rir ?? null, rpe: s.rpe ?? null }));
+const serieDeTrabajo = s => ({ ejercicio_id: s.ejercicio_id, carga_kg: s.carga_kg ?? null, reps: s.reps ?? null, rir: s.tipo === 'fallo' ? 0 : s.rir ?? null, rpe: s.rpe ?? null });
+const trabajo = sesion => (sesion.series || []).filter(s => s.ejercicio_id && esDeTrabajoGuardada(s)).map(serieDeTrabajo);
+// Para ajustar, además, qué series fueron al fallo (la puntería no las corrige) y cuál fue la de comprobación: la última
+// al fallo del ejercicio cuya nota la trae (nucleo/comprobacion-rir.js).
+function trabajoAjuste(sesion) {
+  const comprobadas = new Set((sesion.notas || []).filter(n => n.respuestas?.comprobacion).map(n => n.ejercicio_id));
+  const series = (sesion.series || []).filter(s => s.ejercicio_id && esDeTrabajoGuardada(s));
+  const ultima = new Map(series.map((s, i) => [s, i]).filter(([s]) => s.tipo === 'fallo' && comprobadas.has(s.ejercicio_id)).map(([s, i]) => [s.ejercicio_id, i]));
+  return series.map((s, i) => ({ ...serieDeTrabajo(s), ...(s.tipo !== 'fallo' ? {} : ultima.get(s.ejercicio_id) === i ? { comprobacion: true } : { fallo: true }) }));
+}
 // Si se guarda de nuevo la sesión con otras cifras, la propuesta se vuelve a calcular.
 const huella = sesion => huellaNotas(JSON.stringify(trabajo(sesion)));
 const restan = reg => Math.max(0, SEGUNDOS_PARA_ACEPTAR - Math.floor((Date.now() - (reg?.desde || 0)) / 1000));
@@ -34,7 +44,14 @@ function calcular(sesion, plan) {
   const dia = plan.dias.find(d => d.fecha === sesion.fecha);
   const calidades = Object.fromEntries((sesion.notas || []).filter(n => n.ejercicio_id).map(n => [n.ejercicio_id, n.respuestas || {}]));
   const otras = E.sesiones.filter(s => s.id !== sesion.id);
-  return ajustarTrasSesion({ plan, fecha: sesion.fecha, series: trabajo(sesion), indice, lugar: lugarDe(dia), historialSemanas: historialPorSemana(otras, sesion.fecha), calidades });
+  // Técnica primero: si la vez anterior se rompió y hoy no se anotó cómo salió, el peso no sube (nucleo/tecnica-primero.js).
+  for (const id of new Set((sesion.series || []).map(s => s.ejercicio_id).filter(Boolean))) {
+    const r = calidades[id] || {}, pendiente = tecnicaPendiente(id, otras, sesion.fecha);
+    if (pendiente && !r.forma && !r.rango) calidades[id] = { ...r, tecnica_pendiente: pendiente };
+  }
+  // La puntería de sus series de comprobación, con la de hoy: a quien le queda más de lo que anota, se le corrige.
+  const correccion = punteria(comprobaciones([...otras, sesion]), sesion.fecha)?.correccion || 0;
+  return ajustarTrasSesion({ plan, fecha: sesion.fecha, series: trabajoAjuste(sesion), indice, lugar: lugarDe(dia), historialSemanas: historialPorSemana(otras, sesion.fecha), calidades, correccion });
 }
 
 function registrar(id, dato) {

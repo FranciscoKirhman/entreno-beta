@@ -17,8 +17,21 @@ const reserva = s => (s.rir != null ? s.rir : s.rpe != null ? 10 - s.rpe : null)
  * @param p.incremento kg que se pueden sumar (null en peso corporal)
  * @param p.calidad    respuestas del desplegable del ejercicio (forma, rango, molestia, dolor), si las hay
  * @param p.asistido   el peso es la ayuda de la máquina: progresar es bajarla (y el máximo estimado no aplica)
+ * @param p.correccion lo que suele quedarle de más según su serie de comprobación (nucleo/comprobacion-rir.js): se suma
+ *                     a la reserva anotada, salvo al fallo, y con 3 o más de sobra el salto es doble
  */
-export function ajustarEjercicio({ objetivo: o, hechas, semanas = [], subioRecien = false, incremento, calidad = null, asistido = false }) {
+export function ajustarEjercicio(p) {
+  const correccion = p.correccion > 0 ? p.correccion : 0;
+  if (!correccion) return ajustarBase(p);
+  // Puntería de RIR: a quien suele quedarle bastante más de lo que anota se le suma a la reserva anotada. Las series al
+  // fallo y la de comprobación ya dicen lo suyo.
+  const hechas = p.hechas.map(s => (!s.fallo && !s.comprobacion && reserva(s) != null ? { ...s, rir: reserva(s) + correccion, rpe: null } : s));
+  const r = ajustarBase({ ...p, hechas, correccion });
+  if (!['subir_carga', 'subir_reps'].includes(r.accion)) return r;
+  return { ...r, motivo: `Según tu serie de comprobación, te quedan unas ${correccion} más de las que anotas. ${r.motivo}` };
+}
+
+function ajustarBase({ objetivo: o, hechas, semanas = [], subioRecien = false, incremento, calidad = null, asistido = false, correccion = 0 }) {
   if (asistido) return ajustarAsistido({ objetivo: o, hechas, subioRecien, incremento, calidad });
   // Si el plan no indicaba carga ("elige un peso"), la referencia es la más pesada que anotó.
   const carga = o.carga_kg ?? (Math.max(0, ...hechas.map(s => Number(s.carga_kg) || 0)) || null);
@@ -68,7 +81,9 @@ export function ajustarEjercicio({ objetivo: o, hechas, semanas = [], subioRecie
   // Estancamiento: tres semanas sin mejorar el 1RM estimado.
   const actual = Math.max(...hechas.filter(s => s.carga_kg > 0 && s.reps > 0).map(e1rm), 0);
   const ultimas = [...semanas, actual].slice(-4);
-  if (ultimas.length === 4 && Math.max(...ultimas.slice(1)) <= ultimas[0] * 1.005 && incremento && carga) {
+  // Con la reserva corregida por su serie de comprobación y de sobra, no está estancado: está levantando de menos.
+  const levantaDeMenos = correccion > 0 && hechas.every(s => reserva(s) != null && reserva(s) >= o.rir);
+  if (ultimas.length === 4 && Math.max(...ultimas.slice(1)) <= ultimas[0] * 1.005 && incremento && carga && !levantaDeMenos) {
     // Si las repeticiones no bajan entre series aunque se anote 1 de reserva o menos, lo que no calza es la reserva y no
     // el peso: bajarlo hundía a quien levanta de menos (50, 47,5, 45 kg en la simulación del 28 de octubre de 2026).
     const delPeso = hechas.filter(s => Number(s.carga_kg) === Number(carga));
@@ -98,8 +113,11 @@ export function ajustarEjercicio({ objetivo: o, hechas, semanas = [], subioRecie
         motivo: `Subir ${kg(incremento)} sobre ${kg(carga)} es más de un 5%. Primero llegas a ${o.reps_max + 2} repeticiones con el mismo peso.` };
     }
     const base = o.rango_extendido ? { reps_min: o.reps_min, reps_max: o.reps_max - 2 } : { reps_min: o.reps_min, reps_max: o.reps_max };
-    return { accion: 'subir_carga', carga_kg: carga + incremento, ...base, regla: 'doble_progresion',
-      motivo: sobrabanMuchas && !todasAlTope ? 'Te sobraban 4 o más repeticiones: sube la carga.' : `Todas las series en ${o.reps_max} repeticiones con reserva: sube ${kg(incremento)}.` };
+    // Con la reserva corregida y 3 o más de sobra en todas, el salto es doble (hasta un 10% de la carga): quien levantaba
+    // de menos llega antes a un peso que le cueste lo pedido.
+    const salto = correccion > 0 && carga && hechas.every(s => reserva(s) >= o.rir + 3) && (2 * incremento) / carga <= 0.1 ? 2 * incremento : incremento;
+    return { accion: 'subir_carga', carga_kg: carga + salto, ...base, regla: 'doble_progresion',
+      motivo: sobrabanMuchas && !todasAlTope ? (salto > incremento ? `Te sobraban 4 o más repeticiones: sube ${kg(salto)}.` : 'Te sobraban 4 o más repeticiones: sube la carga.') : `Todas las series en ${o.reps_max} repeticiones con reserva: sube ${kg(salto)}.` };
   }
   if (!bajoElRango) return { ...mantener('repeticiones_primero', 'Dentro del rango: mismo peso y una repetición más por serie.'), accion: 'subir_reps_dentro' };
   return mantener('repetir', 'Algunas series quedaron bajo el rango: repite la carga.');
@@ -172,10 +190,11 @@ const iguales = (a, b) => a.carga_kg === b.carga_kg && a.reps_min === b.reps_min
  * @param series           series de trabajo de la sesión [{ejercicio_id, carga_kg, reps, rir?, rpe?}]
  * @param historialSemanas mejor 1RM estimado por semana antes de la sesión (semanal.js: historialPorSemana)
  * @param calidades        respuestas del desplegable de cada ejercicio (forma, rango, molestia, dolor)
+ * @param correccion       lo que suele quedarle de más según su serie de comprobación (ajustarEjercicio)
  * @returns {{plan, cambios}} plan nuevo (copia) y un cambio por ejercicio: {ejercicio_id, nombre, accion, regla,
  *          motivo, reanclado, desde, antes, despues, dias: [{fecha, descarga, antes, despues}]}
  */
-export function ajustarTrasSesion({ plan, fecha, series, indice, lugar = null, historialSemanas = {}, calidades = {} }) {
+export function ajustarTrasSesion({ plan, fecha, series, indice, lugar = null, historialSemanas = {}, calidades = {}, correccion = 0 }) {
   const nuevo = structuredClone(plan);
   const cambios = [];
   if (!Array.isArray(nuevo?.dias)) return { plan: nuevo, cambios };
@@ -197,10 +216,14 @@ export function ajustarTrasSesion({ plan, fecha, series, indice, lugar = null, h
     if (!destino.length) continue;
     const incremento = incrementoPara(ej, lugar);
     const asistido = esAsistido(ej);
-    const usada = asistido ? null : cargaUsada(todas);
+    // La serie de comprobación va al fallo a propósito (nucleo/comprobacion-rir.js): cuenta como lo que habría sido en el
+    // tope del rango, con lo que sobraba como reserva. 15 al fallo pidiendo 8 a 10 es un 10 con 5 de reserva, no "más
+    // duro de lo pedido".
+    const comoPedidas = todas.map(s => (s.comprobacion && Number(s.reps) > 0 ? { ...s, reps: Math.min(Number(s.reps), pedido.reps_max), rir: Math.max(0, Number(s.reps) - pedido.reps_max), rpe: null } : s));
+    const usada = asistido ? null : cargaUsada(comoPedidas);
     const planeada = pedido.carga_kg;
     const reanclado = usada != null && planeada != null && Math.abs(usada - planeada) >= (incremento || 2.5) / 2 - 1e-9;
-    const conCarga = reanclado ? todas.filter(s => Number(s.carga_kg) === usada) : todas;
+    const conCarga = reanclado ? comoPedidas.filter(s => Number(s.carga_kg) === usada) : comoPedidas;
     const cuentan = conCarga.slice(0, Math.max(1, Number(base.series) || conCarga.length));
     const anotadas = cuentan.map(reserva).filter(x => x != null && Number.isFinite(x));
     const peor = anotadas.length ? Math.min(...anotadas) : null;
@@ -210,7 +233,7 @@ export function ajustarTrasSesion({ plan, fecha, series, indice, lugar = null, h
     const subioRecien = !reanclado && previo?.carga_kg != null && planeada != null && planeada > Number(previo.carga_kg);
     const r = ajustarEjercicio({
       objetivo: reanclado ? { ...base, carga_kg: usada } : base, hechas, semanas: historialSemanas[id] || [], subioRecien,
-      incremento, calidad: calidades[id] || null, asistido,
+      incremento, calidad: calidades[id] || null, asistido, correccion,
     });
     if (r.accion === 'mantener' && !reanclado) continue;
     const dias = [];

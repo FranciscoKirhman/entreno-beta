@@ -16,6 +16,7 @@ import { reconocer } from './importar-plan.js';
 import { articulacionesBloqueadas } from './catalogo.js';
 import { duracionEstimada, cargaSugerida, registrosParaCarga } from './motor-plan.js';
 import { alternativasNoHecha, alternativaEnFecha, fechasLibres, fechaEscrita, semanaDe, firma, diaCorto } from './sin-registro.js';
+import { semanaDe as semanaDelBloque, adelantarDescarga } from './ciclos.js';
 
 const DIAS = { domingo: 0, lunes: 1, martes: 2, miercoles: 3, jueves: 4, viernes: 5, sabado: 6 };
 const ZONAS = { hombro: 'hombro', hombros: 'hombro', codo: 'codo', codos: 'codo', rodilla: 'rodilla', rodillas: 'rodilla', espalda: 'lumbar', lumbar: 'lumbar', cintura: 'lumbar', muneca: 'muneca', munecas: 'muneca', cuello: 'cuello', tobillo: 'tobillo', cadera: 'cadera' };
@@ -184,7 +185,7 @@ function opcionesAlternativa(ctx, fecha, id) {
 }
 
 // ── Cambios al plan: primero la vista previa, después la confirmación ──────────────
-const CAMBIAN_PLAN = new Set(['intercambiar', 'mover', 'falte', 'descanso_activo', 'ajustar_hoy', 'recortar_hoy', 'reemplazar_hoy', 'quitar_zona_hoy']);
+const CAMBIAN_PLAN = new Set(['intercambiar', 'mover', 'falte', 'descanso_activo', 'ajustar_hoy', 'recortar_hoy', 'reemplazar_hoy', 'quitar_zona_hoy', 'descarga_temprana']);
 const fechaCorta = f => `${nombreDia(f)} ${Number(f.slice(8))}`;
 const prescCorta = e => `${e.nombre} ${e.series}×${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${sufijo(e)}`;
 const finDeSemana = f => sumarDias(f, (7 - diaSemana(f)) % 7);
@@ -262,6 +263,23 @@ export function calcularCambio(accion, ctx) {
       }
       return { plan: nuevo, ir: 'hoy', propone: `Saldría${salen.length === 1 ? '' : 'n'} de hoy ${salen.map(e => e.nombre).join(', ')}, porque carga${salen.length === 1 ? '' : 'n'} la zona del ${accion.zona}.`, hecho: toda ? 'Listo: saqué lo que carga esa zona hasta el domingo.' : 'Listo: saqué de hoy lo que carga esa zona.' };
     }
+    case 'descarga_temprana': {
+      // La propuesta a quien entrena más duro de lo pedido (nucleo/sobrecarga.js): la semana que viene pasa a ser la
+      // descarga y el bloque termina ahí. semana: cómo quedaría cada día, con las series antes y después.
+      const actual = semanaDelBloque(plan, ctx.hoy), n = Number(accion.semana);
+      if (!plan.semana_descarga || !actual || !(n > actual) || n >= plan.semana_descarga) return { error: 'Tu plan cambió desde esa propuesta: la descarga ya no se puede adelantar a esa semana.' };
+      const r = adelantarDescarga(plan, n, 'venías entrenando más cerca del fallo de lo pedido');
+      const series = d => (d?.ejercicios || []).reduce((a, e) => a + (Number(e.series) || 0), 0);
+      const antes = new Map(plan.dias.filter(d => d.semana === n).map(d => [d.fecha, d]));
+      const semana = r.dias.filter(d => d.semana === n).sort((a, b) => (a.fecha < b.fecha ? -1 : 1))
+        .map(d => ({ fecha: d.fecha, foco: d.foco, cambio: `${series(d)} series en vez de ${series(antes.get(d.fecha))}, con 2 más de reserva` }));
+      const desde = sumarDias(plan.inicio, (n - 1) * 7), fin = sumarDias(desde, 6), quitadas = (plan.semanas || plan.semana_descarga) - n;
+      return {
+        plan: r, ir: 'semana', semana,
+        propone: `La semana del ${fechaCorta(desde)} pasaría a ser de descarga, con los mismos ejercicios y pesos. El bloque terminaría el ${fechaCorta(fin)}${quitadas ? `, ${quitadas === 1 ? 'una semana' : `${quitadas} semanas`} antes de lo previsto,` : ''} y después armas el siguiente.`,
+        hecho: `Listo: la semana del ${fechaCorta(desde)} es de descarga y el bloque termina el ${fechaCorta(fin)}.`,
+      };
+    }
     default: return { error: 'No sé hacer ese cambio.' };
   }
 }
@@ -274,6 +292,7 @@ export function vistaPrevia(accion, ctx) {
   const no = { etiqueta: 'No, dejarlo como está', accion: { tipo: 'nada' } };
   if (accion.tipo === 'reemplazar_hoy') return { texto: `${r.propone} ¿Solo hoy o desde hoy en adelante?`, opciones: [confirmar('Solo hoy', { alcance: 'hoy' }), confirmar('Desde hoy en adelante', { alcance: 'adelante' }), no] };
   if (accion.tipo === 'quitar_zona_hoy') return { texto: `${r.propone} ¿Solo hoy o toda la semana?`, opciones: [confirmar('Solo hoy', { alcance: 'hoy' }), confirmar('Toda la semana', { alcance: 'semana' }), no] };
+  if (accion.tipo === 'descarga_temprana') return { texto: `${r.propone} ¿La adelanto?`, semana: r.semana, opciones: [confirmar('Sí, adelantar la descarga'), no] };
   return { texto: `${r.propone} ¿Lo cambio?`, opciones: [confirmar(r.ir === 'semana' ? 'Sí, cambiar la semana' : 'Sí, cambiar la sesión de hoy'), no] };
 }
 
@@ -302,6 +321,8 @@ export function aplicarOpcion(accion, ctx) {
     case 'elegir_alternativa': return opcionesAlternativa(ctx, accion.fecha, accion.ejercicio);
     case 'consentir_cuidado': return { texto: 'Gracias. Vuelve a contarme la molestia para darte los ejercicios.', consentimiento: 'cuidado_lesiones' };
     case 'nada': return { texto: 'Bien, no cambié nada.' };
+    // "Ahora no" a la descarga adelantada: no se vuelve a proponer esta semana (descartar lo guarda la app).
+    case 'sobrecarga_no': return { texto: 'Bien, sigues con el plan. Esta semana, para cada serie cuando te queden las repeticiones que pide: la última tiene que salir igual de limpia que la primera.', descartar: accion.clave };
     default: return { texto: 'Perfecto.' };
   }
 }

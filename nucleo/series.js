@@ -44,9 +44,27 @@ export function prioridadEsfuerzo(e, ej, d = {}, zonasConMolestia = []) {
  * @param o.previas  series de trabajo ya hechas hoy en este ejercicio, antes de esta (para ver si va bajando)
  * @param o.quedan   series de trabajo que faltan; con 0 no se habla de "la siguiente". Sin contexto (null), como antes.
  * @param o.lastre   el ejercicio de peso corporal tiene versión con lastre (dominadas, fondos): con eso se le suma peso
+ * @param o.correccion lo que suele quedarle de más según su serie de comprobación (nucleo/comprobacion-rir.js): se suma a
+ *                   la reserva anotada, salvo al fallo
+ * @param o.tecnica  'tecnica' o 'rango' si el ejercicio va con la técnica primero (nucleo/tecnica-primero.js): aunque
+ *                   sobre, el peso no sube hoy
  * @returns {{tipo, texto, kg?}} kg: el peso sugerido para la serie siguiente, que la app deja en gris
  */
-export function consejoSerie(e, s, incremento = null, { asistido = false, lastre = false, previas = [], quedan = null } = {}) {
+export function consejoSerie(e, s, incremento = null, o = {}) {
+  const { correccion = 0, tecnica = null, quedan = null } = o;
+  const corregir = x => (correccion > 0 && !x.fallo && reservaDe(x) != null ? { ...x, rir: reservaDe(x) + correccion, rpe: null } : x);
+  let c = consejoConContexto(e, corregir(s), incremento, { ...o, previas: (o.previas || []).map(corregir) });
+  // Si la corrección cambió el consejo a subir, se dice por qué: lo anotado decía otra cosa.
+  if (c && correccion > 0 && c.tipo === 'subir' && consejoConContexto(e, s, incremento, o)?.tipo !== 'subir') {
+    c = { ...c, texto: `Según tu serie de comprobación, te quedan unas ${correccion} más de las que anotas. ${c.texto}` };
+  }
+  if (!c || !tecnica || c.tipo !== 'subir' || quedan == null) return c;
+  return quedan === 0
+    ? { tipo: 'mantener', texto: `Listo con este ejercicio. Te sobró: si ${tecnica === 'rango' ? 'el rango salió completo' : 'salió limpia'}, márcalo en la tarjeta y la próxima vez sube.` }
+    : { tipo: 'mantener', texto: 'Te sobró, pero hoy va la técnica primero: mismo peso. Si sale limpia, haz una repetición más o baja en 3 segundos.' };
+}
+
+function consejoConContexto(e, s, incremento = null, { asistido = false, lastre = false, previas = [], quedan = null } = {}) {
   const c = consejoSolo(e, s, incremento, { asistido, lastre });
   if (!c || quedan == null) return c;
   const r = reservaDe(s), reps = Number(s.reps), kg = Number(s.kg);
