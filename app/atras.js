@@ -1,10 +1,12 @@
 // Volver atrás como en el teléfono: deslizando el dedo desde el borde izquierdo hacia la derecha (iPhone con la app
 // instalada, que no trae ese gesto) y con el botón o el gesto "atrás" del teléfono (Android). Lleva a la pantalla de
 // la que se vino o cierra la hoja abierta; en las pestañas principales no hay atrás. Mientras se desliza, la pantalla
-// actual sigue al dedo y debajo se ve aquella a la que se vuelve, como quedó al salir de ella.
+// actual sigue al dedo y debajo se ve aquella a la que se vuelve, como quedó al salir de ella. Un deslizamiento vuelve
+// una sola pantalla aunque llegue por las dos vías, el gesto propio y el "atrás" del teléfono (nucleo/una-vuelta.js).
 import { cerrarHoja } from './hoja.js';
 import { icono } from './iconos.js';
 import { sinMovimiento } from './movimiento.js';
+import { unaVueltaPorGesto } from '../nucleo/una-vuelta.js';
 
 // Pantallas sin botón propio de volver, y a dónde vuelven.
 const PADRE = { perfil: 'mas', seccion: 'perfil', plan: 'miplan', checkin: 'semana', pasado: 'progreso', progreso: 'miplan', 'tablero-original': 'mas', resumen: 'entrenar', banco: 'hoy', hoy: 'entrenar', semana: 'miplan', rutina: 'entrenar' };
@@ -15,6 +17,7 @@ const BORDE = 28, UMBRAL = 44; // px: dónde empieza el gesto y cuánto hay que 
 // altura a la que estaban. Se guarda la última de cada pantalla, hasta seis.
 const fotos = new Map();
 let conGesto = false;
+const vueltas = unaVueltaPorGesto({ reloj: () => performance.now() });
 
 /** Guarda la pantalla que se deja (app.js la llama antes de pintar la siguiente). */
 export function recordarPantalla(vista, app) {
@@ -52,6 +55,8 @@ function instalarHistorial(obtenerAccion) {
   }
   addEventListener('popstate', ev => {
     if (!ev.state?.entreno) return; // otros cambios de dirección (por ejemplo, el enlace de perfiles)
+    // El mismo deslizamiento ya volvió con el gesto propio: solo se repone la guardia, sin volver otra pantalla.
+    if (!vueltas.puede('historial')) { if (ev.state.entreno === 'base') history.pushState({ entreno: 'guardia' }, ''); return; }
     const accion = obtenerAccion();
     if (accion) { history.pushState({ entreno: 'guardia' }, ''); accion(); }
     else if (ev.state.entreno === 'base') history.back();
@@ -132,7 +137,7 @@ function instalarGesto(obtenerAccion) {
       c.sombra.animate([{ opacity: 1 - dx / innerWidth }, { opacity: 1 - fin / innerWidth }], { duration: t, easing: SUAVE, fill: 'forwards' });
       const cerrar = () => {
         if (capa !== c) return;
-        if (accion) { conGesto = true; try { accion(); } finally { conGesto = false; } }
+        if (accion && vueltas.puede('gesto')) { conGesto = true; try { accion(); } finally { conGesto = false; } }
         anims.forEach(a => a.cancel());
         quitarCapa();
         recortar(false);
@@ -140,7 +145,7 @@ function instalarGesto(obtenerAccion) {
       anims[0] ? anims[0].finished.then(cerrar, cerrar) : cerrar();
       return;
     }
-    if (accion) { app.style.translate = ''; recortar(false); accion(); return; }
+    if (accion) { app.style.translate = ''; recortar(false); if (vueltas.puede('gesto')) accion(); return; }
     if (app.style.translate) {
       const desde = app.style.translate; app.style.translate = '';
       const a = sinMovimiento() ? null : app.animate([{ translate: desde }, { translate: '0 0' }], { duration: 180, easing: SUAVE });
@@ -163,6 +168,7 @@ function instalarGesto(obtenerAccion) {
       if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { inicio = null; return; } // era desplazar la pantalla
       if (dx < 8) return;
       activo = true;
+      vueltas.empiezaGesto();
       recortar(true);
       burbuja = document.createElement('div');
       burbuja.className = 'atras-gesto';

@@ -29,7 +29,7 @@ Casos:
 - Una máquina siempre ocupada o un ejercicio que no quiere (no uses opciones_coach): busca alternativas con buscar_ejercicios y usa proponer_cambios con reemplazar_ejercicio en la plantilla. Si esa plantilla ya no tiene sesiones desde la semana que viene (fin del bloque): si una sesión pendiente de esta semana lo tiene, reemplázalo ahí (proponer_cambios con desde = esa fecha); y en cualquier caso usa proponer_requisitos con prohibidos = ese ejercicio (sin rearmar) para que el próximo bloque no lo traiga. Siempre deja una propuesta.
 - Si ver_resumen trae siguiente_ciclo_elegido, la persona ya eligió esos cambios para su próximo bloque en Mi plan: respétalos, nómbralos cuando hables del próximo bloque y no propongas otros salvo que lo pida. crear_plan los aplica solo.
 - El plan termina pronto o pide planificar más semanas: cada bloque dura unas 4 semanas y termina con una descarga. Si solo pregunta cuándo termina o qué viene, no armes nada todavía: explica y ofrece. Explica cuándo termina el bloque actual (día y fecha). Usa plan.bloque.siguiente_bloque, no lo deduzcas: si se_puede_armar es true, ofrece armar el siguiente con OPCIONES (por ejemplo: Arma mi próximo bloque | Quiero cambiar algo antes): parte el lunes después de que termina y conserva lo que queda; si acepta, usa crear_plan con siguiente_bloque=true. Antes de esa semana, di desde cuándo se puede armar. Si quiere cambiar días, minutos o prioridades, usa proponer_requisitos con rearmar_plan=true.
-- Dolor o molestia por la que la persona consulta: usa plan_de_cuidado con esa zona (la herramienta revisa el consentimiento; no lo preguntes) y da una o dos indicaciones de técnica o carga para el ejercicio que molesta. Señales de alarma (dolor en el pecho, hormigueo, chasquido con hinchazón, dolor fuerte): indica parar y buscar atención; no propongas cambios.
+- Dolor o molestia por la que la persona consulta: usa plan_de_cuidado con esa zona (la herramienta revisa el consentimiento; no lo preguntes) y da una o dos indicaciones de técnica o carga para el ejercicio que molesta. Señales de alarma (dolor en el pecho, hormigueo, chasquido con hinchazón, dolor fuerte): indica parar y buscar atención, sin proponer cambios; si es dolor en el pecho, falta de aire o desmayo, que llame al 131 (SAMU) o pida que alguien llame.
 - Suplementos: solo registra lo que la persona decidió. Si pregunta cuánto tomar, no des cifras, rangos ni "pautas habituales": la dosis la define un profesional de salud; ofrece registrar la que decida. Nunca diagnostiques.
 - Evidencia de un ejercicio: explicar_ejercicio.
 
@@ -79,6 +79,12 @@ export const PROMPTS = { chat: SISTEMA, plan: SISTEMA + PLANIFICACION, semana: S
 /** @type {Record<string, string>} */
 export const NIVEL_POR_MODO = Object.freeze({ chat: 'low', nota: 'low', ideas: 'none', plan: 'high', semana: 'high' });
 export const SUBIR_ESFUERZO = Object.freeze({ crear_plan: 'high', proponer_requisitos: 'high', importar_plan_texto: 'high', plan_de_cuidado: 'medium' });
+/** Caché de instrucciones y herramientas por modo (docs/37): 12 horas en lo que se pide varias veces al día (chat y la
+ *  nota de cada sesión); 30 minutos en plan y semana, que se piden pocas veces y no pagarían la escritura de 12 horas
+ *  (2,5x); las ideas tienen un prefijo corto que no se vuelve a usar y no escriben caché. */
+export const CACHE_POR_MODO = Object.freeze({ chat: '12h', nota: '12h', plan: '30m', semana: '30m', ideas: 'ninguna' });
+/** Respuestas breves en el día a día; plan y semana explican más y quedan con la verbosidad normal. */
+export const VERBOSIDAD_POR_MODO = Object.freeze({ chat: 'low', nota: 'low', ideas: 'low' });
 
 /** Modos largos: más vueltas y herramientas. */
 export const modoLargo = modo => ['plan', 'semana', 'nota'].includes(modo);
