@@ -77,6 +77,14 @@ export function consejoSerie(e, s, incremento = null, { asistido = false, lastre
   // aunque la serie caiga dentro del rango: 35 × 15 y después 35 × 10 no es "justo lo pedido".
   const perdidas = ultima && Number(ultima.kg) === kg ? Number(ultima.reps) - reps : 0;
   const caidaFuerte = perdidas >= Math.max(3, Math.ceil(0.2 * Number(ultima?.reps || 0)));
+  // Las mismas repeticiones que la anterior con el mismo peso, dentro del rango y sin fallo: con 1 de reserva o menos de
+  // verdad, lo normal es que la serie siguiente baje. Lo que no calza es la reserva anotada, no el peso, así que no se
+  // baja (Francisco, 28 de octubre de 2026: con 10, 10 y 10 "a RIR 1" la app bajaba a quien levantaba de menos).
+  const planas = Boolean(ultima) && Number(ultima.kg) === kg && reps >= Number(ultima.reps) && reps >= (e.reps_min || 0) && !s.fallo;
+  if (planas && (otraVez || c.tipo === 'bajar') && !caidaFuerte) {
+    const o = rango(reps);
+    return { tipo: 'mantener', texto: `Te salieron ${reps}, igual que la anterior: con ${r ?? 0} de reserva de verdad, lo normal es que esta baje. Mantén ${n(kg)} kg; puede que te quede más de lo que anotas.`, reps: o.reps, rango: o.rango };
+  }
   // Más duro de lo pedido dos veces, o con las repeticiones cayendo: se baja un 5% (al menos un escalón), que es lo que
   // pierde la fuerza entre series cuando se va cerca del fallo. El peso queda en gris en la serie siguiente.
   if (c.tipo === 'bajar' || (pasada && (otraVez || cayeron)) || caidaFuerte) {

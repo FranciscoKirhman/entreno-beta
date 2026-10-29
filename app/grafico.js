@@ -1,5 +1,5 @@
 // Gráficos de línea simples, sin librerías y sin señal: una serie por gráfico (dos medidas de distinta escala van en
-// dos gráficos, nunca con dos ejes). Línea de 2 px, puntos de 8 px con un anillo del color de la tarjeta, grilla
+// dos gráficos, nunca con dos ejes). También barras sobre y bajo un cero, alineadas con las líneas. Línea de 2 px, puntos de 8 px con un anillo del color de la tarjeta, grilla
 // suave y un aviso al tocar o pasar sobre cada punto. El color es --serie-1 (validado en claro y oscuro).
 import { esc } from './comun.js';
 import { analisisSerie } from '../nucleo/analisis-grafico.js';
@@ -36,6 +36,38 @@ export function lineaSimple({ puntos, desde, hasta, min, max, marcas = [], titul
   const toques = ps.map(p => `<circle class="g-toque" cx="${x(p.fecha).toFixed(1)}" cy="${y(p.valor).toFixed(1)}" r="13" data-dato="${esc(`${corta(p.fecha)}: ${p.texto}`)}" tabindex="0" role="button" aria-label="${esc(`${corta(p.fecha)}: ${p.texto}`)}"/>`).join('');
   const ejeX = `<text x="${IZQ}" y="${ALTO - 4}" class="g-eje">${esc(corta(desde))}</text><text x="${ANCHO - DER}" y="${ALTO - 4}" class="g-eje" text-anchor="end">hoy</text>`;
   return `<div class="grafico"><svg viewBox="0 0 ${ANCHO} ${ALTO}" role="img" aria-label="${esc(titulo)}">${grilla}${ejeX}${lineas}${marcasPuntos}${toques}</svg><div class="g-aviso" hidden></div></div>`;
+}
+
+// ── Barras sobre y bajo una línea base (el rendimiento de cada sesión contra lo habitual) ──────────────────────────
+// Misma escala de fechas, mismo ancho y mismo margen que lineaSimple: van una sobre otra con energía, ánimo y sueño, y el
+// mismo día queda en la misma columna. Arriba del cero, --serie-1; abajo, --serie-baja (el par divergente azul y rojo,
+// validado en claro y oscuro); la dirección también se lee por el lado del cero. Barras de 6 px con la punta redonda.
+
+/** Una barra con la punta redonda y el lado del cero recto. */
+const barra = (cx, desde, hasta) => {
+  const a = 3, arriba = hasta < desde, r = Math.min(a, Math.abs(hasta - desde));
+  const punta = arriba ? hasta + r : hasta - r;
+  return `M${(cx - a).toFixed(1)},${desde.toFixed(1)}V${punta.toFixed(1)}A${a},${r} 0 0 ${arriba ? 1 : 0} ${(cx + a).toFixed(1)},${punta.toFixed(1)}V${desde.toFixed(1)}Z`;
+};
+
+/**
+ * @param puntos  [{fecha, valor, texto}] valor: diferencia con lo habitual (puede ser negativa)
+ * @param limite  la escala va de −limite a +limite (simétrica: el cero queda al medio)
+ * @param marcas  [{valor, texto}] líneas de la grilla con su etiqueta; la del cero va más marcada
+ */
+export function barrasDivergentes({ puntos, desde, hasta, limite = 10, marcas = [], titulo, izquierda = 38 }) {
+  const IZQ = izquierda, total = Math.max(1, dias(desde, hasta));
+  const x = f => IZQ + (dias(desde, f) / total) * (ANCHO - IZQ - DER);
+  const y = v => ARRIBA + (1 - (Math.max(-limite, Math.min(limite, v)) + limite) / (2 * limite)) * (ALTO - ARRIBA - ABAJO);
+  const ps = [...puntos].filter(p => p.valor != null && p.fecha >= desde && p.fecha <= hasta).sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
+  const cero = y(0);
+  const grilla = marcas.map(m => `<line x1="${IZQ}" x2="${ANCHO - DER}" y1="${y(m.valor).toFixed(1)}" y2="${y(m.valor).toFixed(1)}" class="${m.valor === 0 ? 'g-cero' : 'g-grilla'}"/>
+    <text x="${IZQ - 6}" y="${(y(m.valor) + 3.5).toFixed(1)}" class="g-eje" text-anchor="end">${esc(m.texto)}</text>`).join('');
+  // Un valor muy chico igual se ve: al menos 2 px desde el cero.
+  const barras = ps.map(p => { const fin = y(p.valor), largo = Math.max(2, Math.abs(fin - cero)); return `<path class="${p.valor < 0 ? 'g-barra-baja' : 'g-barra'}" d="${barra(x(p.fecha), cero, p.valor < 0 ? cero + largo : cero - largo)}"/>`; }).join('');
+  const toques = ps.map(p => `<rect class="g-toque" x="${(x(p.fecha) - 11).toFixed(1)}" y="${ARRIBA}" width="22" height="${ALTO - ARRIBA - ABAJO}" data-dato="${esc(`${corta(p.fecha)}: ${p.texto}`)}" tabindex="0" role="button" aria-label="${esc(`${corta(p.fecha)}: ${p.texto}`)}"/>`).join('');
+  const ejeX = `<text x="${IZQ}" y="${ALTO - 4}" class="g-eje">${esc(corta(desde))}</text><text x="${ANCHO - DER}" y="${ALTO - 4}" class="g-eje" text-anchor="end">hoy</text>`;
+  return `<div class="grafico"><svg viewBox="0 0 ${ANCHO} ${ALTO}" role="img" aria-label="${esc(titulo)}">${grilla}${ejeX}${barras}${toques}</svg><div class="g-aviso" hidden></div></div>`;
 }
 
 // El aviso de cada punto: al tocarlo o al pasar el puntero; se cierra tocando fuera.

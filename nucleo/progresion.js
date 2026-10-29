@@ -69,6 +69,11 @@ export function ajustarEjercicio({ objetivo: o, hechas, semanas = [], subioRecie
   const actual = Math.max(...hechas.filter(s => s.carga_kg > 0 && s.reps > 0).map(e1rm), 0);
   const ultimas = [...semanas, actual].slice(-4);
   if (ultimas.length === 4 && Math.max(...ultimas.slice(1)) <= ultimas[0] * 1.005 && incremento && carga) {
+    // Si las repeticiones no bajan entre series aunque se anote 1 de reserva o menos, lo que no calza es la reserva y no
+    // el peso: bajarlo hundía a quien levanta de menos (50, 47,5, 45 kg en la simulación del 28 de octubre de 2026).
+    const delPeso = hechas.filter(s => Number(s.carga_kg) === Number(carga));
+    const reservaDudosa = delPeso.length >= 2 && delPeso.every(s => Number(s.reps) >= Number(delPeso[0].reps) && reserva(s) != null && reserva(s) <= 1);
+    if (reservaDudosa) return mantener('reserva_dudosa', 'Tres semanas iguales y las repeticiones no bajan entre series aunque anotas 1 de reserva o menos: es probable que te quede más. Mantienes el peso.');
     const nueva = Math.max(incremento, Math.round((carga * 0.925) / incremento) * incremento);
     return { accion: 'bajar_carga', carga_kg: nueva, reps_min: o.reps_min, reps_max: o.reps_max, regla: 'estancamiento',
       motivo: 'Tres semanas sin mejorar. Bajas un 7,5% y vuelves a subir; si se repite, conviene cambiar a una variante.' };

@@ -1,6 +1,6 @@
 import { calendarioHtml, enlazarCalendario } from './calendario-asistencia.js';
 // Vista Progreso: la semana por músculo (series hechas contra las del plan), la constancia, el ritmo de cada ejercicio
-// (que abre su ficha con gráficos e historial), sueño y ánimo, el historial con buscador,
+// (que abre su ficha con gráficos e historial), cómo llegas (energía, ánimo y sueño) y cómo rindes, el historial con buscador,
 // y las fotos de progreso privadas. Suplementos, indicaciones del médico y notas para el entrenador están en Mi plan
 // (app/cuidados.js).
 import { textoCardio } from '../nucleo/unidades.js';
@@ -18,7 +18,8 @@ import { NOMBRE_MUSCULO, mayuscula, imagenMusculo } from './musculos.js';
 import * as nube from './nube.js';
 import { esAsistido } from '../nucleo/catalogo.js';
 import { bienvenidaProgreso, historialVacio } from './estados-visuales.js';
-import { lineaSimple, lineaHevy } from './grafico.js';
+import { lineaSimple, lineaHevy, barrasDivergentes } from './grafico.js';
+import { rendimientoSesiones, segunComoLlegas, textoPct } from '../nucleo/rendimiento-sesion.js';
 import { sumarDias as sumar } from '../nucleo/agenda.js';
 import { constanciaEntreno } from '../nucleo/constancia.js';
 import { recordsPorSesion } from '../nucleo/records.js';
@@ -235,26 +236,51 @@ function ejerciciosHtml() {
   </section>`;
 }
 
-/** Sueño y ánimo de las últimas 4 semanas (lo respondido en "¿Cómo estás hoy?"): dos gráficos, uno por medida. */
+/**
+ * Cómo llegas y cómo rindes, las últimas 4 semanas: el rendimiento de cada sesión contra lo habitual
+ * (nucleo/rendimiento-sesion.js) y, debajo, energía, ánimo y sueño de "¿Cómo estás hoy?". Un gráfico por medida (nunca
+ * dos escalas en uno), todos con las mismas fechas: el mismo día queda en la misma columna. Arriba, lo que dicen juntos:
+ * si con poca energía o ánimo bajo se rinde igual o menos (Francisco, 28 de octubre de 2026).
+ */
 const ANIMO = ['', 'Muy bajo', 'Bajo', 'Normal', 'Bien', 'Muy bien'];
-function suenoAnimoHtml() {
+const ENERGIA = ['', 'Agotado', 'Cansado', 'Normal', 'Bien', 'Fresco']; // 6 menos el cansancio: arriba es más energía
+function llegasRindesHtml() {
   const hasta = hoy(), desde = sumar(hasta, -27);
-  const dias = Object.entries(E.bienestar || {}).filter(([f, b]) => f >= desde && f <= hasta && b && (b.sueno_horas != null || b.animo != null))
+  const dias = Object.entries(E.bienestar || {}).filter(([f, b]) => f >= desde && f <= hasta && b && (b.sueno_horas != null || b.animo != null || b.cansancio != null))
     .sort(([a], [b]) => (a < b ? -1 : 1));
   const horas = h => (h >= 9 ? '9 o más horas' : h <= 5 ? '5 o menos horas' : `${h} horas`);
   const sueno = dias.filter(([, b]) => b.sueno_horas != null).map(([fecha, b]) => ({ fecha, valor: b.sueno_horas, texto: horas(b.sueno_horas) }));
-  const animo = dias.filter(([, b]) => b.animo != null).map(([fecha, b]) => ({ fecha, valor: b.animo, texto: ANIMO[b.animo].toLowerCase() }));
-  const cabeza = '<h3>Sueño y ánimo</h3><p class="pequeno suave">Lo que respondes en "¿Cómo estás hoy?", las últimas 4 semanas. Toca un punto para ver el día.</p>';
-  if (sueno.length + animo.length < 2) return `<section class="tarjeta">${cabeza}<p class="pequeno">Todavía hay pocos días. Responde "¿Cómo estás hoy?" en Entrenar (toma 10 segundos) y aquí vas a ver cómo duermes y cómo andas de ánimo.</p></section>`;
+  const animo = dias.filter(([, b]) => b.animo != null).map(([fecha, b]) => ({ fecha, valor: b.animo, texto: `ánimo ${ANIMO[b.animo].toLowerCase()}` }));
+  const energia = dias.filter(([, b]) => b.cansancio != null).map(([fecha, b]) => ({ fecha, valor: 6 - b.cansancio, texto: `energía: ${ENERGIA[6 - b.cansancio].toLowerCase()}` }));
+  const asistidos = new Set(indice.ejercicios.filter(esAsistido).map(e => e.id));
+  const rinde = rendimientoSesiones(E.sesiones, { desde, hasta, asistidos });
+  const rend = rinde.map(r => ({ fecha: r.fecha, valor: r.pct, texto: `${textoPct(r.pct)} contra lo habitual (${r.ejercicios} ${r.ejercicios === 1 ? 'ejercicio' : 'ejercicios'})` }));
+  const cabeza = '<h3>Cómo llegas y cómo rindes</h3><p class="pequeno suave">Tu rendimiento en cada sesión contra lo habitual, y lo que respondes en "¿Cómo estás hoy?", las últimas 4 semanas. Cada día queda en la misma columna: toca una barra o un punto para verlo.</p>';
+  if (rend.length + sueno.length + animo.length + energia.length < 2) return `<section class="tarjeta">${cabeza}<p class="pequeno">Todavía hay pocos días. Responde "¿Cómo estás hoy?" en Entrenar (toma 10 segundos) y aquí vas a ver si rindes igual con poca energía.</p></section>`;
+  // Lo que dicen juntos: con 3 sesiones o más con poca energía (o ánimo bajo) anotada. Mira 8 semanas: 4 son pocas.
+  const lectura = rendimientoSesiones(E.sesiones, { desde: sumar(hasta, -55), hasta, asistidos });
+  const dichos = ['energia', 'animo'].map(m => segunComoLlegas(lectura, E.bienestar || {}, m).texto).filter(Boolean);
+  // Sin lo dicho todavía: si no hay respuestas, a responder; si hay, cuántas faltan para poder decir algo.
+  const pocas = dichos.length || !lectura.length ? ''
+    : !energia.length && !animo.length ? '<p class="pequeno">Responde "¿Cómo estás hoy?" en Entrenar (toma 10 segundos) y aquí vas a ver si rindes igual con poca energía.</p>'
+      : '<p class="pequeno">Cuando anotes poca energía en 3 sesiones, aquí te digo si rindes igual o menos esos días.</p>';
   const semana = xs => xs.filter(p => p.fecha >= sumar(hasta, -6));
   const prom = xs => (xs.length ? xs.reduce((a, p) => a + p.valor, 0) / xs.length : null);
-  const pS = prom(semana(sueno)), pA = prom(semana(animo));
+  const [pR, pE, pA, pS] = [rend, energia, animo, sueno].map(xs => prom(semana(xs)));
+  const tope = Math.min(30, Math.max(10, Math.ceil(Math.max(0, ...rend.map(p => Math.abs(p.valor))) / 5) * 5));
+  const cifra = (nombre, valor) => `<div class="cifra-grafico"><span>${nombre}</span><strong class="num">${valor}</strong></div>`;
+  // Una medida sin nada en las 4 semanas va en una línea, sin un gráfico vacío.
+  const tira = (nombre, puntos, valor, grafico, vacio = 'sin respuestas en 4 semanas') => (puntos.length ? `${cifra(nombre, valor)}${grafico()}` : cifra(nombre, vacio));
   return `<section class="tarjeta">${cabeza}
-    <div class="cifra-grafico"><span>Sueño</span><strong class="num">${pS == null ? 'sin datos esta semana' : `${pS.toFixed(1).replace('.', ',')} h promedio esta semana`}</strong></div>
-    ${lineaSimple({ puntos: sueno, desde, hasta, min: 4, max: 10, marcas: [{ valor: 6, texto: '6 h' }, { valor: 8, texto: '8 h' }], titulo: `Horas de sueño, ${sueno.length} días respondidos`, izquierda: 50 })}
-    <div class="cifra-grafico"><span>Ánimo</span><strong>${pA == null ? 'sin datos esta semana' : `${ANIMO[Math.round(pA)].toLowerCase()} en promedio esta semana`}</strong></div>
-    ${lineaSimple({ puntos: animo, desde, hasta, min: 1, max: 5, marcas: [{ valor: 1, texto: 'Muy bajo' }, { valor: 3, texto: 'Normal' }, { valor: 5, texto: 'Muy bien' }], titulo: `Ánimo, ${animo.length} días respondidos`, izquierda: 50 })}
-    <details class="extra"><summary>Ver como tabla</summary><ul class="pequeno lista-simple">${[...dias].reverse().map(([f, b]) => `<li><span>${esc(fechaCorta(f))}</span><span>${[b.sueno_horas != null && horas(b.sueno_horas), b.animo != null && `ánimo ${ANIMO[b.animo].toLowerCase()}`].filter(Boolean).join(' · ')}</span></li>`).join('')}</ul></details>
+    ${dichos.map(t => `<p class="lectura-rinde">${esc(t)}</p>`).join('')}${pocas}
+    ${tira('Rendimiento', rend, pR == null ? 'sin sesiones esta semana' : `${textoPct(pR)} esta semana`, () => barrasDivergentes({ puntos: rend, desde, hasta, limite: tope, marcas: [{ valor: tope, texto: `+${tope}%` }, { valor: 0, texto: 'habitual' }, { valor: -tope, texto: `−${tope}%` }], titulo: `Rendimiento contra lo habitual, ${rend.length} sesiones`, izquierda: 50 }), 'sin sesiones para comparar')}
+    ${tira('Energía', energia, pE == null ? 'sin datos esta semana' : `${ENERGIA[Math.round(pE)].toLowerCase()} en promedio esta semana`, () => lineaSimple({ puntos: energia, desde, hasta, min: 1, max: 5, marcas: [{ valor: 1, texto: 'Agotado' }, { valor: 3, texto: 'Normal' }, { valor: 5, texto: 'Fresco' }], titulo: `Energía, ${energia.length} días respondidos`, izquierda: 50 }))}
+    ${tira('Ánimo', animo, pA == null ? 'sin datos esta semana' : `${ANIMO[Math.round(pA)].toLowerCase()} en promedio esta semana`, () => lineaSimple({ puntos: animo, desde, hasta, min: 1, max: 5, marcas: [{ valor: 1, texto: 'Muy bajo' }, { valor: 3, texto: 'Normal' }, { valor: 5, texto: 'Muy bien' }], titulo: `Ánimo, ${animo.length} días respondidos`, izquierda: 50 }))}
+    ${tira('Sueño', sueno, pS == null ? 'sin datos esta semana' : `${pS.toFixed(1).replace('.', ',')} h promedio esta semana`, () => lineaSimple({ puntos: sueno, desde, hasta, min: 4, max: 10, marcas: [{ valor: 6, texto: '6 h' }, { valor: 8, texto: '8 h' }], titulo: `Horas de sueño, ${sueno.length} días respondidos`, izquierda: 50 }))}
+    <details class="extra"><summary>Ver como tabla</summary><ul class="pequeno lista-simple">${[...new Set([...dias.map(([f]) => f), ...rinde.map(r => r.fecha)])].sort().reverse().map(f => {
+      const b = E.bienestar?.[f] || {}, r = rinde.find(x => x.fecha === f);
+      return `<li><span>${esc(fechaCorta(f))}</span><span>${[r && `rendimiento ${textoPct(r.pct)}`, b.cansancio != null && `energía ${ENERGIA[6 - b.cansancio].toLowerCase()}`, b.animo != null && `ánimo ${ANIMO[b.animo].toLowerCase()}`, b.sueno_horas != null && horas(b.sueno_horas)].filter(Boolean).join(' · ')}</span></li>`;
+    }).join('')}</ul></details>
   </section>`;
 }
 
@@ -343,7 +369,7 @@ export async function vistaProgreso(ir) {
     ${franjaHtml()}
     ${esfuerzoHtml(R().escala_esfuerzo === 'rir' ? 'rir' : 'rpe')}
     ${resumenPeriodoHtml()}
-    ${suenoAnimoHtml()}
+    ${llegasRindesHtml()}
     </div>
     <div data-seccion-p="calendario">
     ${constanciaHtml()}
