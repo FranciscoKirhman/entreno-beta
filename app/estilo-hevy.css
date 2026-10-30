@@ -218,6 +218,10 @@ body.con-mini-sesion #descanso{display:none!important}
 .guardar-cuando{display:flex;align-items:center;gap:6px;margin:0}
 .guardar-cuando .icono{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2}
 .guardar-sesion .aviso{margin:0}
+/* Con series sin marcar o letra grande, la hoja pasa del alto de la pantalla y "Guardar sesión" quedaba abajo, fuera
+   de la vista: los botones van fijos al fondo de la hoja y lo demás se desplaza por detrás. La segunda sombra tapa la
+   franja de abajo (zona segura del iPhone), para que no se vea el contenido pasando bajo los botones. */
+.hoja:has(.guardar-sesion) .opciones-hoja{position:sticky;bottom:0;z-index:1;box-shadow:0 -12px 16px var(--bg),0 calc(env(safe-area-inset-bottom,0px) + 16px) 0 var(--bg)}
 
 /* ── Ajustes de la sesión, como "Workout Settings" de Hevy ── */
 .ajustes-sesion{display:flex;flex-direction:column;gap:14px;margin:0 0 10px}

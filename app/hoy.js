@@ -1961,10 +1961,6 @@ function enlazar(ir, dia) {
     E.mensaje = `Sesión guardada: ${series.length} serie${series.length === 1 ? '' : 's'}.`;
     detenerDescanso();
     guardar();
-    if (nube.conectado()) {
-      // Si subió o quedó esperando señal lo cuenta la campanita (app/campana.js), no el aviso de guardado.
-      await subirACuenta('sesion', id, { fecha: f, hora, titulo, duracion_min: minutos, series, notas, ...(comentario ? { comentario } : {}) });
-    }
     // La sesión (lo hecho contra el plan, récords y las notas para el entrenador) va al coach con IA: su respuesta queda
     // en el chat y es el comentario del resumen. Una vez por versión: guardar de nuevo sin cambios no la repite.
     const nombres = new Map(dia.ejercicios.map(e => [e.ejercicio_id, e.nombre]));
@@ -1972,14 +1968,23 @@ function enlazar(ir, dia) {
     const guardada = E.sesiones.find(s => s.id === id);
     const texto = guardada && mensajeSesionCoach(guardada, textoNotas);
     const huella = texto && `${id}:${huellaNotas(texto)}`;
-    if (huella && !E.notasAlCoach?.[huella] && !modoEjemplo && nube.hay() && nube.usuarioId()) {
-      (E.notasAlCoach ||= {})[huella] = true;
+    const alCoach = huella && !E.notasAlCoach?.[huella] && !modoEjemplo && nube.hay() && nube.usuarioId();
+    if (alCoach) (E.notasAlCoach ||= {})[huella] = true;
+    const pedidas = () => (E.chat || []).filter(m => m.rol === 'persona' && m.sesionId === id).length, antes = pedidas();
+    // Como Hevy: al guardar se abre el resumen (récords, cuánto levantaste y lo que dice el coach). Ya quedó en el
+    // teléfono, así que no espera la subida: con mala señal en el gimnasio la pantalla quedaba quieta y otro toque en
+    // Guardar no hacía nada, porque la sesión seguía "terminando".
+    pasosAbierta = null;
+    ir('resumen', { id });
+    if (nube.conectado()) {
+      // Si subió o quedó esperando señal lo cuenta la campanita (app/campana.js), no el aviso de guardado.
+      await subirACuenta('sesion', id, { fecha: f, hora, titulo, duracion_min: minutos, series, notas, ...(comentario ? { comentario } : {}) }).catch(() => {});
+    }
+    // Al coach después de subirla, como antes. Si mientras tanto tocó "Pedir comentario" en el resumen, no se repite.
+    if (alCoach && pedidas() === antes) {
       // En el chat se ve lo que escribió la persona (o una línea); la IA recibe la sesión completa.
       mandarAlCoach({ texto: textoNotas || `Terminé ${titulo || dia.foco}.`, paraIA: texto, modo: 'nota', tipo: 'sesion', sesionId: id });
     }
-    // Como Hevy: al guardar se abre el resumen (récords, cuánto levantaste y lo que dice el coach).
-    pasosAbierta = null;
-    ir('resumen', { id });
   };
   // Terminar, como en Hevy: antes de guardar, una pantalla con el título, las cifras, cómo te fue y lo que no se marcó.
   raiz.querySelectorAll('[data-terminar]').forEach(b => b.onclick = () => {
@@ -2001,11 +2006,11 @@ function enlazar(ir, dia) {
           <span><small>Volumen</small><strong class="num">${esc(volumenTexto(a.cifras.volumen))}</strong></span>
           <span><small>Series</small><strong class="num">${a.hechas}</strong></span>
         </div>
+        ${sinMarcar > 0 ? `<p class="aviso ojo pequeno">${sinMarcar === 1 ? 'Queda 1 serie sin marcar' : `Quedan ${sinMarcar} series sin marcar`}: la sesión se guarda igual, ${a.hechas === 0 ? 'con el cardio' : a.hechas === 1 ? 'con la serie marcada' : `con las ${a.hechas} series marcadas`}. ${sinMarcar === 1 ? 'Si la hiciste, vuelve y márcala.' : 'Si hiciste alguna, vuelve y márcala.'}</p>` : ''}
         <p class="pequeno suave guardar-cuando">${icono('calendario', 'icono icono-chico')} ${esc(mayuscula(cuando))}</p>
         ${camposDuracionHtml(duracion)}
         <div class="guardar-sensacion"><span class="pequeno suave">¿Cómo se sintió?</span><div class="segmentos" role="radiogroup" aria-label="¿Cómo se sintió?">${SENSACIONES.map(([v, t]) => `<button type="button" role="radio" data-sensacion="${v}" aria-checked="${v === sensacion}">${t}</button>`).join('')}</div></div>
         <label class="guardar-nota"><span class="pequeno suave">¿Cómo te fue?</span><textarea id="guardar-comentario" rows="3" maxlength="500" placeholder="Deja una nota de la sesión">${esc(comentario)}</textarea></label>
-        ${sinMarcar > 0 ? `<p class="aviso ojo pequeno">${sinMarcar === 1 ? 'Queda 1 serie sin marcar: no se guarda.' : `Quedan ${sinMarcar} series sin marcar: no se guardan.`} Si las hiciste, vuelve y márcalas.</p>` : ''}
       </div>`,
       opciones: [
         { valor: 'guardar', icono: icono('visto'), clase: 'confirmar', nombre: anterior ? 'Guardar de nuevo' : 'Guardar sesión' },
