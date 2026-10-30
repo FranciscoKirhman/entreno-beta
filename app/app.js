@@ -40,6 +40,7 @@ import { progresoNivel } from '../nucleo/nivel.js';
 import { programarAvisos } from './avisos.js';
 import { actualizarPantalla, sesionEnCurso } from './pantalla.js';
 import { dejarPendiente, subirPendientes } from './cola.js';
+import { completarCierres } from './cierre-sesion.js';
 import { anotarSinc, pintarCampana, configurarCampana } from './campana.js';
 import * as nube from './nube.js';
 import { CONFIG } from './config.js';
@@ -411,6 +412,8 @@ async function iniciarEnSegundoPlano() {
   }
   // Solo se redibuja si la cuenta trajo algo distinto: así la pantalla no salta al abrir cuando todo estaba al día.
   if (extraActual !== extraAntes || firmaVisible() !== firmaAntes) repintarSinMover();
+  // Lo que faltó de una sesión guardada (el comentario del coach, "Para la próxima") se completa solo (app/cierre-sesion.js).
+  try { completarCierres(ir); } catch (e) { console.warn('No pude completar el cierre de la sesión', e); }
   guardarImagenesDelPlan();
   hevyAlAbrir(() => { if (['hoy', 'semana', 'progreso', 'miplan'].includes(E.vista)) repintarSinMover(); });
 }

@@ -26,6 +26,7 @@ import { seriesAnotadas } from '../nucleo/semanal.js';
 import { avisoCheckin } from './checkin.js';
 import { avisoDescargaCorto } from './temporada.js';
 import { subirACuenta } from './cola.js';
+import { marcarPorCerrar } from './cierre-sesion.js';
 import { iniciarDescanso, detenerDescanso, iniciarTramos } from './descanso.js';
 import { tramosDePaso, tramosDeCardio, seriesDeCalentamiento, descansoCalentamiento, rangoDescansoCalentamiento, modoCalentamiento, textoCalentamientoCorporal } from '../nucleo/calentamiento.js';
 import { calentamientoDeSesion, minutosCalentamiento, partePaso, aproximacionesDelPlan, conAproximaciones, zonasDeSesion } from '../nucleo/calentamiento-sesion.js';
@@ -1955,6 +1956,9 @@ function enlazar(ir, dia) {
     // Lo que duró: lo escrito al guardar o, si no, desde "Empezar" (o la primera serie) hasta ahora.
     const minutos = minutosElegidos != null ? minutosElegidos : anteriorGuardada ? anteriorGuardada.duracion_min : inicioDe(f) ? minutosDe(f) : avance(dia).cifras.minutos ?? (cardio ? Math.round(cardio.duracion_seg / 60) : null);
     E.sesiones.push({ id, fecha: f, hora, titulo, duracion_min: minutos, series, notas, ...(comentario ? { comentario } : {}) });
+    // Queda por cerrar hasta que el coach la reciba y "Para la próxima" se muestre: si algo corta el guardado (sin
+    // señal, la app cerrada), se completa solo al volver a abrir la app (app/cierre-sesion.js).
+    marcarPorCerrar(id);
     // Cómo se sintió (como OpenGym): aparte de la sesión, así no se pierde cuando la cuenta trae su copia.
     if (sensacion) (E.sensaciones ||= {})[id] = sensacion; else if (E.sensaciones) delete E.sensaciones[id];
     if (sensacion || anteriorGuardada) datoCambiado('sensaciones');

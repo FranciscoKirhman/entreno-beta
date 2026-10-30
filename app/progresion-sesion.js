@@ -96,6 +96,12 @@ export async function deshacerAjustesSesion(sesion) {
 
 export function descartarAjustes(sesion) { registrar(sesion.id, { estado: 'descartado', huella: huella(sesion) }); }
 
+/** Si "Para la próxima" trae cambios para esta sesión que todavía no se mostraron (app/cierre-sesion.js). No anota
+ *  nada: la cuenta de 10 segundos parte recién cuando el resumen la muestra. */
+export function faltaMostrarAjustes(sesion) {
+  return corresponde(sesion) && !E.ajustesSesion?.[sesion.id] && calcular(sesion, E.plan).cambios.length > 0;
+}
+
 /** Lo que quedó en cuenta regresiva y ya cumplió los 10 segundos (por ejemplo, si se cerró la app): se aplica. */
 export async function aplicarPendientes() {
   for (const [id, reg] of Object.entries(E.ajustesSesion || {})) {
