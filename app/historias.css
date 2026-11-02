@@ -147,11 +147,14 @@ html.con-historias,html.con-historias body{overflow:hidden}
 @keyframes hist-coach{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:none}}
 @keyframes hist-crece{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @keyframes hist-pop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+/* La frase con IA que llega mientras se mira la pantalla reemplaza a la de reglas con un fundido corto. */
+.hist-globo.cambia{animation:hist-cambia .35s ease-out}
+@keyframes hist-cambia{from{opacity:.25}to{opacity:1}}
 @media (prefers-reduced-motion:reduce){
   .historias{transition:none}
   .hist-escena.entra .hist-contenido,.hist-escena.entra .hist-coach,.hist-escena.entra .hist-dias li,.hist-escena.entra .hist-lista li,
   .hist-escena.entra .hist-ranking li,.hist-escena.entra .hist-barras-m li,.hist-escena.entra .hist-barras-m .relleno,
-  .hist-escena.entra .hist-cal .hecho,.hist-escena.entra .hist-insignia{animation:none}
+  .hist-escena.entra .hist-cal .hecho,.hist-escena.entra .hist-insignia,.hist-globo.cambia{animation:none}
 }
 /* Teléfonos bajos (iPhone SE): todo un poco más chico para que quepa sin desplazar */
 @media (max-height:700px){

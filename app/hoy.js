@@ -46,7 +46,8 @@ import { NOMBRE_MUSCULO, lista, mayuscula, imagenesMusculos } from './musculos.j
 import { seguir, abrirAjustarHoy } from './cambios-ui.js';
 import { abrirTiempo, etiquetaTiempo } from './tiempo-ui.js';
 import { aplicarOpcion } from '../nucleo/coach.js';
-import { nombreAsistente } from './cuestionario.js';
+import { nombreAsistente, asistenteActual } from './cuestionario.js';
+import { capasAsistente } from '../nucleo/asistente-capas.js';
 import * as nube from './nube.js';
 import { descansoHtml, sesionCompletaHtml } from './estados-visuales.js';
 import { repintarConservando, celebrar, sinMovimiento, entrarPaso, selectorDe } from './movimiento.js';
@@ -149,7 +150,7 @@ function celebrarSiSeCompleto(f) {
   completaAntes = ahora;
   if (!recien) return;
   celebradas.add(f);
-  celebrar(tarjeta, tarjeta.querySelector('.estado-personaje'));
+  celebrar(tarjeta, tarjeta.querySelector('.estado-personaje'), capasAsistente(asistenteActual(), IMAGENES));
   // La tarjeta aparece sobre "Terminar sesión": si el botón queda fuera de la pantalla, se acerca hasta verlo.
   requestAnimationFrame(() => {
     const b = document.getElementById('terminar')?.getBoundingClientRect();
@@ -945,6 +946,11 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
   const cargaPlan = cargaHoy.kg;
   // El consejo del entrenador va solo bajo la última serie de trabajo hecha: las anteriores ya se leyeron.
   const ultimaHecha = filas.reduce((u, x, j) => (x.hecho && deTrabajo(tipoDe(x)) ? j : u), -1);
+  // "+ Calentamiento" a la vista (lo pidió Francisco el 4 de octubre; antes solo estaba en el menú ⋮): en los ejercicios
+  // con peso, mientras no tengan series de calentamiento ni una de trabajo hecha. Va donde aparecen esas series.
+  const calHtml = !cardio && !seg && !dist && !queEs && ejCat && !sinCargaExterna(ejCat)
+    && !filas.some(x => tipoDe(x) === 'calentamiento') && !filas.some(x => x.hecho && deTrabajo(tipoDe(x)))
+    ? `<button type="button" class="agregar-cal" data-agregar-cal="${id}" aria-label="${esc(`Agregar series de calentamiento a ${e.nombre || ej?.nombre || ''}`)}">+ Calentamiento</button>` : '';
   const filasHtml = filas.map((r, i) => {
     const t = tipoDe(r);
     const trabajo = deTrabajo(t);
@@ -1005,7 +1011,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     ${g && g.pos < g.total ? `<div class="linea-descanso sin-toque linea-ss">${icono('reloj')} <span>${esc(descTexto)}</span><button type="button" class="separar-ss" data-separar-ss="${id}" aria-label="Separar la superserie ${g.letra}">Separar</button></div>` : `<button type="button" class="linea-descanso" data-descanso-ej="${id}">${icono('reloj')} ${esc(descTexto)}</button>`}
     <div class="tabla-series${cardio ? ' cardio' : seg ? ' seg' : dist ? ' dist' : !conEsfuerzo ? ' sin-esfuerzo' : ''}">
       ${cardio ? `<div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span><span aria-hidden="true">${cardio === 'pisos' ? 'Pisos' : 'Km'}</span><span aria-hidden="true">Tiempo</span><span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>` : `<div class="cab-series"><span aria-hidden="true">Serie</span><span aria-hidden="true">Anterior</span>${seg ? '' : `<span aria-hidden="true">${cabKg}</span>`}<span aria-hidden="true">${seg ? 'Seg' : dist ? 'Metros' : 'Reps'}</span>${seg ? '<span aria-hidden="true"></span>' : dist || !conEsfuerzo ? '' : `<button type="button" class="cab-rir" data-ayuda-rir aria-label="Qué es el ${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}">${modoEsfuerzo(R()) === 'rir' ? 'RIR' : 'RPE'}</button>`}<span aria-hidden="true">${icono('visto', 'icono icono-chico')}</span></div>`}
-      ${filasHtml}
+      ${calHtml}${filasHtml}
     </div>
     <div class="fila-agregar"><button type="button" class="boton agregar-serie" data-agregar="${id}">+ Agregar serie</button><button type="button" class="boton" data-agregar-despues="${e.ejercicio_id}">+ Agregar ejercicio aquí</button></div>
 
@@ -1440,6 +1446,7 @@ function enlazar(ir, dia) {
     if (calentar) avisar(nuevas.length > 1 || nuevas[0]._s?.kg ? `${nuevas.length} ${nuevas.length === 1 ? 'serie' : 'series'} de calentamiento agregadas: ${nuevas.map(x => `${coma(enUnidad(x._s?.kg))} × ${x._s?.reps}`).join(', ')}.` : 'Serie de calentamiento agregada: escribe el peso.');
   };
   raiz.querySelectorAll('[data-agregar]').forEach(b => b.onclick = () => agregarFila(b.dataset.agregar, false));
+  raiz.querySelectorAll('[data-agregar-cal]').forEach(b => b.onclick = () => agregarFila(b.dataset.agregarCal, true));
 
   // Empezar (arriba o abajo): parte el tiempo de la sesión.
   raiz.querySelectorAll('[data-empezar]').forEach(b => b.onclick = () => {

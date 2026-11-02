@@ -4,7 +4,9 @@
 // ⓘ de cada ejercicio y desde Progreso.
 import { modoCardio, relojTexto, textoCardio } from '../nucleo/unidades.js';
 import { datoCambiado } from './datos-nube.js';
-import { E, R, D, C, TECNICA, EVIDENCIA, indice, hoy, esc, $, fechaCorta, coma, enUnidad, unidadPeso, peso, guardar, avisar, volumenTexto } from './comun.js';
+import { E, R, D, C, TECNICA, EVIDENCIA, indice, hoy, esc, $, fechaCorta, coma, enUnidad, unidadPeso, peso, guardar, avisar, volumenTexto, ctxNucleo } from './comun.js';
+import { motivoNoAgregar } from '../nucleo/editar-sesion.js';
+import { proponerEdicion } from './editar-sesion-ui.js';
 import { explicarEjercicio, enlaceVideo } from '../nucleo/explicar.js';
 import { alternativas } from '../nucleo/checkin.js';
 import { articulacionesBloqueadas, esAsistido } from '../nucleo/catalogo.js';
@@ -141,6 +143,22 @@ function criteriosDeVariante(t) {
   </section>`;
 }
 
+/** Acciones arriba, como la ficha de un contacto del iPhone: agregar a hoy (o ir a hoy, si ya está en la sesión),
+ *  videos de técnica y "Revisar mi técnica", que llegará después. Si no se puede agregar, el motivo va debajo. */
+function accionesHtml(ej, p) {
+  const motivo = p?.esHoy ? null : motivoNoAgregar(ej, ctxNucleo());
+  const hoyBoton = p?.esHoy
+    ? `<button type="button" class="accion-ficha" id="accion-ir-hoy">${icono('flecha')}<span>Ir a hoy</span></button>`
+    : `<button type="button" class="accion-ficha" id="accion-agregar-hoy"${motivo ? ' aria-disabled="true" aria-describedby="acciones-motivo"' : ''}>${icono('mas')}<span>Agregar a hoy</span></button>`;
+  return `<div class="acciones-ficha" role="group" aria-label="Acciones">
+      ${hoyBoton}
+      <a class="accion-ficha" href="${esc(enlaceVideo(ej))}" target="_blank" rel="noopener">${icono('video')}<span>Videos</span></a>
+      ${botonFuturo('revisionTecnica', { forma: 'accion', simbolo: 'camara' })}
+    </div>
+    ${motivo ? `<p class="pequeno suave acciones-motivo" id="acciones-motivo">${esc(motivo)}</p>` : ''}
+    ${avisoFuturo('revisionTecnica')}`;
+}
+
 /** El ejercicio en tu plan: el de hoy o, si no, la próxima vez que toca (o la última). */
 function enElPlan(id) {
   const plan = E.plan;
@@ -179,6 +197,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
     ${ej.extra ? '<p><span class="chip chip-sin-revision">Banco ampliado · sin revisión profesional</span></p>' : ''}
     <p class="ficha-sub suave">${esc(ej.propio ? ['Creado por ti', ...ej.equipamiento.map(q => EQUIPO[q]).filter(Boolean).slice(0, 2)].join(' · ') : [...ej.equipamiento.map(q => EQUIPO[q]).filter(Boolean).slice(0, 2), ej.extra ? null : NIVEL[ej.nivel_minimo]].filter(Boolean).join(' · '))}</p>
     ${E.notasFijas?.[id] ? `<p class="nota-fija">${icono('lapiz', 'icono icono-chico')}<span>Tu nota fija: ${esc(E.notasFijas[id])}</span></p>` : ''}
+    ${accionesHtml(ej, p)}
 
 
     ${p?.esHoy ? `<section class="tarjeta fila-resumen"><span><strong>Hoy:</strong> <span class="num">${esc(`${p.e.series} × ${p.e.reps_min}${p.e.reps_max !== p.e.reps_min ? ` a ${p.e.reps_max}` : ''}${sufijo(p.e)}${p.e.unidad === 'm' ? '' : ` · RIR ${p.e.rir}`}${p.e.carga_kg ? ` · ${peso(p.e.carga_kg)}` : ''}`)}</span></span><button type="button" class="enlace" id="cambiar-hoy">Cambiar</button></section>` : ''}
@@ -233,7 +252,6 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
       <ol class="pasos" id="ficha-pasos">${t.pasos.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
       ${t.ojo.length ? `<p class="sobretitulo ojo-titulo">Ojo con</p><ul class="ojo">${t.ojo.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
       <a class="boton video" href="${esc(enlaceVideo(ej))}" target="_blank" rel="noopener">${icono('video')} Ver videos de técnica</a>
-      <div class="futura-en-ficha">${botonFuturo('revisionTecnica', { simbolo: 'camara' })}${avisoFuturo('revisionTecnica')}</div>
     </section>
 
     ${ej.propio ? '' : criteriosDeVariante(t)}
@@ -292,6 +310,13 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
   pintarCalculadora();
   document.querySelectorAll('[data-resumen-ficha]').forEach(b => b.onclick = () => ir('resumen', { id: b.dataset.resumenFicha, desde: 'progreso' }));
   document.querySelectorAll('[data-ver]').forEach(b => b.onclick = () => { vistaFicha(ir, { id: b.dataset.ver, desde, antes: { id, desde, antes } }); window.scrollTo(0, 0); });
+  // Agregar a hoy, con la misma vista previa y confirmación que el banco; si no se puede, dice por qué.
+  $('accion-agregar-hoy')?.addEventListener('click', ev => {
+    const motivo = motivoNoAgregar(ej, ctxNucleo());
+    if (motivo) return avisar(motivo);
+    proponerEdicion({ tipo: 'agregar', ejercicio: id }, { volver: ev.currentTarget, alCambiar: () => ir('hoy', { sesion: true }) });
+  });
+  $('accion-ir-hoy')?.addEventListener('click', () => ir('hoy', { ej: id }));
   $('cambiar-hoy')?.addEventListener('click', ev => proponer({ tipo: 'elegir_alternativa', fecha: f, ejercicio: id }, {
     titulo: `Cambiar ${ej.nombre}`, volver: ev.currentTarget, alCambiar: () => ir('hoy'),
   }));

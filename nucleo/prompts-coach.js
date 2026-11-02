@@ -77,14 +77,14 @@ Responde solo una línea: OPCIONES: primera | segunda | tercera | cuarta`;
 export const PROMPTS = { chat: SISTEMA, plan: SISTEMA + PLANIFICACION, semana: SISTEMA + REVISION, nota: SISTEMA + NOTAS };
 /** Razonamiento por modo y subida por herramienta pesada (docs/37-inteligencia-por-uso.md). */
 /** @type {Record<string, string>} */
-export const NIVEL_POR_MODO = Object.freeze({ chat: 'low', nota: 'low', ideas: 'none', plan: 'high', semana: 'high' });
+export const NIVEL_POR_MODO = Object.freeze({ chat: 'low', nota: 'low', ideas: 'none', historia: 'none', plan: 'high', semana: 'high' });
 export const SUBIR_ESFUERZO = Object.freeze({ crear_plan: 'high', proponer_requisitos: 'high', importar_plan_texto: 'high', plan_de_cuidado: 'medium' });
 /** Caché de instrucciones y herramientas por modo (docs/37): 12 horas en lo que se pide varias veces al día (chat y la
  *  nota de cada sesión); 30 minutos en plan y semana, que se piden pocas veces y no pagarían la escritura de 12 horas
  *  (2,5x); las ideas tienen un prefijo corto que no se vuelve a usar y no escriben caché. */
-export const CACHE_POR_MODO = Object.freeze({ chat: '12h', nota: '12h', plan: '30m', semana: '30m', ideas: 'ninguna' });
+export const CACHE_POR_MODO = Object.freeze({ chat: '12h', nota: '12h', plan: '30m', semana: '30m', ideas: 'ninguna', historia: 'ninguna' });
 /** Respuestas breves en el día a día; plan y semana explican más y quedan con la verbosidad normal. */
-export const VERBOSIDAD_POR_MODO = Object.freeze({ chat: 'low', nota: 'low', ideas: 'low' });
+export const VERBOSIDAD_POR_MODO = Object.freeze({ chat: 'low', nota: 'low', ideas: 'low', historia: 'low' });
 
 /** Modos largos: más vueltas y herramientas. */
 export const modoLargo = modo => ['plan', 'semana', 'nota'].includes(modo);

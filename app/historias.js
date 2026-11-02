@@ -3,7 +3,9 @@
 // y a la izquierda vuelve, mantener apretado pausa y deslizar hacia abajo cierra. Una idea por pantalla, con un color
 // cada una, números grandes que se cuentan solos y el coach que narra. Los datos salen de nucleo/historias.js; aquí solo
 // se dibujan. Se entra desde Entrenar (los círculos de arriba), el Coach (el anillo en su cara) y Progreso (el resumen).
-import { E, D, esc, guardar, indice, hoy, peso, volumenTexto, enUnidad, unidadPeso, IMAGENES } from './comun.js';
+import { E, D, esc, guardar, indice, hoy, peso, volumenTexto, enUnidad, unidadPeso, IMAGENES, modoEjemplo } from './comun.js';
+import * as nube from './nube.js';
+import { datosParaIA, filtrarFrases, huellaHistoria } from '../nucleo/historias-ia.js';
 import { imagenAsistente, nombreAsistente } from './cuestionario.js';
 import { historiaSemana, historiaMes, historiaAnio, historiasDeHoy, idHistoria, MESES } from '../nucleo/historias.js';
 import { textoPct } from '../nucleo/rendimiento-sesion.js';
@@ -145,10 +147,33 @@ let abierta = null;
 // Safari y la app instalada tiñen su franja con theme-color: mientras dura la historia, el color de cada pantalla.
 const colorBarra = () => document.querySelector('meta[name="theme-color"]');
 
+// Frases del coach con IA: con cuenta y la IA activada, el coach comenta cada pantalla (nucleo/historias-ia.js, una
+// petición corta y barata del modo "historia"). Mientras llegan, y si no llegan, van las frases por reglas. Se guardan
+// por historia y por sus cifras: en este teléfono, cada una se pide una sola vez.
+const conIA = () => !modoEjemplo && nube.conectado() && E.consentimientos?.ia_transferencia === true;
+const ponerFrases = (h, frases) => { for (const p of h.pantallas) if (frases[p.id]) p.frase = frases[p.id]; };
+async function pedirFrases(a, datos, clave) {
+  try {
+    const r = await nube.chat(JSON.stringify(datos), [], null, 'historia');
+    const frases = filtrarFrases(r?.frases, datos);
+    if (!Object.keys(frases).length) return;
+    E.frasesHistorias = { ...Object.fromEntries(Object.entries(E.frasesHistorias || {}).slice(-11)), [clave]: frases };
+    guardar();
+    if (abierta !== a) return;
+    ponerFrases(a.h, frases);
+    const globo = a.raiz.querySelector('.hist-globo'), p = a.h.pantallas[a.i];
+    if (globo && frases[p?.id]) { globo.textContent = frases[p.id]; globo.classList.remove('cambia'); void globo.offsetWidth; globo.classList.add('cambia'); }
+  } catch { /* sin señal o sin IA: quedan las de reglas */ }
+}
+
 /** Abre una historia armada (nucleo/historias.js). volver: dónde queda el foco al cerrar. */
 export function abrirHistoria(h, { volver = null, alCerrar = null } = {}) {
   if (!h?.pantallas?.length) return;
   cerrarHistoria();
+  // Las frases con IA ya guardadas van desde la primera pantalla; si no hay, se piden mientras se mira.
+  const datosIA = conIA() ? datosParaIA(h, { ejercicio: nombreEj, musculo: m => NOMBRE_MUSCULO[m] || m }) : null;
+  const claveIA = datosIA && `${h.id}|${huellaHistoria(datosIA)}`, guardadas = claveIA && E.frasesHistorias?.[claveIA];
+  if (guardadas) ponerFrases(h, guardadas);
   (E.historiasVistas ||= {})[h.id] = true;
   guardar();
   const raiz = document.createElement('div');
@@ -172,6 +197,7 @@ export function abrirHistoria(h, { volver = null, alCerrar = null } = {}) {
   abierta = { h, i: -1, raiz, volver, alCerrar, inertes, pausada: false, manteniendo: false, tragarClic: false, colorAntes: colorBarra()?.getAttribute('content') ?? null };
   enlazar(abierta);
   ir(0);
+  if (datosIA && !guardadas) pedirFrases(abierta, datosIA, claveIA);
   raiz.focus({ preventScroll: true });
 }
 

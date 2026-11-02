@@ -22,6 +22,12 @@ export const FUNCIONES_FUTURAS = Object.freeze({
     detalle: 'Analizar un video también exige resguardar tu privacidad y que un profesional valide las indicaciones antes de mostrarlas.',
     mientras: 'Mientras tanto, guíate por los pasos, por "Ojo con" y por los videos de técnica.',
   },
+  entrenarConAmigos: {
+    tipo: 'funcion', nombre: 'Entrenar con amigos', donde: 'progreso', requiere: ['servidor'], ruta: 'T44',
+    descripcion: 'Comparte tu constancia y tu progreso con los amigos que elijas, y entrenen juntos.',
+    detalle: 'También hacen falta cuentas de amigos con permisos claros: cada uno elige qué comparte, y nunca se comparten fotos ni peso corporal.',
+    mientras: 'Mientras tanto, puedes compartir la imagen de una sesión o tu historia de la semana.',
+  },
 });
 
 /** Lo que dice el botón al tocarlo: qué falta, qué requisitos tiene y qué se puede usar hoy. */

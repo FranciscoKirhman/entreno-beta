@@ -183,6 +183,7 @@ const RITMOS = {
   patina: [F('Salta', 1.7, 0, 1, { lineal: true })],
   pasos: [F('Pasos', 3.6, 0, 1, { lineal: true })],
   golpes: [F('Toca', 2.6, 0, 1, { lineal: true })],
+  jala: [F('Tira', 1, 0, 1), F('Aprieta', 0.4, 1, 1), F('Vuelve', 2, 1, 0), F('Estira', 0.4, 0, 0)],
 };
 const lado = s => Math.sin(2 * Math.PI * s);
 
@@ -583,6 +584,55 @@ export function patinador() {
   };
 }
 
+/**
+ * Zancada cruzada: la pierna de atrás da el paso hacia atrás cruzando por detrás de la de adelante, que no se mueve, y
+ * las dos rodillas bajan; el tronco queda derecho y las mancuernas cuelgan a los costados. De lado se veía igual que
+ * una zancada atrás: de frente se ve el cruce.
+ */
+export function zancadaCruzada() {
+  return {
+    vista: 'frente', camara: { inclinacion: 8 }, fases: RITMOS.bajaSube,
+    pose(s, m) {
+      const a = anchos(m), k = suave(s);
+      const pelvis = v3(-0.04 * k, altoPelvis(m, 0.03, 0.3 * k), -0.1 * k);
+      const t = tronco(m, pelvis, { arriba: v3(0, 1, 0.1 * k), giroPelvis: -6 * k });
+      const adelante = v3(-(a.cadera + 0.03), m.tobillo, 0.04), quieta = v3(a.cadera + 0.03, m.tobillo, 0.02);
+      const detras = v3(t.caderas[0].x - 0.12, m.tobillo + 0.08, -0.55);
+      const piernas = [
+        pierna(m, t.caderas[0], adelante, { rodilla: v3(-0.08, 0, 1), pie: v3(-0.12, 0, 1) }),
+        pierna(m, t.caderas[1], mezcla(quieta, detras, k), { rodilla: v3(-0.25, -0.35, 1), pie: mezcla(v3(0.12, 0, 1), v3(-0.25, 0, 1), k), abajo: v3(0, -1, -0.45 * k) }),
+      ];
+      const L = (m.brazo + m.antebrazo) * 0.96;
+      const brazos = [0, 1].map(i => { const l = i ? 1 : -1, h = t.hombros[i]; return brazo(m, h, sum(h, v3(l * 0.05, -L, 0.03)), v3(l * 0.2, 0, -1)); });
+      const equipo = brazos.map(b => mancuerna(sum(b.mano, v3(0, -0.02, 0.01)), { profundidad: b.mano.z + 0.05 }));
+      return pose({ ...t, piernas }, brazos, { equipo });
+    },
+  };
+}
+
+/**
+ * Jalón a un brazo, visto desde atrás (así se ve trabajar el dorsal): sentado en la máquina, una mano baja desde arriba
+ * hasta el costado del hombro con el codo hacia la cadera; la otra se afirma en el muslo. El cable baja de la polea.
+ */
+export function jalonUnBrazo() {
+  return {
+    vista: 'frente', camara: { inclinacion: 6 }, fases: RITMOS.jala,
+    pose(s, m) {
+      const c = sentado(m, { alto: 0.47, separa: 0.1, opciones: { inclina: -3 * s } });
+      const h = c.hombros[1], L = m.brazo + m.antebrazo;
+      const arriba = sum(h, v3(0.08, L * 0.96, 0.08)), abajo = sum(h, v3(0.04, 0.06, 0.14));
+      const activo = brazo(m, h, mezcla(arriba, abajo, s), v3(0.15, -1, -0.1)); // el codo baja junto al cuerpo, hacia la cadera
+      const muslo = sum(mezcla(c.piernas[0].cadera, c.piernas[0].rodilla, 0.55), v3(0, 0.1, 0));
+      const libre = brazo(m, c.hombros[0], muslo, v3(-0.8, -0.2, -0.4));
+      // La torre va detrás del cuerpo (delante de la persona) y un brazo arriba lleva la polea sobre la mano: así el cable se ve solo.
+      const polea = v3(arriba.x, 2.3, arriba.z + 0.04), torre = v3(0, 2.36, 0.6);
+      const equipo = [...asientoMaquina(c, 0.47, { respaldo: false }), poste(0, 0.6, 2.36, { profundidad: -0.9, siempreAtras: true }),
+        { tipo: 'capsula', a: torre, b: polea, ancho: 0.05, color: 'estructura', encuadra: false, profundidad: -0.85, siempreAtras: true }, ...cableA(polea, activo.mano)];
+      return deEspalda(pose(c, [libre, activo], { equipo }));
+    },
+  };
+}
+
 // ── Calentamiento y estiramientos ─────────────────────────────────────────────────────────────────────────────────
 export const PASOS_FRENTE = {
   /** Movilidad torácica sentado: manos en la nuca y el pecho gira a cada lado con la cadera quieta. */
@@ -670,4 +720,5 @@ export const FRENTE = {
   plancha_lateral: () => planchaLateral(), plancha_lateral_elevacion: () => planchaLateral({ elevacion: true }),
   toques_talon: () => toquesTalon(), giro_polea: () => giro(), lenador: () => giro({ tipo: 'lenador' }), giro_ruso: () => giro({ tipo: 'ruso' }),
   vuelta_al_mundo: () => vueltaAlMundo(), saltos_tijera: () => saltosTijera(), patinador: () => patinador(),
+  zancada_cruzada: () => zancadaCruzada(), jalon_un_brazo: () => jalonUnBrazo(),
 };

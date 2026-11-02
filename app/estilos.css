@@ -624,6 +624,7 @@ details.pasos > summary{font-weight:600}
 .tramos-cardio i{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;padding:5px 2px;background:var(--surface-2);font-style:normal;font-size:11px;line-height:1.2;color:var(--ink-muted)}
 .tramos-cardio i b{font-size:13px;color:var(--ink)}
 .fila-agregar{display:flex;gap:8px;margin-top:8px}
+.agregar-cal{display:inline-flex;align-items:center;align-self:flex-start;justify-self:start;min-height:44px;margin:0 0 2px;padding:0 4px;border:0;background:none;color:var(--warning);font:600 15px/1.2 var(--f-texto);cursor:pointer}
 /* Resumen de la sesión (app/resumen.js) */
 .cifras-resumen{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
 .cifras-resumen .cifra{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radius:14px;background:var(--surface)}
@@ -647,6 +648,17 @@ details.pasos > summary{font-weight:600}
 .flecha-atras{transform:rotate(180deg);width:22px;height:22px;stroke-width:2.2}
 .ficha-dibujo{display:block;width:100%;height:auto;aspect-ratio:3/2;object-fit:contain;border-radius:16px;background:#FFFFFF;margin:8px 0 4px}
 .ficha-sub{margin:-2px 0 6px}
+/* Acciones de la ficha, como las de un contacto del iPhone: el ícono arriba y el nombre debajo, en tres partes iguales. */
+.acciones-ficha{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0 14px}
+.accion-ficha{display:flex;flex-direction:column;align-items:center;gap:4px;min-height:68px;padding:10px 4px 8px;border:1px solid transparent;border-radius:14px;background:var(--surface);color:var(--accent);font:500 13px/1.2 var(--f-texto);text-align:center;text-decoration:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.accion-ficha .icono{width:24px;height:24px}
+.accion-ficha small{font-size:11px;font-weight:400;color:var(--ink-muted)}
+.accion-ficha[aria-disabled="true"]{color:var(--ink-muted);cursor:default}
+.accion-ficha:active:not([aria-disabled="true"]){background:var(--fill)}
+.accion-ficha:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.accion-futura{border-style:dashed;border-color:var(--border);color:var(--ink-muted)}
+.acciones-motivo{margin:-6px 0 12px}
+.acciones-ficha~.aviso-futuro{margin:-4px 0 12px}
 .ficha-musculos .sobretitulo{margin:0 0 4px}
 .ficha-maquina{display:block;width:72px;height:72px;object-fit:contain;padding:4px;border-radius:12px;background:var(--fondo-icono);margin-top:10px}
 #vista-ficha .tarjeta h2{font-size:20px;margin:0 0 8px}

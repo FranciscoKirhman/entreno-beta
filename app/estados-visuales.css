@@ -23,6 +23,9 @@
 .opcion-hoja .imagen-opcion[src^="img/articulaciones/"]{width:56px;height:56px;background:var(--surface-2)}
 .sesion-completa{margin:12px 0 4px;padding:10px 12px;border-radius:16px;background:var(--accent-soft)}
 .sesion-completa .estado-personaje,.descarga-ilustrada .estado-personaje{width:104px;height:104px}
+/* La celebración con capas (app/movimiento.js): el cuerpo y, encima, el brazo, del mismo tamaño que la pose. */
+.personaje-capas{position:relative;display:block}
+.personaje-capas img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 .sesion-completa .estado-texto h3,.descarga-ilustrada .estado-texto h3{font-size:19px}
 .sesion-completa .estado-texto p{line-height:1.45}
 .descarga-ilustrada{margin-bottom:8px}

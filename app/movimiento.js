@@ -1,5 +1,7 @@
 // Movimiento breve, siempre opcional: si la persona pidió reducir movimiento en su sistema, nada se anima. Solo
 // opacidad y desplazamientos cortos: nunca se agranda ni se deforma un dibujo, y nada se repite en bucle.
+import { GOLPE_PUNO } from '../nucleo/asistente-capas.js';
+
 const reducir = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : { matches: true };
 export const sinMovimiento = () => reducir.matches;
 const SUAVE = 'cubic-bezier(.2,.7,.3,1)';
@@ -37,11 +39,32 @@ export function entrarEnOrden(elementos, { paso = 60, desde = 40 } = {}) {
 /** Entrada breve de una pose del asistente (al aparecer o al cambiar de pose). */
 export const entrarPose = el => animar(el, [{ opacity: 0, translate: '0 4px' }, { opacity: 1, translate: '0 0' }], { duration: 200 });
 
-/** Celebración de una sola vez: la tarjeta aparece y el dibujo da un salto corto, sin cambiar de tamaño. */
-export function celebrar(tarjeta, personaje) {
+/**
+ * Celebración de una sola vez: la tarjeta aparece y el dibujo da un salto corto, sin cambiar de tamaño. Con las capas del
+ * asistente (nucleo/asistente-capas.js: capasAsistente), además levanta el puño: el cuerpo queda fijo y el brazo gira en
+ * el hombro. Si las capas no están listas a tiempo, salta como antes; con "reducir movimiento", nada se mueve.
+ */
+export async function celebrar(tarjeta, personaje, capas = null) {
   animar(tarjeta, [{ opacity: 0, translate: '0 8px' }, { opacity: 1, translate: '0 0' }], { duration: 260 });
-  animar(personaje, [{ translate: '0 0' }, { translate: '0 -10px', offset: 0.35 }, { translate: '0 0', offset: 0.7 }, { translate: '0 -4px', offset: 0.85 }, { translate: '0 0' }],
-    { duration: 600, delay: 60 }); // en total, menos de 700 ms
+  const brazo = capas && !sinMovimiento() ? await conCapas(personaje, capas) : null;
+  animar(brazo?.parentElement || personaje, [{ translate: '0 0' }, { translate: '0 -10px', offset: 0.35 }, { translate: '0 0', offset: 0.7 }, { translate: '0 -4px', offset: 0.85 }, { translate: '0 0' }],
+    { duration: 600, delay: brazo ? 0 : 60 }); // en total, menos de 700 ms
+  if (brazo) animar(brazo, GOLPE_PUNO, { duration: 600, easing: 'linear' });
+}
+
+/** Cambia la pose por sus capas (cuerpo y brazo) cuando las dos imágenes ya se pueden dibujar; si tardan, null. */
+async function conCapas(img, { cuerpo, brazo, origen }) {
+  const capas = [cuerpo, brazo].map(src => Object.assign(new Image(320, 320), { src, alt: '', decoding: 'async' }));
+  const listas = await Promise.race([Promise.all(capas.map(c => c.decode())).then(() => true, () => false), new Promise(r => setTimeout(() => r(false), 250))]);
+  if (!listas || !img?.isConnected) return null;
+  const caja = document.createElement('span');
+  caja.className = `${img.className} personaje-capas`;
+  caja.setAttribute('aria-hidden', 'true');
+  capas[1].className = 'personaje-brazo';
+  capas[1].style.transformOrigin = origen;
+  caja.append(...capas);
+  img.replaceWith(caja);
+  return capas[1];
 }
 
 const ESTILO = ['backgroundColor', 'borderColor', 'boxShadow', 'color'];

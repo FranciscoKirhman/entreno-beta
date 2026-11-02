@@ -104,6 +104,12 @@ const soloPierna = p => ({ talon: p.talon, punta: p.punta, tobillo: p.tobillo, r
 // ── Equipo ────────────────────────────────────────────────────────────────────────────────────────────────────
 const barraCon = (c, r = 0.225, capa = 'frente') => [{ tipo: 'disco', centro: mas(c, -0.015, 0.01), r, capa: 'fondo' }, { tipo: 'barra', centro: c, capa }];
 const mancuernas = (cerca, lejos = mas(cerca, 0.02, 0.012)) => [{ tipo: 'mancuerna', centro: lejos, capa: 'fondo' }, { tipo: 'mancuerna', centro: cerca, capa: 'frente' }];
+/** Agarre neutro (martillo): cada mancuerna se ve de perfil, cruzada al antebrazo; la del otro brazo asoma detrás. */
+function mancuernasPerfil(codo, mano) {
+  const d = { x: mano.x - codo.x, y: mano.y - codo.y }, L = Math.hypot(d.x, d.y) || 1, p = { x: -d.y / L, y: d.x / L };
+  const una = (c, capa) => ({ tipo: 'mancuernaBarra', a: mas(c, p.x * 0.15, p.y * 0.15), b: mas(c, -p.x * 0.15, -p.y * 0.15), capa });
+  return [una(mas(mano, 0.02, 0.012), 'fondo'), una(mano, 'frente')];
+}
 const banco = (a, b, extra = {}) => ({ tipo: 'banco', a, b, capa: 'fondo', ...extra });
 const cable = (desde, hasta) => [{ tipo: 'cable', desde, hasta, capa: 'fondo' }, { tipo: 'mango', centro: hasta, capa: 'frente' }];
 const asiento = (cadera, tronco, m, alto = 0.45) => [banco({ x: cadera.x - 0.2, y: alto }, { x: cadera.x + 0.25, y: alto })]
@@ -545,7 +551,7 @@ const discosChicos = c => [{ tipo: 'disco', centro: mas(c, -0.01, 0.006), r: 0.1
  * Curl de bíceps. tipo: 'pie', 'predicador', 'inclinado' o 'tras' (polea por detrás). carga: 'barra', 'mancuernas',
  * 'polea' o 'maquina'. El codo queda quieto y el antebrazo sube.
  */
-export function curl({ tipo = 'pie', carga = 'barra' } = {}) {
+export function curl({ tipo = 'pie', carga = 'barra', agarre = 'supino' } = {}) {
   return {
     fases: RITMOS.sube,
     pose(s, m) {
@@ -556,7 +562,7 @@ export function curl({ tipo = 'pie', carga = 'barra' } = {}) {
       else { cuerpo = dePie(m, { pierna: 2 }); a1 = mix(178, 168, s); a2 = mix(176, 32, s); }
       const { cadera, hombro } = cuerpo, brazos = brazoFK(m, hombro, a1, a2);
       if (carga === 'barra') equipo.push(...discosChicos(brazos.mano));
-      else if (carga === 'mancuernas') equipo.push(...mancuernas(brazos.mano));
+      else if (carga === 'mancuernas') equipo.push(...(agarre === 'neutro' ? mancuernasPerfil(brazos.codo, brazos.mano) : mancuernas(brazos.mano)));
       else if (carga === 'polea') equipo.push(...cable(tipo === 'tras' ? { x: -0.55, y: 0.18 } : { x: 0.5, y: 0.14 }, brazos.mano));
       else equipo.push({ tipo: 'mango', centro: brazos.mano, capa: 'frente' });
       if (tipo === 'predicador') {
@@ -1104,7 +1110,7 @@ const MAPA = {
   prensa: () => prensa(), prensa_horizontal: () => prensa({ angulo: 0 }), prensa_unilateral: () => prensa(),
   bulgara_mancuernas: () => estocada({ trasero: 'banco', carga: 'mancuernas' }), bulgara: () => estocada({ trasero: 'banco' }), bulgara_smith: () => estocada({ trasero: 'banco', carga: 'barra', smith: true }),
   step_up: () => stepUp(), step_up_mancuernas: () => stepUp({ carga: 'mancuernas' }),
-  zancada_cruzada: () => estocada({ carga: 'mancuernas' }), zancadas_caminando: () => estocada({ carga: 'mancuernas' }), zancadas_corporal: () => estocada(),
+  zancadas_caminando: () => estocada({ carga: 'mancuernas' }), zancadas_corporal: () => estocada(),
   extension_cuadriceps: () => extensionCuadriceps(),
   peso_muerto_rumano_barra: () => rumano(), peso_muerto_rumano_smith: () => rumano({ smith: true }), peso_muerto_rumano_mancuernas: () => rumano({ carga: 'mancuernas' }),
   peso_muerto_barra: () => pesoMuerto(), peso_muerto_smith: () => pesoMuerto({ smith: true }), buenos_dias: () => buenosDias(), swing_kettlebell: () => swing(),
@@ -1130,7 +1136,7 @@ const MAPA = {
   press_hombro_mancuernas: () => pressVertical({ sentado: true, carga: 'mancuernas' }), press_hombro_sentado_mancuernas: () => pressVertical({ sentado: true, carga: 'mancuernas' }),
   press_hombro_de_pie_mancuernas: () => pressVertical({ carga: 'mancuernas' }), press_hombro_maquina: () => pressVertical({ sentado: true, carga: 'maquina' }), press_arnold: () => pressVertical({ sentado: true, carga: 'mancuernas' }),
   elevaciones_frontales: () => elevacionFrontal(), face_pull: () => facePull(),
-  jalon_polea: () => jalon(), jalon_maquina: () => jalon(), jalon_agarre_cerrado: () => jalon(), jalon_un_brazo: () => jalon(),
+  jalon_polea: () => jalon(), jalon_maquina: () => jalon(), jalon_agarre_cerrado: () => jalon(),
   dominadas: () => dominada(), dominadas_asistidas: () => dominada({ asistida: true }), dominadas_banda: () => dominada({ banda: true }), dominadas_lastre: () => dominada({ lastre: true }),
   dominadas_supinas: () => dominada(), dominadas_supinas_lastre: () => dominada({ lastre: true }), dominadas_supinas_asistidas: () => dominada({ asistida: true }), dominadas_escapulares: () => dominada({ escapular: true }),
   remo_maquina: () => remoSentado({ maquina: true }), remo_maquina_cable: () => remoSentado({ maquina: true }), remo_polea: () => remoSentado(), remo_polea_un_brazo: () => remoSentado(),
@@ -1139,7 +1145,7 @@ const MAPA = {
   remo_mancuerna: () => remoUnBrazo(), remo_landmine: () => remoInclinado({ tronco: 45 }), remo_invertido: () => remoInvertido(), remo_suspension: () => remoInvertido({ suspension: true }),
   encogimientos: () => encogimiento(),
   curl_mancuernas: () => curl({ carga: 'mancuernas' }), curl_barra: () => curl(), curl_barra_ez: () => curl(), curl_polea: () => curl({ carga: 'polea' }), curl_maquina: () => curl({ tipo: 'predicador', carga: 'maquina' }),
-  curl_martillo: () => curl({ carga: 'mancuernas' }), curl_predicador_barra: () => curl({ tipo: 'predicador' }), curl_predicador_ez: () => curl({ tipo: 'predicador' }),
+  curl_martillo: () => curl({ carga: 'mancuernas', agarre: 'neutro' }), curl_predicador_barra: () => curl({ tipo: 'predicador' }), curl_predicador_ez: () => curl({ tipo: 'predicador' }),
   curl_predicador_mancuerna: () => curl({ tipo: 'predicador', carga: 'mancuernas' }), curl_predicador_maquina: () => curl({ tipo: 'predicador', carga: 'maquina' }), curl_predicador_maquina_unilateral: () => curl({ tipo: 'predicador', carga: 'maquina' }),
   curl_inclinado: () => curl({ tipo: 'inclinado', carga: 'mancuernas' }), curl_tras_espalda: () => curl({ tipo: 'tras', carga: 'polea' }),
   curl_muneca: () => muneca(), extension_muneca_barra: () => muneca({ extension: true }),
