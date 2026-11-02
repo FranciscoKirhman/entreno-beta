@@ -17,6 +17,7 @@ import { articulacionesBloqueadas } from './catalogo.js';
 import { duracionEstimada, cargaSugerida, registrosParaCarga, lugaresDe } from './motor-plan.js';
 import { alternativasNoHecha, alternativaEnFecha, fechasLibres, fechaEscrita, semanaDe, firma, diaCorto } from './sin-registro.js';
 import { semanaDe as semanaDelBloque, adelantarDescarga } from './ciclos.js';
+import { CAMBIOS_SEMANA_A_MEDIAS, cambioSemanaAMedias, confirmarSemanaAMedias } from './semana-a-medias.js';
 
 const DIAS = { domingo: 0, lunes: 1, martes: 2, miercoles: 3, jueves: 4, viernes: 5, sabado: 6 };
 const ZONAS = { hombro: 'hombro', hombros: 'hombro', codo: 'codo', codos: 'codo', rodilla: 'rodilla', rodillas: 'rodilla', espalda: 'lumbar', lumbar: 'lumbar', cintura: 'lumbar', muneca: 'muneca', munecas: 'muneca', cuello: 'cuello', tobillo: 'tobillo', cadera: 'cadera' };
@@ -185,7 +186,7 @@ function opcionesAlternativa(ctx, fecha, id) {
 }
 
 // ── Cambios al plan: primero la vista previa, después la confirmación ──────────────
-const CAMBIAN_PLAN = new Set(['intercambiar', 'mover', 'falte', 'descanso_activo', 'ajustar_hoy', 'recortar_hoy', 'reemplazar_hoy', 'quitar_zona_hoy', 'descarga_temprana']);
+const CAMBIAN_PLAN = new Set(['intercambiar', 'mover', 'falte', 'descanso_activo', 'ajustar_hoy', 'recortar_hoy', 'reemplazar_hoy', 'quitar_zona_hoy', 'descarga_temprana', ...CAMBIOS_SEMANA_A_MEDIAS]);
 const fechaCorta = f => `${nombreDia(f)} ${Number(f.slice(8))}`;
 const prescCorta = e => `${e.nombre} ${e.series}×${e.reps_min}${e.reps_max !== e.reps_min ? ` a ${e.reps_max}` : ''}${sufijo(e)}`;
 const finDeSemana = f => sumarDias(f, (7 - diaSemana(f)) % 7);
@@ -196,6 +197,8 @@ const movidas = cambios => cambios.map(c => (c.tipo === 'intercambiar' ? `el ${n
  *   propone: cómo quedaría, para preguntar; hecho: lo que se dice al aplicarlo; ir: 'hoy' o 'semana'.
  */
 export function calcularCambio(accion, ctx) {
+  // Una semana que quedó a medias: pasar a menos días, primero lo que faltó, repetirla o descargar (nucleo/semana-a-medias.js).
+  if (CAMBIOS_SEMANA_A_MEDIAS.has(accion.tipo)) return cambioSemanaAMedias(accion, ctx);
   const { plan, indice } = ctx;
   const noPuedo = ctx.respuestas?.dias_no_puedo || [];
   const nuevo = structuredClone(plan);
@@ -293,6 +296,7 @@ export function vistaPrevia(accion, ctx) {
   if (accion.tipo === 'reemplazar_hoy') return { texto: `${r.propone} ¿Solo hoy o desde hoy en adelante?`, opciones: [confirmar('Solo hoy', { alcance: 'hoy' }), confirmar('Desde hoy en adelante', { alcance: 'adelante' }), no] };
   if (accion.tipo === 'quitar_zona_hoy') return { texto: `${r.propone} ¿Solo hoy o toda la semana?`, opciones: [confirmar('Solo hoy', { alcance: 'hoy' }), confirmar('Toda la semana', { alcance: 'semana' }), no] };
   if (accion.tipo === 'descarga_temprana') return { texto: `${r.propone} ¿La adelanto?`, semana: r.semana, opciones: [confirmar('Sí, adelantar la descarga'), no] };
+  if (CAMBIOS_SEMANA_A_MEDIAS.has(accion.tipo)) return { texto: `${r.propone} ¿Lo cambio?`, semana: r.semana, opciones: [confirmar(confirmarSemanaAMedias(accion)), no] };
   return { texto: `${r.propone} ¿Lo cambio?`, opciones: [confirmar(r.ir === 'semana' ? 'Sí, cambiar la semana' : 'Sí, cambiar la sesión de hoy'), no] };
 }
 
@@ -323,6 +327,8 @@ export function aplicarOpcion(accion, ctx) {
     case 'nada': return { texto: 'Bien, no cambié nada.' };
     // "Ahora no" a la descarga adelantada: no se vuelve a proponer esta semana (descartar lo guarda la app).
     case 'sobrecarga_no': return { texto: 'Bien, sigues con el plan. Esta semana, para cada serie cuando te queden las repeticiones que pide: la última tiene que salir igual de limpia que la primera.', descartar: accion.clave };
+    // "Seguir igual" a una semana a medias (nucleo/semana-a-medias.js): no se vuelve a ofrecer por esa semana.
+    case 'semana_a_medias_no': return { texto: 'Bien, sigues con el plan tal cual. No sumes a esta semana lo que faltó, y lo que no hiciste mantiene su peso.', descartar: accion.clave };
     default: return { texto: 'Perfecto.' };
   }
 }

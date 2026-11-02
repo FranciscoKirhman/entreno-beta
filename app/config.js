@@ -4,7 +4,7 @@ export const CONFIG = {
   supabaseAnonKey: "sb_publishable_oW_KQ68m0LkMYDyK4kGDIQ_ZYJsi1IG",
   funcionesUrl: "https://vqsxfjmotiucipysfmux.supabase.co/functions/v1",
   versionConsentimientos: '2026-10-01',
-  version: '2026-11-02 11:47 · 7c3e233',
+  version: '2026-11-02 12:13 · c9a61d2',
   sinSenal: true,
   // Modo prueba: el perfil se conserva; el ejemplo ficticio se abre por elección.
   modoPrueba: true,

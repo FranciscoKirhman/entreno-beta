@@ -23,6 +23,7 @@ import { abrirHerramientas } from './herramientas-coach.js';
 import { abrirHoja } from './hoja.js';
 import { duracionSesion } from '../nucleo/motor-plan.js';
 import { senalesSobrecarga, propuestaSobrecarga } from '../nucleo/sobrecarga.js';
+import { semanaAMedias } from '../nucleo/semana-a-medias.js';
 import { esAsistido } from '../nucleo/catalogo.js';
 import { historiasDeHoy, idHistoria } from '../nucleo/historias.js';
 
@@ -414,7 +415,10 @@ export function mandarAlCoach({ texto, paraIA, modo, tipo, sesionId }) {
 /** Si terminó una semana del plan y no se revisó, la pide (una vez por semana). */
 export function revisarSemanaSiToca() {
   const s = semanaPorRevisar(E.plan, hoy(), E.revisionesIA || {});
-  if (s && nube.conectado() && E.consentimientos?.ia_transferencia !== false) {
+  // Una semana a medias la propone el coach con sus reglas (proponerSemanaAMediasSiToca): la revisión con IA no se suma,
+  // tampoco si la persona eligió "Seguir igual".
+  const aMedias = s && (semanaMedias()?.semana === s.semana || E.sobrecargaNo?.[`medias|${E.plan.inicio}|${s.semana}`]);
+  if (s && !aMedias && nube.conectado() && E.consentimientos?.ia_transferencia !== false) {
     (E.revisionesIA ||= {})[s.clave] = true;
     mandarAlCoach({ ...mensajeRevision(s), modo: 'semana', tipo: 'revision' });
   } else procesarColaCoach();
@@ -424,6 +428,26 @@ export function revisarSemanaSiToca() {
  * un mensaje en el chat, una vez por semana del bloque, con "Ver cómo quedaría" antes de cambiar nada. Si no está en el
  * Coach, la pestaña queda con el punto de novedad. Se revisa al navegar (app.js: ir), así sale apenas hay datos.
  */
+/** La semana del bloque que terminó, si quedó a medias, con lo que conviene (nucleo/semana-a-medias.js). */
+function semanaMedias() {
+  if (!E.plan?.dias?.length || !Array.isArray(E.sesiones)) return null;
+  const c = ctxNucleo();
+  return semanaAMedias({ plan: E.plan, sesiones: E.sesiones, bienestar: E.bienestar || {}, marcas: E.marcasPlan || {}, hoy: c.hoy, indice, respuestas: c.respuestas || {}, hechas: c.hechas, descartadas: E.sobrecargaNo || {} });
+}
+/**
+ * Una semana que quedó a medias: el coach ofrece la opción que mejor calza con los datos (pasar a menos días, primero lo
+ * que faltó, repetirla o descargar), con el porqué, y deja las otras a mano; cada una muestra cómo quedaría antes de
+ * cambiar nada. Una vez por semana, y después de que la persona dijo qué pasó con las sesiones sin registro.
+ */
+export function proponerSemanaAMediasSiToca() {
+  if (!Array.isArray(E.chat)) return false;
+  const p = semanaMedias();
+  if (!p?.ofrecer || E.chat.some(m => m.clave === p.clave)) return false;
+  E.chat.push({ rol: 'coach', app: true, tipo: 'semana_a_medias', clave: p.clave, texto: p.texto, opciones: p.opciones });
+  if (!$('vista-coach')?.isConnected) { E.chatSinLeer = true; marcarNovedadCoach(); }
+  guardar();
+  return true;
+}
 export function proponerDescargaSiToca() {
   if (!E.plan?.dias?.length || !Array.isArray(E.sesiones) || !Array.isArray(E.chat)) return false;
   const senales = senalesSobrecarga({ plan: E.plan, sesiones: E.sesiones, bienestar: E.bienestar || {}, hoy: hoy(), asistidos: new Set(indice.ejercicios.filter(esAsistido).map(e => e.id)) });
@@ -675,13 +699,18 @@ function guardarRevision(xs) {
   for (const x of no) E.marcasPlan[x.fecha] = 'saltada';
   datoCambiado('calendario_asistencia');
   const de = x => `${x.foco} del ${diaCorto(x.fecha)}`;
+  // Si con esto la semana quedó a medias, cómo seguir va abajo (proponerSemanaAMediasSiToca) y no se ofrece recuperar
+  // cada sesión de esa semana: sumarlas a la que viene acumula más fatiga que beneficio.
+  const medias = semanaMedias(), deLaSemana = x => medias?.ofrecer && sesionDe(E.plan, x.fecha)?.semana === medias.semana;
+  const recuperar = no.filter(x => !deLaSemana(x)), abajo = recuperar.length < no.length;
   E.chat.push({ rol: 'persona', texto: [hechas.length && `Hice ${lista(hechas.map(de))}.`, no.length && `No hice ${lista(no.map(de))}.`].filter(Boolean).join(' ') });
   E.chat.push({ rol: 'coach', app: true,
-    texto: `Anotado. ${hechas.length ? `${mayus(lista(hechas.map(de)))} ${hechas.length === 1 ? 'quedó como hecha' : 'quedaron como hechas'}, sin series anotadas. ` : ''}${no.length ? `${mayus(lista(no.map(de)))} ${no.length === 1 ? 'quedó' : 'quedaron'} sin hacer y tu semana sigue igual. ` : ''}${hechas.length ? 'Si quieres, anota lo que hiciste' : ''}${hechas.length && no.length ? ' o recupera lo que faltó.' : no.length ? 'Si quieres, recupera lo que faltó.' : '.'}`,
+    texto: `Anotado. ${hechas.length ? `${mayus(lista(hechas.map(de)))} ${hechas.length === 1 ? 'quedó como hecha' : 'quedaron como hechas'}, sin series anotadas. ` : ''}${no.length ? `${mayus(lista(no.map(de)))} ${no.length === 1 ? 'quedó' : 'quedaron'} sin hacer${abajo ? '. ' : ' y tu semana sigue igual. '}` : ''}${hechas.length ? 'Si quieres, anota lo que hiciste' : ''}${hechas.length && recuperar.length ? ' o recupera lo que faltó.' : recuperar.length ? 'Si quieres, recupera lo que faltó.' : hechas.length ? '.' : ''}${abajo ? `${hechas.length ? ' ' : ''}Abajo te propongo cómo seguir.` : ''}`.trim(),
     opciones: [...hechas.slice(-2).map(x => ({ etiqueta: `Anotar ${x.foco}`, accion: { tipo: 'anotar_pasado', fecha: x.fecha } })),
-      ...no.slice(-2).reverse().map(x => ({ etiqueta: `Recuperar ${x.foco}`, accion: { tipo: 'no_hecha', fecha: x.fecha } }))] });
+      ...recuperar.slice(-2).reverse().map(x => ({ etiqueta: `Recuperar ${x.foco}`, accion: { tipo: 'no_hecha', fecha: x.fecha } }))] });
   marcadasRevision = new Set(); fechasRevision = '';
   guardar();
+  proponerSemanaAMediasSiToca();
 }
 
 /** Con el teclado abierto el chat se desplaza por dentro; sin teclado, la página. */
@@ -743,8 +772,8 @@ function burbuja(m, i) {
   // semana: cómo quedaría (o quedó) la semana, día por día, con lo que cambia marcado.
   const semana = m.semana?.length ? `<ul class="semana-chat">${m.semana.map(d => `<li class="${d.libre ? 'libre' : d.cambio ? 'cambia' : ''}"><span class="num">${esc(diaCorto(d.fecha))}</span><strong>${esc(d.foco)}</strong>${d.cambio ? `<small>${esc(d.cambio)}</small>` : ''}</li>`).join('')}</ul>` : '';
   // Las notas de una sesión y la revisión semanal se escribieron solas: llevan su etiqueta y el mismo formato del coach.
-  const etiqueta = m.tipo === 'sesion' ? 'Tu sesión' : m.tipo === 'nota' ? 'Nota de la sesión' : m.tipo === 'revision' ? 'Revisión semanal' : m.tipo === 'descarga' ? 'Propuesta de descarga' : '';
-  const cabeza = etiqueta ? `<span class="tipo-mensaje">${icono(m.tipo === 'revision' || m.tipo === 'descarga' ? 'calendario' : m.tipo === 'sesion' ? 'pesa' : 'lapiz', 'icono icono-chico')} ${etiqueta}${m.porEnviar ? ` · ${esperaTexto()}` : ''}</span>` : '';
+  const etiqueta = m.tipo === 'sesion' ? 'Tu sesión' : m.tipo === 'nota' ? 'Nota de la sesión' : m.tipo === 'revision' ? 'Revisión semanal' : m.tipo === 'descarga' ? 'Propuesta de descarga' : m.tipo === 'semana_a_medias' ? 'Semana a medias' : '';
+  const cabeza = etiqueta ? `<span class="tipo-mensaje">${icono(m.tipo === 'revision' || m.tipo === 'descarga' || m.tipo === 'semana_a_medias' ? 'calendario' : m.tipo === 'sesion' ? 'pesa' : 'lapiz', 'icono icono-chico')} ${etiqueta}${m.porEnviar ? ` · ${esperaTexto()}` : ''}</span>` : '';
   // Lo escrito sin señal: el mensaje queda a la vista, más tenue, con "En espera" debajo.
   const espera = m.porEnviar && !etiqueta ? `<span class="estado-envio">En espera · ${esperaTexto()}</span>` : '';
   return `<div id="mensaje-chat-${i}" tabindex="-1" class="burbuja ${m.rol}${etiqueta ? ' automatico' : ''}${espera ? ' en-espera' : ''}${m.propuesta ? ' con-propuesta' : ''}">${cabeza}<div class="texto-chat">${m.rol === 'coach' || etiqueta ? textoRico(m.texto) : esc(m.texto)}${m.enlace ? ` <a class="enlace" href="${esc(m.enlace)}" target="_blank" rel="noopener">Ver videos</a>` : ''}</div>${semana}${m.propuesta ? propuestaChatHtml({ ...m.propuesta, estado: m.estadoPropuesta || m.propuesta.estado }) : ''}${opciones?.length ? `<div class="opciones-chat" ${ocupada ? 'aria-busy="true"' : ''}>${opciones.map((o, k) => `<button type="button" ${ocupada ? 'disabled' : ''} class="boton${['confirmar', 'confirmar_ia', 'aceptar_alternativa'].includes(o.accion?.tipo) && k === 0 ? ' primario' : ''}" data-msg="${i}" data-opcion="${k}">${esc(o.etiqueta)}</button>${o.nota ? `<span class="pequeno suave nota-opcion">${esc(o.nota)}</span>` : ''}${o.avisos?.length ? `<span class="pequeno suave">${esc(o.avisos.join(' '))}</span>` : ''}`).join('')}</div>` : ''}${m.sugerencias?.length && i === E.chat.length - 1 ? `<div class="chips respuestas-rapidas" role="group" aria-label="Respuestas rápidas">${m.sugerencias.map(x => `<button type="button" class="sugerencia">${esc(x)}</button>`).join('')}</div>` : ''}</div>${espera}`;
