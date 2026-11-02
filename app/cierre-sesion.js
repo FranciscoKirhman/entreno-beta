@@ -12,7 +12,9 @@ import { notasDeSesionTexto, huellaNotas } from '../nucleo/revision-semanal.js';
 import { sumarDias } from '../nucleo/agenda.js';
 import * as nube from './nube.js';
 
-const DIAS_MAXIMO = 3; // una marca más vieja ya no se completa: el plan y la conversación siguieron
+// Una sesión de hace más de 7 días ya no se cierra: es el mismo plazo de "Para la próxima" (app/progresion-sesion.js).
+// Con 2 días, una sesión del jueves guardada sin señal quedaba sin cerrar si la app recién se abría el lunes.
+const DIAS_MAXIMO = 7;
 const conCoach = () => !modoEjemplo && nube.hay() && nube.usuarioId();
 const pedida = id => (E.chat || []).some(m => m.rol === 'persona' && m.sesionId === id);
 // Anotada aquí: sus series marcadas siguen en el registro de este teléfono (otro teléfono solo trae la sesión guardada).
@@ -25,11 +27,11 @@ const otraEnCurso = sesion => Object.keys(E.inicioSesion || {}).some(f => f > se
 /** Al guardar (app/hoy.js): queda por cerrar hasta que el coach la tenga y "Para la próxima" se haya mostrado. */
 export function marcarPorCerrar(id) { (E.porCerrar ||= {})[id] = Date.now(); }
 
-/** Las guardadas antes de esta marca no la traen: la última, de hoy o de ayer, anotada aquí y sin pedido al coach ni
- *  "Para la próxima" mostrado, es un guardado que se quedó esperando la señal (29 de octubre de 2026). Una vez. */
+/** Las guardadas antes de esta marca no la traen: la última de los últimos 7 días, anotada aquí y sin pedido al coach
+ *  ni "Para la próxima" mostrado, es un guardado que se quedó esperando la señal (29 de octubre de 2026). Una vez. */
 function sinMarcaPorCerrar() {
   const s = ultimaGuardada();
-  if (!s || E.porCerrar?.[s.id] || E.porCerrarRevisada === s.id || s.fecha < sumarDias(hoy(), -1) || !anotadaAqui(s)) return;
+  if (!s || E.porCerrar?.[s.id] || E.porCerrarRevisada === s.id || s.fecha < sumarDias(hoy(), -DIAS_MAXIMO) || !anotadaAqui(s)) return;
   E.porCerrarRevisada = s.id;
   if ((conCoach() && !pedida(s.id)) || faltaMostrarAjustes(s)) marcarPorCerrar(s.id);
 }
