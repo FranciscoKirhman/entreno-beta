@@ -14,6 +14,8 @@ const campo = (nombre, vacio) => ({ leer: () => E[nombre] ?? vacio, poner: v => 
 const LOCAL = {
   ejercicios_propios: campo('ejerciciosPropios', []), medidas_cuerpo: campo('medidas', []), notas_fijas: campo('notasFijas', {}),
   calendario_asistencia: campo('marcasPlan', {}), rutinas: campo('rutinas', []), sensaciones: campo('sensaciones', {}),
+  // Los descansos reales de cada sesión (nucleo/descansos.js): la hora de cada serie no se guarda en la tabla series.
+  descansos: campo('descansos', {}),
   // Con los ajustes de la sesión viajan dos preferencias de cómo se anota, que viven en las respuestas: RPE o RIR y
   // las mancuernas de a una o el par. Una cuenta que aún no las tiene recibe las de este teléfono (falta).
   ajustes_sesion: {

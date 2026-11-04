@@ -22,6 +22,7 @@ import { sesionViva, aplicarViva, SEGUNDOS_PARA_ACEPTAR } from '../nucleo/sesion
 import { alternativas } from '../nucleo/checkin.js';
 import { filasTrasAjuste, ajustarTiempo, hechasDelDia, duracionReal, minutosRestantes, resumenSesion } from '../nucleo/tiempo-sesion.js';
 import { factorRitmo, minutosDe as minutosARitmo, textoRitmo, accesoriosHoy, topeSeriesHoy } from './ritmo.js';
+import { descansosDeSesion, paraGuardar as descansosParaGuardar } from '../nucleo/descansos.js';
 import { TIPOS_SERIE, tipoDe, etiquetas, cuantasFilas, anterior, cifras, tipoParaGuardar } from '../nucleo/registro.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { avisoCheckin } from './checkin.js';
@@ -2039,6 +2040,14 @@ function enlazar(ir, dia) {
     // Cómo se sintió (como OpenGym): aparte de la sesión, así no se pierde cuando la cuenta trae su copia.
     if (sensacion) (E.sensaciones ||= {})[id] = sensacion; else if (E.sensaciones) delete E.sensaciones[id];
     if (sensacion || anteriorGuardada) datoCambiado('sensaciones');
+    // Los descansos reales (nucleo/descansos.js), desde la hora de cada serie marcada: aparte, como la sensación, porque
+    // la tabla series no guarda la hora. Se recalculan si se guarda de nuevo; quedan los de las últimas 40 sesiones.
+    const descansos = descansosParaGuardar(descansosDeSesion({ ejercicios: dia.ejercicios, filas: dia.ejercicios.map((e, k) => filasDe(f, e, k)), tipoDe, porId: indice.porId }), f);
+    if (descansos || E.descansos?.[id]) {
+      const resto = Object.entries(E.descansos || {}).filter(([k]) => k !== id).sort((a, b) => (a[1]?.fecha < b[1]?.fecha ? 1 : -1)).slice(0, 39);
+      E.descansos = Object.fromEntries(descansos ? [[id, descansos], ...resto] : resto);
+      datoCambiado('descansos');
+    }
     E.mensaje = `Sesión guardada: ${series.length} serie${series.length === 1 ? '' : 's'}.`;
     detenerDescanso();
     guardar();

@@ -753,3 +753,7 @@ body:not(.en-sesion) .medalla-record{top:calc(env(safe-area-inset-top,0px) + 16p
 #nav [data-ir="coach"].con-novedad::after{content:'';position:absolute;top:8px;left:calc(50% + 9px);width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--surface)}
 /* Con el teclado abierto en el chat, el menú se oculta y la caja queda arriba del teclado (app/coach-ui.js). */
 body.escribiendo-coach #nav{display:none!important}
+/* Descanso cumplido (app/descanso.js): el reloj cuenta cuánto te pasas, verde los primeros 20 s y después en aviso. */
+#descanso.extra.pasado{background:color-mix(in srgb,var(--surface) 92%,transparent);color:var(--ink)}
+#descanso.extra.pasado .tiempo{color:var(--warning)}
+#descanso.extra.pasado [data-listo]{background:var(--fill);color:var(--ink)}

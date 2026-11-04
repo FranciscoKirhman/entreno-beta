@@ -18,6 +18,7 @@ import { guardarComoRutina } from './rutinas.js';
 import { editarDuracionGuardada } from './duracion-sesion.js';
 import { icono } from './iconos.js';
 import { ajustesHtml, enlazarAjustes } from './progresion-sesion.js';
+import { reloj, tendenciaDescansos } from '../nucleo/descansos.js';
 
 const nombreEj = (id, respaldo) => indice.porId.get(id)?.nombre || respaldo || 'Ejercicio';
 // Insignia de cada récord (hoja RS01 del banco de imágenes). Mientras no esté cortada, se muestra la etiqueta "Récord".
@@ -141,6 +142,27 @@ export function mensajeSesionCoach(sesion, notas = null) {
   return [textoParaIA({ sesion, r, dia, foco }).split('\n').slice(2, -2).join('\n').trim(), notas].filter(Boolean).join('\n\n');
 }
 
+/**
+ * Los descansos reales de la sesión (nucleo/descansos.js, guardados al terminar en E.descansos): cuánto se descansó en
+ * los básicos y en los accesorios contra lo pedido, cuánto tomó cambiar de ejercicio y cuántos minutos sumó eso. Con
+ * más sesiones medidas, también la tendencia. Sin horas de series (una sesión de Hevy o anotada después), no aparece.
+ */
+function descansosHtml(sesion) {
+  const d = E.descansos?.[sesion.id];
+  if (!d) return '';
+  const fila = (nombre, x) => (x ? `<li><span>${nombre}</span><strong class="num">${reloj(x.real)}</strong><small class="suave">${x.real > x.pedido + 20 ? `pedía ${reloj(x.pedido)}` : 'lo pedido'}</small></li>` : '');
+  const largos = (d.porEjercicio || []).filter(p => p.real > p.pedido + 45).sort((a, b) => (b.real - b.pedido) - (a.real - a.pedido)).slice(0, 3);
+  const t = tendenciaDescansos(E.descansos);
+  const extra = d.extraMin >= 3 ? `Descansar más de lo pedido y cambiar de ejercicio sumaron unos ${d.extraMin} minutos a la sesión.` : 'Descansaste casi lo que pedía el plan.';
+  return `<section class="tarjeta descansos-resumen"><h3>Tus descansos</h3>
+    <ul class="lista-descansos">${fila('Básicos', d.basicos)}${fila('Accesorios', d.accesorios)}${d.cambios ? `<li><span>Cambio de ejercicio</span><strong class="num">${reloj(d.cambios.real)}</strong><small class="suave">entre la última serie y la primera del siguiente</small></li>` : ''}</ul>
+    <p class="pequeno">${esc(extra)}${d.largas ? ` Hubo ${d.largas === 1 ? 'una pausa' : `${d.largas} pausas`} de más de 8 minutos sin marcar, que no cuenta${d.largas === 1 ? '' : 'n'} como descanso.` : ''}</p>
+    ${largos.length ? `<p class="pequeno suave">Los más largos: ${esc(largos.map(p => `${nombreEj(p.ejercicio_id)} ${reloj(p.real)} (pedía ${reloj(p.pedido)})`).join(', '))}.</p>` : ''}
+    ${t && t.sesiones >= 3 && t.basicos ? `<p class="pequeno suave">En tus últimas ${t.sesiones} sesiones: ${reloj(t.basicos.real)} en los básicos, cuando el plan pide ${reloj(t.basicos.pedido)}.</p>` : ''}
+    ${d.extraMin >= 8 ? '<p class="pequeno">Para terminar en tu tiempo: cuando el reloj marque el descanso cumplido, parte con la serie. Si prefieres descansar más, al empezar la app ajusta la sesión a tu ritmo.</p>' : ''}
+  </section>`;
+}
+
 export function vistaResumen(ir, { id, desde = null } = {}) {
   const sesion = E.sesiones.find(s => s.id === id) || E.sesiones.filter(s => !s.origen).at(-1);
   if (!sesion) return ir('hoy');
@@ -161,6 +183,7 @@ export function vistaResumen(ir, { id, desde = null } = {}) {
       ${cifra(r.seriesTrabajo, 'series de trabajo')}
       ${cifra(r.ejercicios, r.ejercicios === 1 ? 'ejercicio' : 'ejercicios')}
     </div>
+    ${descansosHtml(sesion)}
     ${(() => { const t = intensidades((sesion.series || []).filter(x => x.tipo !== 'calentamiento' && x.ejercicio_id)); return Object.keys(t.porMusculo).length ? `<section class="tarjeta cuerpo-resumen"><h3>Lo que entrenaste</h3>${cuerpoHtml(t.intensidad, { tamano: 'grande', etiqueta: 'Lo que entrenaste' })}</section>` : ''; })()}
     ${n ? `<section class="tarjeta"><h3>Récords</h3><ul class="lista-resumen record">${r.records.map(x => `<li>${insignia(x.tipo)} ${esc(nombreEj(x.ejercicio_id))}: ${esc(textoRecord(x))}</li>`).join('')}</ul></section>` : ''}
     <section class="tarjeta" id="coach-dice" aria-live="polite">${comentarioCoachHtml(sesion)}</section>

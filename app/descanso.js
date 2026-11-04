@@ -11,6 +11,11 @@ let fin = 0, reloj = null, audio = null, etiqueta = '', siguientes = [], textoFi
 let alFin = null, inicio = 0;
 // El anillo alrededor del asistente se vacía con el tramo; inicioTramo y fin dicen cuánto queda.
 let inicioTramo = 0;
+// Descanso cumplido: en vez de cerrarse, el reloj cuenta cuánto te pasas ("+00:45"), hasta la serie siguiente, "Cerrar"
+// o 5 minutos. Solo en el descanso entre series (no en los tramos ni en las series por tiempo). Los descansos más
+// largos que los pedidos eran la mayor parte de los minutos de más (nucleo/descansos.js, 4 de noviembre de 2026).
+let entreSeries = false, cumplido = 0, relojExtra = null;
+const EXTRA_MAX = 5 * 60_000, EXTRA_AVISO = 20_000;
 const ANILLO = 2 * Math.PI * 22;
 const hechos = () => Math.round((Date.now() - inicio) / 1000);
 const formato = seg => `${String(Math.floor(seg / 60)).padStart(2, '0')}:${String(seg % 60).padStart(2, '0')}`; // 02:29, como Hevy
@@ -77,7 +82,31 @@ const reprogramar = () => { if (reloj && !alFin && !siguientes.length) programar
 function correr() {
   clearInterval(reloj);
   reloj = setInterval(pintar, 250); // con la hora de término, no se atrasa aunque el teléfono frene la app
+  quitarExtra();
   caja().classList.remove('termino');
+}
+
+function quitarExtra() {
+  clearInterval(relojExtra);
+  relojExtra = null; cumplido = 0;
+  const el = document.getElementById('descanso');
+  if (!el) return;
+  el.classList.remove('extra', 'pasado');
+  el.querySelector('[data-listo]').textContent = 'Saltar';
+  el.querySelector('[data-listo]').removeAttribute('aria-label');
+}
+
+/** Lo que te pasas del descanso: verde los primeros 20 segundos (a la serie) y después en color de aviso. */
+function pintarExtra() {
+  const el = document.getElementById('descanso');
+  const pasa = Date.now() - cumplido;
+  if (!el || pasa > EXTRA_MAX) { detenerDescanso(); return; }
+  const seg = Math.floor(pasa / 1000);
+  el.querySelector('.tiempo').textContent = `+${formato(seg)}`;
+  el.querySelector('.etiqueta').textContent = 'Descanso cumplido';
+  el.querySelector('.tiempo').setAttribute('aria-label', `Descanso cumplido hace ${seg} segundos`);
+  el.classList.toggle('pasado', pasa >= EXTRA_AVISO);
+  el.classList.toggle('termino', pasa < EXTRA_AVISO);
 }
 
 function pitido() {
@@ -104,12 +133,24 @@ function terminar() {
     return;
   }
   caja().classList.add('termino');
+  if (entreSeries) {
+    cumplido = Date.now();
+    const el = caja();
+    el.classList.add('extra');
+    el.querySelector('[data-listo]').textContent = 'Cerrar';
+    el.querySelector('[data-listo]').setAttribute('aria-label', 'Cerrar el reloj de descanso');
+    clearInterval(relojExtra);
+    relojExtra = setInterval(pintarExtra, 1000);
+    pintarExtra();
+    return;
+  }
   setTimeout(() => { if (!reloj) detenerDescanso(); }, 5000);
 }
 
 /** Parte el descanso. Hay que llamarla desde un toque: en iPhone el sonido solo se habilita así. */
 export function iniciarDescanso(segundos, texto = 'Descanso') {
   iniciarTramos([{ seg: segundos, texto }], '¡A la siguiente serie!');
+  entreSeries = true;
   reprogramar();
 }
 
@@ -117,6 +158,7 @@ export function iniciarDescanso(segundos, texto = 'Descanso') {
  *  alTerminar(segundos): para una serie por tiempo, recibe los segundos hechos al terminar o al tocar Listo antes. */
 export function iniciarTramos(tramos, final = '¡Listo!', { alTerminar = null } = {}) {
   if (!tramos?.length) return;
+  entreSeries = false;
   alFin = alTerminar; inicio = Date.now();
   try { audio ||= new (window.AudioContext || window.webkitAudioContext)(); audio.resume?.(); } catch { audio = null; }
   const [primero, ...resto] = tramos;
@@ -134,6 +176,8 @@ export function iniciarTramos(tramos, final = '¡Listo!', { alTerminar = null } 
 export function detenerDescanso() {
   cancelarAvisoDescanso();
   const corriendo = Boolean(reloj), f = alFin;
+  quitarExtra();
+  entreSeries = false;
   clearInterval(reloj);
   reloj = null;
   siguientes = [];

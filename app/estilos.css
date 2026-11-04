@@ -1049,3 +1049,8 @@ main:has(#vista-coach){padding-bottom:calc(var(--coach-redaccion-alto,100px) + v
 .aviso-ej .enlace{display:inline-flex;align-items:center;min-height:40px;margin-top:2px;padding:0}
 .fila-propuesta{display:flex;gap:8px;margin-top:8px}
 .fila-propuesta .boton{flex:1}
+/* Tus descansos, en el resumen de la sesión (app/resumen.js). */
+.lista-descansos{list-style:none;margin:6px 0 10px;padding:0;display:grid;gap:8px}
+.lista-descansos li{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;align-items:baseline}
+.lista-descansos strong{font-size:20px;font-weight:650}
+.lista-descansos small{grid-column:1/-1;font-size:12.5px}

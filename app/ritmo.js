@@ -8,6 +8,7 @@ import { duracionSesion, prescripcion, cargaSugerida, registrosParaCarga, increm
 import { duracionReal, ritmoPersonal, accesoriosParaDia, TOPE_SERIES_SESION } from '../nucleo/tiempo-sesion.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { tieneEquipo, nivelAlcanza, cargaZonaBloqueada, articulacionesBloqueadas } from '../nucleo/catalogo.js';
+import { tendenciaDescansos, reloj } from '../nucleo/descansos.js';
 
 let memo = { clave: null, valor: null };
 /** {factor, sesiones} de tus últimas sesiones, o null si todavía no hay suficientes. Se recalcula al guardar una sesión. */
@@ -26,11 +27,16 @@ export const factorRitmo = () => ritmoHoy()?.factor ?? 1;
 /** Minutos del día a tu ritmo (o los del plan si no hay ritmo o el cardio no dice sus minutos). */
 export const minutosDe = dia => (dia ? duracionReal(dia, factorRitmo()) ?? duracionSesion(dia) : null);
 
-/** "las pesas te toman 1,4 veces lo estimado": para explicar de dónde salen los minutos. Vacío sin ritmo o cerca de 1. */
+/**
+ * "las pesas te toman 1,4 veces lo estimado": para explicar de dónde salen los minutos. Con descansos medidos
+ * (nucleo/descansos.js), también por qué: "descansas 3:40 en los básicos y el plan pide 2:30". Vacío sin ritmo o cerca de 1.
+ */
 export function textoRitmo() {
   const r = ritmoHoy();
   if (!r || Math.abs(r.factor - 1) < 0.08) return '';
-  return `a tu ritmo de las últimas ${r.sesiones} sesiones (las pesas te toman ${String(r.factor).replace('.', ',')} veces lo que estima el plan)`;
+  const t = tendenciaDescansos(E.descansos || {});
+  const porque = t?.basicos && t.basicos.real > t.basicos.pedido + 30 ? `: descansas ${reloj(t.basicos.real)} en los básicos y el plan pide ${reloj(t.basicos.pedido)}` : '';
+  return `a tu ritmo de las últimas ${r.sesiones} sesiones (las pesas te toman ${String(r.factor).replace('.', ',')} veces lo que estima el plan${porque})`;
 }
 
 /** Series de trabajo por sesión como máximo razonable, según tu nivel. */
