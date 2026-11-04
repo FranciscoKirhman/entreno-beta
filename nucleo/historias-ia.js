@@ -5,9 +5,10 @@
 // salud, que traiga una cifra que no está en los datos o que venga larga o rara se descarta y queda la de reglas.
 
 /** Pantallas que no van a la IA: "Cómo rendiste" lee la energía de "¿Cómo estás hoy?". */
-export const SIN_IA = new Set(['rindes']);
+// Las que piden una respuesta (historia del bloque) dicen qué hacer: se quedan con su frase por reglas.
+export const SIN_IA = new Set(['rindes', 'prioridades', 'feedback']);
 const LARGO = 140;
-const FUERA = new Set(['tema', 'pose', 'forma', 'frase', 'nota', 'insignia', 'destacado', 'referencia', 'leyenda', 'calendario', 'dias', 'fecha', 'letra']);
+const FUERA = new Set(['tema', 'pose', 'forma', 'frase', 'nota', 'insignia', 'destacado', 'referencia', 'leyenda', 'calendario', 'dias', 'fecha', 'letra', 'parte']);
 // Palabras de salud al inicio de una palabra ("descansa" no cuenta). \b no sirve: no reconoce la "á" como letra.
 const SALUD = /(?<!\p{L})(dolor|duel[eo]|molest|lesi[oó]n|sueñ|dorm|energ[ií]a|cansa|[áa]nimo|estr[eé]s|grasa|dieta|regla|menstru|ciclo|m[eé]dic|salud|enferm|fatiga|adelgaz|peso corporal)/iu;
 

@@ -9,7 +9,8 @@ import { semanaDe, aplicarFase } from '../nucleo/ciclos.js';
 import { bloqueSiguienteDisponible } from '../nucleo/bloque-siguiente.js';
 import { resumenPlan } from '../nucleo/resumen-plan.js';
 import { estadoDelPlan } from '../nucleo/registrado.js';
-import { generarPlan, volumenSemanal, duracionSesion, NOMBRE_ZONA } from '../nucleo/motor-plan.js';
+import { generarPlan, volumenSemanal, NOMBRE_ZONA } from '../nucleo/motor-plan.js';
+import { minutosDe } from './ritmo.js';
 import { derivar } from '../nucleo/derivar.js';
 import { sumarDias } from '../nucleo/agenda.js';
 import { normalizar } from '../nucleo/catalogo.js';
@@ -121,7 +122,7 @@ function semanaHtml() {
     return `<span class="mp-dia ${clase}" aria-label="${esc(texto)}">${l}${hecha ? ' ✓' : ''}</span>`;
   }).join('');
   const proximas = p.dias.filter(d => d.fecha >= f && d.ejercicios?.length && !HECHA.includes(reg.porDia.get(d.fecha)?.t)).slice(0, 2);
-  const texto = proximas.map(d => `${d.fecha === f ? 'Hoy' : mayus(new Date(d.fecha + 'T12:00:00Z').toLocaleDateString('es-CL', { weekday: 'long', timeZone: 'UTC' }))}: ${d.foco}, ~${duracionSesion(d)} min`).join(' · ');
+  const texto = proximas.map(d => `${d.fecha === f ? 'Hoy' : mayus(new Date(d.fecha + 'T12:00:00Z').toLocaleDateString('es-CL', { weekday: 'long', timeZone: 'UTC' }))}: ${d.foco}, ~${minutosDe(d)} min`).join(' · ');
   return `<h2 class="titulo-seccion">${cual}</h2>
     <button type="button" class="tarjeta mp-semana" id="mp-semana"><span class="mp-dias">${celdas}</span>
     <span class="pequeno suave">${esc(texto || 'No te quedan sesiones esta semana.')}</span>
@@ -384,7 +385,7 @@ function vistaCiclo(ir) {
     <p class="pequeno suave">${esc({ mismos: 'Repite los mismos para comparar tu progreso.', variar: 'Cambia varios ejercicios para no aburrirte.' }[r.rotacion] || 'Mantiene los principales y cambia algunos.')} Los favoritos se mantienen siempre y los evitados no vuelven.</p>
     <h2 class="titulo-seccion">Vista previa</h2>
     ${!previa ? '' : previa.bloqueado ? `<div class="aviso alerta">${esc(previa.mensaje)}</div>` : `<section class="tarjeta">
-      <p class="pequeno">${semana1.length} sesiones a la semana: ${esc(semana1.map(d => `${d.foco} (~${duracionSesion(d)} min)`).join(', '))}.</p>
+      <p class="pequeno">${semana1.length} sesiones a la semana: ${esc(semana1.map(d => `${d.foco} (~${minutosDe(d)} min)`).join(', '))}.</p>
       <ul class="lista-simple pequeno">${Object.entries(vol).filter(([k, n]) => NOMBRE_ZONA[k] && n).sort((x, y) => y[1] - x[1]).map(([k, n]) => `<li><span>${esc(mayus(nombreZona(k)))}${(r.musculos_prioridad || []).includes(k) ? ' <span class="chip-prioridad">Prioridad</span>' : ''}</span><span class="num">${coma(n)} series</span></li>`).join('')}</ul>
       <details class="extra"><summary>Ejercicios de la primera semana</summary>${semana1.map(d => `<p class="pequeno"><strong>${esc(d.foco)}:</strong> ${esc(d.ejercicios.map(e => nombreEj(e.ejercicio_id)).join(', '))}</p>`).join('')}</details>
       <p class="pequeno suave">Los ejercicios pueden variar un poco al armarlo, según lo que anotes de aquí a esa fecha.</p>

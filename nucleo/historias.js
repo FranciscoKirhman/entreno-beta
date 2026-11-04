@@ -167,7 +167,7 @@ function paraCompartir(titulo, periodo, c) {
 }
 
 /** La clave de una historia, la misma que su id: 'semana|2026-10-19', 'mes|2026-10' o 'año|2026'. */
-export const idHistoria = x => `${x.tipo}|${x.lunes || x.mes || x.anio}`;
+export const idHistoria = x => `${x.tipo}|${x.lunes || x.mes || x.anio || x.inicio}`;
 
 /**
  * La historia de una semana (lunes a domingo). null si no se entrenó.
@@ -298,6 +298,79 @@ export function historiaMes({ sesiones = [], plan = null, bienestar = {}, indice
   return { tipo: 'mes', id: `mes|${mes}`, titulo: `Tu ${nombre}`, desde, hasta, pantallas, compartir: paraCompartir(`Mi ${nombre}`, mes.slice(0, 4), c) };
 }
 
+/** Lo que se puede cambiar del bloque siguiente desde la historia: cada respuesta, a qué campo del borrador va. */
+export const CAMBIOS_CICLO = [
+  { id: 'mas_cortas', texto: 'Sesiones más cortas', par: 'mas_largas', aplicar: r => ({ duracion_min: String(Math.max(30, (Number(r.duracion_min) || 60) - 15)) }) },
+  { id: 'mas_largas', texto: 'Sesiones más largas', par: 'mas_cortas', aplicar: r => ({ duracion_min: String(Math.min(120, (Number(r.duracion_min) || 60) + 15)) }) },
+  { id: 'menos_dias', texto: 'Un día menos', par: 'mas_dias', aplicar: r => ({ dias_meta: Math.max(2, (Number(r.dias_meta) || 3) - 1) }) },
+  { id: 'mas_dias', texto: 'Un día más', par: 'menos_dias', aplicar: r => ({ dias_meta: Math.min(6, (Number(r.dias_meta) || 3) + 1) }) },
+  { id: 'variar', texto: 'Ejercicios nuevos', par: 'mismos', aplicar: () => ({ rotacion: 'variar' }) },
+  { id: 'mismos', texto: 'Los mismos ejercicios', par: 'variar', aplicar: () => ({ rotacion: 'mismos' }) },
+];
+export const SENSACIONES_CICLO = [['facil', 'Me quedó corto'], ['justo', 'Justo'], ['duro', 'Muy duro']];
+
+/**
+ * Lo que la historia del bloque deja en el perfil: las prioridades y los cambios elegidos van al borrador del
+ * siguiente bloque (respuestas.ciclo_siguiente, que se aplica al armarlo y la persona confirma), y la respuesta queda
+ * en el historial de lo que contó de cada bloque (respuestas.feedback_ciclos, las últimas 12), para el coach.
+ * @returns {{cambios: object, feedback: object}} cambios: {musculos_prioridad?, duracion_min?, dias_meta?, rotacion?}
+ */
+export function respuestaCiclo(r, { bloque, fecha, musculos = null, sensacion = null, elegidos = [], texto = '' }) {
+  const cambios = {};
+  if (Array.isArray(musculos)) cambios.musculos_prioridad = [...musculos];
+  for (const id of elegidos) { const c = CAMBIOS_CICLO.find(x => x.id === id); if (c) Object.assign(cambios, c.aplicar(r)); }
+  const feedback = { fecha, bloque, ...(sensacion ? { sensacion } : {}), ...(elegidos.length ? { cambios: elegidos } : {}), ...(String(texto).trim() ? { texto: String(texto).trim().slice(0, 600) } : {}),
+    ...(Array.isArray(musculos) ? { prioridades: [...musculos] } : {}) };
+  return { cambios, feedback };
+}
+
+/**
+ * La historia del bloque que termina (Francisco, 4 de noviembre de 2026: "cada un mes, en Entrenar, una historia que
+ * permita modificar los músculos prioritarios del mesociclo y un feedback"). Cuánto se cumplió, la fuerza del bloque,
+ * los músculos (hecho contra planificado), y dos pantallas para responder: las prioridades del siguiente bloque y cómo
+ * le fue. Lo elegido va al borrador del siguiente bloque: nada cambia el plan actual.
+ * @param respuestas el perfil (para las prioridades de ahora y lo ya elegido para el siguiente)
+ */
+export function historiaCiclo({ sesiones = [], plan = null, indice, hoy, asistidos = new Set(), respuestas = {} }) {
+  const dias = (plan?.dias || []).filter(d => d.ejercicios?.length && d.tipo !== 'descanso');
+  if (!plan?.inicio || !dias.length) return null;
+  const desde = plan.inicio, fin = dias.map(d => d.fecha).sort().at(-1), hasta = hoy < fin ? hoy : fin;
+  const records = recordsPorSesion(sesiones, { asistidos });
+  const c = cifrasDe(sesiones, desde, hasta, { asistidos, records });
+  if (!c.sesiones.length) return null;
+  const firmes = dias.filter(d => d.firme !== false && d.fecha <= hasta);
+  const hechas = new Set(c.sesiones.map(s => s.fecha));
+  const cumplidas = firmes.filter(d => hechas.has(d.fecha)).length;
+  const pct = firmes.length ? Math.round((cumplidas / firmes.length) * 100) : null;
+  const semanas = Number(plan.semanas) || Math.ceil(((Date.parse(fin) - Date.parse(desde)) / 864e5 + 1) / 7);
+  const siguiente = sumarDias(fin, 1 + ((8 - diaSemana(sumarDias(fin, 1))) % 7));
+  const pantallas = [{
+    id: 'portada', forma: 'cifra', tema: 'naranjo', pose: 'calendario', etiqueta: 'Tu bloque', titulo: hoy <= fin ? `Termina el ${diaCorto(fin)}` : `Terminó el ${diaCorto(fin)}`,
+    cifra: { valor: c.sesiones.length, unidad: null, texto: c.sesiones.length === 1 ? 'sesión entrenada' : 'sesiones entrenadas' }, texto: '',
+    detalle: `${semanas} semanas${pct != null ? `, ${pct}% de las sesiones firmes` : ''}${c.minutos ? `, ${tiempoTexto(c.minutos)}` : ''}`,
+    frase: pct == null ? 'Un bloque más en el registro.' : pct >= 90 ? 'Casi todo lo planificado: así se construye.' : pct >= 70 ? 'La mayor parte del plan, hecha. Bien.' : 'Faltaron sesiones: el próximo bloque lo armamos para que calce mejor.',
+  }];
+  const fuerza = fuerzaDe(c.trabajo, asistidos);
+  if (fuerza.length) {
+    const mejor = fuerza.reduce((a, x) => (x.cambio > a.cambio ? x : a));
+    pantallas.push({ id: 'fuerza', forma: 'fuerza', tema: 'rojo', pose: 'progreso', etiqueta: 'Tu fuerza', titulo: 'Máximo estimado, del inicio del bloque a hoy', items: fuerza,
+      destacado: mejor.cambio > 0 ? mejor.ejercicio_id : null, frase: mejor.cambio > 0 ? 'Más fuerza que al empezar el bloque.' : 'Fuerza sostenida: el bloque también sirvió de base.' });
+  }
+  const hechasM = hechasPorMusculo(c.trabajo, indice, desde, hasta), planM = planeadasPorMusculo(plan, indice, desde, hasta);
+  const barras = barrasMusculos(hechasM, planM);
+  if (barras.length) pantallas.push({ id: 'musculos', forma: 'barras', tema: 'verde', pose: 'explica', etiqueta: 'Tus músculos', titulo: 'Series del bloque', referencia: 'plan', leyenda: 'La marca es lo planificado.', barras, frase: 'Lo que más quedó bajo la marca puede ser tu prioridad del próximo bloque.' });
+  const borrador = respuestas?.ciclo_siguiente?.musculos_prioridad;
+  const bajo = Object.keys(planM).filter(m => planM[m] >= 4 && (hechasM[m] || 0) < planM[m] * 0.7).sort((a, b) => (hechasM[a] || 0) / planM[a] - (hechasM[b] || 0) / planM[b]);
+  pantallas.push({ id: 'prioridades', forma: 'prioridades', tema: 'azul', pose: 'pregunta', etiqueta: 'Tu próximo bloque', titulo: '¿Qué quieres priorizar?',
+    elegidos: [...(borrador || respuestas?.musculos_prioridad || [])], actuales: [...(respuestas?.musculos_prioridad || [])], sugeridos: bajo.slice(0, 3), parte: siguiente,
+    frase: 'Hasta 3: reciben más series. El bloque de ahora sigue igual.' });
+  pantallas.push({ id: 'feedback', forma: 'feedback', tema: 'grafito', pose: 'pregunta', etiqueta: 'Cuéntame', titulo: '¿Cómo te fue en este bloque?',
+    frase: 'Con esto armo el próximo a tu medida.' });
+  pantallas.push({ id: 'cierre', forma: 'cierre-ciclo', tema: 'naranjo', pose: 'celebra', etiqueta: 'Tu próximo bloque', titulo: `Parte el ${diaCorto(siguiente)}`, parte: siguiente,
+    frase: 'Lo que elegiste queda guardado para ese día. Puedes cambiarlo en Mi plan.' });
+  return { tipo: 'ciclo', id: `ciclo|${desde}`, titulo: 'Tu bloque', desde, hasta: fin, pantallas, compartir: paraCompartir('Mi bloque en Entreno', rangoTexto(desde, fin), c) };
+}
+
 // Cómo entrenas, en pocas palabras: lo que más se nota en el año. Nombres que no suponen género. Las insignias son
 // app/img/historias/<id>.webp (herramientas/prompts-imagenes.mjs, HI01); mientras no estén, un ícono.
 export const PERSONALIDADES = {
@@ -385,5 +458,9 @@ export function historiasDeHoy({ sesiones: todas = [], plan = null, hoy }) {
   if (Number(hoy.slice(8)) <= 7) { const m = mesAntes(hoy.slice(0, 7)); if (con(`${m}-01`, finDeMes(m))) out.push({ tipo: 'mes', mes: m }); }
   const anio = hoy.slice(5) >= '12-15' ? Number(hoy.slice(0, 4)) : hoy.slice(5, 7) === '01' ? Number(hoy.slice(0, 4)) - 1 : null;
   if (anio && con(`${anio}-01-01`, `${anio}-12-31`)) out.push({ tipo: 'año', anio });
+  // El bloque que termina: de 10 días antes de su último día a 3 días después, para elegir las prioridades del
+  // siguiente y contar cómo fue. Va primero: es la que pide una respuesta.
+  const fin = (plan?.dias || []).filter(d => d.ejercicios?.length && d.tipo !== 'descanso').map(d => d.fecha).sort().at(-1);
+  if (plan?.inicio && fin && hoy >= sumarDias(fin, -10) && hoy <= sumarDias(fin, 3) && con(plan.inicio, hoy)) out.unshift({ tipo: 'ciclo', inicio: plan.inicio });
   return out;
 }

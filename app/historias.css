@@ -180,3 +180,15 @@ html.con-historias,html.con-historias body{overflow:hidden}
 .hist-burbuja-nombre{max-width:84px;text-align:center}
 /* Y en la cara del coach, en el chat */
 .coach-avatar.con-historia{box-shadow:0 0 0 2px var(--bg),0 0 0 4.5px var(--accent);cursor:pointer;border:0;padding:0}
+/* Historia del bloque: elegir prioridades y contar cómo fue (app/historias.js, formas prioridades y feedback). */
+.hist-chips{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0}
+.hist-chip{min-height:44px;padding:8px 14px;border:1.5px solid rgba(255,255,255,.55);border-radius:22px;background:transparent;color:#fff;font:600 15px/1.15 var(--f-texto);display:inline-flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer}
+.hist-chip small{font-size:11px;font-weight:500;opacity:.85}
+.hist-chip.sugerido{border-style:dashed}
+.hist-chip[aria-pressed="true"],.hist-chip[aria-checked="true"]{background:#fff;border-color:#fff;color:var(--hist-fondo)}
+.hist-chip:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.hist-campo{display:block;margin:14px 0 0}
+.hist-campo textarea{width:100%;box-sizing:border-box;min-height:64px;padding:10px 12px;border:0;border-radius:14px;background:var(--hist-tarjeta);color:#fff;font:500 16px/1.35 var(--f-texto);resize:vertical}
+.hist-campo textarea::placeholder{color:rgba(255,255,255,.7)}
+.hist-elegido{grid-template-columns:1fr}
+.hist-elegido li{padding:12px 14px;border-radius:14px;background:var(--hist-tarjeta);font-weight:600}

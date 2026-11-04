@@ -15,7 +15,7 @@ import { planDeCuidado } from './cuidado.js';
 import { reconocer } from './importar-plan.js';
 import { articulacionesBloqueadas } from './catalogo.js';
 import { duracionEstimada, cargaSugerida, registrosParaCarga, lugaresDe } from './motor-plan.js';
-import { alternativasNoHecha, alternativaEnFecha, fechasLibres, fechaEscrita, semanaDe, firma, diaCorto } from './sin-registro.js';
+import { alternativasNoHecha, alternativaEnFecha, fechasLibres, fechaEscrita, semanaDe, firma, diaCorto, calendarioNoHecha } from './sin-registro.js';
 import { semanaDe as semanaDelBloque, adelantarDescarga } from './ciclos.js';
 import { CAMBIOS_SEMANA_A_MEDIAS, cambioSemanaAMedias, confirmarSemanaAMedias } from './semana-a-medias.js';
 
@@ -353,10 +353,17 @@ export function opcionesNoHecha(fecha, ctx) {
     : todasChocan
       ? `${r.sesion.foco} del ${diaCorto(fecha)} quedó sin hacer. Ninguna opción evita dejarla pegada a una sesión del mismo grupo; cada una dice con cuál. También puedes saltarla o elegir otra fecha.`
       : `${r.sesion.foco} del ${diaCorto(fecha)} quedó sin hacer. Elige una opción y te muestro cómo queda la semana antes de cambiar nada.`;
+  // Cada opción que la lleva a otro día tiene su letra, y el calendario muestra esa letra en ese día: así se ve adónde
+  // va sin leer fechas. Los días libres del calendario se tocan para ponerla ahí (Francisco, 4 de noviembre de 2026).
+  let n = 0;
+  const conLetra = r.opciones.map(o => (o.destino ? { ...o, letra: 'ABCDEFG'[n++] } : o));
+  const calendario = { ...calendarioNoHecha(ctx.plan, fecha, { hoy: ctx.hoy, noPuedo: ctx.respuestas?.dias_no_puedo || [], hechas: ctx.hechas || [], marcas: ctx.marcas || {}, opciones: conLetra }), fecha, base };
+  const tocables = calendario.dias.some(d => d.elegible);
   return {
-    texto,
+    texto: tocables ? `${texto} En el calendario, cada letra es adónde la lleva esa opción; también puedes tocar un día libre.` : texto,
+    calendario,
     opciones: [
-      ...r.opciones.map(o => ({ etiqueta: o.titulo, nota: `${o.detalle} ${o.diferencia}${avisoOjo(o)}`, accion: { tipo: 'ver_alternativa', fecha, opcion: o.id, base } })),
+      ...conLetra.map(o => ({ etiqueta: o.titulo, ...(o.letra ? { letra: o.letra } : {}), nota: `${o.detalle} ${o.diferencia}${avisoOjo(o)}`, accion: { tipo: 'ver_alternativa', fecha, opcion: o.id, base } })),
       ...(r.fechasLibres.length ? [{ etiqueta: 'Elegir otra fecha', accion: { tipo: 'elegir_fecha', fecha } }] : []),
     ],
   };
@@ -387,7 +394,7 @@ function verAlternativa(accion, ctx) {
   if (accion.base && accion.base !== firma(ctx.plan)) return { ...opcionesNoHecha(accion.fecha, ctx), texto: 'Tu semana cambió desde que viste esas opciones. Estas son las de ahora:' };
   const o = buscarAlternativa(accion, ctx);
   if (o.error) return { texto: o.error, opciones: [{ etiqueta: 'Volver a las opciones', accion: { tipo: 'no_hecha', fecha: accion.fecha } }] };
-  const semana = semanaDe(o.plan, { hoy: ctx.hoy, cambios: o.cambios, saltada: o.saltar ? accion.fecha : null });
+  const semana = semanaDe(o.plan, { hoy: ctx.hoy, cambios: o.cambios, saltada: o.saltar || o.repartir ? accion.fecha : null, sumas: o.sumas || [] });
   return {
     texto: `${o.titulo}. ${o.detalle}${avisoOjo(o)} Así quedaría tu semana:`,
     semana,
@@ -401,6 +408,8 @@ function aceptarAlternativa(accion, ctx) {
   const o = buscarAlternativa(accion, ctx);
   if (o.error) return { texto: o.error };
   if (o.saltar) return { texto: `Listo: ${sesionDe(ctx.plan, accion.fecha)?.foco || 'esa sesión'} del ${diaCorto(accion.fecha)} quedó saltada y el resto de la semana sigue igual.`, marca: { fecha: accion.fecha, valor: 'saltada' }, ir: 'semana' };
+  // Repartida: las próximas sesiones suman lo principal de la que no se hizo, y esa queda como saltada.
+  if (o.repartir) return { texto: `Listo: ${o.detalle} ${sesionDe(ctx.plan, accion.fecha)?.foco || 'Esa sesión'} del ${diaCorto(accion.fecha)} queda como saltada.`, plan: o.plan, marca: { fecha: accion.fecha, valor: 'saltada' }, ir: 'semana' };
   const movida = o.cambios.find(c => c.de === accion.fecha);
   return { texto: `Listo: ${movida.foco} quedó para el ${diaCorto(movida.a)}. ${o.detalle}`, plan: o.plan, ir: movida.a === ctx.hoy ? 'hoy' : 'semana' };
 }

@@ -11,7 +11,7 @@ import { proponerSesionVacia } from './sesion-libre-ui.js';
 import { elegirCardio } from './cardio-ui.js';
 import { proponer } from './cambios-ui.js';
 import { sesionDe } from '../nucleo/agenda.js';
-import { duracionSesion } from '../nucleo/motor-plan.js';
+import { minutosDe } from './ritmo.js';
 import { miniatura } from './imagenes.js';
 import { icono } from './iconos.js';
 import * as nube from './nube.js';
@@ -58,7 +58,7 @@ function rutinaHtml(d, s) {
   return `<li class="rutina${esHoy ? ' es-hoy' : ''}">
     <div class="rutina-cab"><h3>${esc(d.foco)}</h3>${chipDia(d, s)}</div>
     <p class="pequeno suave rutina-ejercicios">${esc(lista || 'Sin ejercicios todavía')}</p>
-    <p class="pequeno suave rutina-datos">${esc(`${fechaCorta(d.fecha)} · ~${duracionSesion(d)} min · ${d.ejercicios.length} ejercicio${d.ejercicios.length === 1 ? '' : 's'}`)}</p>
+    <p class="pequeno suave rutina-datos">${esc(`${fechaCorta(d.fecha)} · ~${minutosDe(d)} min · ${d.ejercicios.length} ejercicio${d.ejercicios.length === 1 ? '' : 's'}`)}</p>
     ${boton}
   </li>`;
 }
@@ -69,7 +69,7 @@ function hoyHtml(s) {
   if (!d) return descansoHtml(s.proxima, { compacta: true });
   if (s.hechaEnHevy) return `${s.registradoHtml}<button type="button" class="boton" data-ir-sesion>Ver la sesión del plan</button>`;
   const a = s.avance;
-  const estado = s.enCurso ? `En curso · ${a.hechas} de ${a.total} series` : s.guardada ? 'Guardada hoy' : `~${duracionSesion(d)} min · ${d.ejercicios.length} ejercicio${d.ejercicios.length === 1 ? '' : 's'}`;
+  const estado = s.enCurso ? `En curso · ${a.hechas} de ${a.total} series` : s.guardada ? 'Guardada hoy' : `~${minutosDe(d)} min · ${d.ejercicios.length} ejercicio${d.ejercicios.length === 1 ? '' : 's'}`;
   return `<section class="tarjeta hoy-entrenar">
     <button type="button" class="hoy-entrenar-abrir" data-ir-sesion aria-label="${esc(`Ver la sesión de hoy: ${d.foco}`)}">
       <span class="sobretitulo">Hoy</span>

@@ -5,14 +5,15 @@
 import { E, hoy, esc, cambiarPlan, avisar, guardar, indice } from './comun.js';
 import { sesionDe } from '../nucleo/agenda.js';
 import { duracionSesion, minutosCardio } from '../nucleo/motor-plan.js';
-import { ajustarTiempo, hechasDelDia, filasTrasAjuste, minutosRestantes, RUEDA } from '../nucleo/tiempo-sesion.js';
+import { ajustarTiempo, hechasDelDia, filasTrasAjuste, minutosRestantes, duracionReal, RUEDA } from '../nucleo/tiempo-sesion.js';
+import { factorRitmo, textoRitmo, accesoriosHoy, topeSeriesHoy } from './ritmo.js';
 import { abrirHoja } from './hoja.js';
 import { icono } from './iconos.js';
 import * as nube from './nube.js';
 
 const GRADOS = 330; // la rueda deja un hueco arriba para que el mínimo y el máximo no se toquen
 const R_ANILLO = 92, C = 120;
-const firmaDe = d => JSON.stringify({ ejercicios: d.ejercicios, cardio: d.cardio ?? null });
+export const firmaDe = d => JSON.stringify({ ejercicios: d.ejercicios, cardio: d.cardio ?? null });
 const redondear = n => Math.min(RUEDA.max, Math.max(RUEDA.min, Math.round(n / RUEDA.paso) * RUEDA.paso));
 const nombre = id => indice.porId.get(id)?.nombre || id;
 
@@ -60,8 +61,11 @@ function resumen(r, base, hechas, enCurso, delPlan = false) {
   const partes = [`${ejercicios} ejercicio${ejercicios === 1 ? '' : 's'}`, `${series} serie${series === 1 ? '' : 's'}${series !== antes ? ` (el plan trae ${antes})` : ''}`];
   if (r.cardio !== base.cardio) partes.push(cardio ? `cardio de ${cardio} min` : 'sin cardio');
   const fuera = r.quitados.length ? ` Hoy no van: ${r.quitados.map(nombre).join(', ')}.` : '';
+  const suma = r.agregados?.length ? ` Suma, como opcional: ${r.agregados.map(nombre).join(', ')}.` : '';
+  // Aunque se pidan tres horas, la sesión crece hasta lo razonable (series por músculo y por sesión).
+  const tope = r.tope ? ' Más que esto no suma: hoy ya tiene lo que rinde, y más series serían cansancio para las próximas sesiones.' : '';
   const inicio = delPlan ? (enCurso ? 'Lo que falta del plan: ' : 'Así viene en el plan: ') : enCurso ? 'Te quedaría: ' : '';
-  return `${inicio}${partes.join(' · ')}. Unos ${r.minutos} minutos${enCurso ? ' más' : ''}.${fuera}`;
+  return `${inicio}${partes.join(' · ')}. Unos ${r.minutos} minutos${enCurso ? ' más' : ''}.${fuera}${suma}${tope}`;
 }
 
 /**
@@ -76,19 +80,24 @@ export function abrirTiempo({ volver = null, alCambiar } = {}) {
   const marca = E.cardioHecho?.[f];
   const cardioHecho = Boolean(marca?.hecho && marca.texto === dia.cardio);
   const enCurso = Object.values(hechas).some(h => h.empezado);
-  const planMin = enCurso ? minutosRestantes(base, hechas, cardioHecho) : duracionSesion(base) ?? 60;
-  const ahora = enCurso ? minutosRestantes(dia, hechas, cardioHecho) : duracionSesion(dia) ?? planMin;
+  // Los minutos van a tu ritmo (app/ritmo.js); con más tiempo entran accesorios, hasta el máximo razonable.
+  const ritmo = factorRitmo();
+  const opciones = { hechas, cardioHecho, ritmo, accesorios: accesoriosHoy({ ...dia, ejercicios: base.ejercicios }), porId: indice.porId, topeSeries: topeSeriesHoy() };
+  const planMin = enCurso ? minutosRestantes(base, hechas, cardioHecho, ritmo) : duracionReal(base, ritmo) ?? duracionSesion(base) ?? 60;
+  const ahora = enCurso ? minutosRestantes(dia, hechas, cardioHecho, ritmo) : duracionReal(dia, ritmo) ?? planMin;
   let v = redondear(elegido ?? ahora);
   const ajustada = E.tiempoHoy?.[f]?.firma === firmaDe(dia);
   const pregunta = enCurso ? '¿Cuánto tiempo te queda?' : '¿Cuánto tiempo tienes hoy?';
   // La rueda va de 5 en 5: en la marca del plan, la sesión queda tal como viene (86 minutos no se recortan a 85).
   const esPlan = n => n === redondear(planMin);
-  const calcular = n => (esPlan(n) ? { ejercicios: structuredClone(base.ejercicios), cardio: base.cardio, minutos: planMin, quitados: [] } : ajustarTiempo(base, { minutos: n, hechas, cardioHecho }));
-  const textoBoton = n => (esPlan(n) ? `Dejar la sesión del plan (unos ${planMin} min)` : `Ajustar a ${n} minutos`);
+  const calcular = n => (esPlan(n) ? { ejercicios: structuredClone(base.ejercicios), cardio: base.cardio, minutos: planMin, quitados: [], agregados: [] } : ajustarTiempo(base, { minutos: n, ...opciones }));
+  // Si la sesión no crece hasta lo pedido (el tope de lo razonable), el botón dice los minutos que de verdad tendrá.
+  const textoBoton = n => { if (esPlan(n)) return `Dejar la sesión del plan (unos ${planMin} min)`; const r = calcular(n); return r.tope && r.minutos < n - 5 ? `Ajustar: unos ${r.minutos} minutos, lo razonable para hoy` : `Ajustar a ${n} minutos`; };
 
   abrirHoja({
     titulo: pregunta, volver,
-    nota: enCurso ? `Lo que ya hiciste se queda. Lo que falta del plan toma unos ${planMin} minutos.` : `La sesión del plan toma unos ${planMin} minutos. Gira la rueda y te muestro cómo queda.`,
+    nota: enCurso ? `Lo que ya hiciste se queda. Lo que falta del plan toma unos ${planMin} minutos${textoRitmo() ? `, ${textoRitmo()}` : ''}.`
+      : `La sesión del plan toma unos ${planMin} minutos${textoRitmo() ? `, ${textoRitmo()}` : ''}. Gira la rueda y te muestro cómo queda: con menos tiempo sale lo menos importante; con más, entran series y accesorios.`,
     contenido: ruedaHtml(v, planMin, pregunta),
     opciones: [
       { valor: 'aplicar', icono: icono('visto'), clase: 'confirmar', nombre: textoBoton(v) },
@@ -141,10 +150,11 @@ export function abrirTiempo({ volver = null, alCambiar } = {}) {
   pintar();
 
   async function aplicar(minutos) {
-    const r = minutos === 'plan' ? calcular(redondear(planMin)) : ajustarTiempo(base, { minutos, hechas, cardioHecho });
+    const r = minutos === 'plan' ? calcular(redondear(planMin)) : ajustarTiempo(base, { minutos, ...opciones });
     const nuevo = structuredClone(E.plan), d = sesionDe(nuevo, f);
     d.ejercicios = r.ejercicios; d.cardio = r.cardio;
-    const mensaje = minutos === 'plan' ? 'Sesión de hoy de vuelta como venía en el plan.' : minutos == null ? 'Sesión de hoy sin límite de tiempo.' : `Sesión de hoy ajustada a ${minutos} minutos.`;
+    const mensaje = minutos === 'plan' ? 'Sesión de hoy de vuelta como venía en el plan.' : minutos == null ? `Sesión de hoy sin límite: unos ${r.minutos} minutos, lo más que rinde hoy.`
+      : r.tope && r.minutos < minutos - 5 ? `Sesión de hoy ajustada: unos ${r.minutos} minutos, lo razonable para hoy.` : `Sesión de hoy ajustada a ${minutos} minutos.`;
     const aviso = await cambiarPlan(nuevo, mensaje, nube);
     if (E.plan !== nuevo) { if (aviso) avisar(aviso); return; }
     // Las filas de cada ejercicio siguen a sus series nuevas, sin borrar lo hecho ni lo escrito.
@@ -168,7 +178,8 @@ export function etiquetaTiempo(dia) {
   const f = dia.fecha, hechas = hechasDelDia(E.registro?.[f]);
   const marca = E.cardioHecho?.[f];
   const enCurso = Object.values(hechas).some(h => h.empezado);
-  const min = enCurso ? minutosRestantes(dia, hechas, Boolean(marca?.hecho && marca.texto === dia.cardio)) : duracionSesion(dia);
+  const ritmo = factorRitmo();
+  const min = enCurso ? minutosRestantes(dia, hechas, Boolean(marca?.hecho && marca.texto === dia.cardio), ritmo) : duracionReal(dia, ritmo) ?? duracionSesion(dia);
   const g = E.tiempoHoy?.[f];
   const sinLimite = g && g.firma === firmaDe(dia) && g.minutos === null;
   if (sinLimite) return 'Sin límite de tiempo';

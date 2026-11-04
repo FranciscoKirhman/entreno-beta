@@ -1,7 +1,7 @@
 // Revisa un plan antes de guardarlo, venga del motor de reglas, del coach Pro o de la IA de la persona.
 // Si hay errores, el plan no se guarda: se reintenta o se usa el plan de reglas.
 import { tieneEquipo, nivelAlcanza, articulacionesBloqueadas, cargaZonaBloqueada } from './catalogo.js';
-import { incrementoPara, duracionSesion, volumenSemanal, lugaresDe, topeMancuerna, conDosMancuernas } from './motor-plan.js';
+import { incrementoPara, duracionSesion, volumenParaTopes, lugaresDe, topeMancuerna, conDosMancuernas } from './motor-plan.js';
 import { grupos } from './superseries.js';
 import { conSemanasPrevias } from './semanas-plan.js';
 import { seriesPorMusculo, SERIES_SESION } from './fatiga-sesion.js';
@@ -105,17 +105,22 @@ export function validarPlan(plan, { derivados: d, respuestas: r, indice, hoy, ed
     }
   }
 
-  // Volumen por músculo en una semana normal (la 1) y que la descarga baje.
-  const v = volumenSemanal(plan.dias, indice.porId, 1);
+  // Volumen por músculo en una semana normal (la 1) y que la descarga baje. El hombro cuenta lo que lo trabaja como
+  // principal, como en el motor (volumenParaTopes): el de cada press de pecho no recorta las laterales.
+  const v = volumenParaTopes(plan.dias, indice.porId, 1);
   const [lo, hi] = d.series_rango;
   for (const m of CONTADOS) {
     const s = v[m] || 0;
     if (s > hi + 4) (edicionPersona ? adv : err)('volumen_alto', `${m}: ${s} series a la semana; tu tope es ${hi}.`, { musculo: m, valor: s });
     else if (s > 0 && s < lo / 2) adv('volumen_bajo', `${m}: solo ${s} series a la semana.`);
   }
+  // La descarga se compara con la semana normal más grande, no con la 1: un plan rehecho a mitad de semana trae una
+  // semana 1 de transición con menos días (la beta, 4 de noviembre de 2026: 68 series contra 110 de una semana normal,
+  // y sumar 2 series de abdominales a cada sesión de la descarga quedaba vetado).
   if (plan.semana_descarga) {
     const total = sem => plan.dias.filter(x => x.semana === sem).reduce((a, x) => a + x.ejercicios.reduce((b, e) => b + e.series, 0), 0);
-    if (total(plan.semana_descarga) >= total(1)) err('descarga', 'La semana de descarga no tiene menos series que una semana normal.');
+    const normales = [...new Set(plan.dias.map(x => x.semana))].filter(s => s !== plan.semana_descarga);
+    if (normales.length && total(plan.semana_descarga) >= Math.max(...normales.map(total))) err('descarga', 'La semana de descarga no tiene menos series que una semana normal.');
   }
   return { ok: errores.length === 0, errores, advertencias };
 }

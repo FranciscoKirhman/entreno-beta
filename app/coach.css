@@ -188,3 +188,13 @@ body.escribiendo-coach .coach-hola{padding-top:4px}
 .coach-dice .texto-coach ul{margin:2px 0 6px;padding-left:18px}
 .coach-dice h3{margin:0 0 4px;font-size:15px}
 .coach-dice .seguir{margin-top:8px}
+/* Calendario de las opciones para una sesión que no se hizo (app/coach-ui.js, calendarioChatHtml). */
+#vista-coach .cal-opciones{margin:12px 0 4px}
+#vista-coach .cal-opciones .cal-dia{aspect-ratio:auto;width:auto;min-height:38px;font-size:13.5px}
+#vista-coach .cal-opciones .cal-chat-dia{cursor:default}
+#vista-coach .cal-opciones .cal-elegible{border:1.5px dashed var(--ink-muted);background:transparent;color:var(--ink);cursor:pointer}
+#vista-coach .cal-opciones .cal-elegible.cal-naranjo{border-style:solid;border-color:#753700;background:#ffddb7;color:#753700}
+#vista-coach .cal-opciones .cal-elegible.cal-azul{border-style:solid;border-color:#003b83;background:#c8dfff;color:#003b83}
+#vista-coach .cal-opciones .tachada span{text-decoration:line-through}
+#vista-coach .cal-leyenda-chat{margin:2px 0 10px;line-height:1.35}
+#vista-coach .letra-opcion{display:inline-grid;place-items:center;flex:none;min-width:22px;height:22px;margin-right:8px;border-radius:7px;background:#ffddb7;color:#753700;font-size:12.5px;font-weight:700}

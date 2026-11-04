@@ -7,18 +7,21 @@ import { nivelAlcanza, tieneEquipo, articulacionesBloqueadas, cargaZonaBloqueada
 
 // ── Plantillas de día ───────────────────────────────────────────────────────
 // Cada hueco es [patrón, prioridad]. Prioridad 1 va primero y es lo último que se salta si falta tiempo.
+// Todas las sesiones traen core en prioridad 3, y los torsos hombro lateral y posterior; la espalda baja entra cuando
+// hay tiempo (Francisco, 4 de noviembre de 2026: "siento que despriorizaste zona media", "abs en todas las sesiones",
+// "más espalda baja", "estás despriorizando hombros").
 export const PLANTILLAS = {
   cuerpo_a: { foco: 'Cuerpo completo A', huecos: [['sentadilla', 1], ['empuje_horizontal', 1], ['tiron_horizontal', 1], ['bisagra', 2], ['empuje_vertical', 2], ['tiron_vertical', 2], ['core_estabilidad', 3], ['biceps', 4], ['triceps', 4]] },
   cuerpo_b: { foco: 'Cuerpo completo B', huecos: [['bisagra', 1], ['tiron_vertical', 1], ['empuje_horizontal', 1], ['unilateral_pierna', 2], ['tiron_horizontal', 2], ['hombro_aislado', 3], ['core_flexion', 3], ['flexion_rodilla', 4]] },
   cuerpo_c: { foco: 'Cuerpo completo C', huecos: [['sentadilla', 1], ['empuje_vertical', 1], ['tiron_vertical', 1], ['extension_cadera', 2], ['empuje_horizontal', 2], ['tiron_horizontal', 2], ['core_antirotacion', 3], ['hombro_posterior', 4]] },
-  torso_a: { foco: 'Torso A', huecos: [['empuje_horizontal', 1], ['tiron_vertical', 1], ['empuje_vertical', 2], ['tiron_horizontal', 2], ['hombro_aislado', 3], ['biceps', 3], ['triceps', 3], ['core_flexion', 4]] },
-  torso_b: { foco: 'Torso B', huecos: [['tiron_horizontal', 1], ['empuje_horizontal', 1], ['tiron_vertical', 2], ['pecho_aislado', 2], ['hombro_posterior', 3], ['triceps', 3], ['biceps', 3], ['core_estabilidad', 4]] },
-  pierna_a: { foco: 'Pierna A', huecos: [['sentadilla', 1], ['bisagra', 1], ['unilateral_pierna', 2], ['flexion_rodilla', 2], ['extension_rodilla', 3], ['abduccion', 3], ['core_estabilidad', 4], ['pantorrilla', 4]] },
-  pierna_b: { foco: 'Pierna B', huecos: [['extension_cadera', 1], ['bisagra', 1], ['sentadilla', 2], ['flexion_rodilla', 2], ['extension_cadera', 3], ['aduccion', 3], ['core_flexion', 4], ['pantorrilla', 4]] },
-  empuje_a: { foco: 'Empuje A', huecos: [['empuje_horizontal', 1], ['empuje_vertical', 1], ['pecho_aislado', 2], ['hombro_aislado', 2], ['triceps', 3], ['core_flexion', 4]] },
-  empuje_b: { foco: 'Empuje B', huecos: [['empuje_vertical', 1], ['empuje_horizontal', 1], ['hombro_aislado', 2], ['pecho_aislado', 2], ['triceps', 3], ['core_estabilidad', 4]] },
-  tiron_a: { foco: 'Tirón A', huecos: [['tiron_vertical', 1], ['tiron_horizontal', 1], ['hombro_posterior', 2], ['biceps', 2], ['core_antirotacion', 4]] },
-  tiron_b: { foco: 'Tirón B', huecos: [['tiron_horizontal', 1], ['tiron_vertical', 1], ['biceps', 2], ['hombro_posterior', 2], ['core_flexion', 4]] },
+  torso_a: { foco: 'Torso A', huecos: [['empuje_horizontal', 1], ['tiron_vertical', 1], ['empuje_vertical', 2], ['tiron_horizontal', 2], ['hombro_aislado', 3], ['biceps', 3], ['triceps', 3], ['core_flexion', 3], ['hombro_posterior', 4]] },
+  torso_b: { foco: 'Torso B', huecos: [['tiron_horizontal', 1], ['empuje_horizontal', 1], ['tiron_vertical', 2], ['pecho_aislado', 2], ['hombro_posterior', 3], ['triceps', 3], ['biceps', 3], ['core_estabilidad', 3], ['hombro_aislado', 4], ['extension_lumbar', 4]] },
+  pierna_a: { foco: 'Pierna A', huecos: [['sentadilla', 1], ['bisagra', 1], ['unilateral_pierna', 2], ['flexion_rodilla', 2], ['extension_rodilla', 3], ['abduccion', 3], ['core_estabilidad', 3], ['pantorrilla', 4]] },
+  pierna_b: { foco: 'Pierna B', huecos: [['extension_cadera', 1], ['bisagra', 1], ['sentadilla', 2], ['flexion_rodilla', 2], ['extension_cadera', 3], ['aduccion', 3], ['core_flexion', 3], ['pantorrilla', 4]] },
+  empuje_a: { foco: 'Empuje A', huecos: [['empuje_horizontal', 1], ['empuje_vertical', 1], ['pecho_aislado', 2], ['hombro_aislado', 2], ['triceps', 3], ['core_flexion', 3]] },
+  empuje_b: { foco: 'Empuje B', huecos: [['empuje_vertical', 1], ['empuje_horizontal', 1], ['hombro_aislado', 2], ['pecho_aislado', 2], ['triceps', 3], ['core_estabilidad', 3]] },
+  tiron_a: { foco: 'Tirón A', huecos: [['tiron_vertical', 1], ['tiron_horizontal', 1], ['hombro_posterior', 2], ['biceps', 2], ['core_antirotacion', 3], ['extension_lumbar', 4]] },
+  tiron_b: { foco: 'Tirón B', huecos: [['tiron_horizontal', 1], ['tiron_vertical', 1], ['biceps', 2], ['hombro_posterior', 2], ['core_flexion', 3]] },
 };
 
 export const SEMANAS = {
@@ -150,7 +153,16 @@ export function cargaSugerida({ e, ej, registros = [], lugar = null }) {
  */
 export function repsObjetivo({ e, carga, registros = [], asistido = false }) {
   const tope = e.reps_max ?? e.reps_min ?? null;
-  if (asistido || !(n(carga) > 0) || (e.unidad && e.unidad !== 'reps') || !(e.reps_min > 0) || !tope) return tope;
+  if (asistido || (e.unidad && e.unidad !== 'reps') || !(e.reps_min > 0) || !tope) return tope;
+  // Sin peso (dominadas, fondos): las que salían hasta el fallo en las dos últimas sesiones, menos la reserva pedida.
+  // Antes era siempre el tope, y la serie siguiente a un "sigue igual" pedía más de lo que se acababa de hacer.
+  if (!(n(carga) > 0)) {
+    const sinPeso = registros.filter(s => !(n(s.carga_kg) > 0) && n(s.reps) > 0);
+    if (!sinPeso.length) return tope;
+    const ultimas = [...new Set(sinPeso.map(s => s.fecha || ''))].sort().slice(-2);
+    const alFallo = Math.max(...sinPeso.filter(s => ultimas.includes(s.fecha || '')).map(repsAlFallo));
+    return Math.max(e.reps_min, Math.min(tope, Math.floor(alFallo) - (e.rir ?? 2)));
+  }
   const validas = registros.filter(s => n(s.carga_kg) > 0 && n(s.reps) > 0);
   if (!validas.length) return tope;
   const ultimas = [...new Set(validas.map(s => s.fecha || ''))].sort().slice(-2);
@@ -222,6 +234,18 @@ export function volumenSemanal(dias, porId, semana = 1) {
       for (const m of ej.musculos_secundarios) v[m] = (v[m] || 0) + e.series * 0.5;
     }
   }
+  return v;
+}
+
+/**
+ * El volumen semanal para los topes por músculo: igual que volumenSemanal, salvo el hombro, que cuenta solo lo que lo
+ * trabaja como principal (press militar, laterales, posterior). El hombro de cada press de pecho es la parte de
+ * adelante y ya va de sobra; contarlo recortaba las laterales y el posterior (Francisco, 4 de noviembre de 2026).
+ */
+export function volumenParaTopes(dias, porId, semana = 1) {
+  const v = volumenSemanal(dias, porId, semana);
+  v.hombro = dias.filter(x => x.semana === semana).reduce((a, x) => a + x.ejercicios.reduce((b, e) => b + (porId.get(e.ejercicio_id)?.musculos_primarios.includes('hombro') ? e.series : 0), 0), 0);
+  if (!v.hombro) delete v.hombro;
   return v;
 }
 
@@ -366,6 +390,8 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     // Lo que no cabe en el tiempo disponible se va desde la prioridad más baja (una superserie cuenta como un lugar).
     let lugares = 0;
     ejercicios = ejercicios.filter((x, k) => {
+      // El primer core del día no ocupa lugar: va en todas las sesiones, y el tiempo decide después (lo acorta, no lo saca).
+      if (x.ej.tipo === 'core' && !ejercicios.slice(0, k).some(y => y.ej.tipo === 'core')) return true;
       const compañero = x.superserie && ejercicios.findIndex((y, j) => j !== k && y.superserie === x.superserie);
       if (!(x.superserie && compañero >= 0 && compañero < k)) lugares++;
       return lugares <= d.ejercicios_por_sesion;
@@ -425,14 +451,17 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
   const esPrincipal = (x, e) => principalDe.get(x.plantilla) === e.ejercicio_id;
   const esBasico = e => e.prioridad === 1 && indice.porId.get(e.ejercicio_id)?.tipo === 'compuesto';
 
-  // Core: hasta 4 ejercicios a la semana. Cada plantilla trae un hueco de core y con 6 días sumaba más series de core
-  // que de espalda; el tiempo que se libera queda para el resto. Se sacan primero los de los días con más ejercicios.
-  const esCore = e => indice.porId.get(e.ejercicio_id)?.tipo === 'core' && !favoritos.has(e.ejercicio_id) && !(r.musculos_prioridad || []).includes('core');
-  for (let sobran = plantillaDias.reduce((n, x) => n + x.ejercicios.filter(esCore).length, 0) - 4; sobran > 0; sobran--) {
-    const x = [...plantillaDias].filter(y => y.ejercicios.some(esCore) && y.ejercicios.length > 2).sort((a, b) => b.ejercicios.length - a.ejercicios.length)[0];
-    if (!x) break;
-    x.ejercicios = x.ejercicios.filter(e => e !== [...x.ejercicios].reverse().find(esCore));
+  // Core: uno por sesión, en todas (dos si el core es prioritario, o un favorito). Antes eran 4 a la semana y los días
+  // con más ejercicios se quedaban sin core. Con 5 o más días va en 2 series, para que no sume más que la espalda.
+  const esCoreEj = e => indice.porId.get(e.ejercicio_id)?.tipo === 'core';
+  const coreLibre = e => esCoreEj(e) && !favoritos.has(e.ejercicio_id);
+  const maxCore = (r.musculos_prioridad || []).includes('core') ? 2 : 1;
+  for (const x of plantillaDias) {
+    while (x.ejercicios.filter(coreLibre).length > maxCore) x.ejercicios = x.ejercicios.filter(e => e !== [...x.ejercicios].reverse().find(coreLibre));
+    if (plantillaDias.length >= 5) for (const e of x.ejercicios.filter(coreLibre)) e.series = Math.min(e.series, 2);
   }
+  // El único core del día: los recortes de tiempo lo tratan como algo entre los accesorios y los básicos.
+  const unicoCore = (lista, e) => esCoreEj(e) && lista.filter(esCoreEj).length === 1;
 
   // Ajuste de volumen: subir a los músculos prioritarios hasta el tope del rango y no pasarse en ninguno.
   const porId = indice.porId;
@@ -443,6 +472,9 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
   const prioritario = m => d.musculos_prioridad.includes(m);
   const aporta = (e, m) => { const ej = porId.get(e.ejercicio_id); return ej.musculos_primarios.includes(m) ? 1 : ej.musculos_secundarios.includes(m) ? 0.5 : 0; };
   const tocan = m => conSemana.flatMap(x => x.ejercicios.map(e => ({ x, e }))).filter(({ e }) => aporta(e, m) > 0);
+  // Para el tope del hombro cuenta solo lo que lo trabaja como principal: el hombro de cada press es la parte de
+  // adelante, y por él se recortaban las laterales y el posterior (Francisco, 4 de noviembre de 2026).
+  const volumenTope = () => volumenParaTopes(conSemana, porId);
   const trabajan = m => tocan(m).filter(({ e }) => aporta(e, m) === 1);
   const fav = ({ e }) => favoritos.has(e.ejercicio_id);
   // 1. Recortar lo que pasa el tope, también lo que llega por músculos secundarios (el hombro en cada press):
@@ -450,11 +482,11 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
   //    Si aun así queda sobre el límite duro, se baja a 1 serie y se sacan ejercicios principales repetidos.
   const atascados = new Set(); // lo que no se puede recortar más (todo es favorito): se sigue con los demás músculos
   for (let vuelta = 0; vuelta < 400; vuelta++) {
-    const v = volumenSemanal(conSemana, porId);
+    const v = volumenTope();
     const m = CONTADOS.find(k => (v[k] || 0) > tope && !atascados.has(k));
     if (!m) break;
     const orden = (a, b) => aporta(b.e, m) - aporta(a.e, m) || b.e.prioridad - a.e.prioridad;
-    const t = tocan(m);
+    const t = m === 'hombro' ? tocan(m).filter(({ e }) => aporta(e, m) === 1) : tocan(m);
     // Un básico de prioridad 1 no baja de 3 series por aquí (ni el primero del día de las suyas): antes se sacaba un
     // accesorio que también cuenta para el músculo.
     const serieNoFav = t.filter(x => !fav(x) && x.e.series > 2 && !esPrincipal(x.x, x.e) && !(esBasico(x.e) && x.e.series <= 3)).sort(orden)[0];
@@ -500,7 +532,7 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
             const ej = elegir(EXTRA_POR_MUSCULO[m], new Set(x.ejercicios.map(e => e.ejercicio_id)));
             if (!ej || !ej.musculos_primarios.includes(m) || !cabe({ e: { ejercicio_id: ej.id, series: 2 } })) continue;
             const nuevo = { ...armar(ej, 2, x.ejercicios.length), series: 2 };
-            const sale = reemplazar && x.ejercicios.filter(e => e.prioridad >= 2 && !favoritos.has(e.ejercicio_id)
+            const sale = reemplazar && x.ejercicios.filter(e => e.prioridad >= 2 && !favoritos.has(e.ejercicio_id) && !unicoCore(x.ejercicios, e)
               && !porId.get(e.ejercicio_id).musculos_primarios.some(prioritario)).sort((a, b) => b.prioridad - a.prioridad || b.orden - a.orden)[0];
             if (reemplazar && !sale) continue;
             const quedan = x.ejercicios.filter(e => e !== sale);
@@ -535,11 +567,12 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     // segundo remo de una prioridad que ya está en su tope) antes que los brazos o los aductores.
     const acciones = () => { const v = volumenSemanal(conSemana, porId); const bajoPiso = (e, n) => porId.get(e.ejercicio_id).musculos_primarios.some(k => CONTADOS.includes(k) && (v[k] || 0) - n < lo); return x.ejercicios.flatMap(e => [
       ...(e.series > 2 ? [{ e, costo: importa(e) + (e.series <= 3 ? 1 : 0) + (esPrincipal(x, e) && e.series > 3 && d.nivel === 'avanzado' ? 2 : esBasico(e) && e.series <= 3 ? 1 : 0) + (bajoPiso(e, 1) ? 1 : 0), hacer: () => { e.series--; } }] : []),
-      ...(x.ejercicios.length > 2 ? [{ e, costo: importa(e) + 1.5 + (ultimo(e) ? 3 : 0) + (esBasico(e) ? 1.5 : 0) + (bajoPiso(e, e.series) ? 2 : 0) + (favoritos.has(e.ejercicio_id) ? 3 : 0), hacer: () => { x.ejercicios = x.ejercicios.filter(y => y !== e); } }] : []),
+      ...(x.ejercicios.length > 2 ? [{ e, costo: importa(e) + 1.5 + (ultimo(e) ? 3 : 0) + (esBasico(e) ? 1.5 : 0) + (bajoPiso(e, e.series) ? 2 : 0) + (favoritos.has(e.ejercicio_id) ? 3 : 0) + (unicoCore(x.ejercicios, e) ? 2 : 0), hacer: () => { x.ejercicios = x.ejercicios.filter(y => y !== e); } }] : []),
     ]).sort((a, b) => a.costo - b.costo || b.e.prioridad - a.e.prioridad || b.e.orden - a.e.orden); };
     while (sobra()) { const [a] = acciones(); if (!a) break; a.hacer(); }
     for (const e of x.ejercicios) if (sobra()) e.descanso_seg = Math.min(e.descanso_seg, 90);
-    const menor = () => [...x.ejercicios].sort((a, b) => importa(a) - importa(b) || b.prioridad - a.prioridad || b.orden - a.orden)[0];
+    const prio = e => (unicoCore(x.ejercicios, e) ? 2.5 : e.prioridad);
+    const menor = () => [...x.ejercicios].sort((a, b) => importa(a) - importa(b) || prio(b) - prio(a) || b.orden - a.orden)[0];
     while (sobra() && x.ejercicios.length > 1) x.ejercicios = x.ejercicios.filter(y => y !== menor());
   }
 
@@ -643,6 +676,9 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     dia.calentamiento = calentamientoDeSesion({ dia, porId: indice.porId, equipo, bloqueadas, minutos: d.duracion_min,
       opcionesCarga: Object.fromEntries(dia.ejercicios.map(e => { const ej = indice.porId.get(e.ejercicio_id); return [e.ejercicio_id, { incremento: ej ? incrementoPara(ej, lugar) : 2.5, barra: ej?.equipamiento.includes('barra_rack') ? 20 : 0 }]; })) });
   };
+  // Lo que deja un músculo bajo el piso de su rango en la semana (los brazos de un torso de 60 minutos).
+  const vSemana = volumenSemanal(conSemana, porId);
+  const dejaBajoPiso = e => porId.get(e.ejercicio_id).musculos_primarios.some(k => CONTADOS.includes(k) && (vSemana[k] || 0) - e.series < lo);
   for (const dia of diasPlan) {
     preparar(dia);
     const objetivoCardio = minutosCardio(dia.cardio) || 0;
@@ -653,9 +689,11 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
       const candidatos = dia.ejercicios.filter(e => !favoritos.has(e.ejercicio_id) || e.series > 1);
       const resguardo = e => (protegido(e) || (principalDe.get(dia.plantilla) === e.ejercicio_id && e.series > 3 && d.nivel === 'avanzado') ? 1 : 0);
       const lista = candidatos.length ? candidatos : dia.ejercicios;
-      let ultimo = [...lista].sort((a, b) => resguardo(a) - resguardo(b) || b.prioridad - a.prioridad || b.orden - a.orden)[0];
-      // Antes de sacar un básico, se le quita una serie a otro que tenga más de 2 (el primero del día, si hace falta).
-      if (ultimo.series <= 2 && esBasico(ultimo)) ultimo = [...lista].filter(e => e.series > 2).sort((a, b) => b.orden - a.orden)[0] || ultimo;
+      const prio = e => (unicoCore(dia.ejercicios, e) ? 2.5 : e.prioridad);
+      let ultimo = [...lista].sort((a, b) => resguardo(a) - resguardo(b) || prio(b) - prio(a) || b.orden - a.orden)[0];
+      // Antes de sacar un básico, el único core del día o algo que deja un músculo bajo su piso, se le quita una serie a
+      // otro que tenga más de 2 (el primero del día, si hace falta).
+      if (ultimo.series <= 2 && (esBasico(ultimo) || unicoCore(dia.ejercicios, ultimo) || dejaBajoPiso(ultimo))) ultimo = [...lista].filter(e => e.series > 2).sort((a, b) => b.orden - a.orden)[0] || ultimo;
       // Antes que dejar un ejercicio en 1 serie (que casi no aporta), se saca.
       if (ultimo.series > 2) ultimo.series--;
       else dia.ejercicios.splice(dia.ejercicios.indexOf(ultimo), 1);

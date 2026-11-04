@@ -15,12 +15,13 @@ import { discosPorLado, discosDisponibles, BARRAS_KG, BARRAS_LB } from '../nucle
 import { checklist } from '../nucleo/suplementos.js';
 import { enlaceVideo } from '../nucleo/explicar.js';
 import { sesionDe } from '../nucleo/agenda.js';
-import { duracionSesion, incrementoPara, cargaSugerida, registrosParaCarga, prescripcion, repsObjetivo, lugaresDe, conDosMancuernas } from '../nucleo/motor-plan.js';
+import { incrementoPara, cargaSugerida, registrosParaCarga, prescripcion, repsObjetivo, lugaresDe, conDosMancuernas } from '../nucleo/motor-plan.js';
 import { prioridadEsfuerzo, consejoSerie } from '../nucleo/series.js';
 import { ajusteDelDia, previasDeHoy } from '../nucleo/fatiga-sesion.js';
 import { sesionViva, aplicarViva, SEGUNDOS_PARA_ACEPTAR } from '../nucleo/sesion-viva.js';
 import { alternativas } from '../nucleo/checkin.js';
-import { filasTrasAjuste } from '../nucleo/tiempo-sesion.js';
+import { filasTrasAjuste, ajustarTiempo, hechasDelDia, duracionReal, minutosRestantes, resumenSesion } from '../nucleo/tiempo-sesion.js';
+import { factorRitmo, minutosDe as minutosARitmo, textoRitmo, accesoriosHoy, topeSeriesHoy } from './ritmo.js';
 import { TIPOS_SERIE, tipoDe, etiquetas, cuantasFilas, anterior, cifras, tipoParaGuardar } from '../nucleo/registro.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { avisoCheckin } from './checkin.js';
@@ -44,7 +45,7 @@ import { icono } from './iconos.js';
 import { miniatura } from './imagenes.js';
 import { NOMBRE_MUSCULO, lista, mayuscula, imagenesMusculos } from './musculos.js';
 import { seguir, abrirAjustarHoy } from './cambios-ui.js';
-import { abrirTiempo, etiquetaTiempo } from './tiempo-ui.js';
+import { abrirTiempo, etiquetaTiempo, firmaDe } from './tiempo-ui.js';
 import { aplicarOpcion } from '../nucleo/coach.js';
 import { nombreAsistente, asistenteActual } from './cuestionario.js';
 import { capasAsistente } from '../nucleo/asistente-capas.js';
@@ -324,6 +325,10 @@ function textoFatiga({ kg, fatiga: x }) {
     : `Lo que ya hiciste del mismo músculo te salió más duro de lo pedido (unos ${coma(x.falta)} de reserva menos)`;
   return `${porque}: parte con ${coma(enUnidad(kg))} en vez de ${coma(enUnidad(x.base))}.`;
 }
+/** Lo que pide la serie siguiente a una ya hecha: lo que sugirió su consejo o, si no sugirió nada, lo mismo que se hizo.
+ *  Solo "te sobró" deja que el objetivo suba; antes un "sigue igual" volvía al tope del rango (10 dominadas y después
+ *  pedía 12). */
+const repsTrasSerie = r => (r?.hecho ? r.consejo?.reps ?? (r.consejo?.tipo === 'subir' ? null : Number(r.reps) || null) : null);
 /**
  * Las repeticiones en gris de una serie de trabajo: las que dejan la reserva del plan con ese peso, según las dos últimas
  * sesiones del ejercicio (nucleo/motor-plan.js: repsObjetivo), en vez del tope del rango, que llevaba las series al
@@ -603,7 +608,7 @@ function siguienteSerieHtml(dia, f) {
   const anteriorHoy = [...filas.slice(0, i)].reverse().find(x => deTrabajo(tipoDe(x)) && x.kg != null);
   const kg = r.kg ?? (deTrabajo(tipo) ? anteriorHoy?.kg ?? cargaPlanDe(e, dia, f) ?? previo?.carga_kg : aproximacion?.kg);
   const hechaAntes = [...filas.slice(0, i)].reverse().find(x => x?.hecho && deTrabajo(tipoDe(x)));
-  const reps = r.reps ?? (e.unidad === 'seg' ? e.reps_min : e.unidad === 'm' ? e.reps_max : deTrabajo(tipo) ? hechaAntes?.consejo?.reps ?? repsObjetivoDe(e, kg, f, dia) : aproximacion?.reps);
+  const reps = r.reps ?? (e.unidad === 'seg' ? e.reps_min : e.unidad === 'm' ? e.reps_max : deTrabajo(tipo) ? repsTrasSerie(hechaAntes) ?? repsObjetivoDe(e, kg, f, dia) : aproximacion?.reps);
   const dosis = e.unidad === 'seg' ? `${reps ?? ''} s` : `${kg != null ? `${peso(kg)} × ` : ''}${reps ?? ''}${e.unidad === 'm' ? ' m' : ' reps'}`;
   return `<div class="acc-pasos acc-siguiente" id="acc-siguiente">
     <button type="button" class="acc-abrir" data-siguiente-serie aria-label="${esc(`Sigue: ${nombreDe(e)}, serie ${etiqueta}, ${dosis}. Ir a la serie`)}">
@@ -729,7 +734,7 @@ function detallesSesionHtml(dia) {
   const eligePeso = dia.ejercicios.some(e => /^Elige un peso/.test(e.nota || ''));
   // La duración cuenta el calentamiento solo si hoy lo hay (en una sesión desde cero, cuando se agregó).
   const calentamiento = pasosDe(dia, f, 'cal').length ? calentamientoCompleto(dia, f) : [];
-  return `    <p class="suave pequeno">${dia.hora ? `${esc(dia.hora)} · ` : ''}~${duracionSesion({ ...dia, calentamiento })} min · ${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? '' : 's'}</p>
+  return `    <p class="suave pequeno">${dia.hora ? `${esc(dia.hora)} · ` : ''}~${minutosARitmo({ ...dia, calentamiento })} min · ${dia.ejercicios.length} ejercicio${dia.ejercicios.length === 1 ? '' : 's'}</p>
     ${prim.length ? `<div class="hoy-entrenas">${imagenesMusculos(prim.slice(0, 4))}<div><p class="sobretitulo">Hoy entrenas</p><p class="musculos-hoy">${esc(mayuscula(lista(prim.map(m => NOMBRE_MUSCULO[m] || m))))}</p>${sec.length ? `<p class="pequeno suave">Y un poco de ${esc(lista(sec.map(m => (NOMBRE_MUSCULO[m] || m).toLowerCase())))}</p>` : ''}</div></div>` : ''}
     <p class="suave pequeno">${esc(dia.racional || '')}</p>
     ${eligePeso ? '<p class="nota-sesion pequeno">Donde no hay peso, elige uno con el que te sobren las repeticiones de reserva (RIR) en la última serie. Lo anotas y la app ajusta desde ahí.</p>' : ''}
@@ -774,6 +779,45 @@ function extrasDe(dia, f) {
   const actual = siguienteSerie(dia, dia.ejercicios.map((e, k) => filasDe(f, e, k)))?.ejercicioIndice ?? null;
   return { comprobacion, tecnica, correccion: punteria(hechas, f)?.correccion || 0, ultima: hechas.at(-1) || null, sePasa: sePasaHoy(f), actual };
 }
+/**
+ * Al empezar, la sesión se ajusta al tiempo de tu perfil, a tu ritmo (app/ritmo.js): si a tu ritmo no cabe, sale lo
+ * menos importante (el core se acorta, no sale); si sobra bastante, entran accesorios opcionales, hasta lo razonable.
+ * Es un cambio de la sesión viva: se ve el antes y el después, se aplica solo a los 10 segundos y se puede rechazar.
+ * Una vez por día; si ya elegiste el tiempo con la rueda, no se propone. Pedido de Francisco, 4 de noviembre de 2026:
+ * "el tiempo se debería ajustar apenas empezar la sesión".
+ */
+function propuestaTiempo(dia, f) {
+  if (!dia?.ejercicios?.length || esDesdeCero(dia) || E.tiempoHoy?.[f]?.firma === firmaDe(dia)) return null;
+  const disponibles = Number(R().duracion_min) || null;
+  if (!disponibles) return null;
+  const hechas = hechasDelDia(E.registro?.[f]), empezada = Object.values(hechas).some(h => h.empezado);
+  // Ya con varias series hechas, la sesión sigue como va: el ajuste es para el comienzo.
+  if (Object.values(hechas).reduce((a, h) => a + h.trabajo, 0) > 3) return null;
+  const marca = E.cardioHecho?.[f], cardioHecho = Boolean(marca?.hecho && marca.texto === dia.cardio);
+  const ritmo = factorRitmo();
+  const base = { ejercicios: structuredClone(dia.ejercicios), cardio: dia.cardio ?? null, calentamiento: dia.calentamiento };
+  const transcurridos = empezada ? Math.round((Date.now() - (inicioDe(f) || Date.now())) / 6e4) : 0;
+  const quedan = Math.max(15, disponibles - transcurridos);
+  const ahora = empezada ? minutosRestantes(base, hechas, cardioHecho, ritmo) : duracionReal(base, ritmo);
+  if (ahora == null) return null;
+  const accesorios = ahora < quedan - 15 ? accesoriosHoy(dia) : [];
+  if (ahora <= quedan + 5 && !accesorios.length) return null;
+  const r = ajustarTiempo(base, { minutos: quedan, hechas, cardioHecho, ritmo, accesorios, porId: indice.porId, topeSeries: topeSeriesHoy() });
+  if (!r.quitados.length && !r.agregados.length && r.cardio === base.cardio && JSON.stringify(r.ejercicios.map(e => e.series)) === JSON.stringify(base.ejercicios.map(e => e.series))) return null;
+  const nombre = id => indice.porId.get(id)?.nombre || id;
+  const ritmoTexto = textoRitmo();
+  const crece = r.agregados.length > 0 && !r.quitados.length;
+  return {
+    id: `tiempo:${f}`, tipo: 'tiempo', ejercicio_id: null, nombre: 'Tiempo de hoy',
+    accion: crece ? `sumar ${lista(r.agregados.map(nombre).map(x => x.toLowerCase()))} como opcional` : `ajustar la sesión a tus ${disponibles} minutos`,
+    hecho: crece ? `Sumé ${lista(r.agregados.map(nombre).map(x => x.toLowerCase()))} como opcional` : `Ajusté la sesión a tus ${disponibles} minutos`,
+    motivo: crece ? `tienes ${disponibles} minutos y la sesión toma unos ${ahora}${ritmoTexto ? `, ${ritmoTexto}` : ''}`
+      : `${empezada ? 'lo que falta' : 'la sesión'} toma unos ${ahora} minutos${ritmoTexto ? ` ${ritmoTexto}` : ''}${r.quitados.length ? `; hoy no van: ${lista(r.quitados.map(nombre))}` : ''}`,
+    antes: resumenSesion({ ejercicios: base.ejercicios, cardio: base.cardio, minutos: ahora }),
+    ahora: resumenSesion({ ejercicios: r.ejercicios, cardio: r.cardio, minutos: r.minutos }),
+    ejercicios: r.ejercicios, cardio: r.cardio, base, minutos: quedan,
+  };
+}
 function vivaDe(dia, f) {
   if (!enCurso(f)) return null;
   const lugar = lugarDe(dia), equipo = lugar?.equipamiento || [];
@@ -789,20 +833,25 @@ function vivaDe(dia, f) {
   const v = sesionViva(dia, E.registro[f] || {}, { notas, porId: indice.porId, minutos: avance(dia).cifras.minutos, disponibles,
     prioridad: R().musculos_prioridad || [], candidato, alternativa, incrementoDe: ej => incrementoPara(ej, lugar) });
   const ya = { ...(E.vivaNo?.[f] || {}), ...(E.vivaHecho?.[f] || {}) };
-  const nuevas = v.propuestas.filter(p => !ya[p.id]);
+  // El ajuste de tiempo va primero: después, lo de cada ejercicio.
+  const tiempo = ya[`tiempo:${f}`] || E.vivaPend?.[f] ? null : propuestaTiempo(dia, f);
+  const nuevas = [...(tiempo ? [tiempo] : []), ...v.propuestas].filter(p => !ya[p.id]);
   if (!E.vivaPend?.[f] && nuevas.length) { (E.vivaPend ||= {})[f] = { ...nuevas[0], desde: Date.now() }; guardar(); }
   // Vista previa del cambio pendiente: lo que hay y lo que quedaría, siempre a la vista.
   const pend = E.vivaPend?.[f] || null;
-  const previa = pend && aplicarViva(dia.ejercicios, pend, E.registro[f] || {}, (id, orden, como) => {
+  const previa = pend && pend.tipo !== 'tiempo' && aplicarViva(dia.ejercicios, pend, E.registro[f] || {}, (id, orden, como) => {
     const ej = indice.porId.get(id);
     return { ejercicio_id: id, nombre: ej.nombre, orden, ...(como ? { series: como.series, reps_min: como.reps_min, reps_max: como.reps_max, rir: como.rir } : { ...prescripcion(ej, 3, D()), series: 3 }) };
   });
-  return { ...v, pendiente: pend && { ...pend, antes: previa.antes, ahora: previa.ahora }, hechos: Object.values(E.vivaHecho?.[f] || {}) };
+  return { ...v, pendiente: pend && { ...pend, antes: previa ? previa.antes : pend.antes, ahora: previa ? previa.ahora : pend.ahora }, hechos: Object.values(E.vivaHecho?.[f] || {}) };
 }
 const restanAceptar = p => Math.max(0, SEGUNDOS_PARA_ACEPTAR - Math.floor((Date.now() - p.desde) / 1000));
+// ejercicioId null: lo de toda la sesión (agregar un ejercicio, abajo); 'tiempo': el ajuste de tiempo, arriba.
 const vivaHtml = (o, ejercicioId) => {
-  const pend = o?.pendiente && (o.pendiente.ejercicio_id === ejercicioId || (ejercicioId == null && o.pendiente.tipo === 'agregar_ejercicio')) ? o.pendiente : null;
-  const hechos = (o?.hechos || []).filter(h => (ejercicioId == null ? h.tipo === 'agregar_ejercicio' : h.ejercicio_id === ejercicioId && h.tipo !== 'agregar_ejercicio'));
+  const deSesion = t => t === 'agregar_ejercicio' || t === 'tiempo';
+  const es = t => (ejercicioId === 'tiempo' ? t === 'tiempo' : ejercicioId == null ? t === 'agregar_ejercicio' : false);
+  const pend = o?.pendiente && (ejercicioId == null || ejercicioId === 'tiempo' ? es(o.pendiente.tipo) : o.pendiente.ejercicio_id === ejercicioId && !deSesion(o.pendiente.tipo)) ? o.pendiente : null;
+  const hechos = (o?.hechos || []).filter(h => (ejercicioId == null || ejercicioId === 'tiempo' ? es(h.tipo) : h.ejercicio_id === ejercicioId && !deSesion(h.tipo)));
   return `${hechos.map(h => `<div class="ajuste-vivo hecho"><p><b>Ajuste en vivo:</b> ${esc(h.hecho)}, porque ${esc(h.motivo)}.</p><p class="pequeno antes-ahora">Antes: ${esc(h.antes)} · Ahora: ${esc(h.ahora)}</p></div>`).join('')}
   ${pend ? `<div class="ajuste-vivo pendiente" data-viva-pendiente><p><b>Voy a ${esc(pend.accion)}</b>, porque ${esc(pend.motivo)}.</p>
     <p class="pequeno antes-ahora">Antes: ${esc(pend.antes)} · Quedaría: ${esc(pend.ahora)}</p>
@@ -825,6 +874,7 @@ function sesionHoy(dia) {
     </div>
   </section>
   ${dia.ejercicios.length && !guardada ? `<div class="fila-tiempo"><button type="button" class="boton chico boton-tiempo" id="ajustar-tiempo" aria-haspopup="dialog">${icono('reloj')}<span>${esc(etiquetaTiempo(dia))}</span><b>Ajustar el tiempo</b></button></div>` : ''}
+  ${vivaHtml(vivaActual, 'tiempo')}
   ${filaPasosHtml(dia, f, 'cal')}
   ${dia.ejercicios.length ? '' : `<div class="sesion-vacia-estado">${icono('pesa')}<h2>Comienza</h2><p class="suave">Agrega un ejercicio para empezar tu sesión</p></div>`}
   <ol class="ejercicios-hoy">${dia.ejercicios.map((e, k) => ejercicioHoy(e, k, f, e.ejercicio_id ? anteriorEj(e.ejercicio_id, f, dia.foco) : null, notas[idDe(e, k)] || {}, dia)).join('')}</ol>
@@ -966,7 +1016,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     if (trabajo && r.hecho && ajusteKg && (r.t || 0) > ajusteKg.t) ajusteKg = null; // ya se hizo una serie después del ajuste
     const repsGris = seg ? e.reps_min : trabajo && repsHoy != null ? repsHoy : dist ? e.reps_max : trabajo ? repsObjetivoDe(e, kgGris, f, dia) : sug?.reps ?? null;
     if (trabajo && !r.hecho && !siguiente) siguiente = { etiqueta: etiq[i], reps: repsGris };
-    if (trabajo && r.hecho) repsHoy = r.consejo?.reps ?? null;
+    if (trabajo && r.hecho) repsHoy = repsTrasSerie(r);
     const antes = prev ? (seg ? ((prev.duracion_seg ?? prev.reps) != null ? `${prev.duracion_seg ?? prev.reps} s` : '')
       : dist ? `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.distancia_m != null ? `${prev.distancia_m} m` : ''}`
       : `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.reps ?? ''}`) : '';
@@ -1162,6 +1212,8 @@ function enlazar(ir, dia) {
     const r = editarSesion({ tipo: 'ordenar', orden }, { ...ctxNucleo(), hoy: f, registro: E.registro, sesiones: E.sesiones });
     if (r.error) { avisar(r.error); return repintar(); }
     const guardando = cambiarPlan(r.plan, 'Orden de hoy actualizado.', nube);
+    // El orden nuevo ya se ve en la lista: sin aviso verde encima de las series (queda el nombre para deshacer).
+    E.mensaje = null;
     repintar();
     const aviso = await guardando;
     if (aviso) avisar(aviso);
@@ -1597,7 +1649,7 @@ function enlazar(ir, dia) {
       const { kg, prev } = sugerencia(e, lista, i);
       if (r.kg == null && e.unidad !== 'seg') r.kg = kg;
       const hechaAntes = [...lista.slice(0, i)].reverse().find(x => x?.hecho && deTrabajo(tipoDe(x)));
-      if (r.reps == null) r.reps = (e.unidad === 'seg' ? e.reps_min : hechaAntes?.consejo?.reps ?? repsObjetivoDe(e, r.kg, f, dia)) ?? prev?.reps ?? null;
+      if (r.reps == null) r.reps = (e.unidad === 'seg' ? e.reps_min : repsTrasSerie(hechaAntes) ?? repsObjetivoDe(e, r.kg, f, dia)) ?? prev?.reps ?? null;
     } else if (!r.hecho && r.aprox != null) {
       // Una serie de calentamiento sin escribir se marca con el peso y las repeticiones que estaban en gris.
       const s = aproximacionesHoy(dia, e, lista, f)[r.aprox];
@@ -1878,6 +1930,24 @@ function enlazar(ir, dia) {
     delete E.vivaPend[f];
     const nuevo = structuredClone(E.plan), d = sesionDe(nuevo, f);
     if (!d) { guardar(); return; }
+    // El ajuste de tiempo cambia la sesión entera, y queda guardado como el de la rueda: "Volver a la sesión del plan".
+    if (p.tipo === 'tiempo') {
+      d.ejercicios = p.ejercicios; d.cardio = p.cardio;
+      const aviso = await cambiarPlan(nuevo, `Ajuste en vivo: ${p.hecho}.`, nube);
+      if (E.plan !== nuevo) { if (aviso) avisar(aviso); return; }
+      for (const e of d.ejercicios) {
+        const lista = E.registro[f]?.[e.ejercicio_id];
+        if (!lista) continue;
+        const t = filasTrasAjuste(lista, e.series);
+        E.registro[f][e.ejercicio_id] = t.lista;
+        if (E.filas?.[f]?.[e.ejercicio_id] != null) E.filas[f][e.ejercicio_id] = t.filas;
+      }
+      E.tiempoHoy = { [f]: { base: p.base, firma: firmaDe(d), minutos: p.minutos } };
+      ((E.vivaHecho ||= {})[f] ||= {})[p.id] = { tipo: 'tiempo', ejercicio_id: null, hecho: p.hecho, motivo: p.motivo, antes: p.antes, ahora: p.ahora, carga_kg: null, t: Date.now() };
+      guardar();
+      repintar();
+      return;
+    }
     const lugar = lugarDe(d), registros = id => registrosParaCarga(seriesAnotadas(E.sesiones, E.registro), id, f);
     const nuevoEjercicio = (id, orden, como = null) => {
       const ej = indice.porId.get(id), pr = como ? { series: como.series, reps_min: como.reps_min, reps_max: como.reps_max, unidad: como.unidad || 'reps', rir: como.rir, descanso_seg: como.descanso_seg } : { ...prescripcion(ej, 3, D()), series: 3 };

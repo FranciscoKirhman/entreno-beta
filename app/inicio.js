@@ -8,7 +8,7 @@ import { proponerSesionVacia } from './sesion-libre-ui.js';
 import { cuentaNuevaHtml, enlazarCuentaNueva } from './cuenta-ui.js';
 import { entrarEnOrden } from './movimiento.js';
 import { planLibre, eleccionDeHoy } from '../nucleo/plan-libre.js';
-import { duracionSesion } from '../nucleo/motor-plan.js';
+import { minutosDe } from './ritmo.js';
 import * as nube from './nube.js';
 
 // El lugar supuesto (gimnasio completo) y la unidad no cuentan como haber empezado el cuestionario.
@@ -71,7 +71,7 @@ export function vistaEleccion(ir) {
   if (!x) return ir('hoy', { sesion: true });
   const dia = x.dia, ejercicios = dia?.ejercicios || [];
   const series = ejercicios.reduce((n, e) => n + (Number(e.series) || 0), 0);
-  const minutos = dia && !x.libre ? duracionSesion(dia) : null;
+  const minutos = dia && !x.libre ? minutosDe(dia) : null;
   const minis = ejercicios.slice(0, 3).map(e => miniatura(e.ejercicio_id, 'miniatura chica')).join('');
   const elegirPlan = () => { E.eleccionInicio = hoy(); guardar(); ir('hoy', { sesion: true }); };
   $('app').innerHTML = `<div id="vista-eleccion">

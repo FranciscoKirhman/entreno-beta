@@ -68,6 +68,14 @@ export function sesionViva(dia, registro = {}, { notas = {}, porId, minutos = nu
   const lleno = (ej, n) => ej.musculos_primarios.every(m => (hechas[m] || 0) >= n);
   const minimoHechas = ej => Math.min(...ej.musculos_primarios.map(m => hechas[m] || 0));
   const poner = p => propuestas.push(p);
+  // Rendimiento bajo hoy: dos o más ejercicios con sus dos últimas series bajo el rango, o al fallo cuando se pedía
+  // reserva. Entonces lo opcional (los accesorios que sumó el tiempo, prioridad 4) sale y no se agrega nada: "si digo 3
+  // horas y mi performance es pésima, obvio habrá que modificar" (Francisco, 4 de noviembre de 2026).
+  const flojo = e => {
+    const ult = hechasDe(e).slice(-2);
+    return ult.length === 2 && (ult.every(s => Number(s.reps) < (e.reps_min || 0)) || ult.every(s => e.rir >= 1 && reservaDe(s) != null && reservaDe(s) <= 0));
+  };
+  const flojos = ejs.filter(e => cuenta(porId.get(e.ejercicio_id)) && (e.unidad || 'reps') === 'reps' && flojo(e)).length;
 
   ejs.forEach((e, k) => {
     const ej = porId.get(e.ejercicio_id);
@@ -105,6 +113,11 @@ export function sesionViva(dia, registro = {}, { notas = {}, porId, minutos = nu
         accion: quedan === 1 ? 'quitar la serie que queda' : `quitar las ${quedan} que quedan`, hecho: quedan === 1 ? 'Quité la serie que quedaba' : `Quité las ${quedan} que quedaban`,
         motivo: `las dos últimas ${bajo ? `quedaron bajo ${e.reps_min}` : 'llegaron al fallo'} y ya tienes el estímulo` });
     }
+    // Un opcional que no empieza, en un día de rendimiento bajo: sale.
+    if (!h.length && k > 0 && (e.prioridad ?? 3) >= 4 && flojos >= 2) {
+      return poner({ ...base, id: `quitar-opcional:${e.ejercicio_id}`, tipo: 'quitar_ejercicio', accion: 'sacarlo por hoy', hecho: 'Lo saqué por hoy',
+        motivo: `es opcional y hoy vienes con menos rendimiento: ${flojos} ejercicios quedaron bajo lo pedido` });
+    }
     // Un ejercicio que no empieza y cuyos músculos ya pasaron el tope por sesión: sale; si van cerca, queda en 2.
     if (!h.length && k > 0 && lleno(ej, SERIES_SESION.aviso)) {
       return poner({ ...base, id: `quitar-ejercicio:${e.ejercicio_id}`, tipo: 'quitar_ejercicio', accion: 'sacarlo por hoy', hecho: 'Lo saqué por hoy',
@@ -131,7 +144,7 @@ export function sesionViva(dia, registro = {}, { notas = {}, porId, minutos = nu
   // Todo lo de pesas hecho, con tiempo de sobra y un músculo del día corto: un ejercicio más para él.
   const pendientes = ejs.filter(e => cuenta(porId.get(e.ejercicio_id)) && faltan(e) > 0);
   const sobra = disponibles == null ? 20 : disponibles - (minutos ?? 0);
-  if (!pendientes.length && candidato && sobra >= 12) {
+  if (!pendientes.length && candidato && sobra >= 12 && flojos < 2) {
     const delDia = [...new Set(ejs.flatMap(e => (cuenta(porId.get(e.ejercicio_id)) ? porId.get(e.ejercicio_id).musculos_primarios : [])))];
     const m = [...prioridad, ...delDia].find(x => delDia.includes(x) && (hechas[x] || 0) < MUCHO - 2);
     const ej = m ? candidato(m, new Set(ejs.map(e => e.ejercicio_id))) : null;

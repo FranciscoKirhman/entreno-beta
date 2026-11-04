@@ -11,6 +11,7 @@
 //    se aceptó), aceptar otra vez no duplica el cambio.
 import { estadoDelPlan, VIGENCIA } from './registrado.js';
 import { sesionDe, sumarDias, diaSemana, nombreDia, moverSesion, marcarFaltada, conflictos } from './agenda.js';
+import { SERIES_SESION } from './fatiga-sesion.js';
 
 const POR_REVISAR = new Set(['pendiente', 'sin_datos']);
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -96,13 +97,16 @@ export function correr(plan, fecha, destino, { noPuedo = [], hechas = [], hasta 
  * Cómo queda la semana: desde la sesión que no se hizo (o desde hoy) hasta 7 días adelante, o hasta el último día que
  * cambia. Los días que quedan sin sesión por el cambio también aparecen, para ver de dónde salió cada una.
  */
-export function semanaDe(plan, { hoy, cambios = [], marcas = {}, saltada = null } = {}) {
+export function semanaDe(plan, { hoy, cambios = [], marcas = {}, saltada = null, sumas = [] } = {}) {
   const desde = [hoy, saltada, ...cambios.map(c => c.de)].filter(Boolean).sort()[0];
-  const fin = [sumarDias(hoy, 6), ...cambios.map(c => c.a)].sort().at(-1);
+  const fin = [sumarDias(hoy, 6), ...cambios.map(c => c.a), ...sumas.map(x => x.fecha)].sort().at(-1);
   const movida = new Map(cambios.map(c => [c.a, c.de]));
+  // Repartida: cada sesión dice lo que suma de la que no se hizo.
+  const suma = new Map(sumas.map(x => [x.fecha, x]));
   const dias = plan.dias.filter(d => d.fecha >= desde && d.fecha <= fin).map(d => ({
     fecha: d.fecha, foco: d.foco,
-    cambio: d.fecha === saltada ? 'saltada' : movida.has(d.fecha) ? `antes el ${diaCorto(movida.get(d.fecha))}` : marcas[d.fecha] === 'saltada' ? 'saltada' : null,
+    cambio: d.fecha === saltada ? 'saltada' : movida.has(d.fecha) ? `antes el ${diaCorto(movida.get(d.fecha))}`
+      : suma.has(d.fecha) ? `suma ${suma.get(d.fecha).nombres.join(' y ')}, 2 series cada uno` : marcas[d.fecha] === 'saltada' ? 'saltada' : null,
   }));
   for (const c of cambios) if (!plan.dias.some(d => d.fecha === c.de)) dias.push({ fecha: c.de, foco: 'Sin sesión', cambio: `${c.foco} pasa al ${diaCorto(c.a)}`, libre: true });
   return dias.sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
@@ -157,8 +161,76 @@ export function alternativasNoHecha(plan, fecha, ctx) {
   // Las que dejan dos sesiones del mismo grupo en días seguidos solo quedan si no hay otra forma de recuperarla.
   const sinChoque = opciones.filter(o => !o.avisos.length);
   const finales = sinChoque.length ? sinChoque : opciones;
-  finales.push({ id: 'saltar', titulo: `Saltar ${s.foco}`, detalle: 'Las demás sesiones de la semana siguen igual.', diferencia: 'No recuperas esta sesión; la semana no cambia.', avisos: [], cambios: [], plan, saltar: true });
+  // E. Repartirla: sus ejercicios principales van de a 2 series a las próximas sesiones, sin sumar un día.
+  const porId = ctx.indice?.porId || ctx.porId;
+  const rep = porId && repartir(plan, fecha, { hoy, hechas, porId });
+  if (rep) {
+    finales.push({ id: 'repartir', titulo: `Repartir ${s.foco} en las próximas sesiones`, detalle: `${rep.sumas.map(x => `${x.nombres.join(' y ')} al ${x.foco} del ${diaCorto(x.fecha)}`).join('; ')}.`,
+      diferencia: `No sumas un día ni mueves nada: lo principal va de a 2 series en lo que viene.${rep.quedan.length ? ` No caben: ${rep.quedan.join(', ')}.` : ''}`, avisos: [], cambios: [], sumas: rep.sumas, plan: rep.plan, repartir: true });
+  }
+  // Y si no quiere ninguna: saltarla, sin recuperar nada.
+  finales.push({ id: 'saltar', titulo: `Saltar ${s.foco}: no recuperarla`, detalle: 'Las demás sesiones de la semana siguen igual.', diferencia: 'No recuperas esta sesión: la semana no cambia y lo que no hiciste mantiene su peso.', avisos: [], cambios: [], plan, saltar: true });
   return { sesion: { fecha, foco: s.foco }, opciones: finales, fechasLibres: libres };
+}
+
+/**
+ * Repartir una sesión que no se hizo en las próximas: sus ejercicios más importantes, de a 2 series y hasta 2 por
+ * sesión, en las próximas 3 sesiones sin hacer (primero las que ya trabajan esos músculos). Sin repetir un ejercicio
+ * que la sesión ya tiene ni pasar 12 series de un músculo en una sesión. Así no se pierde entera y no se suma un día
+ * (Francisco, 4 de noviembre de 2026: "la opción de perderla o distribuirla en días").
+ * @returns {{plan, sumas: [{fecha, foco, ids, nombres}], quedan: string[]} | null} null si no cabe nada
+ */
+export function repartir(plan, fecha, { hoy, hechas = [], porId, porSesion = 2, cuantas = 3 } = {}) {
+  const s = sesionDe(plan, fecha);
+  if (!s || !porId) return null;
+  const nuevo = structuredClone(plan);
+  const destinos = nuevo.dias.filter(d => d.fecha >= hoy && d.fecha !== fecha && !hechas.includes(d.fecha) && d.ejercicios?.length && d.firme !== false)
+    .sort((a, b) => (a.fecha < b.fecha ? -1 : 1)).slice(0, cuantas);
+  if (!destinos.length) return null;
+  const ej = id => porId.get(id);
+  const prim = id => ej(id)?.musculos_primarios || [];
+  const cuenta = id => ej(id) && !['core', 'cardio', 'movilidad'].includes(ej(id).tipo);
+  const seriesDe = (d, m) => d.ejercicios.reduce((a, e) => a + (cuenta(e.ejercicio_id) && prim(e.ejercicio_id).includes(m) ? Number(e.series) || 0 : 0), 0);
+  const puestos = new Map(destinos.map(d => [d.fecha, []]));
+  const quedan = [];
+  const candidatos = s.ejercicios.filter(e => ej(e.ejercicio_id) && !['cardio', 'movilidad'].includes(ej(e.ejercicio_id).tipo))
+    .sort((a, b) => (a.prioridad ?? 3) - (b.prioridad ?? 3) || (a.orden ?? 0) - (b.orden ?? 0)).slice(0, porSesion * cuantas);
+  for (const e of candidatos) {
+    const ms = prim(e.ejercicio_id), series = Math.min(2, Number(e.series) || 2);
+    const comparte = d => d.ejercicios.some(x => prim(x.ejercicio_id).some(m => ms.includes(m)));
+    const d = destinos.filter(x => puestos.get(x.fecha).length < porSesion && !x.ejercicios.some(y => y.ejercicio_id === e.ejercicio_id)
+      && (!cuenta(e.ejercicio_id) || ms.every(m => seriesDe(x, m) + series <= SERIES_SESION.aviso)))
+      .sort((a, b) => comparte(b) - comparte(a) || puestos.get(a.fecha).length - puestos.get(b.fecha).length || (a.fecha < b.fecha ? -1 : 1))[0];
+    if (!d) { quedan.push(ej(e.ejercicio_id).nombre); continue; }
+    d.ejercicios.push({ ...structuredClone(e), series, prioridad: 3, orden: d.ejercicios.length, superserie: null,
+      nota: `De ${s.foco} del ${diaCorto(fecha)}, que no se hizo: ${series} series para no perderla entera.` });
+    puestos.get(d.fecha).push(e.ejercicio_id);
+  }
+  const sumas = destinos.filter(d => puestos.get(d.fecha).length).map(d => ({ fecha: d.fecha, foco: d.foco, ids: puestos.get(d.fecha), nombres: puestos.get(d.fecha).map(id => ej(id).nombre) }));
+  return sumas.length ? { plan: nuevo, sumas, quedan } : null;
+}
+
+/**
+ * El calendario de las opciones: desde el lunes de la semana de la sesión que no se hizo hasta el domingo de la semana
+ * que viene, con lo hecho, lo que viene, los días que no puede y adónde lleva cada opción (su letra). Los días libres
+ * de hoy en adelante se pueden tocar para ponerla ahí.
+ * @param opciones [{letra, destino}]
+ * @returns {{dias: [{fecha, tipo, foco?, letra?, elegible}]}}
+ *   tipo: 'faltada' | 'hecha' | 'saltada' | 'sesion' | 'libre' | 'no_puedo' | 'pasado'
+ */
+export function calendarioNoHecha(plan, fecha, { hoy, noPuedo = [], hechas = [], marcas = {}, opciones = [] } = {}) {
+  const desde = lunesDe(fecha < hoy ? fecha : hoy), hasta = sumarDias(lunesDe(hoy), 13);
+  // Dos opciones que la ponen el mismo día muestran las dos letras (hacerla hoy y reacomodar la semana desde hoy).
+  const letras = new Map();
+  for (const o of opciones.filter(x => x.destino && x.letra)) letras.set(o.destino, (letras.get(o.destino) || '') + o.letra);
+  const dias = [];
+  for (let f = desde; f <= hasta; f = sumarDias(f, 1)) {
+    const d = sesionDe(plan, f);
+    const tipo = f === fecha ? 'faltada' : hechas.includes(f) ? 'hecha' : d && marcas[f] === 'saltada' ? 'saltada' : d ? 'sesion'
+      : noPuedo.includes(diaSemana(f)) ? 'no_puedo' : f < hoy ? 'pasado' : 'libre';
+    dias.push({ fecha: f, tipo, ...(d ? { foco: d.foco } : {}), ...(letras.has(f) ? { letra: letras.get(f) } : {}), elegible: tipo === 'libre' && f >= hoy });
+  }
+  return { dias };
 }
 
 /** Días en que se puede poner una sesión (sin sesión, sin "no puedo" y sin entrenar), para elegir otra fecha. */

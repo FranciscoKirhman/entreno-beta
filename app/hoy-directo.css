@@ -131,6 +131,10 @@ body:has(#vista-hoy) main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 
 body:has(#vista-hoy) .acc-pasos{bottom:calc(env(safe-area-inset-bottom,0px) + 144px)}
 body:has(#vista-hoy) #descanso{bottom:calc(env(safe-area-inset-bottom,0px) + 144px)}
 body:has(#vista-hoy) #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 212px)}
+/* En la sesión los avisos van arriba, sobre la cabecera: abajo quedaban en medio de la pantalla, encima de las series que
+   se están anotando (Francisco, 4 de noviembre de 2026). El paso a paso del calentamiento sigue con los suyos abajo. */
+body:has(#vista-hoy):not(:has(#pantalla-pasos)) #aviso-flotante{top:calc(env(safe-area-inset-top,0px) + 10px);bottom:auto;transform:translateY(-8px)}
+body:has(#vista-hoy):not(:has(#pantalla-pasos)) #aviso-flotante.visible{transform:none}
 body.con-descanso:has(#vista-hoy) #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 224px)}
 body:has(#pantalla-pasos) #descanso{bottom:calc(env(safe-area-inset-bottom,0px) + 84px)}
 body.con-descanso:has(#pantalla-pasos) #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 164px)}

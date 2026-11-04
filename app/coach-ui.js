@@ -21,7 +21,7 @@ import { semanaPorRevisar, mensajeRevision } from '../nucleo/revision-semanal.js
 import { nombreAsistente, imagenAsistente, asistenteActual } from './cuestionario.js';
 import { abrirHerramientas } from './herramientas-coach.js';
 import { abrirHoja } from './hoja.js';
-import { duracionSesion } from '../nucleo/motor-plan.js';
+import { minutosDe } from './ritmo.js';
 import { senalesSobrecarga, propuestaSobrecarga } from '../nucleo/sobrecarga.js';
 import { semanaAMedias } from '../nucleo/semana-a-medias.js';
 import { esAsistido } from '../nucleo/catalogo.js';
@@ -201,10 +201,13 @@ export function vistaCoach(ir, mensajeInicial) {
     if (ev.target.closest('[data-deshacer]')) deshacerCambio(ir);
   });
   chat.addEventListener('click', async ev => {
-    const b = ev.target.closest('[data-opcion]');
+    const b = ev.target.closest('[data-opcion], [data-cal-elegir]');
     if (!b) return;
     const msg = E.chat[Number(b.dataset.msg)];
-    const op = msg && opcionesMensaje(msg)?.[Number(b.dataset.opcion)];
+    // Un día libre tocado en el calendario de las opciones: como "Elegir otra fecha" con ese día.
+    const dia = b.dataset.calElegir, cal = msg?.calendario;
+    const op = !msg ? null : dia ? (cal && msg.opciones?.length ? { etiqueta: `Hacerla el ${diaCorto(dia)}`, accion: { tipo: 'ver_alternativa', fecha: cal.fecha, opcion: 'fecha', destino: dia, base: cal.base } } : null)
+      : opcionesMensaje(msg)?.[Number(b.dataset.opcion)];
     if (!op || decisiones.has(msg) || !vigente()) return;
     if (op.accion.tipo === 'ir') return ir(op.accion.vista); // los botones para ir a ver el cambio quedan
     if (op.accion.tipo === 'reintentar') {
@@ -311,7 +314,7 @@ function holaHtml() {
   const dia = conPlan ? sesionDe(E.plan, hoy()) : null, proxima = conPlan && !dia ? E.plan.dias.find(d => d.fecha > hoy()) : null;
   const linea = !E.plan ? 'Cuéntame qué quieres entrenar. Para armar tu primer plan, completa tu edad y acepta los términos en tu perfil.'
     : !conPlan ? 'Revisa las indicaciones de tu perfil antes de armar un plan.'
-    : dia ? `Hoy toca ${dia.foco}: ${dia.ejercicios.length} ${dia.ejercicios.length === 1 ? 'ejercicio' : 'ejercicios'}, unos ${duracionSesion(dia)} min.`
+    : dia ? `Hoy toca ${dia.foco}: ${dia.ejercicios.length} ${dia.ejercicios.length === 1 ? 'ejercicio' : 'ejercicios'}, unos ${minutosDe(dia)} min.`
     : proxima ? `Hoy descansas. La próxima es ${proxima.foco}, el ${diaCorto(proxima.fecha)}.` : 'Hoy descansas.';
   const acciones = !E.plan ? '<button type="button" class="boton primario" id="perfil-chat">Completar mi perfil</button>'
     : dia ? '<button type="button" class="boton primario" data-coach-ir="hoy">Empezar</button><button type="button" class="boton" data-coach-ir="semana">Ver la semana</button>'
@@ -607,11 +610,12 @@ async function decidir(accion, etiqueta, ir) {
   if (r.marca) { (E.marcasPlan ||= {})[r.marca.fecha] = r.marca.valor; datoCambiado('calendario_asistencia'); }
   const aviso = r.plan ? await cambiarPlan(r.plan, null, nube) : null;
   // Recuperada en otro día: ya no es una falta (el calendario de la pregunta la había dejado como no hecha).
-  if (accion.tipo === 'aceptar_alternativa' && r.plan && E.plan === r.plan && E.marcasPlan?.[accion.fecha] === 'saltada') { delete E.marcasPlan[accion.fecha]; datoCambiado('calendario_asistencia'); }
+  // Repartida en otras sesiones (r.marca) sigue siendo una falta.
+  if (accion.tipo === 'aceptar_alternativa' && r.plan && !r.marca && E.plan === r.plan && E.marcasPlan?.[accion.fecha] === 'saltada') { delete E.marcasPlan[accion.fecha]; datoCambiado('calendario_asistencia'); }
   if (!vigente()) return false;
   if (r.plan && E.plan !== r.plan) aceptada = false;
   const cambio = Boolean(r.plan && !aviso) || r.marca?.valor === 'saltada';
-  E.chat.push({ rol: 'coach', app: true, texto: aviso || r.texto, opciones: r.opciones || (cambio ? irA(r.ir) : null), semana: r.semana || null });
+  E.chat.push({ rol: 'coach', app: true, texto: aviso || r.texto, opciones: r.opciones || (cambio ? irA(r.ir) : null), semana: r.semana || null, calendario: r.calendario || null });
   guardar();
   return aceptada;
 }
@@ -764,19 +768,42 @@ export function textoRico(t) {
 }
 
 const esperaTexto = () => (!nube.usuarioId() ? 'se envía al entrar a tu cuenta' : E.consentimientos?.ia_transferencia === false ? 'se envía al activar la IA' : 'se envía con señal');
+const LETRAS_DIA = ['L', 'M', 'Mi', 'J', 'V', 'S', 'D'];
+/**
+ * El calendario de las opciones para una sesión que no se hizo (nucleo/sin-registro.js, calendarioNoHecha): la que
+ * faltó, lo hecho, lo que viene, los días que no puedes y la letra de cada opción en el día adonde la lleva. Mientras
+ * las opciones siguen abiertas, los días libres se tocan para ponerla ahí.
+ */
+function calendarioChatHtml(cal, i, activo) {
+  const f0 = hoy();
+  const celda = d => {
+    const num = Number(d.fecha.slice(8));
+    const clase = d.letra ? 'cal-naranjo' : d.tipo === 'faltada' ? 'cal-rojo' : d.tipo === 'hecha' ? 'cal-verde' : d.tipo === 'sesion' || d.tipo === 'saltada' ? 'cal-gris' : d.fecha === f0 ? 'cal-azul' : 'rev-libre';
+    const marca = d.letra || (d.tipo === 'faltada' ? '×' : d.tipo === 'hecha' ? '✓' : d.tipo === 'sesion' ? '•' : d.tipo === 'saltada' ? '×' : d.tipo === 'no_puedo' ? '–' : d.fecha === f0 ? 'Hoy' : '');
+    const que = d.tipo === 'faltada' ? `${d.foco}, la que no hiciste` : d.foco ? `${d.foco}${d.tipo === 'hecha' ? ', hecha' : d.tipo === 'saltada' ? ', saltada' : ''}` : d.tipo === 'no_puedo' ? 'no puedes entrenar' : 'libre';
+    const nombre = `${mayus(diaCorto(d.fecha))}: ${d.letra ? `opción ${d.letra}, ` : ''}${que}`;
+    if (activo && d.elegible) return `<button type="button" class="cal-dia cal-elegible${d.letra ? ' cal-naranjo' : d.fecha === f0 ? ' cal-azul' : ''}" data-cal-elegir="${d.fecha}" data-msg="${i}" aria-label="${esc(`Ponerla el ${diaCorto(d.fecha)}${d.letra ? ` (opción ${d.letra})` : ''}`)}"><span>${num}</span><small>${esc(d.letra || (d.fecha === f0 ? 'Hoy' : '+'))}</small></button>`;
+    return `<span class="cal-dia cal-chat-dia ${clase}${d.tipo === 'saltada' ? ' tachada' : ''}" role="img" aria-label="${esc(nombre)}" title="${esc(nombre)}"><span>${num}</span><small>${esc(marca)}</small></span>`;
+  };
+  const tocables = activo && cal.dias.some(d => d.elegible);
+  return `<div class="cal-grid rev-cal cal-opciones" role="group" aria-label="Calendario de las opciones">${LETRAS_DIA.map(l => `<span class="cal-letra" aria-hidden="true">${l}</span>`).join('')}${cal.dias.map(celda).join('')}</div>
+    <p class="pequeno suave cal-leyenda-chat">× la que no hiciste · • sesión del plan · ✓ hecha · la letra es adónde la lleva cada opción${tocables ? ' · toca un día libre (+) para ponerla ahí' : ''}</p>`;
+}
+
 function burbuja(m, i) {
   // Lo que pasó (un cambio con las herramientas, deshacerlo): una línea gris centrada, con Deshacer si vale.
   if (m.sistema) return `<p id="mensaje-chat-${i}" tabindex="-1" class="linea-sistema">${esc(m.texto)}${m.deshacer ? ' · <button type="button" data-deshacer>Deshacer</button>' : ''}</p>`;
   if (m.pendiente) return `<div id="mensaje-chat-${i}" tabindex="-1" class="burbuja coach"><span class="escribiendo" role="status" aria-label="${esc(nombreAsistente())} está escribiendo"><i></i><i></i><i></i></span></div>`;
   const opciones = opcionesMensaje(m), ocupada = decisiones.has(m);
   // semana: cómo quedaría (o quedó) la semana, día por día, con lo que cambia marcado.
+  const calendario = m.calendario?.dias?.length ? calendarioChatHtml(m.calendario, i, Boolean(m.opciones?.length)) : '';
   const semana = m.semana?.length ? `<ul class="semana-chat">${m.semana.map(d => `<li class="${d.libre ? 'libre' : d.cambio ? 'cambia' : ''}"><span class="num">${esc(diaCorto(d.fecha))}</span><strong>${esc(d.foco)}</strong>${d.cambio ? `<small>${esc(d.cambio)}</small>` : ''}</li>`).join('')}</ul>` : '';
   // Las notas de una sesión y la revisión semanal se escribieron solas: llevan su etiqueta y el mismo formato del coach.
   const etiqueta = m.tipo === 'sesion' ? 'Tu sesión' : m.tipo === 'nota' ? 'Nota de la sesión' : m.tipo === 'revision' ? 'Revisión semanal' : m.tipo === 'descarga' ? 'Propuesta de descarga' : m.tipo === 'semana_a_medias' ? 'Semana a medias' : '';
   const cabeza = etiqueta ? `<span class="tipo-mensaje">${icono(m.tipo === 'revision' || m.tipo === 'descarga' || m.tipo === 'semana_a_medias' ? 'calendario' : m.tipo === 'sesion' ? 'pesa' : 'lapiz', 'icono icono-chico')} ${etiqueta}${m.porEnviar ? ` · ${esperaTexto()}` : ''}</span>` : '';
   // Lo escrito sin señal: el mensaje queda a la vista, más tenue, con "En espera" debajo.
   const espera = m.porEnviar && !etiqueta ? `<span class="estado-envio">En espera · ${esperaTexto()}</span>` : '';
-  return `<div id="mensaje-chat-${i}" tabindex="-1" class="burbuja ${m.rol}${etiqueta ? ' automatico' : ''}${espera ? ' en-espera' : ''}${m.propuesta ? ' con-propuesta' : ''}">${cabeza}<div class="texto-chat">${m.rol === 'coach' || etiqueta ? textoRico(m.texto) : esc(m.texto)}${m.enlace ? ` <a class="enlace" href="${esc(m.enlace)}" target="_blank" rel="noopener">Ver videos</a>` : ''}</div>${semana}${m.propuesta ? propuestaChatHtml({ ...m.propuesta, estado: m.estadoPropuesta || m.propuesta.estado }) : ''}${opciones?.length ? `<div class="opciones-chat" ${ocupada ? 'aria-busy="true"' : ''}>${opciones.map((o, k) => `<button type="button" ${ocupada ? 'disabled' : ''} class="boton${['confirmar', 'confirmar_ia', 'aceptar_alternativa'].includes(o.accion?.tipo) && k === 0 ? ' primario' : ''}" data-msg="${i}" data-opcion="${k}">${esc(o.etiqueta)}</button>${o.nota ? `<span class="pequeno suave nota-opcion">${esc(o.nota)}</span>` : ''}${o.avisos?.length ? `<span class="pequeno suave">${esc(o.avisos.join(' '))}</span>` : ''}`).join('')}</div>` : ''}${m.sugerencias?.length && i === E.chat.length - 1 ? `<div class="chips respuestas-rapidas" role="group" aria-label="Respuestas rápidas">${m.sugerencias.map(x => `<button type="button" class="sugerencia">${esc(x)}</button>`).join('')}</div>` : ''}</div>${espera}`;
+  return `<div id="mensaje-chat-${i}" tabindex="-1" class="burbuja ${m.rol}${etiqueta ? ' automatico' : ''}${espera ? ' en-espera' : ''}${m.propuesta ? ' con-propuesta' : ''}">${cabeza}<div class="texto-chat">${m.rol === 'coach' || etiqueta ? textoRico(m.texto) : esc(m.texto)}${m.enlace ? ` <a class="enlace" href="${esc(m.enlace)}" target="_blank" rel="noopener">Ver videos</a>` : ''}</div>${calendario}${semana}${m.propuesta ? propuestaChatHtml({ ...m.propuesta, estado: m.estadoPropuesta || m.propuesta.estado }) : ''}${opciones?.length ? `<div class="opciones-chat" ${ocupada ? 'aria-busy="true"' : ''}>${opciones.map((o, k) => `<button type="button" ${ocupada ? 'disabled' : ''} class="boton${['confirmar', 'confirmar_ia', 'aceptar_alternativa'].includes(o.accion?.tipo) && k === 0 ? ' primario' : ''}" data-msg="${i}" data-opcion="${k}"${o.letra ? ` aria-label="${esc(`Opción ${o.letra}: ${o.etiqueta}`)}"` : ''}>${o.letra ? `<b class="letra-opcion" aria-hidden="true">${esc(o.letra)}</b>` : ''}${esc(o.etiqueta)}</button>${o.nota ? `<span class="pequeno suave nota-opcion">${esc(o.nota)}</span>` : ''}${o.avisos?.length ? `<span class="pequeno suave">${esc(o.avisos.join(' '))}</span>` : ''}`).join('')}</div>` : ''}${m.sugerencias?.length && i === E.chat.length - 1 ? `<div class="chips respuestas-rapidas" role="group" aria-label="Respuestas rápidas">${m.sugerencias.map(x => `<button type="button" class="sugerencia">${esc(x)}</button>`).join('')}</div>` : ''}</div>${espera}`;
 }
 
 /**

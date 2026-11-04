@@ -3,11 +3,12 @@
 // y a la izquierda vuelve, mantener apretado pausa y deslizar hacia abajo cierra. Una idea por pantalla, con un color
 // cada una, números grandes que se cuentan solos y el coach que narra. Los datos salen de nucleo/historias.js; aquí solo
 // se dibujan. Se entra desde Entrenar (los círculos de arriba), el Coach (el anillo en su cara) y Progreso (el resumen).
-import { E, D, esc, guardar, indice, hoy, peso, volumenTexto, enUnidad, unidadPeso, IMAGENES, modoEjemplo } from './comun.js';
+import { E, D, R, C, esc, guardar, indice, hoy, peso, volumenTexto, enUnidad, unidadPeso, IMAGENES, modoEjemplo, avisar } from './comun.js';
 import * as nube from './nube.js';
 import { datosParaIA, filtrarFrases, huellaHistoria } from '../nucleo/historias-ia.js';
 import { imagenAsistente, nombreAsistente } from './cuestionario.js';
-import { historiaSemana, historiaMes, historiaAnio, historiasDeHoy, idHistoria, MESES } from '../nucleo/historias.js';
+import { historiaSemana, historiaMes, historiaAnio, historiaCiclo, historiasDeHoy, idHistoria, MESES, CAMBIOS_CICLO, SENSACIONES_CICLO, respuestaCiclo } from '../nucleo/historias.js';
+import { guardarEnBorrador } from '../nucleo/ciclo-siguiente.js';
 import { textoPct } from '../nucleo/rendimiento-sesion.js';
 import { esAsistido } from '../nucleo/catalogo.js';
 import { textoRecord, srcInsignia } from './resumen.js';
@@ -17,8 +18,9 @@ import { icono } from './iconos.js';
 import { sinMovimiento } from './movimiento.js';
 
 // Cuánto dura cada pantalla, según lo que hay que leer.
-const DURACION = { portada: 6000, cifra: 7000, records: 8500, barras: 8500, lista: 7500, fuerza: 8500, ranking: 9000, meta: 7000, personalidad: 8000, cierre: 6000 };
-const POSE = { semana: 'saludo', mes: 'calendario', año: 'celebra' };
+// Las que piden una respuesta (prioridades y cómo te fue) duran más y se pausan al tocarlas.
+const DURACION = { portada: 6000, cifra: 7000, records: 8500, barras: 8500, lista: 7500, fuerza: 8500, ranking: 9000, meta: 7000, personalidad: 8000, cierre: 6000, prioridades: 45000, feedback: 60000, 'cierre-ciclo': 7000 };
+const POSE = { semana: 'saludo', mes: 'calendario', año: 'celebra', ciclo: 'pregunta' };
 const ICONO_PERSONALIDAD = { constante: 'calendario', records: 'trofeo', preciso: 'objetivo', madrugador: 'reloj', nocturno: 'luna', incansable: 'fuego' };
 const FORMATO = {
   entero: x => Math.round(x).toLocaleString('es-CL'),
@@ -32,8 +34,8 @@ const corto = x => { const v = Math.round(enUnidad(x) || 0); return v >= 1e6 ? `
 const grande = (valor, formato = 'entero') => `<p class="hist-grande" style="--n:${FORMATO[formato](Number(valor) || 0).length}">${numero(valor, formato)}</p>`;
 
 // ── Qué historias hay y cómo se arman ────────────────────────────────────────────────────────────────────────────────
-const etiquetaDe = x => (x.tipo === 'semana' ? 'Tu semana' : x.tipo === 'mes' ? mayuscula(MESES[Number(x.mes.slice(5, 7)) - 1]) : `Tu ${x.anio}`);
-const deId = id => { const [tipo, v] = String(id).split('|'); return tipo === 'semana' ? { tipo, lunes: v } : tipo === 'mes' ? { tipo, mes: v } : { tipo: 'año', anio: Number(v) }; };
+const etiquetaDe = x => (x.tipo === 'ciclo' ? 'Tu bloque' : x.tipo === 'semana' ? 'Tu semana' : x.tipo === 'mes' ? mayuscula(MESES[Number(x.mes.slice(5, 7)) - 1]) : `Tu ${x.anio}`);
+const deId = id => { const [tipo, v] = String(id).split('|'); return tipo === 'ciclo' ? { tipo, inicio: v } : tipo === 'semana' ? { tipo, lunes: v } : tipo === 'mes' ? { tipo, mes: v } : { tipo: 'año', anio: Number(v) }; };
 export const disponibles = () => historiasDeHoy({ sesiones: E.sesiones || [], plan: E.plan, hoy: hoy() });
 export const hayNueva = () => disponibles().some(x => !E.historiasVistas?.[idHistoria(x)]);
 
@@ -41,6 +43,7 @@ export const hayNueva = () => disponibles().some(x => !E.historiasVistas?.[idHis
 export function construir(id) {
   const x = deId(id), asistidos = new Set(indice.ejercicios.filter(esAsistido).map(e => e.id));
   const base = { sesiones: E.sesiones || [], plan: E.plan, bienestar: E.bienestar || {}, indice, asistidos };
+  if (x.tipo === 'ciclo') return E.plan?.inicio === x.inicio ? historiaCiclo({ ...base, hoy: hoy(), respuestas: R() || {} }) : null;
   if (x.tipo === 'semana') return historiaSemana({ ...base, lunes: x.lunes, hoy: hoy() });
   if (x.tipo === 'mes') return historiaMes({ ...base, mes: x.mes, rango: D().series_rango || null });
   return historiaAnio({ ...base, anio: x.anio });
@@ -137,8 +140,73 @@ function contenidoHtml(p, h) {
       return `${etiqueta}${titulo}${repaso}<div class="hist-acciones"><button type="button" class="hist-accion" data-hist-compartir>${icono('compartir')}Compartir</button><button type="button" class="hist-accion secundaria" data-hist-otra-vez>Ver de nuevo</button></div>
         <p class="hist-privado">La imagen lleva tus cifras y récords; nunca tu energía, ánimo ni sueño.</p>`;
     }
+    // Historia del bloque: elegir las prioridades del siguiente (hasta 3; las que quedaron bajo lo planificado, marcadas).
+    case 'prioridades': {
+      const r = abierta?.respuesta, elegidos = r?.musculos ?? p.elegidos;
+      return `${etiqueta}${titulo}<div class="hist-chips" role="group" aria-label="Músculos prioridad">${C.zonas.musculos.map(([m, t]) => `<button type="button" class="hist-chip${p.sugeridos.includes(m) ? ' sugerido' : ''}" data-hist-musculo="${m}" aria-pressed="${elegidos.includes(m)}">${esc(t)}${p.sugeridos.includes(m) ? '<small>quedó bajo</small>' : ''}</button>`).join('')}</div>
+        ${elegidos.length > 3 ? '<p class="hist-nota">Más de 3: igual se puede, pero cada una crece menos.</p>' : ''}
+        <div class="hist-acciones"><button type="button" class="hist-accion" data-hist-siguiente>${elegidos.length ? 'Listo' : 'Sin prioridades'}</button></div>`;
+    }
+    case 'feedback': {
+      const r = abierta?.respuesta || {};
+      return `${etiqueta}${titulo}<div class="hist-chips" role="radiogroup" aria-label="Cómo te fue">${SENSACIONES_CICLO.map(([id, t]) => `<button type="button" class="hist-chip" role="radio" data-hist-sensacion="${id}" aria-checked="${r.sensacion === id}">${esc(t)}</button>`).join('')}</div>
+        <p class="hist-detalle">¿Qué cambiarías para el próximo?</p>
+        <div class="hist-chips" role="group" aria-label="Qué cambiarías">${CAMBIOS_CICLO.map(c => `<button type="button" class="hist-chip" data-hist-cambio="${c.id}" aria-pressed="${(r.elegidos || []).includes(c.id)}">${esc(c.texto)}</button>`).join('')}</div>
+        <label class="hist-campo"><span class="sr-only">Algo más</span><textarea rows="2" maxlength="600" placeholder="Algo más que quieras contarme (opcional)" data-hist-texto>${esc(r.texto || '')}</textarea></label>
+        <div class="hist-acciones"><button type="button" class="hist-accion" data-hist-guardar>Guardar para el próximo bloque</button></div>`;
+    }
+    case 'cierre-ciclo': {
+      const g = abierta?.guardado;
+      const lineas = g ? [g.musculos ? `Prioridad: ${g.musculos.length ? g.musculos.map(m => (NOMBRE_MUSCULO[m] || m).toLowerCase()).join(', ') : 'ninguna'}` : '', ...g.cambios.map(id => CAMBIOS_CICLO.find(c => c.id === id)?.texto || '')].filter(Boolean) : [];
+      return `${etiqueta}${titulo}${lineas.length ? `<ul class="hist-repaso hist-elegido">${lineas.map(t => `<li><span>${esc(t)}</span></li>`).join('')}</ul>` : `<p class="hist-detalle">${g ? 'Guardé lo que me contaste.' : 'No elegiste cambios: el próximo bloque sigue tu perfil.'}</p>`}`;
+    }
     default: return `${etiqueta}${titulo}${detalle}`;
   }
+}
+
+/**
+ * Lo que se responde en la historia del bloque. Las prioridades y los cambios van al borrador del siguiente bloque
+ * (nucleo/ciclo-siguiente.js), que se aplica al armarlo y la persona confirma: nada cambia el plan de ahora. Lo que
+ * contó queda en respuestas.feedback_ciclos para el coach. Con cuenta, el perfil se sube como siempre.
+ */
+function guardarCiclo(a, { silencioso = false } = {}) {
+  const r = R() || {}, x = a.respuesta || {};
+  const { cambios, feedback } = respuestaCiclo(r, { bloque: a.h.desde, fecha: hoy(), musculos: x.musculos ?? null, sensacion: x.sensacion || null, elegidos: x.elegidos || [], texto: x.texto || '' });
+  const conBorrador = guardarEnBorrador(r, cambios);
+  E.respuestas = { ...conBorrador, feedback_ciclos: [feedback, ...(r.feedback_ciclos || []).filter(f => f.bloque !== feedback.bloque)].slice(0, 12) };
+  guardar();
+  if (nube.conectado()) nube.guardarCuestionario(structuredClone(E.respuestas)).catch(() => {});
+  a.guardado = { musculos: x.musculos ?? null, cambios: x.elegidos || [] };
+  if (!silencioso) avisar('Guardado para tu próximo bloque.');
+}
+
+/** Toques en las pantallas que piden respuesta: cada toque pausa la historia y redibuja la pantalla. */
+function enlazarRespuestas(a, escena) {
+  const p = a.h.pantallas[a.i];
+  if (!['prioridades', 'feedback'].includes(p.forma)) return;
+  a.respuesta ||= {};
+  const quieto = () => { if (!a.pausada) { a.pausada = true; pausar(true); } };
+  const redibujar = () => { const el = escena.querySelector('.hist-contenido'); el.innerHTML = contenidoHtml(p, a.h); enlazarRespuestas(a, escena); };
+  escena.querySelectorAll('[data-hist-musculo]').forEach(b => b.addEventListener('click', () => {
+    quieto();
+    const m = b.dataset.histMusculo, ya = a.respuesta.musculos ?? [...p.elegidos];
+    a.respuesta.musculos = ya.includes(m) ? ya.filter(y => y !== m) : [...ya, m];
+    redibujar();
+  }));
+  // "Listo" ya guarda las prioridades: si después se salta la pantalla de cómo le fue, no se pierden.
+  escena.querySelector('[data-hist-siguiente]')?.addEventListener('click', () => { a.respuesta.musculos ??= [...p.elegidos]; guardarCiclo(a, { silencioso: true }); a.pausada = false; pausar(false); ir(a.i + 1); });
+  escena.querySelectorAll('[data-hist-sensacion]').forEach(b => b.addEventListener('click', () => { quieto(); a.respuesta.sensacion = a.respuesta.sensacion === b.dataset.histSensacion ? null : b.dataset.histSensacion; redibujar(); }));
+  escena.querySelectorAll('[data-hist-cambio]').forEach(b => b.addEventListener('click', () => {
+    quieto();
+    const id = b.dataset.histCambio, c = CAMBIOS_CICLO.find(x => x.id === id), ya = a.respuesta.elegidos || [];
+    // Cada cambio excluye a su contrario (más corto o más largo, un día menos o uno más).
+    a.respuesta.elegidos = ya.includes(id) ? ya.filter(y => y !== id) : [...ya.filter(y => y !== c.par), id];
+    redibujar();
+  }));
+  const texto = escena.querySelector('[data-hist-texto]');
+  texto?.addEventListener('focus', quieto);
+  texto?.addEventListener('input', () => { a.respuesta.texto = texto.value; });
+  escena.querySelector('[data-hist-guardar]')?.addEventListener('click', () => { guardarCiclo(a); a.pausada = false; pausar(false); ir(a.i + 1); });
 }
 const coachHtml = p => (p.frase ? `<div class="hist-coach">${imagenAsistente(p.pose, 'hist-pose')}<p class="hist-globo">${esc(p.frase)}</p></div>` : '');
 
@@ -235,6 +303,7 @@ function ir(i) {
   contar(escena);
   escena.querySelector('[data-hist-compartir]')?.addEventListener('click', ev => compartir(a.h, ev.currentTarget));
   escena.querySelector('[data-hist-otra-vez]')?.addEventListener('click', () => ir(0));
+  enlazarRespuestas(a, escena);
 }
 
 function pausar(si) {
@@ -264,13 +333,15 @@ function contar(escena) {
 function teclas(ev) {
   const a = abierta;
   if (!a) return;
+  // Escribiendo en "algo más": las flechas y el espacio son del texto.
+  if (ev.target.closest?.('textarea, input') && ev.key !== 'Escape' && ev.key !== 'Tab') return;
   if (ev.key === 'Escape') { ev.preventDefault(); cerrarHistoria(); }
   else if (ev.key === 'ArrowRight') { ev.preventDefault(); ir(a.i + 1); }
   else if (ev.key === 'ArrowLeft') { ev.preventDefault(); ir(a.i - 1); }
   else if (ev.key === ' ' && !ev.target.closest?.('button')) { ev.preventDefault(); a.pausada = !a.pausada; pausar(a.pausada); }
   else if (ev.key === 'Tab') {
     // El foco no sale de la historia.
-    const xs = [...a.raiz.querySelectorAll('button:not([disabled])')];
+    const xs = [...a.raiz.querySelectorAll('button:not([disabled]), textarea')];
     if (!xs.length) return;
     const i = xs.indexOf(document.activeElement);
     if (ev.shiftKey && i <= 0) { ev.preventDefault(); xs.at(-1).focus(); }
@@ -296,7 +367,7 @@ function enlazar(a) {
   // Mantener apretado pausa; deslizar hacia abajo cierra. Los botones de arriba y los de la pantalla funcionan solos.
   let inicio = null, espera = null;
   raiz.addEventListener('pointerdown', ev => {
-    if (ev.target.closest('.hist-cab button, .hist-escena button')) return;
+    if (ev.target.closest('.hist-cab button, .hist-escena button, .hist-escena textarea')) return;
     inicio = { x: ev.clientX, y: ev.clientY, arrastre: false };
     espera = setTimeout(() => { a.manteniendo = true; pausar(true); }, 220);
   });
