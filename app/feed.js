@@ -33,6 +33,7 @@ function tarjetaHtml(t, historial) {
     <div class="feed-meta"><span>${etiqueta(t.tipo)}</span><time datetime="${esc(t.fecha)}">${esc(fechaCorta(t.fecha))}</time></div>
     <h3>${esc(t.titulo)}</h3><p>${esc(t.texto)}</p>
     ${serie ? `<p class="feed-cifra">${esc(`${serie.carga_kg != null ? peso(serie.carga_kg) + ' × ' : ''}${serie.reps || (serie.duracion_seg ? serie.duracion_seg + ' s' : '')}`)}</p>` : ''}
+    ${t.records?.length ? `<ul class="feed-records">${t.records.map(r => `<li><b>${esc(r.nombre)}</b><span>${esc(`${r.serie?.carga_kg != null ? peso(r.serie.carga_kg) + ' × ' : ''}${r.serie?.reps ?? (r.serie?.duracion_seg ? r.serie.duracion_seg + ' s' : '')}`)}</span></li>`).join('')}</ul>` : ''}
     ${t.puntos ? `${grafico(t.puntos)}<p class="pequeno">${esc(peso(t.antes))} a ${esc(peso(t.ahora))} estimados</p>` : ''}
     ${t.tipo === 'cambio' && t.antes ? `<p class="pequeno">Antes: ${esc(t.antes)}<br>Ahora: ${esc(t.ahora)}</p>` : ''}
     ${t.cambios?.length ? `<details><summary>Ver antes, después y por qué</summary>${t.cambios.map(c => `<p><b>${esc(c.nombre)}</b>: ${esc(c.motivo)}<br>Antes: ${esc(dosis(c.antes))}<br>Ahora: ${esc(dosis(c.despues))}</p>`).join('')}</details>` : ''}

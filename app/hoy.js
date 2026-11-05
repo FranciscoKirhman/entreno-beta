@@ -803,7 +803,9 @@ function propuestaTiempo(dia, f) {
   if (ahora == null) return null;
   const sacarOpcionales = R().opcionales_al_empezar === true;
   const opcionales = sacarOpcionales ? base.ejercicios.filter(e => e.prioridad >= 4 && !hechas[e.ejercicio_id]?.empezado) : [];
-  const baseAjuste = opcionales.length ? { ...base, ejercicios: base.ejercicios.filter(e => !opcionales.includes(e)) } : base;
+  // Sin los opcionales, la pareja de una superserie que queda sola pasa a series normales y el orden se rehace.
+  const sinSueltas = ejs => ejs.map((e, i) => ({ ...e, orden: i, superserie: e.superserie && ejs.filter(x => x.superserie === e.superserie).length > 1 ? e.superserie : null }));
+  const baseAjuste = opcionales.length ? { ...base, ejercicios: sinSueltas(base.ejercicios.filter(e => !opcionales.includes(e))) } : base;
   const accesorios = !sacarOpcionales && ahora < quedan - 15 ? accesoriosHoy(dia) : [];
   if (ahora <= quedan + 5 && !accesorios.length && !opcionales.length) return null;
   const r = opcionales.length && (duracionReal(baseAjuste, ritmo) ?? Infinity) <= quedan
@@ -814,12 +816,15 @@ function propuestaTiempo(dia, f) {
   const nombre = id => indice.porId.get(id)?.nombre || id;
   const ritmoTexto = textoRitmo();
   const crece = r.agregados.length > 0 && !r.quitados.length;
+  // Cabía igual: lo opcional sale porque la persona eligió mantener su tiempo sin lo opcional (preguntas del coach).
+  const porPedido = opcionales.length > 0 && ahora <= quedan + 5;
   return {
     id: `tiempo:${f}`, tipo: 'tiempo', ejercicio_id: null, nombre: 'Tiempo de hoy',
     accion: crece ? `sumar ${lista(r.agregados.map(nombre).map(x => x.toLowerCase()))} como opcional` : `ajustar la sesión a tus ${disponibles} minutos`,
     hecho: crece ? `Sumé ${lista(r.agregados.map(nombre).map(x => x.toLowerCase()))} como opcional` : `Ajusté la sesión a tus ${disponibles} minutos`,
     motivo: crece ? `tienes ${disponibles} minutos y la sesión toma unos ${ahora}${ritmoTexto ? `, ${ritmoTexto}` : ''}`
-      : `${empezada ? 'lo que falta' : 'la sesión'} toma unos ${ahora} minutos${ritmoTexto ? ` ${ritmoTexto}` : ''}${r.quitados.length ? `; hoy no van: ${lista(r.quitados.map(nombre))}` : ''}`,
+      : porPedido ? `elegiste mantener tus ${disponibles} minutos sin lo opcional; hoy no van: ${lista(r.quitados.map(nombre))}`
+        : `${empezada ? 'lo que falta' : 'la sesión'} toma unos ${ahora} minutos${ritmoTexto ? ` ${ritmoTexto}` : ''}${r.quitados.length ? `; hoy no van: ${lista(r.quitados.map(nombre))}` : ''}`,
     antes: resumenSesion({ ejercicios: base.ejercicios, cardio: base.cardio, minutos: ahora }),
     ahora: resumenSesion({ ejercicios: r.ejercicios, cardio: r.cardio, minutos: r.minutos }),
     ejercicios: r.ejercicios, cardio: r.cardio, base, minutos: quedan,

@@ -14,6 +14,11 @@ const reserva = s => s.tipo === 'fallo' ? 0 : s.rir != null ? Number(s.rir) : s.
 const orden = s => `${s.fecha}T${s.hora || '00:00'}`;
 const mediana = xs => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 const nombre = (indice, id) => indice.porId.get(id)?.nombre || 'Ejercicio';
+// Los minutos que acepta el perfil (contenido/cuestionario.json, duracion_min). Con otro valor, derivar no sabe cuántos
+// ejercicios caben y el bloque siguiente salía con 6 por sesión: proponer 115 lo achicaba en vez de alargarlo.
+const MINUTOS_PERFIL = [30, 45, 60, 75, 90];
+// Una sesión cuenta como más larga si pasa el tiempo del perfil por más de 5 minutos: 91 contra 90 no es una señal.
+const MARGEN_MIN = 5;
 
 export function preguntasCoach({ plan, sesiones = [], respuestas = {}, descansos = {}, notas = {}, indice, hoy }) {
   if (!plan?.dias?.length || plan.libre || plan.bloqueado) return [];
@@ -21,8 +26,10 @@ export function preguntasCoach({ plan, sesiones = [], respuestas = {}, descansos
   const recientes = [...sesiones].filter(s => s.fecha >= desde && s.fecha <= hoy).sort((a, b) => orden(b).localeCompare(orden(a)));
   const bloque = plan.inicio || 'actual', preguntas = [];
   const ultimas = recientes.slice(0, 3), minutos = Number(respuestas.duracion_min);
-  if (minutos > 0 && ultimas.length === 3 && ultimas.every(s => Number(s.duracion_min) > minutos)) {
+  if (minutos > 0 && ultimas.length === 3 && ultimas.every(s => Number(s.duracion_min) > minutos + MARGEN_MIN)) {
     const real = mediana(ultimas.map(s => Number(s.duracion_min)));
+    // Subir solo si hay una opción del perfil más larga (la de 90 ya es "1 hora 30 o más").
+    const subir = MINUTOS_PERFIL.find(m => m >= real) ?? MINUTOS_PERFIL.at(-1);
     const ritmo = ritmoPersonal({ sesiones: recientes, plan, porId: indice.porId, hasta: hoy });
     const ids = new Set(ultimas.map(s => s.id));
     const descanso = tendenciaDescansos(Object.fromEntries(Object.entries(descansos).filter(([id]) => ids.has(id))));
@@ -31,7 +38,7 @@ export function preguntasCoach({ plan, sesiones = [], respuestas = {}, descansos
       titulo: '¿Cómo acomodamos tu tiempo?',
       texto: `Tus últimas tres sesiones duraron ${ultimas.map(s => s.duracion_min).join(', ')} minutos y tu perfil dice ${minutos}.${ritmo ? ` Tu ritmo medido es ${String(ritmo.factor).replace('.', ',')} veces el estimado.` : ''}${descanso?.basicos ? ` Descansaste ${reloj(descanso.basicos.real)} en los básicos, frente a ${reloj(descanso.basicos.pedido)} pedidos.` : ''}`,
       opciones: [
-        { id: 'subir', etiqueta: `Usar ${Math.ceil(real / 5) * 5} minutos en el próximo bloque`, efecto: 'borrador', cambios: { duracion_min: Math.ceil(real / 5) * 5 } },
+        ...(subir > minutos ? [{ id: 'subir', etiqueta: `Usar ${subir} minutos en el próximo bloque`, efecto: 'borrador', cambios: { duracion_min: String(subir) } }] : []),
         { id: 'mantener', etiqueta: `Mantener ${minutos} minutos y sacar lo opcional al empezar`, efecto: 'opcionales' },
         ...(Number(respuestas.dias_meta) > 1 ? [{ id: 'menos', etiqueta: 'Un día menos en el próximo bloque', efecto: 'borrador', cambios: { dias_meta: Number(respuestas.dias_meta) - 1 } }] : []),
       ] });
