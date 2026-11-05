@@ -14,6 +14,8 @@ import { comprobaciones, punteria } from '../nucleo/comprobacion-rir.js';
 import { tecnicaPendiente } from '../nucleo/tecnica-primero.js';
 import { lugaresDe } from '../nucleo/motor-plan.js';
 import * as nube from './nube.js';
+import { registrarProgresion } from '../nucleo/registro-progresion.js';
+import { datoCambiado } from './datos-nube.js';
 
 // Con la forma de anotar las mancuernas: con "El par", las de dos mancuernas suben de a 4.
 const lugarDe = dia => { const l = lugaresDe(R()); return l.find(x => x.nombre === dia?.lugar) || l.find(x => x.principal) || l[0]; };
@@ -57,27 +59,26 @@ function calcular(sesion, plan) {
 }
 
 function registrar(id, dato) {
-  const lista = Object.entries({ ...(E.ajustesSesion || {}), [id]: { ...dato, cuando: Date.now() } }).sort((a, b) => b[1].cuando - a[1].cuando).slice(0, 8);
-  E.ajustesSesion = Object.fromEntries(lista);
-  guardar();
+  E.progresionSesion = registrarProgresion(E.progresionSesion, id, dato);
+  datoCambiado('progresion_sesion');
 }
 
 /** Qué mostrar para la sesión: {estado: 'propuesta' | 'aplicado' | null, cambios, restan}. La cuenta de 10 segundos
  *  parte la primera vez que se muestra la propuesta. */
 export function ajustesDeSesion(sesion) {
   if (!corresponde(sesion)) return { estado: null, cambios: [] };
-  const reg = E.ajustesSesion?.[sesion.id];
+  const reg = E.progresionSesion?.[sesion.id];
   const h = huella(sesion);
   if (reg?.huella === h && reg.estado === 'aplicado') return { estado: 'aplicado', cambios: reg.cambios };
   if (reg?.huella === h && reg.estado === 'descartado') return { estado: null, cambios: [] };
   const { cambios } = calcular(sesion, baseDe(reg));
   if (!cambios.length) return { estado: null, cambios: [] };
   if (!(reg?.estado === 'propuesta' && reg.huella === h)) registrar(sesion.id, { estado: 'propuesta', huella: h, desde: Date.now(), previos: previos(reg) });
-  return { estado: 'propuesta', cambios, restan: restan(E.ajustesSesion[sesion.id]) };
+  return { estado: 'propuesta', cambios, restan: restan(E.progresionSesion[sesion.id]) };
 }
 
 export async function aplicarAjustes(sesion) {
-  const reg = E.ajustesSesion?.[sesion.id];
+  const reg = E.progresionSesion?.[sesion.id];
   const { plan, cambios } = calcular(sesion, baseDe(reg));
   if (!cambios.length) { registrar(sesion.id, { estado: 'descartado', huella: huella(sesion) }); return; }
   const n = cambios.length;
@@ -87,7 +88,7 @@ export async function aplicarAjustes(sesion) {
 }
 
 export async function deshacerAjustesSesion(sesion) {
-  const reg = E.ajustesSesion?.[sesion.id];
+  const reg = E.progresionSesion?.[sesion.id];
   if (reg?.estado !== 'aplicado') return;
   registrar(sesion.id, { estado: 'descartado', huella: reg.huella });
   const aviso = await cambiarPlan(deshacerAjustes(E.plan, reg.cambios), `Ajuste de las próximas sesiones deshecho (${fechaCorta(sesion.fecha)})`, nube);
@@ -99,12 +100,12 @@ export function descartarAjustes(sesion) { registrar(sesion.id, { estado: 'desca
 /** Si "Para la próxima" trae cambios para esta sesión que todavía no se mostraron (app/cierre-sesion.js). No anota
  *  nada: la cuenta de 10 segundos parte recién cuando el resumen la muestra. */
 export function faltaMostrarAjustes(sesion) {
-  return corresponde(sesion) && !E.ajustesSesion?.[sesion.id] && calcular(sesion, E.plan).cambios.length > 0;
+  return corresponde(sesion) && !E.progresionSesion?.[sesion.id] && calcular(sesion, E.plan).cambios.length > 0;
 }
 
 /** Lo que quedó en cuenta regresiva y ya cumplió los 10 segundos (por ejemplo, si se cerró la app): se aplica. */
 export async function aplicarPendientes() {
-  for (const [id, reg] of Object.entries(E.ajustesSesion || {})) {
+  for (const [id, reg] of Object.entries(E.progresionSesion || {})) {
     const sesion = E.sesiones.find(s => s.id === id);
     if (reg.estado !== 'propuesta' || restan(reg) > 0 || !sesion || !corresponde(sesion) || reg.huella !== huella(sesion)) continue;
     await aplicarAjustes(sesion);
@@ -142,7 +143,7 @@ export function enlazarAjustes(caja, sesion) {
   const repintar = () => { if (!caja.isConnected) return; const html = ajustesHtml(sesion); if (html) caja.innerHTML = html; else caja.remove(); };
   const aplicar = async () => {
     parar(id);
-    const r = E.ajustesSesion?.[id];
+    const r = E.progresionSesion?.[id];
     if (r?.estado === 'propuesta' && r.huella === huella(sesion)) await aplicarAjustes(sesion);
     repintar();
   };
@@ -156,14 +157,14 @@ export function enlazarAjustes(caja, sesion) {
     else descartarAjustes(sesion);
     repintar();
   });
-  const reg = E.ajustesSesion?.[id];
+  const reg = E.progresionSesion?.[id];
   if (reg?.estado !== 'propuesta' || !caja.querySelector('[data-ajustes="aplicar"]')) return;
   if (restan(reg) <= 0) { aplicar(); return; }
   relojes.set(id, {
     aplicar: setTimeout(aplicar, restan(reg) * 1000 + 50),
     cuenta: setInterval(() => {
       const el = caja.isConnected && caja.querySelector('[data-ajustes-cuenta]');
-      if (el) el.textContent = restan(E.ajustesSesion?.[id]);
+      if (el) el.textContent = restan(E.progresionSesion?.[id]);
     }, 1000),
   });
 }

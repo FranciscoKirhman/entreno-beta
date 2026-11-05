@@ -801,9 +801,15 @@ function propuestaTiempo(dia, f) {
   const quedan = Math.max(15, disponibles - transcurridos);
   const ahora = empezada ? minutosRestantes(base, hechas, cardioHecho, ritmo) : duracionReal(base, ritmo);
   if (ahora == null) return null;
-  const accesorios = ahora < quedan - 15 ? accesoriosHoy(dia) : [];
-  if (ahora <= quedan + 5 && !accesorios.length) return null;
-  const r = ajustarTiempo(base, { minutos: quedan, hechas, cardioHecho, ritmo, accesorios, porId: indice.porId, topeSeries: topeSeriesHoy() });
+  const sacarOpcionales = R().opcionales_al_empezar === true;
+  const opcionales = sacarOpcionales ? base.ejercicios.filter(e => e.prioridad >= 4 && !hechas[e.ejercicio_id]?.empezado) : [];
+  const baseAjuste = opcionales.length ? { ...base, ejercicios: base.ejercicios.filter(e => !opcionales.includes(e)) } : base;
+  const accesorios = !sacarOpcionales && ahora < quedan - 15 ? accesoriosHoy(dia) : [];
+  if (ahora <= quedan + 5 && !accesorios.length && !opcionales.length) return null;
+  const r = opcionales.length && (duracionReal(baseAjuste, ritmo) ?? Infinity) <= quedan
+    ? { ...baseAjuste, minutos: duracionReal(baseAjuste, ritmo), quitados: [], agregados: [] }
+    : ajustarTiempo(baseAjuste, { minutos: quedan, hechas, cardioHecho, ritmo, accesorios, porId: indice.porId, topeSeries: topeSeriesHoy() });
+  r.quitados.push(...opcionales.map(e => e.ejercicio_id));
   if (!r.quitados.length && !r.agregados.length && r.cardio === base.cardio && JSON.stringify(r.ejercicios.map(e => e.series)) === JSON.stringify(base.ejercicios.map(e => e.series))) return null;
   const nombre = id => indice.porId.get(id)?.nombre || id;
   const ritmoTexto = textoRitmo();

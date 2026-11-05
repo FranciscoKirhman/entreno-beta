@@ -1,3 +1,4 @@
+import { migrarProgresion } from '../nucleo/registro-progresion.js';
 import { sufijo } from '../nucleo/unidades.js';
 import { validarRespaldo } from '../nucleo/respaldo.js';
 // Estado y utilidades que comparten las vistas de la app. Todo funciona sin cuenta (en este navegador);
@@ -129,6 +130,7 @@ let alCargar = { clave: CLAVE, guardadoEn: lecturaFallida ? 0 : Number(E.guardad
 // Los ejercicios que crea la persona (nucleo/propios.js) se suman al catálogo del teléfono: así el banco, Hoy, el
 // validador y el historial los tratan como cualquier otro. Se rehace en cada guardado (cambia con la cuenta o el ejemplo).
 export function alinearPropios() {
+  migrarProgresion(E);
   if (!Array.isArray(indice.ejercicios)) return;
   const propios = Array.isArray(E.ejerciciosPropios) ? E.ejerciciosPropios : [];
   for (const [id, e] of indice.porId) if (e.propio) indice.porId.delete(id);

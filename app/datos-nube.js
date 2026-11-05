@@ -7,6 +7,8 @@ import { propiosDelPlan, conPropiosGuardados } from '../nucleo/propios.js';
 import { unirInicios } from '../nucleo/ciclo-menstrual.js';
 import * as nube from './nube.js';
 
+import { migrarProgresion, unirProgresion } from '../nucleo/registro-progresion.js';
+
 const PREFERENCIAS = ['escala_esfuerzo', 'mancuernas'];
 // clave en la cuenta → cómo leerla y ponerla en E. "Aviso con la pantalla bloqueada" es de cada teléfono (su
 // suscripción de avisos), así que no viaja con los ajustes de la sesión.
@@ -16,6 +18,7 @@ const LOCAL = {
   calendario_asistencia: campo('marcasPlan', {}), rutinas: campo('rutinas', []), sensaciones: campo('sensaciones', {}),
   // Los descansos reales de cada sesión (nucleo/descansos.js): la hora de cada serie no se guarda en la tabla series.
   descansos: campo('descansos', {}),
+  feed_vistas: { leer: () => E.feedVistas || {}, poner: v => { E.feedVistas = unirProgresion(E.feedVistas, v); } },
   // Con los ajustes de la sesión viajan dos preferencias de cómo se anota, que viven en las respuestas: RPE o RIR y
   // las mancuernas de a una o el par. Una cuenta que aún no las tiene recibe las de este teléfono (falta).
   ajustes_sesion: {
@@ -28,9 +31,11 @@ const LOCAL = {
       const aviso = E.ajustesSesion?.avisoCerrada, ajustes = { ...v };
       for (const k of PREFERENCIAS) { if (v?.[k] && R()) R()[k] = v[k]; delete ajustes[k]; }
       E.ajustesSesion = { ...ajustes, ...(aviso ? { avisoCerrada: aviso } : {}) };
+      migrarProgresion(E);
     },
     falta: v => PREFERENCIAS.some(k => R()?.[k] && !v?.[k]),
   },
+  progresion_sesion: { leer: () => E.progresionSesion || {}, poner: v => { E.progresionSesion = unirProgresion(E.progresionSesion, v); } },
   meta_peso: { leer: () => (E.metaPeso ? { kg: E.metaPeso } : {}), poner: v => { if (v?.kg) E.metaPeso = v.kg; else delete E.metaPeso; } },
   // El plan de la cuenta solo guarda ejercicios del catálogo: los propios y los del banco ampliado van aparte, con su
   // día y posición, y se reponen en el plan de otro teléfono.
@@ -118,13 +123,14 @@ export async function sincronizarDatosTelefono() {
   for (const clave of Object.keys(LOCAL)) {
     if (!permitido(clave)) continue;
     const fila = filas.find(f => f.clave === clave);
+    if (['progresion_sesion', 'feed_vistas'].includes(clave) && fila) LOCAL[clave].poner(fila.valor);
     if (E.nubeDatos?.[clave]?.pendiente || (!fila && tieneDatos(clave))) {
       await guardarDato(clave, contexto);
       contexto.comprobar();
     } else if (fila && revisionDe(clave) === alLeer[clave]) {
       const falta = LOCAL[clave].falta?.(fila.valor);
       LOCAL[clave].poner(fila.valor);
-      if (falta) { (E.nubeDatos ||= {})[clave] = { pendiente: true }; await guardarDato(clave, contexto); contexto.comprobar(); }
+      if (falta || E.nubeDatos?.[clave]?.pendiente) { (E.nubeDatos ||= {})[clave] = { pendiente: true }; await guardarDato(clave, contexto); contexto.comprobar(); }
     }
   }
   if (R().seguimiento_ciclo === true) {

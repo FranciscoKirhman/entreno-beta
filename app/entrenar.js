@@ -1,6 +1,6 @@
-// Pestaña Entrenar, como la pestaña "Workout" de Hevy: arriba el inicio rápido y la sesión de hoy; abajo, tu plan
-// como rutinas (cada sesión de la semana en una tarjeta con sus ejercicios y su botón). La sesión en sí es otra
-// pantalla (app/hoy.js), sin pestañas abajo; minimizada, queda una barra sobre el menú (app/mini-sesion.js).
+import { feedHtml, enlazarFeed } from './feed.js';
+// Entrenar: historias, sesión de hoy y actividad reciente. Las rutinas se abren con su botón.
+// La sesión sigue en app/hoy.js; minimizada, queda una barra sobre el menú (app/mini-sesion.js).
 import { E, esc, $, fechaCorta, indice, guardar, D, ahora, mostrarMensaje } from './comun.js';
 import { checklist } from '../nucleo/suplementos.js';
 import { avisoCheckin } from './checkin.js';
@@ -26,6 +26,7 @@ import { filaHistoriasHtml, abrirPorId } from './historias.js';
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const nombreDia = iso => DIAS[new Date(iso + 'T12:00:00Z').getUTCDay()];
 const nombreEj = e => e.nombre || indice.porId.get(e.ejercicio_id)?.nombre || 'Ejercicio';
+let rutinasAbiertas = false;
 let planAbierto = true; // la carpeta "Tu plan" se pliega y despliega como las carpetas de Hevy
 
 /** Lunes a domingo de la semana de f. */
@@ -81,7 +82,7 @@ function hoyHtml(s) {
       ${d.ejercicios.length > 5 ? `<li class="hoy-entrenar-mas pequeno suave">y ${d.ejercicios.length - 5} más</li>` : ''}</ul>
     ${s.enCurso ? '<button type="button" class="boton primario grande" data-ir-sesion>Seguir la sesión</button>'
       : s.guardada ? '<button type="button" class="boton grande" data-ir-sesion>Ver la sesión</button>'
-      : '<button type="button" class="boton primario grande" data-empezar-hoy>Entrenamiento planificado</button><button type="button" class="enlace" data-ir-sesion>Ver la sesión antes de empezar</button>'}
+      : '<button type="button" class="boton primario grande" data-empezar-hoy>Empezar</button><button type="button" class="enlace" data-ir-sesion>Ver la sesión antes de empezar</button>'}
   </section>`;
 }
 
@@ -121,15 +122,15 @@ export function vistaEntrenar(ir) {
     <span class="sobretitulo">${esc(fecha)}</span>
     <h1>Entrenar</h1>
     ${filaHistoriasHtml()}
-    ${mesHtml(s.f)}
     ${hoyHtml(s)}
-    <button type="button" class="boton fila-boton boton-vacia" id="sesion-vacia">${icono('mas')} Empezar entrenamiento vacío</button>
-    ${s.avisoSinRegistro}
+    <div class="entrenar-herramientas"><button type="button" class="boton" id="abrir-rutinas" aria-expanded="${rutinasAbiertas}" aria-controls="rutinas-panel">Rutinas</button><button type="button" class="boton" id="sesion-vacia">Sesión vacía</button></div>
+    ${feedHtml()}
+
     ${D().mensaje_alerta ? `<div class="aviso ojo">${esc(D().mensaje_alerta)}</div>` : ''}
     ${avisoCheckin()}
     ${avisoBloqueSiguiente()}
     ${avisoDescargaCorto()}
-    <h2 class="titulo-seccion">Rutinas</h2>
+    <div id="rutinas-panel" class="rutinas-panel" ${rutinasAbiertas ? '' : 'hidden'}><h2 class="titulo-seccion">Rutinas</h2>
     <div class="botones-rutinas">
       <button type="button" class="boton fila-boton" data-rutina-nueva>${icono('mas')} Nueva rutina</button>
     </div>
@@ -138,10 +139,13 @@ export function vistaEntrenar(ir) {
       ${planAbierto ? `<ul class="rutinas">${semana.map(d => rutinaHtml(d, s)).join('') || '<li class="pequeno suave">Esta semana no tiene sesiones.</li>'}</ul>` : ''}
       ${hayCambiosPlan() ? `<button type="button" class="enlace deshacer-plan" id="deshacer-plan">${icono('cambiar', 'icono icono-chico')} Deshacer un cambio del plan</button>` : ''}
     </section>
-    ${misRutinasHtml()}
+    ${misRutinasHtml()}</div>
+    ${mesHtml(s.f)}
     ${sups.length ? `<section class="tarjeta"><h3>Suplementos</h3><ul class="lista-check">${sups.map(x => `<li class="${x.estado}"><button type="button" class="check" data-toma="${x.suplemento_id}" ${x.estado === 'tomada' ? 'disabled aria-pressed="true"' : 'aria-pressed="false"'} aria-label="Marcar ${esc(x.nombre)} como tomado">${x.estado === 'tomada' ? '✓' : ''}</button><span>${esc(x.nombre)}${x.dosis ? ` · ${esc(x.dosis)}` : ''}</span><span class="suave pequeno">${x.hora || ''}${x.estado === 'atrasada' ? ' · atrasado' : ''}</span></li>`).join('')}</ul></section>` : ''}
   </div>`;
   const raiz = $('vista-entrenar');
+  enlazarFeed(raiz, ir, () => vistaEntrenar(ir));
+  $('abrir-rutinas').onclick = () => { rutinasAbiertas = !rutinasAbiertas; vistaEntrenar(ir); if (rutinasAbiertas) $('rutinas-panel').scrollIntoView({ block: 'start' }); else $('abrir-rutinas').focus(); };
   raiz.querySelectorAll('[data-ir-sesion]').forEach(b => b.onclick = () => ir('hoy', { sesion: true }));
   // Las historias de la semana, el mes y el año (app/historias.js): al cerrar, el anillo deja de estar nuevo.
   raiz.querySelectorAll('[data-historia]').forEach(b => b.onclick = () => abrirPorId(b.dataset.historia, { volver: b, alCerrar: () => vistaEntrenar(ir) }));
