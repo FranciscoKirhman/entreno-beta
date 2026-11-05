@@ -1,3 +1,6 @@
+import { unir, deshacer } from './superseries.js';
+import { pesasReales } from './modelo-tiempo.js';
+import { tendenciaDescansos } from './descansos.js';
 // La sesión de hoy armada para el tiempo que la persona tiene, elegido con la rueda de "Ajustar el tiempo" (como Down
 // Dog) o, al empezar, con el tiempo de su perfil. Siempre se parte de la sesión del plan tal como venía, así se puede
 // achicar y volver a agrandar sin perder nada. Antes de empezar, los minutos son de la sesión completa; ya empezada,
@@ -36,8 +39,7 @@ const minutosCal = dia => (dia.calentamiento?.length ? minutosCalentamiento(dia.
 export function duracionReal(dia, ritmo = 1) {
   const cardio = minutosCardio(dia.cardio);
   if (cardio === null) return null;
-  const pesas = (dia.ejercicios || []).length ? duracionEstimada(dia.ejercicios, 0) : 0;
-  return minutosCal(dia) + Math.round(pesas * (ritmo > 0 ? ritmo : 1)) + cardio + (cardio ? 2 : 0);
+  return minutosCal(dia) + pesasReales(dia.ejercicios || [], ritmo) + cardio + (cardio ? 2 : 0);
 }
 
 const mediana = xs => { const s = [...xs].sort((a, b) => a - b), k = s.length >> 1; return s.length % 2 ? s[k] : (s[k - 1] + s[k]) / 2; };
@@ -52,9 +54,16 @@ const mediana = xs => { const s = [...xs].sort((a, b) => a - b), k = s.length >>
  * @param plan     el plan, para la prescripción de cada día (si no está, valores típicos por tipo de ejercicio)
  * @returns {{factor: number, sesiones: number} | null} null con menos de 3 sesiones que sirvan
  */
-export function ritmoPersonal({ sesiones = [], plan = null, porId, hasta = '9999-12-31' }) {
+export function ritmoPersonal({ sesiones = [], plan = null, porId, descansos = {}, hasta = '9999-12-31' }) {
   const porFecha = new Map((plan?.dias || []).map(d => [d.fecha, d]));
   const ratios = [];
+  // Solo mediciones ligadas a sesiones válidas, recientes y con duración conocida.
+  const candidatas = new Set(sesiones.filter(s => s.fecha <= hasta && Number(s.duracion_min) >= 20
+    && (s.series || []).filter(x => porId.has(x.ejercicio_id) && !['cardio', 'movilidad'].includes(porId.get(x.ejercicio_id).tipo) && !['calentamiento', 'aproximacion'].includes(x.tipo)).length >= 6)
+    .sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, RITMO.sesiones).map(s => s.id));
+  const medidas = Object.fromEntries(Object.entries(descansos).filter(([id, d]) => candidatas.has(id) && d?.medidos >= 4 && d.fecha <= hasta));
+  const tendencia = Object.keys(medidas).length >= 3 ? tendenciaDescansos(medidas, { ultimas: RITMO.sesiones }) : null;
+  const modeloPersonal = tendencia ? { descansos: tendencia, tipos: Object.fromEntries([...porId].map(([id, ej]) => [id, ej.tipo])) } : null;
   const recientes = sesiones.filter(s => s.fecha <= hasta && Number(s.duracion_min) >= 20).sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0));
   for (const s of recientes) {
     if (ratios.length >= RITMO.sesiones) break;
@@ -74,12 +83,12 @@ export function ritmoPersonal({ sesiones = [], plan = null, porId, hasta = '9999
       const tipico = ej.tipo === 'compuesto' ? [8, 12, 120] : ej.tipo === 'core' ? [10, 15, 60] : [10, 15, 75];
       return { ejercicio_id: id, orden: i, series: n, reps_min: e?.reps_min ?? tipico[0], reps_max: e?.reps_max ?? tipico[1], unidad: e?.unidad ?? 'reps', descanso_seg: e?.descanso_seg ?? tipico[2], superserie: e?.superserie ?? null };
     });
-    const modelo = duracionEstimada(hecho, 0) + aprox;
+    const modelo = duracionEstimada(hecho, 0, modeloPersonal) + aprox;
     const real = Number(s.duracion_min) - (dia ? minutosCal(dia) : 8) - cardioSeg / 60 - (cardioSeg ? 2 : 0);
     if (modelo > 0 && real > 0) ratios.push(real / modelo);
   }
   if (ratios.length < RITMO.minimo) return null;
-  return { factor: Math.round(Math.min(RITMO.max, Math.max(RITMO.min, mediana(ratios))) * 100) / 100, sesiones: ratios.length };
+  return { factor: Math.round(Math.min(RITMO.max, Math.max(RITMO.min, mediana(ratios))) * 100) / 100, sesiones: ratios.length, ...(modeloPersonal || {}) };
 }
 
 /**
@@ -96,9 +105,10 @@ export function hechasDelDia(registro = {}) {
 
 /** Minutos que le quedan a una sesión ya empezada: las series que faltan, sus descansos (a tu ritmo) y el cardio si falta. */
 export function minutosRestantes({ ejercicios, cardio }, hechas = {}, cardioHecho = false, ritmo = 1) {
-  const faltan = ejercicios.map(e => ({ ...e, series: Math.max(0, e.series - (hechas[e.ejercicio_id]?.trabajo || 0)), superserie: null }))
+  const pendientes = deshacer(ejercicios, new Set(ejercicios.filter(e => hechas[e.ejercicio_id]?.empezado).map(e => e.ejercicio_id)));
+  const faltan = pendientes.map(e => ({ ...e, series: Math.max(0, e.series - (hechas[e.ejercicio_id]?.trabajo || 0)) }))
     .filter(e => e.series > 0);
-  const min = faltan.length ? Math.round(duracionEstimada(faltan, 0) * (ritmo > 0 ? ritmo : 1)) : 0;
+  const min = faltan.length ? pesasReales(faltan, ritmo) : 0;
   const c = cardioHecho ? 0 : minutosCardio(cardio) || 0;
   return min + c + (c ? 2 : 0);
 }
@@ -125,8 +135,8 @@ export function ajustarTiempo(base, { minutos = null, hechas = {}, cardioHecho =
   const hecho = e => hechas[e.ejercicio_id] || { trabajo: 0, empezado: false };
   const minimo = e => Math.max(hecho(e).trabajo, 1);
   const estimar = () => (enCurso ? minutosRestantes({ ejercicios: lista, cardio }, hechas, cardioHecho, ritmo)
-    : duracionReal({ ejercicios: lista, cardio, calentamiento: base.calentamiento }, ritmo) ?? Math.round(duracionEstimada(lista) + duracionEstimada(lista, 0) * (ritmo - 1)));
-  const quitados = [], agregados = [];
+    : duracionReal({ ejercicios: lista, cardio, calentamiento: base.calentamiento }, ritmo) ?? 8 + pesasReales(lista, ritmo));
+  const quitados = [], agregados = [], superseries = [];
   const quitar = e => {
     lista = lista.filter(x => x !== e);
     quitados.push(e.ejercicio_id);
@@ -145,6 +155,20 @@ export function ajustarTiempo(base, { minutos = null, hechas = {}, cardioHecho =
   if (minutos != null && estimar() > minutos) {
     // 1. El cardio baja hasta 10 minutos: es lo más fácil de achicar sin perder el estímulo de las pesas.
     if (tocaCardio) for (let n = cardioBase - 5; n >= CARDIO_MIN && sobra(); n -= 5) cardioA(n);
+    // Una pareja nueva solo se ofrece si basta para que quepa, antes de quitar ejercicios o series.
+    if (sobra() && porId) {
+      const original = lista;
+      const apto = e => !e.superserie && !hecho(e).empezado && ['aislamiento', 'core'].includes(porId.get(e.ejercicio_id)?.tipo);
+      for (let i = 0; i < original.length && !superseries.length; i++) for (let j = i + 1; j < original.length && !superseries.length; j++) {
+        const a = original[i], b = original[j];
+        if (!apto(a) || !apto(b)) continue;
+        const ea = porId.get(a.ejercicio_id), eb = porId.get(b.ejercicio_id);
+        const ms = e => [...(e.musculos_primarios || []), ...(e.musculos_secundarios || [])];
+        if (!ms(ea).length || !ms(eb).length || ms(ea).some(m => ms(eb).includes(m))) continue;
+        lista = unir(original, i, j);
+        if (!sobra()) superseries.push([a.ejercicio_id, b.ejercicio_id]); else lista = original;
+      }
+    }
     // 2. Fuera los accesorios (prioridad 3 o más) que no se han empezado, dejando al menos 3 ejercicios (y el core).
     const accesorio = () => { const e = menosImportante(); return e && e.prioridad >= 3 ? e : null; };
     while (sobra() && lista.length > 3 && accesorio()) quitar(accesorio());
@@ -209,7 +233,7 @@ export function ajustarTiempo(base, { minutos = null, hechas = {}, cardioHecho =
     // Pidió más de lo que la sesión puede crecer: ya tiene lo razonable para hoy.
     if (porId && (minutos == null || estimar() < minutos - 10) && (tope || !pool.length)) tope = true;
   }
-  return { ejercicios: lista.map((e, i) => ({ ...e, orden: i })), cardio, minutos: estimar(), quitados, agregados, enCurso, tope };
+  return { ejercicios: lista.map((e, i) => ({ ...e, orden: i })), cardio, minutos: estimar(), quitados, agregados, superseries, enCurso, tope };
 }
 
 /**

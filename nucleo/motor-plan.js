@@ -1,3 +1,5 @@
+import { duracionEstimada, pesasReales } from './modelo-tiempo.js';
+export { duracionEstimada } from './modelo-tiempo.js';
 // Motor de reglas: arma un plan de 4 semanas sin IA. Es el plan del plan Gratis y la base que el coach
 // Pro ajusta. Todo lo que hace está explicado en contenido/evidencia/.
 import { calentamientoDeSesion, minutosCalentamiento } from './calentamiento-sesion.js';
@@ -196,21 +198,6 @@ export function prescripcion(ej, prioridad, d) {
  * Minutos que toma un día: calentamiento + series × (tiempo bajo tensión + descanso) + cambio de ejercicio.
  * En una superserie se descansa una vez por vuelta (el descanso más largo de sus ejercicios), no después de cada uno.
  */
-export function duracionEstimada(ejercicios, calentamientoMin = 8) {
-  let seg = calentamientoMin * 60;
-  const g = grupos(ejercicios);
-  ejercicios.forEach((e, i) => {
-    // Segundos tal cual; metros a 1 metro por segundo (caminando con peso); repeticiones a 4 segundos cada una.
-    const trabajo = e.unidad === 'seg' || e.unidad === 'm' ? (e.reps_min + e.reps_max) / 2 : ((e.reps_min + e.reps_max) / 2) * 4;
-    seg += e.series * (trabajo + (g[i] ? 15 : e.descanso_seg)) + 60;
-    if (g[i]?.pos === 1) {
-      const vueltas = Math.max(...g[i].miembros.map(m => ejercicios[m].series));
-      seg += vueltas * Math.max(...g[i].miembros.map(m => ejercicios[m].descanso_seg ?? 90));
-    }
-  });
-  return Math.round(seg / 60);
-}
-
 /** Incluye calentamiento, transiciones de pesas y cardio, usando el extremo mayor de un rango. */
 export function minutosCardio(texto) {
   if (!texto) return 0;
@@ -218,9 +205,9 @@ export function minutosCardio(texto) {
   const m = texto.match(/(\d+)(?: a (\d+))? minutos?/);
   return m ? Number(m[2] || m[1]) : null;
 }
-export function duracionSesion(dia) {
+export function duracionSesion(dia, ritmo = null) {
   const cardio = minutosCardio(dia.cardio);
-  return cardio === null ? null : duracionEstimada(dia.ejercicios || [], dia.calentamiento?.length ? minutosCalentamiento(dia.calentamiento) : 8) + cardio + (cardio ? 2 : 0);
+  return cardio === null ? null : (ritmo ? (dia.calentamiento?.length ? minutosCalentamiento(dia.calentamiento) : 8) + pesasReales(dia.ejercicios || [], ritmo) : duracionEstimada(dia.ejercicios || [], dia.calentamiento?.length ? minutosCalentamiento(dia.calentamiento) : 8)) + cardio + (cardio ? 2 : 0);
 }
 
 /** Series por semana de cada músculo: 1 por serie si es principal y 0,5 si es secundario. */
@@ -270,7 +257,9 @@ const CALENTAMIENTO_ZONA = {
  * @param p.historial  series efectivas recientes [{ejercicio_id, carga_kg, reps, rir?, rpe?, fecha}]
  */
 /** @param anteriores ids de los ejercicios del bloque que termina: si a la persona le gusta variar, se cambian algunos. */
-export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historial = /** @type {Array<Record<string, any>>} */ ([]), anteriores = null }) {
+export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historial = /** @type {Array<Record<string, any>>} */ ([]), anteriores = null, ritmo = null }) {
+  const estimar = (e, cal = 8) => ritmo ? cal + pesasReales(e, ritmo) : duracionEstimada(e, cal);
+  const minutosDia = dia => duracionSesion(dia, ritmo);
   if (d.alerta === 'bloqueo') return { bloqueado: true, mensaje: d.mensaje_alerta };
   if (d.errores?.length) return { bloqueado: true, mensaje: d.errores.join(' ') };
 
@@ -526,7 +515,7 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
         // Y no dos del mismo movimiento el mismo día.
         const yaTiene = x => (x.ejercicios.some(e => porId.get(e.ejercicio_id).patron === EXTRA_POR_MUSCULO[m]) ? 1 : 0);
         const laTrabaja = x => (x.ejercicios.some(e => aporta(e, m) > 0) ? 0 : 1);
-        const dias = [...conSemana].sort((a, b) => yaTiene(a) - yaTiene(b) || laTrabaja(a) - laTrabaja(b) || duracionEstimada(a.ejercicios) - duracionEstimada(b.ejercicios));
+        const dias = [...conSemana].sort((a, b) => yaTiene(a) - yaTiene(b) || laTrabaja(a) - laTrabaja(b) || estimar(a.ejercicios) - estimar(b.ejercicios));
         for (const reemplazar of [false, true]) {
           for (const x of dias) {
             const ej = elegir(EXTRA_POR_MUSCULO[m], new Set(x.ejercicios.map(e => e.ejercicio_id)));
@@ -537,8 +526,8 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
             if (reemplazar && !sale) continue;
             const quedan = x.ejercicios.filter(e => e !== sale);
             // Sumar tiene que caber en el tiempo; reemplazar, al menos no alargar la sesión.
-            const tope = reemplazar ? Math.max(duracionEstimada(x.ejercicios), d.duracion_min * 1.1) : d.duracion_min * 1.1;
-            if (duracionEstimada([...quedan, nuevo]) > tope) continue;
+            const tope = reemplazar ? Math.max(estimar(x.ejercicios), d.duracion_min * 1.1) : d.duracion_min * 1.1;
+            if (estimar([...quedan, nuevo]) > tope) continue;
             x.ejercicios = [...quedan, { ...nuevo, series: reemplazar ? Math.max(2, sale.series) : 2 }];
             cambio = true;
             break;
@@ -562,7 +551,7 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
   const ultimo = e => porId.get(e.ejercicio_id).musculos_primarios.some(m => (GRANDES.includes(m) || prioritario(m))
     && conSemana.reduce((n, x) => n + x.ejercicios.filter(y => porId.get(y.ejercicio_id).musculos_primarios.includes(m)).length, 0) === 1);
   for (const x of conSemana) {
-    const sobra = () => duracionEstimada(x.ejercicios) > d.duracion_min * 1.1;
+    const sobra = () => estimar(x.ejercicios) > d.duracion_min * 1.1;
     // Lo que deja un músculo bajo el piso de su rango cuesta más: así se recorta primero lo que sobra (por ejemplo, un
     // segundo remo de una prioridad que ya está en su tope) antes que los brazos o los aductores.
     const acciones = () => { const v = volumenSemanal(conSemana, porId); const bajoPiso = (e, n) => porId.get(e.ejercicio_id).musculos_primarios.some(k => CONTADOS.includes(k) && (v[k] || 0) - n < lo); return x.ejercicios.flatMap(e => [
@@ -578,7 +567,7 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
 
   // Después de recortar por tiempo, una zona prioritaria no puede quedar con menos series que el promedio de las que
   // no lo son: se le devuelven series, o un ejercicio, en los días donde todavía queda tiempo.
-  const cabeTiempo = (x, extra) => duracionEstimada([...x.ejercicios, ...extra]) <= d.duracion_min * 1.1;
+  const cabeTiempo = (x, extra) => estimar([...x.ejercicios, ...extra]) <= d.duracion_min * 1.1;
   for (let vuelta = 0; vuelta < 40; vuelta++) {
     const v = volumenSemanal(conSemana, porId);
     const resto = CONTADOS.filter(k => !prioritario(k) && v[k]);
@@ -613,7 +602,7 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
       const m = CONTADOS.filter(k => !prioritario(k) && !sinLugar.has(k) && EXTRA_POR_MUSCULO[k] && (v[k] || 0) < lo).sort((a, b) => (v[a] || 0) - (v[b] || 0))[0];
       if (!m) break;
       let puesto = false;
-      for (const x of [...conSemana].sort((a, b) => duracionEstimada(a.ejercicios) - duracionEstimada(b.ejercicios))) {
+      for (const x of [...conSemana].sort((a, b) => estimar(a.ejercicios) - estimar(b.ejercicios))) {
         const ej = elegir(EXTRA_POR_MUSCULO[m], new Set(x.ejercicios.map(e => e.ejercicio_id)));
         if (!ej || ej.tipo === 'compuesto' || !ej.musculos_primarios.includes(m)) continue;
         // Sin pasar el tope de otro músculo (la abductora suma glúteo).
@@ -627,12 +616,12 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
         const sobra = l => l.filter(e => e.series > 2 && !esPrincipal(x, e) && !(esBasico(e) && e.series <= 3) && !favoritos.has(e.ejercicio_id)
           && porId.get(e.ejercicio_id).musculos_primarios.every(k => !CONTADOS.includes(k) || (v[k] || 0) - 1 >= lo))
           .sort((a, b) => b.prioridad - a.prioridad || b.orden - a.orden)[0];
-        for (let n = 0; n < 5 && duracionEstimada(lista, 10) > d.duracion_min; n++) {
+        for (let n = 0; n < 5 && estimar(lista, 10) > d.duracion_min; n++) {
           const e = sobra(lista);
           if (!e) break;
           lista = lista.map(y => (y === e ? { ...y, series: y.series - 1 } : y));
         }
-        if (duracionEstimada(lista, 10) > d.duracion_min) continue;
+        if (estimar(lista, 10) > d.duracion_min) continue;
         x.ejercicios = lista;
         puesto = true;
         break;
@@ -684,7 +673,7 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     const objetivoCardio = minutosCardio(dia.cardio) || 0;
     // Recortar accesorios para respetar el tiempo; después ajustar el cardio al espacio disponible.
     const reserva = objetivoCardio > 0 && (r.favoritos || []).some(id => indice.porId.get(id)?.tipo === 'cardio') ? 7 : 0;
-    while (duracionSesion({ ...dia, cardio: null }) + reserva > d.duracion_min && dia.ejercicios.length) {
+    while (minutosDia({ ...dia, cardio: null }) + reserva > d.duracion_min && dia.ejercicios.length) {
       const protegido = e => (r.favoritos || []).includes(e.ejercicio_id) || (indice.porId.get(e.ejercicio_id)?.musculos_primarios || []).some(m => (r.musculos_prioridad || []).includes(m));
       const candidatos = dia.ejercicios.filter(e => !favoritos.has(e.ejercicio_id) || e.series > 1);
       const resguardo = e => (protegido(e) || (principalDe.get(dia.plantilla) === e.ejercicio_id && e.series > 3 && d.nivel === 'avanzado') ? 1 : 0);
@@ -700,7 +689,7 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
       dia.ejercicios = juntarSuperseries(dia.ejercicios);
       preparar(dia);
     }
-    const disponible = Math.max(0, d.duracion_min - duracionSesion({ ...dia, cardio: null }) - 2);
+    const disponible = Math.max(0, d.duracion_min - minutosDia({ ...dia, cardio: null }) - 2);
     if (objetivoCardio > disponible) {
       dia.cardio = disponible >= 5 ? `${dia.cardio.split(/\d| en intervalos|:/)[0].trim()} ${disponible} minutos a ritmo cómodo. Reducido para respetar tu tiempo.` : null;
       dia.nota_cardio = 'La dosis de cardio original no cabe en este tiempo. Puedes dedicarle una sesión aparte.';

@@ -3,7 +3,7 @@
 // del perfil. Se aplica recién al armar el bloque siguiente, que la persona confirma con un botón (AGENTS.md, regla 10).
 
 /** Lo que el borrador puede cambiar del perfil. */
-export const CAMPOS_CICLO = ['musculos_prioridad', 'dias_meta', 'duracion_min', 'rotacion'];
+export const CAMPOS_CICLO = ['musculos_prioridad', 'dias_meta', 'duracion_min', 'rotacion', 'favoritos', 'prohibidos'];
 const MAX_HISTORIAL = 20;
 
 /** El borrador del siguiente ciclo, solo con sus campos válidos, o null si no hay nada elegido. */

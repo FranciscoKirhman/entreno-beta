@@ -1,3 +1,4 @@
+import { responderSalud } from '../nucleo/preguntas-seguimiento.js';
 import { E, R, hoy, indice, esc, guardar, fechaCorta, peso, ctxNucleo, cambiarPlan, avisar } from './comun.js';
 import { armarFeed, verTarjeta } from '../nucleo/feed.js';
 import { efectoPregunta, responderPregunta } from '../nucleo/preguntas-coach.js';
@@ -51,6 +52,7 @@ export function feedHtml() {
 function vista(t) { E.feedVistas = verTarjeta(E.feedVistas, t); datoCambiado('feed_vistas'); }
 async function guardarRespuesta(p, o, efecto, original) {
   if (E !== original) return;
+  if (p.salud) { E.saludFeed = responderSalud(E.saludFeed, p, o, hoy()); datoCambiado('seguimiento_molestias'); return; }
   if (efecto.respuestas) E.respuestas = efecto.respuestas;
   E.respuestas = responderPregunta(R(), p, o, hoy());
   guardar();

@@ -1,3 +1,4 @@
+import { ritmoHoy } from './ritmo.js';
 // Pestaña Mi plan: el ciclo en curso, la semana, los músculos prioridad (y desde cuándo cambian), los ejercicios
 // favoritos y evitados, los cuidados (indicación del profesional, suplementos, notas para el entrenador) y los ajustes
 // del plan. Progreso, Semana, Siguiente ciclo y el Banco de ejercicios se abren desde sus botones.
@@ -262,10 +263,10 @@ function planDesdeSemana(musculos) {
   const lunes = proximoLunes();
   const respuestas = { ...R(), musculos_prioridad: musculos };
   const derivados = derivar(respuestas, C, hoy());
-  let nuevo = generarPlan({ derivados, respuestas, indice, hoy: lunes, historial: historialReciente() });
+  let nuevo = generarPlan({ derivados, respuestas, indice, hoy: lunes, ritmo: ritmoHoy(), historial: historialReciente() });
   if (nuevo.bloqueado) return { bloqueado: true, mensaje: nuevo.mensaje };
   const m = macroActual(), actual = m?.bloques.find(b => b.n === m.actual);
-  if (actual) nuevo = aplicarFase(nuevo, actual, { minutos: derivados.duracion_min });
+  if (actual) nuevo = aplicarFase(nuevo, actual, { minutos: derivados.duracion_min, ritmo: ritmoHoy() });
   return { ...semanasDesde(E.plan, nuevo, lunes), lunes };
 }
 

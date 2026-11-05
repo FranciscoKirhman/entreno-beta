@@ -812,9 +812,10 @@ function propuestaTiempo(dia, f) {
     ? { ...baseAjuste, minutos: duracionReal(baseAjuste, ritmo), quitados: [], agregados: [] }
     : ajustarTiempo(baseAjuste, { minutos: quedan, hechas, cardioHecho, ritmo, accesorios, porId: indice.porId, topeSeries: topeSeriesHoy() });
   r.quitados.push(...opcionales.map(e => e.ejercicio_id));
-  if (!r.quitados.length && !r.agregados.length && r.cardio === base.cardio && JSON.stringify(r.ejercicios.map(e => e.series)) === JSON.stringify(base.ejercicios.map(e => e.series))) return null;
+  if (!r.superseries?.length && !r.quitados.length && !r.agregados.length && r.cardio === base.cardio && JSON.stringify(r.ejercicios.map(e => e.series)) === JSON.stringify(base.ejercicios.map(e => e.series))) return null;
   const nombre = id => indice.porId.get(id)?.nombre || id;
   const ritmoTexto = textoRitmo();
+  const juntas = r.superseries?.length ? `; junto ${r.superseries.map(ids => ids.map(nombre).join(' con ')).join(', ')} en superserie, sin quitar ejercicios` : '';
   const crece = r.agregados.length > 0 && !r.quitados.length;
   // Cabía igual: lo opcional sale porque la persona eligió mantener su tiempo sin lo opcional (preguntas del coach).
   const porPedido = opcionales.length > 0 && ahora <= quedan + 5;
@@ -824,7 +825,7 @@ function propuestaTiempo(dia, f) {
     hecho: crece ? `Sumé ${lista(r.agregados.map(nombre).map(x => x.toLowerCase()))} como opcional` : `Ajusté la sesión a tus ${disponibles} minutos`,
     motivo: crece ? `tienes ${disponibles} minutos y la sesión toma unos ${ahora}${ritmoTexto ? `, ${ritmoTexto}` : ''}`
       : porPedido ? `elegiste mantener tus ${disponibles} minutos sin lo opcional; hoy no van: ${lista(r.quitados.map(nombre))}`
-        : `${empezada ? 'lo que falta' : 'la sesión'} toma unos ${ahora} minutos${ritmoTexto ? ` ${ritmoTexto}` : ''}${r.quitados.length ? `; hoy no van: ${lista(r.quitados.map(nombre))}` : ''}`,
+        : `${empezada ? 'lo que falta' : 'la sesión'} toma unos ${ahora} minutos${ritmoTexto ? ` ${ritmoTexto}` : ''}${r.quitados.length ? `; hoy no van: ${lista(r.quitados.map(nombre))}` : ''}${juntas}`,
     antes: resumenSesion({ ejercicios: base.ejercicios, cardio: base.cardio, minutos: ahora }),
     ahora: resumenSesion({ ejercicios: r.ejercicios, cardio: r.cardio, minutos: r.minutos }),
     ejercicios: r.ejercicios, cardio: r.cardio, base, minutos: quedan,

@@ -1,3 +1,4 @@
+import { ritmoHoy } from './ritmo.js';
 // La temporada (macrociclo, nucleo/ciclos.js) en la vista Semana: los bloques con su fase, en qué semana vas,
 // la propuesta de adelantar la descarga cuando vienes cansado y armar el bloque siguiente al terminar.
 import { E, guardar, R, D, C, esc, $, hoy, indice, fechaCorta, cambiarPlan, mostrarSemana } from './comun.js';
@@ -124,9 +125,9 @@ export function planBloqueSiguiente({ forzar = false, cambios = null } = {}) {
   const ctx = { derivados, respuestas, indice, hoy: disp.desde };
   // Si a la persona le gusta variar, el bloque nuevo cambia algunos ejercicios del que termina.
   const anteriores = new Set((E.plan?.dias || []).flatMap(d => d.ejercicios.map(e => e.ejercicio_id)));
-  const base = generarPlan({ ...ctx, historial: historialReciente(), anteriores });
+  const base = generarPlan({ ...ctx, ritmo: ritmoHoy(), historial: historialReciente(), anteriores });
   if (base.bloqueado) return { bloqueado: true, mensaje: base.mensaje };
-  let plan = sig ? aplicarFase(base, sig, { minutos: derivados.duracion_min }) : base;
+  let plan = sig ? aplicarFase(base, sig, { minutos: derivados.duracion_min, ritmo: ritmoHoy() }) : base;
   if (sig && !validarPlan(plan, ctx).ok) plan = { ...base, bloque: sig.n }; // si la fase no cabe en tus reglas, el plan base
   plan = conDiasQueQuedan(E.plan, plan, hoy(), { respuestas, derivados, indice });
   return { plan, sig, nv, anteriores, respuestas, derivados };

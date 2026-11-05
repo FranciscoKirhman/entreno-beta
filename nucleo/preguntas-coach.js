@@ -1,3 +1,4 @@
+import { preguntasSeguimiento, efectoSeguimiento } from './preguntas-seguimiento.js';
 // Preguntas con evidencia y efectos explícitos. Aquí solo se calculan propuestas, nunca se guarda un plan.
 import { ritmoPersonal } from './tiempo-sesion.js';
 import { tendenciaDescansos, reloj } from './descansos.js';
@@ -20,7 +21,7 @@ const MINUTOS_PERFIL = [30, 45, 60, 75, 90];
 // Una sesión cuenta como más larga si pasa el tiempo del perfil por más de 5 minutos: 91 contra 90 no es una señal.
 const MARGEN_MIN = 5;
 
-export function preguntasCoach({ plan, sesiones = [], respuestas = {}, descansos = {}, notas = {}, indice, hoy }) {
+export function preguntasCoach({ plan, sesiones = [], respuestas = {}, descansos = {}, notas = {}, saludFeed = {}, indice, hoy }) {
   if (!plan?.dias?.length || plan.libre || plan.bloqueado) return [];
   const desde = [plan.inicio || '', sumarDias(hoy, -28)].sort().at(-1);
   const recientes = [...sesiones].filter(s => s.fecha >= desde && s.fecha <= hoy).sort((a, b) => orden(b).localeCompare(orden(a)));
@@ -30,7 +31,7 @@ export function preguntasCoach({ plan, sesiones = [], respuestas = {}, descansos
     const real = mediana(ultimas.map(s => Number(s.duracion_min)));
     // Subir solo si hay una opción del perfil más larga (la de 90 ya es "1 hora 30 o más").
     const subir = MINUTOS_PERFIL.find(m => m >= real) ?? MINUTOS_PERFIL.at(-1);
-    const ritmo = ritmoPersonal({ sesiones: recientes, plan, porId: indice.porId, hasta: hoy });
+    const ritmo = ritmoPersonal({ sesiones: recientes, plan, porId: indice.porId, descansos, hasta: hoy });
     const ids = new Set(ultimas.map(s => s.id));
     const descanso = tendenciaDescansos(Object.fromEntries(Object.entries(descansos).filter(([id]) => ids.has(id))));
     const dato = { sesiones: ultimas.map(s => ({ id: s.id, fecha: s.fecha, minutos: Number(s.duracion_min) })), perfil: minutos, ritmo, descansos: descanso };
@@ -56,7 +57,7 @@ export function preguntasCoach({ plan, sesiones = [], respuestas = {}, descansos
       const reservas = series.map(reserva).filter(x => x != null && Number.isFinite(x));
       return { id: s.id, fecha: s.fecha, pedido: e?.rir, real: reservas.length ? mediana(reservas) : null };
     });
-    if (datos.length === 2 && datos.every(d => d.pedido != null && d.real != null && d.real < Number(d.pedido))) {
+    if (datos.length === 2 && datos.every(d => d.pedido != null && d.real != null && d.real <= Number(d.pedido) - 1)) {
       preguntas.push({ id: `esfuerzo:${bloque}:${id}`, tipo: 'esfuerzo', ejercicio_id: id, fecha: xs[0].fecha, dato: datos,
         titulo: `${nombre(indice, id)} te costó más`, texto: `En tus últimas dos sesiones dejaste menos repeticiones en reserva de lo pedido: ${datos.map(d => `${d.real} en vez de ${d.pedido}`).join('; ')}. ¿Fue el peso, el cansancio o la técnica?`,
         opciones: [{ id: 'bajar', etiqueta: 'Bajar un escalón', efecto: 'bajar' }, { id: 'nada', etiqueta: 'Fue un mal día, seguir igual', efecto: 'nada' }, { id: 'tecnica', etiqueta: 'Ver la técnica', efecto: 'tecnica' }] });
@@ -76,6 +77,7 @@ export function preguntasCoach({ plan, sesiones = [], respuestas = {}, descansos
       titulo: 'La misma máquina ocupada', texto: `Anotaste ${nombre(indice, id)} como ocupada en ${fechas.size} días distintos. ¿La reemplazamos?`,
       opciones: [{ id: 'reemplazar', etiqueta: 'Reemplazarla desde hoy', efecto: 'reemplazar' }, { id: 'ocasional', etiqueta: 'Solo cuando esté ocupada', efecto: 'ocasional' }] });
   }
+  preguntas.push(...preguntasSeguimiento({ plan, sesiones, respuestas, saludFeed, notas, indice, hoy }));
   return preguntas.filter(p => !respuestas.preguntas_coach?.[p.id]).sort((a, b) => b.fecha.localeCompare(a.fecha) || a.id.localeCompare(b.id));
 }
 
@@ -83,6 +85,8 @@ export function preguntasCoach({ plan, sesiones = [], respuestas = {}, descansos
 export function efectoPregunta(pregunta, opcionId, ctx) {
   const o = pregunta.opciones.find(o => o.id === opcionId);
   if (!o) return { error: 'Esa respuesta ya no está disponible.' };
+  const seguimiento = efectoSeguimiento(pregunta, o, ctx);
+  if (seguimiento) return seguimiento;
   const r = ctx.respuestas || {}, id = pregunta.ejercicio_id;
   if (o.efecto === 'borrador') return { respuestas: guardarEnBorrador(r, o.cambios), detalle: `Para el próximo bloque: ${Object.entries(o.cambios).map(([k, v]) => `${k === 'dias_meta' ? 'días por semana' : 'minutos por sesión'} de ${r.ciclo_siguiente?.[k] ?? r[k]} a ${v}`).join(', ')}. El bloque actual sigue igual; confirmarás el siguiente al armarlo.` };
   if (o.efecto === 'opcionales') return { respuestas: { ...r, opcionales_al_empezar: true }, detalle: `Mantienes ${r.duracion_min} minutos. Al empezar, la sesión viva propone sacar los ejercicios opcionales sin empezar, muestra antes y después y permite rechazar durante 10 segundos.` };
@@ -121,5 +125,6 @@ export function efectoPregunta(pregunta, opcionId, ctx) {
 }
 
 export function responderPregunta(respuestas, pregunta, opcion, fecha) {
+  if (pregunta.salud) return respuestas;
   return { ...respuestas, preguntas_coach: { ...respuestas.preguntas_coach, [pregunta.id]: { fecha, opcion, respuesta: pregunta.opciones.find(o => o.id === opcion)?.etiqueta || opcion, dato: pregunta.dato, titulo: pregunta.titulo, texto: pregunta.texto } } };
 }

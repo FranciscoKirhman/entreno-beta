@@ -61,11 +61,12 @@ function resumen(r, base, hechas, enCurso, delPlan = false) {
   const partes = [`${ejercicios} ejercicio${ejercicios === 1 ? '' : 's'}`, `${series} serie${series === 1 ? '' : 's'}${series !== antes ? ` (el plan trae ${antes})` : ''}`];
   if (r.cardio !== base.cardio) partes.push(cardio ? `cardio de ${cardio} min` : 'sin cardio');
   const fuera = r.quitados.length ? ` Hoy no van: ${r.quitados.map(nombre).join(', ')}.` : '';
+  const juntas = r.superseries?.length ? ` En superserie: ${r.superseries.map(ids => ids.map(nombre).join(' con ')).join(', ')}.` : '';
   const suma = r.agregados?.length ? ` Suma, como opcional: ${r.agregados.map(nombre).join(', ')}.` : '';
   // Aunque se pidan tres horas, la sesión crece hasta lo razonable (series por músculo y por sesión).
   const tope = r.tope ? ' Más que esto no suma: hoy ya tiene lo que rinde, y más series serían cansancio para las próximas sesiones.' : '';
   const inicio = delPlan ? (enCurso ? 'Lo que falta del plan: ' : 'Así viene en el plan: ') : enCurso ? 'Te quedaría: ' : '';
-  return `${inicio}${partes.join(' · ')}. Unos ${r.minutos} minutos${enCurso ? ' más' : ''}.${fuera}${suma}${tope}`;
+  return `${inicio}${partes.join(' · ')}. Unos ${r.minutos} minutos${enCurso ? ' más' : ''}.${fuera}${suma}${juntas}${tope}`;
 }
 
 /**

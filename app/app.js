@@ -1,9 +1,10 @@
+import { ritmoHoy } from './ritmo.js';
 import { recuperarCuentaPrincipal } from './recuperar-cuenta.js';
 // App Entreno. Funciona sin cuenta (todo en este navegador) y con cuenta (Supabase). Usa el mismo núcleo
 // que el servidor: nucleo/*.js.
 //
 //   node herramientas/servir.mjs  →  http://127.0.0.1:5173/app/
-import { sincronizarDatosTelefono } from './datos-nube.js';
+import { sincronizarDatosTelefono, limpiarProgresionSesion } from './datos-nube.js';
 import { revisarSesionEnCuenta, alReponerSesion } from './sesion-nube.js';
 import { hevyAlAbrir } from './hevy-auto.js';
 import { conPropios, idsPropios } from '../nucleo/propios.js';
@@ -92,7 +93,7 @@ async function armarPlan({ mensaje = null } = {}) {
   }
   // Parte con los pesos ya anotados y conserva lo que queda del plan actual hasta el lunes (semana 0).
   const derivados = derivar(r, C, hoy());
-  const nuevo = generarPlan({ derivados, respuestas: r, indice, hoy: hoy(), historial: historialReciente() });
+  const nuevo = generarPlan({ derivados, respuestas: r, indice, hoy: hoy(), ritmo: ritmoHoy(), historial: historialReciente() });
   E.plan = nuevo.bloqueado ? nuevo : conDiasQueQuedan(E.plan, nuevo, hoy(), { respuestas: r, derivados, indice });
   guardar();
   ir(E.plan.bloqueado ? 'hoy' : 'plan', { nuevo: true });
@@ -196,6 +197,7 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
   const marca = !forzar && E.sincSesiones?.usuario === usuario ? E.sincSesiones.hasta : null;
   const [cambiadas, bienestarCuenta] = await consultar(() => Promise.all([nube.cargarSesionesCambiadas(marca), nube.cargarBienestar()]));
   E.sesiones = unirSesiones(E.sesiones, idsPropios(cambiadas.sesiones, [...(E.ejerciciosPropios || []), ...EXTRAS]), E.pendientes || []);
+  limpiarProgresionSesion(E.sesiones);
   if (cambiadas.hasta) E.sincSesiones = { usuario, hasta: cambiadas.hasta };
   E.bienestar = { ...bienestarCuenta, ...Object.fromEntries(Object.entries(E.bienestar).filter(([, b]) => !b.enCuenta)) };
   // La sesión que quedó empezada en otro teléfono (app/sesion-nube.js), si aquí no hay otra. Va después de traer las

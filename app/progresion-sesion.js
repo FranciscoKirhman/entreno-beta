@@ -15,7 +15,7 @@ import { tecnicaPendiente } from '../nucleo/tecnica-primero.js';
 import { lugaresDe } from '../nucleo/motor-plan.js';
 import * as nube from './nube.js';
 import { registrarProgresion } from '../nucleo/registro-progresion.js';
-import { datoCambiado } from './datos-nube.js';
+import { datoCambiado, limpiarProgresionSesion } from './datos-nube.js';
 
 // Con la forma de anotar las mancuernas: con "El par", las de dos mancuernas suben de a 4.
 const lugarDe = dia => { const l = lugaresDe(R()); return l.find(x => x.nombre === dia?.lugar) || l.find(x => x.principal) || l[0]; };
@@ -105,6 +105,8 @@ export function faltaMostrarAjustes(sesion) {
 
 /** Lo que quedó en cuenta regresiva y ya cumplió los 10 segundos (por ejemplo, si se cerró la app): se aplica. */
 export async function aplicarPendientes() {
+  // Con cuenta, el historial puede estar cargando: aquí solo vence la antigüedad.
+  limpiarProgresionSesion(nube.usuarioId() ? null : E.sesiones);
   for (const [id, reg] of Object.entries(E.progresionSesion || {})) {
     const sesion = E.sesiones.find(s => s.id === id);
     if (reg.estado !== 'propuesta' || restan(reg) > 0 || !sesion || !corresponde(sesion) || reg.huella !== huella(sesion)) continue;

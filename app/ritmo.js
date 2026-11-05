@@ -13,16 +13,16 @@ import { tendenciaDescansos, reloj } from '../nucleo/descansos.js';
 let memo = { clave: null, valor: null };
 /** {factor, sesiones} de tus últimas sesiones, o null si todavía no hay suficientes. Se recalcula al guardar una sesión. */
 export function ritmoHoy() {
-  const s = E.sesiones || [], u = s.at(-1);
-  const clave = `${s.length}|${u?.id || ''}|${u?.fecha || ''}|${u?.duracion_min || ''}|${E.plan?.inicio || ''}|${(E.plan?.dias || []).length}`;
+  const s = E.sesiones || [];
+  const clave = JSON.stringify([s, E.plan, E.descansos, hoy()]);
   if (memo.clave !== clave) {
     let valor = null;
-    try { valor = ritmoPersonal({ sesiones: s, plan: E.plan, porId: indice.porId, hasta: hoy() }); } catch { valor = null; }
+    try { valor = ritmoPersonal({ sesiones: s, plan: E.plan, porId: indice.porId, descansos: E.descansos || {}, hasta: hoy() }); } catch { valor = null; }
     memo = { clave, valor };
   }
   return memo.valor;
 }
-export const factorRitmo = () => ritmoHoy()?.factor ?? 1;
+export const factorRitmo = () => ritmoHoy() ?? 1;
 
 /** Minutos del día a tu ritmo (o los del plan si no hay ritmo o el cardio no dice sus minutos). */
 export const minutosDe = dia => (dia ? duracionReal(dia, factorRitmo()) ?? duracionSesion(dia) : null);
@@ -33,7 +33,9 @@ export const minutosDe = dia => (dia ? duracionReal(dia, factorRitmo()) ?? durac
  */
 export function textoRitmo() {
   const r = ritmoHoy();
-  if (!r || Math.abs(r.factor - 1) < 0.08) return '';
+  if (!r) return '';
+  if (r.descansos) return `con los descansos medidos de ${r.descansos.sesiones} sesiones y tu ritmo ajustado a ellos${r.descansos.basicos ? ` (básicos: ${reloj(r.descansos.basicos.real)})` : ''}`;
+  if (Math.abs(r.factor - 1) < 0.08) return '';
   const t = tendenciaDescansos(E.descansos || {});
   const porque = t?.basicos && t.basicos.real > t.basicos.pedido + 30 ? `: descansas ${reloj(t.basicos.real)} en los básicos y el plan pide ${reloj(t.basicos.pedido)}` : '';
   return `a tu ritmo de las últimas ${r.sesiones} sesiones (las pesas te toman ${String(r.factor).replace('.', ',')} veces lo que estima el plan${porque})`;

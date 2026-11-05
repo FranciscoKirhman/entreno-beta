@@ -126,7 +126,7 @@ export function ajustarMacrociclo(bloques, nActual, accion) {
  * Aplica la fase al plan del bloque: series y repeticiones de las semanas normales (no a la descarga).
  * @param minutos tiempo disponible por sesión: si con las series sumadas no cabe, se devuelven desde lo menos prioritario
  */
-export function aplicarFase(plan, bloque, { minutos = null } = {}) {
+export function aplicarFase(plan, bloque, { minutos = null, ritmo = null } = {}) {
   const nuevo = structuredClone(plan);
   nuevo.fase = bloque.fase;
   nuevo.bloque = bloque.n;
@@ -143,7 +143,7 @@ export function aplicarFase(plan, bloque, { minutos = null } = {}) {
       }
       e.rir = Math.min(5, e.rir + bloque.rir);
     }
-    while (minutos && duracionSesion(d) > minutos) {
+    while (minutos && duracionSesion(d, ritmo) > minutos) {
       const e = d.ejercicios.filter(x => x.series > antes.get(x)).sort((a, b) => b.prioridad - a.prioridad || b.orden - a.orden)[0];
       if (!e) break;
       e.series--;

@@ -7,7 +7,7 @@ import { propiosDelPlan, conPropiosGuardados } from '../nucleo/propios.js';
 import { unirInicios } from '../nucleo/ciclo-menstrual.js';
 import * as nube from './nube.js';
 
-import { migrarProgresion, unirProgresion } from '../nucleo/registro-progresion.js';
+import { migrarProgresion, unirProgresion, limpiarProgresion } from '../nucleo/registro-progresion.js';
 
 const PREFERENCIAS = ['escala_esfuerzo', 'mancuernas'];
 // clave en la cuenta → cómo leerla y ponerla en E. "Aviso con la pantalla bloqueada" es de cada teléfono (su
@@ -18,6 +18,7 @@ const LOCAL = {
   calendario_asistencia: campo('marcasPlan', {}), rutinas: campo('rutinas', []), sensaciones: campo('sensaciones', {}),
   // Los descansos reales de cada sesión (nucleo/descansos.js): la hora de cada serie no se guarda en la tabla series.
   descansos: campo('descansos', {}),
+  seguimiento_molestias: { leer: () => E.saludFeed || {}, poner: v => { E.saludFeed = { respuestas: unirProgresion(E.saludFeed?.respuestas, v?.respuestas) }; } },
   feed_vistas: { leer: () => E.feedVistas || {}, poner: v => { E.feedVistas = unirProgresion(E.feedVistas, v); } },
   // Con los ajustes de la sesión viajan dos preferencias de cómo se anota, que viven en las respuestas: RPE o RIR y
   // las mancuernas de a una o el par. Una cuenta que aún no las tiene recibe las de este teléfono (falta).
@@ -48,7 +49,7 @@ const LOCAL = {
   },
 };
 // Las medidas y la meta de peso son datos del cuerpo: solo con el permiso de las medidas.
-const permitido = clave => !['medidas_cuerpo', 'meta_peso'].includes(clave) || E.consentimientos?.medidas_cuerpo === true;
+const permitido = clave => clave === 'seguimiento_molestias' ? R()?.consentimiento_salud === true && E.consentimientos?.datos_salud !== false : !['medidas_cuerpo', 'meta_peso'].includes(clave) || E.consentimientos?.medidas_cuerpo === true;
 const valorLocal = clave => LOCAL[clave].leer();
 const tieneDatos = clave => { const v = valorLocal(clave); return Array.isArray(v) ? v.length > 0 : Object.keys(v).length > 0; };
 const enLinea = () => !modoEjemplo && nube.hay() && nube.conectado() && ambitoDatos === nube.usuarioId();
@@ -123,7 +124,7 @@ export async function sincronizarDatosTelefono() {
   for (const clave of Object.keys(LOCAL)) {
     if (!permitido(clave)) continue;
     const fila = filas.find(f => f.clave === clave);
-    if (['progresion_sesion', 'feed_vistas'].includes(clave) && fila) LOCAL[clave].poner(fila.valor);
+    if (['progresion_sesion', 'feed_vistas', 'seguimiento_molestias'].includes(clave) && fila) LOCAL[clave].poner(fila.valor);
     if (E.nubeDatos?.[clave]?.pendiente || (!fila && tieneDatos(clave))) {
       await guardarDato(clave, contexto);
       contexto.comprobar();
@@ -142,4 +143,13 @@ export async function sincronizarDatosTelefono() {
   contexto.comprobar();
   alinearPropios();
   guardar();
+}
+
+/** Las ausentes solo se eliminan cuando el llamador ya recibió el historial completo de la cuenta. */
+export function limpiarProgresionSesion(sesiones = null) {
+  const limpia = limpiarProgresion(E.progresionSesion, { sesiones });
+  if (JSON.stringify(limpia) === JSON.stringify(E.progresionSesion || {})) return false;
+  E.progresionSesion = limpia;
+  datoCambiado('progresion_sesion');
+  return true;
 }

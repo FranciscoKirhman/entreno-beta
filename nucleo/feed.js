@@ -16,7 +16,7 @@ const lista = xs => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', '
 const accionable = t => (t.tipo === 'pregunta' || t.tipo === 'falta' ? 0 : 1);
 
 /** Una identidad por hecho; las vistas pasan al historial. Las preguntas respondidas nunca vuelven al feed. */
-export function armarFeed({ sesiones = [], plan = null, indice, hoy, progresionSesion = {}, vivaHecho = {}, feedVistas = {}, respuestas = {}, marcas = {}, descansos = {}, notas = {} }) {
+export function armarFeed({ sesiones = [], plan = null, indice, hoy, progresionSesion = {}, vivaHecho = {}, feedVistas = {}, respuestas = {}, marcas = {}, descansos = {}, notas = {}, saludFeed = {} }) {
   const tarjetas = [], asistidos = new Set(indice.ejercicios.filter(esAsistido).map(e => e.id));
   const ss = [...sesiones].filter(s => s.fecha <= hoy).sort((a, b) => a.fecha.localeCompare(b.fecha) || (a.hora || '').localeCompare(b.hora || ''));
   const records = recordsPorSesion(ss, { asistidos });
@@ -64,7 +64,7 @@ export function armarFeed({ sesiones = [], plan = null, indice, hoy, progresionS
     tarjetas.push({ id: `viva:${fecha}:${id}`, tipo: 'cambio', fecha, cuando: c.t, titulo: 'Ajuste durante la sesión', texto: `${c.hecho || 'Sesión ajustada'}. ${c.motivo || ''}`, antes: c.antes, ahora: c.ahora });
   }
   for (const d of sesionesPorRevisar(plan, ss, { hoy, marcas })) tarjetas.push({ id: `falta:${d.fecha}`, tipo: 'falta', fecha: d.fecha, titulo: `${d.foco} quedó sin registro`, texto: 'Revisa si la hiciste o elige cómo recuperarla.', accion: 'revisar' });
-  const preguntas = preguntasCoach({ plan, sesiones: ss, respuestas, descansos, notas, indice, hoy });
+  const preguntas = preguntasCoach({ plan, sesiones: ss, respuestas, descansos, notas, saludFeed, indice, hoy });
   tarjetas.push(...preguntas.map(p => ({ ...p, tipo: 'pregunta', pregunta: p })));
   const unicas = [...new Map(tarjetas.map(t => [t.id, t])).values()].sort(ordenar);
   let abiertas = 0;
@@ -72,6 +72,7 @@ export function armarFeed({ sesiones = [], plan = null, indice, hoy, progresionS
   const historial = new Map(unicas.filter(t => feedVistas[t.id]).map(t => [t.id, t]));
   for (const [id, v] of Object.entries(feedVistas)) if (v.tarjeta) historial.set(id, v.tarjeta);
   for (const [id, r] of Object.entries(respuestas.preguntas_coach || {})) historial.set(id, { id, tipo: 'respondida', fecha: r.fecha, titulo: r.titulo || 'Pregunta respondida', texto: r.texto, respuesta: r.respuesta || r.opcion });
+  for (const [id, r] of Object.entries(saludFeed.respuestas || {})) historial.set(id, { id, tipo: 'respondida', fecha: r.fecha, titulo: r.titulo, texto: r.texto, respuesta: r.respuesta, salud: true });
   return { nuevas, historial: [...historial.values()].sort(ordenar) };
 }
 
