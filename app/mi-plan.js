@@ -1,14 +1,22 @@
 import { ritmoHoy } from './ritmo.js';
-// Pestaña Mi plan: el ciclo en curso, la semana, los músculos prioridad (y desde cuándo cambian), los ejercicios
-// favoritos y evitados, los cuidados (indicación del profesional, suplementos, notas para el entrenador) y los ajustes
-// del plan. Progreso, Semana, Siguiente ciclo y el Banco de ejercicios se abren desde sus botones.
+// Pestaña Mi plan, en este orden (Francisco, 5 de noviembre de 2026: "hay mucho texto; primero el calendario, los
+// entrenamientos futuros colapsados en solo el nombre pero expandibles, un botón para ver los pasados, después las series
+// acumuladas por músculo y después botones claros para el resto"):
+//   1. Una línea con el bloque y su avance.
+//   2. Las próximas sesiones, cada una en una fila con su día y su nombre, que se abre para ver los ejercicios; las
+//      pasadas, con cómo quedó cada una, detrás de un botón.
+//   3. Las series de esta semana por músculo, hechas de las que tocan.
+//   4. Botones para lo demás: mover o faltar, progreso, prioridades, siguiente ciclo, favoritos y evitados, banco,
+//      cuidados y ajustes. Favoritos, cuidados y ajustes se abren en su propia pantalla.
 // Nada cambia el plan sin que la persona lo vea antes (AGENTS.md, regla 10): las prioridades muestran cómo queda y el
 // siguiente ciclo guarda un borrador que se aplica al armar el bloque (nucleo/ciclo-siguiente.js).
-import { E, R, D, C, guardar, esc, $, hoy, indice, fechaCorta, cambiarPlan, avisar, mostrarMensaje } from './comun.js';
+import { E, R, D, C, guardar, esc, $, hoy, indice, fechaCorta, cambiarPlan, avisar, mostrarMensaje, peso } from './comun.js';
+import { semanaPorMusculo } from '../nucleo/volumen-semana.js';
+import { seriesAnotadas } from '../nucleo/semanal.js';
+import { NOMBRE_MUSCULO, mayuscula } from './musculos.js';
 import { macroActual, planBloqueSiguiente, armarBloqueSiguiente, lunesDesde, historialReciente, tarjetaDescarga, enlazarTemporada } from './temporada.js';
 import { semanaDe, aplicarFase } from '../nucleo/ciclos.js';
 import { bloqueSiguienteDisponible } from '../nucleo/bloque-siguiente.js';
-import { resumenPlan } from '../nucleo/resumen-plan.js';
 import { estadoDelPlan } from '../nucleo/registrado.js';
 import { generarPlan, volumenSemanal, NOMBRE_ZONA } from '../nucleo/motor-plan.js';
 import { minutosDe } from './ritmo.js';
@@ -23,7 +31,6 @@ import { abrirHoja } from './hoja.js';
 import { icono } from './iconos.js';
 import * as nube from './nube.js';
 
-const LETRA = ['L', 'M', 'Mi', 'J', 'V', 'S', 'D'];
 const mayus = t => (t ? t[0].toUpperCase() + t.slice(1) : t);
 const nombreZona = m => NOMBRE_ZONA[m] || m;
 const listaZonas = xs => xs.length ? xs.map(nombreZona).map(mayus).join(', ') : 'ninguno';
@@ -31,9 +38,18 @@ const nombreEj = id => indice.porId.get(id)?.nombre || id;
 const coma = x => String(Math.round(x * 10) / 10).replace('.', ',');
 const OPCIONES = id => C.secciones.flatMap(s => s.preguntas || []).find(q => q.id === id)?.opciones || [];
 const HECHA = ['hecha', 'recuperada', 'adelantada', 'hecha_sin_registro'];
+const DIA = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+/** "Lun 9": el día de la semana y el del mes. */
+const diaCorto = f => `${DIA[new Date(f + 'T12:00:00Z').getUTCDay()]} ${Number(f.slice(8))}`;
+/** "16 nov": el día y el mes, sin el día de la semana. */
+const diaMes = f => new Date(f + 'T12:00:00Z').toLocaleDateString('es-CL', { day: 'numeric', month: 'short', timeZone: 'UTC' }).replace('.', '');
+/** Cómo quedó una sesión pasada (nucleo/registrado.js, estadoDelPlan). Lo que no está aquí es que no se hizo. */
+const ESTADO_PASADA = { hecha: 'Hecha', recuperada: 'Hecha', adelantada: 'Hecha', hecha_sin_registro: 'Hecha sin anotar', saltada: 'Saltada', reemplazada: 'Movida', omitida: 'Opcional' };
 
 // Lo que la persona va eligiendo en la pantalla de prioridades (sin guardar hasta confirmar).
 let eleccion = null, desdeElegido = 'ciclo', buscarFav = '', buscarEvitar = '';
+// Las sesiones pasadas se ven al tocar su botón; quedan abiertas mientras la persona siga en Mi plan.
+let verPasadas = false;
 
 /** Lunes de la semana de f. */
 const lunesDe = f => sumarDias(f, -((new Date(f + 'T12:00:00Z').getUTCDay() + 6) % 7));
@@ -43,111 +59,146 @@ const finDelPlan = () => (E.plan?.dias || []).map(d => d.fecha).sort().at(-1);
 /** Cuándo parte el siguiente ciclo: el lunes después de que termina el actual. */
 const inicioSiguiente = () => { const fin = finDelPlan(); return fin ? lunesDesde(sumarDias(fin, 1)) : proximoLunes(); };
 
+const SUBPANTALLAS = { ejercicios: 'Favoritos y evitados', cuidados: 'Cuidados', ajustes: 'Ajustes del plan' };
+
 export function vistaMiPlan(ir, extra = {}) {
   const panel = extra?.panel;
   if (panel === 'prioridades') return vistaPrioridades(ir, extra);
   if (panel === 'ciclo') return vistaCiclo(ir);
-  const p = E.plan;
+  if (SUBPANTALLAS[panel]) return vistaSub(ir, panel);
+  const p = E.plan, conPlan = Boolean(p?.dias?.length && !p.libre);
   const repintar = () => { const y = scrollY; vistaMiPlan(ir); scrollTo(0, y); };
   $('app').innerHTML = `<div id="vista-miplan">
     <h1>Mi plan</h1>
-    ${cicloHtml()}
-    ${tarjetaDescarga()}
-    <div class="tablero-progreso mp-tablero">
-      ${[['progreso', 'grafico', 'Progreso'], ['semana', 'calendario', 'Semana'], ['ciclo', 'cambiar', 'Siguiente ciclo'], ['banco', 'pesa', 'Banco de ejercicios']]
-        .map(([id, ic, t]) => `<button type="button" class="tablero-boton" data-mp-ir="${id}">${icono(ic)}<span>${t}</span>${icono('flecha', 'icono tablero-flecha')}</button>`).join('')}
-    </div>
-    ${p?.libre ? '' : semanaHtml()}
-    ${p?.libre ? '' : prioridadesHtml()}
-    ${ejerciciosHtml()}
-    <h2 class="titulo-seccion">Cuidados</h2>
-    ${indicacionesHtml()}
-    ${suplementosHtml()}
-    ${notasEntrenadorHtml()}
-    ${ajustesHtml()}
+    ${conPlan ? `${bloqueHtml()}${calendarioHtml()}${tarjetaDescarga()}${seriesHtml()}` : sinPlanHtml()}
+    ${botonesHtml(conPlan)}
   </div>`;
   const raiz = $('vista-miplan');
   raiz.querySelectorAll('[data-mp-ir]').forEach(b => b.onclick = () => {
     const v = b.dataset.mpIr;
-    if (v === 'ciclo') return ir('miplan', { panel: 'ciclo' });
+    if (v === 'prioridades') { eleccion = null; return ir('miplan', { panel: 'prioridades' }); }
+    if (v === 'ciclo' || SUBPANTALLAS[v]) return ir('miplan', { panel: v });
     if (v === 'banco') return ir('banco', { desde: 'miplan', despues: null });
     ir(v);
   });
-  $('mp-semana')?.addEventListener('click', () => ir('semana'));
-  $('mp-prioridades')?.addEventListener('click', () => { eleccion = null; ir('miplan', { panel: 'prioridades' }); });
-  $('mp-descartar')?.addEventListener('click', () => { guardarRespuestas(guardarEnBorrador(R(), { musculos_prioridad: R().musculos_prioridad })); avisar('Quité el cambio pendiente de prioridades.'); repintar(); });
-  enlazarEjercicios(repintar);
+  raiz.querySelector('[data-mp-pasadas]')?.addEventListener('click', () => { verPasadas = !verPasadas; repintar(); });
+  raiz.querySelectorAll('[data-mp-resumen]').forEach(b => b.onclick = () => ir('resumen', { id: b.dataset.mpResumen, desde: 'miplan' }));
+  raiz.querySelectorAll('[data-mp-hoy]').forEach(b => b.onclick = () => ir('hoy', { sesion: true }));
+  raiz.querySelectorAll('[data-mp-rehacer]').forEach(b => b.onclick = () => armarPlanFn?.());
   enlazarTemporada(repintar);
-  enlazarCuidados(repintar, ir);
-  enlazarAjustes(ir, raiz);
   mostrarMensaje();
 }
 
-/** Ciclo en curso: fase, semana, barra y cuándo termina. */
-function cicloHtml() {
-  const p = E.plan;
-  if (!p?.dias?.length || p.libre) return `<section class="tarjeta mp-ciclo"><h3>Sin plan por ahora</h3><p class="pequeno suave">Entrenas con sesiones libres. Puedes armar un plan con tus respuestas cuando quieras.</p><button type="button" class="boton primario" data-mp-rehacer>Armar mi plan</button></section>`;
-  const m = macroActual();
-  const f = hoy(), s = semanaDe(p, f), fin = finDelPlan();
+/** Favoritos y evitados, cuidados y ajustes del plan: cada uno en su pantalla, con volver a Mi plan. */
+function vistaSub(ir, panel) {
+  const contenido = panel === 'ejercicios' ? ejerciciosHtml() : panel === 'cuidados' ? `${indicacionesHtml()}${suplementosHtml()}${notasEntrenadorHtml()}` : ajustesHtml();
+  $('app').innerHTML = `<div id="vista-miplan" class="mp-sub">
+    <button type="button" class="volver" id="mp-volver" data-vuelve-a="miplan">${icono('flecha', 'icono flecha-atras')} Mi plan</button>
+    <h1>${SUBPANTALLAS[panel]}</h1>
+    ${contenido}
+  </div>`;
+  const raiz = $('vista-miplan');
+  const repintar = () => { const y = scrollY; vistaSub(ir, panel); scrollTo(0, y); };
+  $('mp-volver').onclick = () => ir('miplan');
+  if (panel === 'ejercicios') enlazarEjercicios(repintar);
+  if (panel === 'cuidados') enlazarCuidados(repintar, ir);
+  if (panel === 'ajustes') enlazarAjustes(ir, raiz);
+  mostrarMensaje();
+}
+
+function sinPlanHtml() {
+  return `<section class="tarjeta mp-ciclo"><h3>Sin plan por ahora</h3><p class="pequeno suave">Entrenas con sesiones libres. Puedes armar un plan con tus respuestas cuando quieras.</p><button type="button" class="boton primario" data-mp-rehacer>Armar mi plan</button></section>`;
+}
+
+/** Una línea con el bloque, la semana y cuándo termina, y una barra fina con el avance. */
+function bloqueHtml() {
+  const p = E.plan, m = macroActual(), f = hoy(), s = semanaDe(p, f);
   const actual = m?.bloques.find(b => b.n === m.actual);
   const pasados = p.dias.filter(d => d.fecha < f).length;
   const avance = Math.round(Math.min(1, Math.max(0, pasados / p.dias.length)) * 100);
-  const descarga = p.semana_descarga ? sumarDias(p.inicio, (p.semana_descarga - 1) * 7) : null;
-  const linea = !s && f < p.inicio ? `Parte el ${fechaCorta(p.inicio)}.`
-    : !s ? 'Terminaste este bloque.'
-      : s === p.semana_descarga ? 'Esta semana es de descarga.'
-        : descarga ? `Descarga desde el ${fechaCorta(descarga)}.` : '';
-  return `<section class="tarjeta mp-ciclo">
-    <p class="pequeno suave">${m && actual ? `Bloque ${m.actual} de ${m.bloques.length} · ${esc(actual.nombre)}` : 'Tu bloque'}</p>
-    <h3>${s ? `Semana ${s} de ${p.semanas}` : !s && f < p.inicio ? 'Por empezar' : 'Bloque terminado'}</h3>
-    <div class="mp-barra" role="img" aria-label="${avance}% del bloque"><i style="width:${avance}%"></i></div>
-    <p class="pequeno suave">${esc(linea)} Termina el ${esc(fechaCorta(fin))}.</p>
-  </section>`;
+  const semana = s ? `semana ${s} de ${p.semanas}${s === p.semana_descarga ? ', de descarga' : ''}` : f < p.inicio ? `parte el ${diaMes(p.inicio)}` : 'bloque terminado';
+  const texto = `${m && actual ? `Bloque ${m.actual} de ${m.bloques.length}` : 'Tu bloque'} · ${semana} · termina el ${diaMes(finDelPlan())}`;
+  return `<div class="mp-bloque"><p class="pequeno suave">${esc(texto)}</p><div class="mp-barra" role="img" aria-label="${avance}% del bloque"><i style="width:${avance}%"></i></div></div>`;
 }
 
-/** Esta semana, de lunes a domingo, con lo hecho y lo que viene. */
-function semanaHtml() {
-  const p = E.plan;
-  if (!p?.dias?.length) return '';
-  const f = hoy();
-  // Esta semana; si ya no le queda ninguna sesión por delante (o el plan parte después), la próxima, como Entrenar.
-  let lunes = lunesDe(f), cual = 'Esta semana';
-  if (!p.dias.some(d => d.fecha >= f && d.fecha <= sumarDias(lunes, 6) && d.ejercicios?.length)) { lunes = sumarDias(lunes, 7); cual = 'La próxima semana'; }
+/** "3 × 8 a 12 · 60 kg": lo que pide el plan de un ejercicio. */
+function dosis(e) {
+  const reps = e.reps_min === e.reps_max ? `${e.reps_min}` : `${e.reps_min} a ${e.reps_max}`;
+  const unidad = e.unidad === 'seg' ? ' s' : e.unidad === 'm' ? ' m' : '';
+  return `${e.series} × ${reps}${unidad}${e.carga_kg != null ? ` · ${peso(e.carga_kg)}` : ''}`;
+}
+
+/** Sesiones agrupadas por semana: "Esta semana", "La próxima semana", "Semana del 16 nov", con la descarga marcada. */
+function porSemana(dias) {
+  const lunes = lunesDe(hoy()), grupos = new Map();
+  for (const d of dias) { const l = lunesDe(d.fecha); if (!grupos.has(l)) grupos.set(l, []); grupos.get(l).push(d); }
+  return [...grupos].map(([l, ds]) => {
+    const nombre = l === lunes ? 'Esta semana' : l === sumarDias(lunes, 7) ? 'La próxima semana' : l === sumarDias(lunes, -7) ? 'La semana pasada' : `Semana del ${diaMes(l)}`;
+    return [`${nombre}${ds.some(d => d.semana != null && d.semana === E.plan.semana_descarga) ? ' · descarga' : ''}`, ds];
+  });
+}
+
+/** Una sesión en una fila (día y nombre); al tocarla se abren sus ejercicios. */
+function sesionHtml(d, estado, pasada) {
+  const esHoy = d.fecha === hoy();
+  const hecha = HECHA.includes(estado?.t);
+  const chip = pasada ? ESTADO_PASADA[estado?.t] || 'No se hizo' : esHoy ? 'Hoy' : d.firme === false ? 'Opcional' : '';
+  const clase = pasada ? (hecha ? 'hecha' : 'falta') : esHoy ? 'hoy' : '';
+  const accion = pasada ? (estado?.sesion?.id ? `<button type="button" class="enlace" data-mp-resumen="${esc(estado.sesion.id)}">Ver lo que hiciste</button>` : '')
+    : esHoy ? '<button type="button" class="enlace" data-mp-hoy>Ir a la sesión</button>' : '';
+  const ejercicios = (d.ejercicios || []).map(e => `<li><span>${esc(e.nombre || nombreEj(e.ejercicio_id))}</span><span class="num">${esc(dosis(e))}</span></li>`).join('');
+  return `<details class="mp-sesion${esHoy ? ' hoy' : ''}">
+    <summary><span class="mp-fecha">${esc(diaCorto(d.fecha))}</span><span class="mp-foco">${esc(d.foco)}</span>${chip ? `<span class="chip mp-chip ${clase}">${esc(chip)}</span>` : ''}</summary>
+    <div class="mp-detalle">${ejercicios ? `<ul class="mp-ejs">${ejercicios}</ul>` : ''}${d.cardio ? `<p class="pequeno">${esc(d.cardio)}</p>` : ''}
+      <p class="pequeno suave mp-pie"><span>~${minutosDe(d)} min</span>${accion}</p></div>
+  </details>`;
+}
+
+/** Primero: lo que viene, de la más próxima a la última del bloque; lo pasado, detrás de un botón. */
+function calendarioHtml() {
+  const p = E.plan, f = hoy();
   const reg = estadoDelPlan(p, E.sesiones, { hoy: f, marcas: E.marcasPlan || {} });
-  const celdas = LETRA.map((l, i) => {
-    const fecha = sumarDias(lunes, i);
-    const d = p.dias.find(x => x.fecha === fecha && x.ejercicios?.length);
-    const hecha = HECHA.includes(reg.porDia.get(fecha)?.t);
-    const clase = hecha ? 'hecha' : fecha === f ? 'hoy' : d ? 'toca' : '';
-    const texto = d ? `${l}: ${d.foco}${hecha ? ', hecha' : fecha < f ? ', no se hizo' : ''}` : `${l}: libre`;
-    return `<span class="mp-dia ${clase}" aria-label="${esc(texto)}">${l}${hecha ? ' ✓' : ''}</span>`;
-  }).join('');
-  const proximas = p.dias.filter(d => d.fecha >= f && d.ejercicios?.length && !HECHA.includes(reg.porDia.get(d.fecha)?.t)).slice(0, 2);
-  const texto = proximas.map(d => `${d.fecha === f ? 'Hoy' : mayus(new Date(d.fecha + 'T12:00:00Z').toLocaleDateString('es-CL', { weekday: 'long', timeZone: 'UTC' }))}: ${d.foco}, ~${minutosDe(d)} min`).join(' · ');
-  return `<h2 class="titulo-seccion">${cual}</h2>
-    <button type="button" class="tarjeta mp-semana" id="mp-semana"><span class="mp-dias">${celdas}</span>
-    <span class="pequeno suave">${esc(texto || 'No te quedan sesiones esta semana.')}</span>
-    <span class="pequeno mp-enlace">Mover, faltar o ver la semana ${icono('flecha', 'icono icono-chico')}</span></button>`;
+  const conSesion = p.dias.filter(d => d.ejercicios?.length || d.cardio);
+  const hecha = d => HECHA.includes(reg.porDia.get(d.fecha)?.t);
+  const proximas = conSesion.filter(d => d.fecha >= f && !hecha(d)).sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const pasadas = conSesion.filter(d => d.fecha < f || hecha(d)).sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const lista = (dias, pasada) => porSemana(dias).map(([titulo, ds]) => `<p class="mp-grupo">${esc(titulo)}</p>
+    <div class="mp-sesiones">${ds.map(d => sesionHtml(d, reg.porDia.get(d.fecha), pasada)).join('')}</div>`).join('');
+  return `<h2 class="titulo-seccion">Próximas sesiones</h2>
+    ${proximas.length ? lista(proximas, false) : '<p class="pequeno suave mp-vacio">No te quedan sesiones en este bloque.</p>'}
+    ${pasadas.length ? `<button type="button" class="boton mp-ver-pasadas" data-mp-pasadas aria-expanded="${verPasadas}">${verPasadas ? 'Ocultar las pasadas' : `Ver las pasadas (${pasadas.length})`}</button>
+    ${verPasadas ? `<div class="mp-pasadas">${lista(pasadas, true)}</div>` : ''}` : ''}`;
 }
 
-/** Músculos prioridad con sus series de la semana contra la franja de tu nivel, y el cambio pendiente si hay. */
-function prioridadesHtml() {
-  const p = E.plan;
-  if (!p?.dias?.length) return '';
-  const d = D();
-  const s = resumenPlan({ plan: p, respuestas: R(), derivados: d, indice, hoy: hoy() });
-  const [lo, hi] = s.rango;
-  const prio = s.volumen.filter(v => v.prioridad);
-  const pendiente = borradorCiclo(R())?.musculos_prioridad;
-  const historial = R().historial_prioridades || [];
-  return `<h2 class="titulo-seccion">Músculos prioridad</h2>
-  <section class="tarjeta mp-prioridades">
-    ${prio.length ? `<ul class="lista-simple">${prio.map(v => `<li><span>${esc(mayus(v.nombre))}</span><span class="pequeno suave">${coma(v.series)} series a la semana · franja ${lo} a ${hi}</span></li>`).join('')}</ul>`
-      : '<p class="pequeno suave">Sin músculos prioridad: todos reciben un volumen parejo.</p>'}
-    ${pendiente ? `<div class="aviso ojo pequeno">Desde el siguiente ciclo (${esc(fechaCorta(inicioSiguiente()))}): ${esc(listaZonas(pendiente))}. <button type="button" class="enlace" id="mp-descartar">Descartar</button></div>` : ''}
-    <button type="button" class="boton" id="mp-prioridades">Cambiar prioridades</button>
-    ${historial.length ? `<details class="extra"><summary>Cambios anteriores (${historial.length})</summary><ul class="pequeno lista-simple">${historial.map(h => `<li><span>${esc(fechaCorta(h.fecha))}: ${esc(listaZonas(h.antes))} pasó a ${esc(listaZonas(h.despues))}${h.desde === 'semana' ? ' (a mitad de ciclo)' : ''}</span></li>`).join('')}</ul></details>` : ''}
+/** Series de esta semana por músculo: las hechas de las que tocan (las que ayudan cuentan media, como en Progreso). */
+function seriesHtml() {
+  const r = semanaPorMusculo({ series: seriesAnotadas(E.sesiones, E.registro), plan: E.plan, indice, hoy: hoy() });
+  const filas = r.filas.filter(x => x.planeadas >= 1 || x.hechas >= 1);
+  if (!filas.length) return '';
+  const prioridad = new Set(R().musculos_prioridad || []);
+  const n = x => String(Math.round(x));
+  return `<h2 class="titulo-seccion">Series de esta semana por músculo</h2>
+  <section class="tarjeta mp-series">
+    <ul class="barras-semana">${filas.map(x => `<li${prioridad.has(x.musculo) ? ' class="prioridad"' : ''}><span class="nombre-musculo">${esc(mayuscula(NOMBRE_MUSCULO[x.musculo] || x.musculo))}</span><span class="pista" aria-hidden="true"><i style="width:${Math.round(x.avance * 100)}%"></i></span><span class="num pequeno">${n(x.hechas)}${x.planeadas ? ` de ${n(x.planeadas)}` : ''}</span></li>`).join('')}</ul>
+    ${prioridad.size ? '<p class="pequeno suave mp-leyenda">En naranjo, tus músculos prioridad.</p>' : ''}
   </section>`;
+}
+
+/** Lo demás, en botones: cada uno abre su pantalla. */
+function botonesHtml(conPlan) {
+  const cambios = borradorCiclo(R());
+  const botones = [
+    conPlan && ['semana', 'calendario', 'Mover o faltar'],
+    ['progreso', 'grafico', 'Progreso'],
+    conPlan && ['prioridades', 'estrella', 'Músculos prioridad'],
+    conPlan && ['ciclo', 'cambiar', cambios ? 'Siguiente ciclo (con cambios)' : 'Siguiente ciclo'],
+    ['ejercicios', 'corazon', 'Favoritos y evitados'],
+    ['banco', 'pesa', 'Banco de ejercicios'],
+    ['cuidados', 'curita', 'Cuidados'],
+    ['ajustes', 'ajustes', 'Ajustes del plan'],
+  ].filter(Boolean);
+  return `<h2 class="titulo-seccion">Más</h2>
+  <div class="tablero-progreso mp-tablero">${botones.map(([id, ic, t]) => `<button type="button" class="tablero-boton" data-mp-ir="${id}">${icono(ic)}<span>${esc(t)}</span>${icono('flecha', 'icono tablero-flecha')}</button>`).join('')}</div>`;
 }
 
 /** Favoritos y evitados, con buscador para sumar. Cuentan al armar un plan o un bloque nuevo. */
@@ -156,17 +207,16 @@ function ejerciciosHtml() {
   const fav = r.favoritos || [], evit = r.prohibidos || [];
   const buscador = (id, valor, lista, accion) => `<label class="pequeno sr-only" for="${id}">Buscar ejercicio</label><input type="search" id="${id}" class="mp-buscar" placeholder="Buscar un ejercicio" value="${esc(valor || '')}" autocomplete="off">
       <ul class="lista-simple mp-resultados" id="${id}-res">${resultadosHtml(valor, lista, accion)}</ul>`;
-  return `<h2 class="titulo-seccion">Ejercicios</h2>
-  <section class="tarjeta mp-ejercicios">
+  return `<section class="tarjeta mp-ejercicios">
     <h3>Favoritos</h3>
-    <p class="pequeno suave">Siempre en tu plan, si tu lugar tiene con qué hacerlos.</p>
+    <p class="pequeno suave">Siempre en tu plan, si tu lugar tiene con qué.</p>
     <div class="chips">${fav.map(id => `<span class="chip firme">${esc(nombreEj(id))} <button type="button" class="enlace mp-quitar" data-quitar-fav="${esc(id)}" aria-label="Quitar ${esc(nombreEj(id))} de favoritos">${icono('cerrar', 'icono icono-chico')}</button></span>`).join('') || '<span class="pequeno suave">Todavía no eliges favoritos.</span>'}</div>
     <details class="extra"${buscarFav ? ' open' : ''}><summary>Agregar un favorito</summary>${buscador('mp-buscar-fav', buscarFav, fav, 'agregar-fav')}</details>
     <h3>Evitados</h3>
-    <p class="pequeno suave">No aparecen en tus planes nuevos. Se suman también desde una sesión, con "No volver a hacer este ejercicio".</p>
+    <p class="pequeno suave">No aparecen en tus planes nuevos.</p>
     <ul class="lista-simple">${evit.map(id => `<li><span>${esc(nombreEj(id))}</span><button type="button" class="enlace" data-permitir="${esc(id)}">Volver a permitir</button></li>`).join('') || '<li class="pequeno suave">Ninguno.</li>'}</ul>
     <details class="extra"${buscarEvitar ? ' open' : ''}><summary>Evitar otro ejercicio</summary>${buscador('mp-buscar-evitar', buscarEvitar, evit, 'agregar-evitar')}</details>
-    <p class="pequeno suave">Estos cambios cuentan desde tu siguiente ciclo o al rehacer el plan. Para cambiar uno desde hoy, usa el menú ⋯ del ejercicio en la sesión.</p>
+    <p class="pequeno suave">Cuentan desde el siguiente ciclo o al rehacer el plan.</p>
   </section>`;
 }
 
@@ -210,8 +260,7 @@ function ajustesHtml() {
   const fila = (id, ic, texto, sub = '') => `<button type="button" class="mp-fila" data-mp-ajuste="${id}">${icono(ic)}<span class="mp-texto"><span>${texto}</span>${sub ? `<small>${sub}</small>` : ''}</span>${icono('flecha', 'icono mp-flecha')}</button>`;
   const d = D();
   const conPlan = E.plan?.dias?.length && !E.plan.bloqueado && !E.plan.libre;
-  return `<h2 class="titulo-seccion">Ajustes del plan</h2>
-  <div class="mp-lista">
+  return `<div class="mp-lista">
     ${fila('objetivo', 'objetivo', 'Objetivo')}
     ${fila('tiempo', 'reloj', 'Días y minutos', esc(`${d.dias_meta} días · ${d.duracion_min} min`))}
     ${fila('lugar', 'casa', 'Lugar y equipo')}

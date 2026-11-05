@@ -41,3 +41,34 @@
 #vista-miplan .fila-botones{margin-top:16px}
 #vista-miplan .prompt{white-space:pre-wrap;overflow-wrap:anywhere}
 #vista-miplan .mp-prioridades .lista-simple>li:first-child{border-top:0;padding-top:0}
+
+/* Mi plan del 5 de noviembre de 2026: una línea con el bloque, las próximas sesiones plegadas (día y nombre; al tocar,
+   los ejercicios), las pasadas detrás de un botón, las series de la semana por músculo y botones para lo demás. */
+#vista-miplan .mp-bloque{margin:-8px 4px 0}
+#vista-miplan .mp-bloque p{margin:0 0 6px}
+#vista-miplan .mp-bloque .mp-barra{height:4px;margin:0}
+#vista-miplan .mp-grupo{margin:14px 4px 6px;font-size:.8125rem;font-weight:600;color:var(--ink-muted)}
+#vista-miplan .mp-sesiones{background:var(--surface);border-radius:16px;overflow:hidden}
+#vista-miplan .mp-sesion+.mp-sesion{border-top:1px solid var(--line)}
+#vista-miplan .mp-sesion summary{display:flex;align-items:center;gap:10px;min-height:52px;padding:10px 14px;cursor:pointer;list-style:none}
+#vista-miplan .mp-sesion summary::-webkit-details-marker{display:none}
+#vista-miplan .mp-sesion summary::after{content:'';flex:0 0 auto;width:7px;height:7px;margin:0 4px 3px 2px;border-right:2px solid var(--ink-muted);border-bottom:2px solid var(--ink-muted);transform:rotate(45deg);transition:transform .15s}
+#vista-miplan .mp-sesion[open] summary::after{transform:rotate(-135deg);margin-bottom:-3px}
+#vista-miplan .mp-sesion.hoy summary{box-shadow:inset 3px 0 0 var(--accent)}
+#vista-miplan .mp-fecha{flex:0 0 50px;font-size:.8125rem;color:var(--ink-muted)}
+#vista-miplan .mp-foco{flex:1;min-width:0;font-weight:600;overflow-wrap:anywhere}
+#vista-miplan .mp-chip{flex:0 0 auto;font-size:.75rem}
+#vista-miplan .mp-chip.hoy{background:var(--accent-soft);color:var(--accent)}
+#vista-miplan .mp-chip.hecha{background:var(--good-soft);color:var(--good)}
+#vista-miplan .mp-chip.falta{background:var(--fill);color:var(--ink-muted)}
+#vista-miplan .mp-detalle{padding:0 14px 12px}
+#vista-miplan .mp-ejs{list-style:none;margin:0;padding:0}
+#vista-miplan .mp-ejs li{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:6px 0;font-size:.9375rem}
+#vista-miplan .mp-ejs li+li{border-top:1px solid var(--line)}
+#vista-miplan .mp-ejs .num{flex:0 0 auto;color:var(--ink-muted);font-size:.875rem}
+#vista-miplan .mp-pie{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:8px 0 0}
+#vista-miplan .mp-ver-pasadas{width:100%;margin-top:12px}
+#vista-miplan .mp-vacio{margin:4px}
+#vista-miplan .mp-series .barras-semana{margin:0}
+#vista-miplan .mp-series li.prioridad .nombre-musculo{color:var(--accent);font-weight:600}
+#vista-miplan .mp-leyenda{margin:10px 0 0}
