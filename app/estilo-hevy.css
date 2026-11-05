@@ -135,8 +135,6 @@ body:has(.barra :is(#modo, #campana):not([hidden])) .cab-sesion{top:calc(env(saf
 body.en-sesion .acciones-sesion{bottom:calc(env(safe-area-inset-bottom,0px) + 12px)}
 body.en-sesion main,body:has(#vista-hoy) main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 110px)}
 body.en-sesion.con-descanso main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 120px)}
-body.en-sesion #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 20px)}
-body.en-sesion.con-descanso #aviso-flotante,body.en-sesion:has(.acciones-sesion) #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 100px)}
 body:has(#pantalla-pasos) #descanso{bottom:calc(env(safe-area-inset-bottom,0px) + 84px)}
 
 /* ── Descanso como Hevy: −15, el tiempo grande, +15 y Saltar, con la línea de avance arriba ── */
@@ -170,7 +168,6 @@ body:not(.con-mini-sesion) #mini-sesion{display:none}
 .mini-sesion-seguir{min-height:40px;padding:0 16px;border:0;border-radius:999px;background:var(--accent);color:var(--accent-ink);font-weight:600;cursor:pointer}
 .mini-sesion-descartar{display:grid;place-items:center;width:40px;height:40px;border:0;border-radius:50%;background:transparent;color:var(--critical);cursor:pointer}
 body.con-mini-sesion main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 150px)}
-body.con-mini-sesion #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 142px)}
 body.con-mini-sesion #descanso{display:none!important}
 
 /* ── Pestaña Entrenar ── */

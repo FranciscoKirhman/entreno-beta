@@ -74,7 +74,6 @@ button.fila-pasos:active{background:var(--surface-2)}
 @media (prefers-reduced-motion:reduce){.pantalla-pasos.entra{animation:none}}
 body:has(#pantalla-pasos){overflow:hidden}
 body:has(#pantalla-pasos) #descanso{z-index:11;bottom:calc(env(safe-area-inset-bottom,0px) + 84px)}
-body:has(#pantalla-pasos) #aviso-flotante{z-index:12;bottom:calc(env(safe-area-inset-bottom,0px) + 84px)}
 .pasos-cab{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:4px;padding:calc(env(safe-area-inset-top,0px) + 4px) 8px 0}
 .pasos-cab h2{margin:0;font:600 17px/1.2 var(--f-texto);text-align:center;white-space:nowrap}
 .pasos-cab h2:focus{outline:none}
@@ -116,9 +115,6 @@ body:has(#acc-calentamiento) main{padding-bottom:calc(env(safe-area-inset-bottom
 .acc-boton{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-width:44px;min-height:44px;padding:0 12px;border:0;border-radius:999px;background:var(--fill);color:var(--accent);font:600 15px/1 var(--f-texto);cursor:pointer}
 .acc-boton:active{opacity:.7}
 
-/* Con ambos avisos abiertos, el texto queda sobre el cronómetro. */
-body.con-descanso:has(#pantalla-pasos) #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 164px)}
-
 /* Un solo grupo de accesos al final y una acción visible sobre el menú. */
 #vista-hoy .ej-cab{grid-template-columns:48px minmax(0,1fr) 44px}
 #vista-hoy .sesion-controles{justify-content:flex-end}
@@ -130,14 +126,8 @@ body.con-descanso:has(#pantalla-pasos) #aviso-flotante{bottom:calc(env(safe-area
 body:has(#vista-hoy) main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 230px)}
 body:has(#vista-hoy) .acc-pasos{bottom:calc(env(safe-area-inset-bottom,0px) + 144px)}
 body:has(#vista-hoy) #descanso{bottom:calc(env(safe-area-inset-bottom,0px) + 144px)}
-body:has(#vista-hoy) #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 212px)}
-/* En la sesión los avisos van arriba, sobre la cabecera: abajo quedaban en medio de la pantalla, encima de las series que
-   se están anotando (Francisco, 4 de noviembre de 2026). El paso a paso del calentamiento sigue con los suyos abajo. */
-body:has(#vista-hoy):not(:has(#pantalla-pasos)) #aviso-flotante{top:calc(env(safe-area-inset-top,0px) + 10px);bottom:auto;transform:translateY(-8px)}
-body:has(#vista-hoy):not(:has(#pantalla-pasos)) #aviso-flotante.visible{transform:none}
-body.con-descanso:has(#vista-hoy) #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 224px)}
+/* Los avisos van arriba en toda la app, como notificación (app/estilos.css, #aviso-flotante). */
 body:has(#pantalla-pasos) #descanso{bottom:calc(env(safe-area-inset-bottom,0px) + 84px)}
-body.con-descanso:has(#pantalla-pasos) #aviso-flotante{bottom:calc(env(safe-area-inset-bottom,0px) + 164px)}
 body:has(#pantalla-pasos) .acciones-sesion{visibility:hidden}
 
 /* La tabla conserva seis columnas y todos sus controles tienen al menos 44 px. */

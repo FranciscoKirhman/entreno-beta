@@ -12,6 +12,7 @@
 import { estadoDelPlan, VIGENCIA } from './registrado.js';
 import { sesionDe, sumarDias, diaSemana, nombreDia, moverSesion, marcarFaltada, conflictos } from './agenda.js';
 import { SERIES_SESION } from './fatiga-sesion.js';
+import { comoDescarga } from './motor-plan.js';
 
 const POR_REVISAR = new Set(['pendiente', 'sin_datos']);
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -93,6 +94,14 @@ export function correr(plan, fecha, destino, { noPuedo = [], hechas = [], hasta 
   return { plan: nuevo, cambios, avisos: [...new Set(avisos)] };
 }
 
+/** "suma Press inclinado y Remo sentado, 2 series cada uno" (en la descarga: "1 serie cada uno, como descarga"). */
+function textoSuma(x) {
+  const ns = x.series?.length === x.ids.length ? x.series : x.ids.map(() => 2);
+  const series = n => `${n} serie${n === 1 ? '' : 's'}`;
+  const cuanto = ns.every(n => n === ns[0]) ? `${series(ns[0])}${ns.length > 1 ? ' cada uno' : ''}` : x.nombres.map((nombre, i) => `${nombre}: ${series(ns[i])}`).join('; ');
+  return `suma ${x.nombres.join(' y ')}, ${cuanto}${x.descarga ? ', como descarga' : ''}`;
+}
+
 /**
  * Cómo queda la semana: desde la sesión que no se hizo (o desde hoy) hasta 7 días adelante, o hasta el último día que
  * cambia. Los días que quedan sin sesión por el cambio también aparecen, para ver de dónde salió cada una.
@@ -106,7 +115,7 @@ export function semanaDe(plan, { hoy, cambios = [], marcas = {}, saltada = null,
   const dias = plan.dias.filter(d => d.fecha >= desde && d.fecha <= fin).map(d => ({
     fecha: d.fecha, foco: d.foco,
     cambio: d.fecha === saltada ? 'saltada' : movida.has(d.fecha) ? `antes el ${diaCorto(movida.get(d.fecha))}`
-      : suma.has(d.fecha) ? `suma ${suma.get(d.fecha).nombres.join(' y ')}, 2 series cada uno` : marcas[d.fecha] === 'saltada' ? 'saltada' : null,
+      : suma.has(d.fecha) ? textoSuma(suma.get(d.fecha)) : marcas[d.fecha] === 'saltada' ? 'saltada' : null,
   }));
   for (const c of cambios) if (!plan.dias.some(d => d.fecha === c.de)) dias.push({ fecha: c.de, foco: 'Sin sesión', cambio: `${c.foco} pasa al ${diaCorto(c.a)}`, libre: true });
   return dias.sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
@@ -166,7 +175,7 @@ export function alternativasNoHecha(plan, fecha, ctx) {
   const rep = porId && repartir(plan, fecha, { hoy, hechas, porId });
   if (rep) {
     finales.push({ id: 'repartir', titulo: `Repartir ${s.foco} en las próximas sesiones`, detalle: `${rep.sumas.map(x => `${x.nombres.join(' y ')} al ${x.foco} del ${diaCorto(x.fecha)}`).join('; ')}.`,
-      diferencia: `No sumas un día ni mueves nada: lo principal va de a 2 series en lo que viene.${rep.quedan.length ? ` No caben: ${rep.quedan.join(', ')}.` : ''}`, avisos: [], cambios: [], sumas: rep.sumas, plan: rep.plan, repartir: true });
+      diferencia: `No sumas un día ni mueves nada: lo principal va de a 2 series en lo que viene${rep.sumas.some(x => x.descarga) ? '; en la semana de descarga va como descarga (la mitad de las series y más reserva), para no quitarte la recuperación' : ''}.${rep.quedan.length ? ` No caben: ${rep.quedan.join(', ')}.` : ''}`, avisos: [], cambios: [], sumas: rep.sumas, plan: rep.plan, repartir: true });
   }
   // Y si no quiere ninguna: saltarla, sin recuperar nada.
   finales.push({ id: 'saltar', titulo: `Saltar ${s.foco}: no recuperarla`, detalle: 'Las demás sesiones de la semana siguen igual.', diferencia: 'No recuperas esta sesión: la semana no cambia y lo que no hiciste mantiene su peso.', avisos: [], cambios: [], plan, saltar: true });
@@ -178,12 +187,19 @@ export function alternativasNoHecha(plan, fecha, ctx) {
  * sesión, en las próximas 3 sesiones sin hacer (primero las que ya trabajan esos músculos). Sin repetir un ejercicio
  * que la sesión ya tiene ni pasar 12 series de un músculo en una sesión. Así no se pierde entera y no se suma un día
  * (Francisco, 4 de noviembre de 2026: "la opción de perderla o distribuirla en días").
- * @returns {{plan, sumas: [{fecha, foco, ids, nombres}], quedan: string[]} | null} null si no cabe nada
+ *
+ * En la semana de descarga lo repartido también va como descarga (la mitad de las series y 2 repeticiones más de
+ * reserva, nucleo/motor-plan.js: comoDescarga), igual que cualquier ejercicio que se suma a esa semana
+ * (nucleo/editar-sesion.js). Antes llegaba con la reserva de la semana normal (1) a una sesión de descarga que pide 3 o
+ * 4 (Francisco, 5 de noviembre de 2026: un viernes que no podía, repartido en la descarga del lunes).
+ * @returns {{plan, sumas: [{fecha, foco, ids, nombres, series, descarga}], quedan: string[]} | null} null si no cabe nada
+ *   series: las de cada ejercicio sumado, en el orden de ids; descarga: si ese día es de la semana de descarga
  */
 export function repartir(plan, fecha, { hoy, hechas = [], porId, porSesion = 2, cuantas = 3 } = {}) {
   const s = sesionDe(plan, fecha);
   if (!s || !porId) return null;
   const nuevo = structuredClone(plan);
+  const enDescarga = d => plan.semana_descarga != null && d.semana === plan.semana_descarga;
   const destinos = nuevo.dias.filter(d => d.fecha >= hoy && d.fecha !== fecha && !hechas.includes(d.fecha) && d.ejercicios?.length && d.firme !== false)
     .sort((a, b) => (a.fecha < b.fecha ? -1 : 1)).slice(0, cuantas);
   if (!destinos.length) return null;
@@ -202,11 +218,20 @@ export function repartir(plan, fecha, { hoy, hechas = [], porId, porSesion = 2, 
       && (!cuenta(e.ejercicio_id) || ms.every(m => seriesDe(x, m) + series <= SERIES_SESION.aviso)))
       .sort((a, b) => comparte(b) - comparte(a) || puestos.get(a.fecha).length - puestos.get(b.fecha).length || (a.fecha < b.fecha ? -1 : 1))[0];
     if (!d) { quedan.push(ej(e.ejercicio_id).nombre); continue; }
-    d.ejercicios.push({ ...structuredClone(e), series, prioridad: 3, orden: d.ejercicios.length, superserie: null,
-      nota: `De ${s.foco} del ${diaCorto(fecha)}, que no se hizo: ${series} series para no perderla entera.` });
+    const sumado = { ...structuredClone(e), series, prioridad: 3, orden: d.ejercicios.length, superserie: null };
+    // Sin reserva anotada (por ejemplo, una plancha por tiempo) solo bajan las series.
+    const descarga = enDescarga(d), conReserva = sumado.rir != null && Number.isFinite(Number(sumado.rir));
+    const final = !descarga ? sumado : conReserva ? comoDescarga({ ...sumado, rir: Number(sumado.rir) }) : { ...comoDescarga({ ...sumado, rir: 0 }), rir: sumado.rir };
+    final.nota = descarga
+      ? `De ${s.foco} del ${diaCorto(fecha)}, que no se hizo: ${final.series} serie${final.series === 1 ? '' : 's'} como el resto de la descarga${final.rir != null ? `, con ${final.rir} repeticiones de reserva` : ''}, para no perderla entera.`
+      : `De ${s.foco} del ${diaCorto(fecha)}, que no se hizo: ${series} series para no perderla entera.`;
+    d.ejercicios.push(final);
     puestos.get(d.fecha).push(e.ejercicio_id);
   }
-  const sumas = destinos.filter(d => puestos.get(d.fecha).length).map(d => ({ fecha: d.fecha, foco: d.foco, ids: puestos.get(d.fecha), nombres: puestos.get(d.fecha).map(id => ej(id).nombre) }));
+  const sumas = destinos.filter(d => puestos.get(d.fecha).length).map(d => ({
+    fecha: d.fecha, foco: d.foco, ids: puestos.get(d.fecha), nombres: puestos.get(d.fecha).map(id => ej(id).nombre),
+    series: puestos.get(d.fecha).map(id => d.ejercicios.find(x => x.ejercicio_id === id).series), descarga: enDescarga(d),
+  }));
   return sumas.length ? { plan: nuevo, sumas, quedan } : null;
 }
 

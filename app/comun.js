@@ -400,8 +400,14 @@ export const coma = x => (x == null || x === '' ? '' : String(x).replace('.', ',
 
 // ── Avisos flotantes ────────────────────────────────────────────────────────
 let relojAviso = null;
-/** Aviso sobre el menú inferior: se ve aunque estés al final de la página. Se cierra solo o al tocarlo. */
-export function avisar(texto, tipo = /no se pudo|no pude|no se activ|bloquead|todavía no|marca al menos/i.test(texto) ? 'ojo' : 'bien') {
+/** Milisegundos que se ve un aviso: 2,5 segundos, y hasta 4 si el texto es largo. */
+export const duracionAviso = texto => Math.min(4000, Math.max(2500, 1500 + String(texto).length * 25));
+/**
+ * Aviso arriba, como una notificación del teléfono: se ve desde cualquier parte de la página y se va solo en un par de
+ * segundos (2,5; los largos, hasta 4 para alcanzar a leerlos) o al tocarlo. Lo que no resultó va en naranjo, no en
+ * verde (Francisco, 5 de noviembre de 2026).
+ */
+export function avisar(texto, tipo = /no se pudo|no pude|no se activ|no lo acept|rechaz|bloquead|todavía no|marca al menos/i.test(texto) ? 'ojo' : 'bien') {
   let el = document.getElementById('aviso-flotante');
   if (!el) {
     el = document.createElement('div');
@@ -414,7 +420,7 @@ export function avisar(texto, tipo = /no se pudo|no pude|no se activ|bloquead|to
   el.textContent = texto;
   requestAnimationFrame(() => el.classList.add('visible'));
   clearTimeout(relojAviso);
-  relojAviso = setTimeout(() => el.classList.remove('visible'), Math.min(10000, 3500 + texto.length * 45));
+  relojAviso = setTimeout(() => el.classList.remove('visible'), duracionAviso(texto));
 }
 /** Muestra una sola vez el mensaje que dejó la última acción (E.mensaje). */
 export function mostrarMensaje() {
