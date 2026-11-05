@@ -47,6 +47,33 @@ export const conLastre = ej => ej?.lastre === true;
 const SIN_CARGA = new Set(['banco', 'barra_dominadas', 'paralelas', 'bandas', 'escaladora', 'trotadora', 'rueda_abdominal', 'banco_predicador']);
 /** De peso corporal: sin equipo que cargue peso ni ayuda de máquina. Ahí los kilos son opcionales. */
 export const sinCargaExterna = ej => Boolean(ej) && !esAsistido(ej) && ej.equipamiento.every(q => SIN_CARGA.has(q));
+
+/** El lastre sube de a 2,5 kg: un disco chico, una mancuerna liviana. */
+export const PASO_LASTRE = 2.5;
+// Ejercicios de peso corporal a los que se les suele sumar peso, y cómo. Los demás (asistidos, con bandas, casi todo el
+// core, los isométricos) siguen con más repeticiones, más lentas o con pausa. Francisco, 5 de noviembre de 2026: "me ha
+// ido bien en este ejercicio pero no me recomienda más peso" (dominadas escapulares de 15 y 20 repeticiones con reserva).
+const COMO_LASTRE = {
+  dominadas: 'con cinturón o una mancuerna entre los pies',
+  dominadas_supinas: 'con cinturón o una mancuerna entre los pies',
+  dominadas_escapulares: 'con cinturón o una mancuerna entre los pies',
+  fondos: 'con cinturón o una mancuerna entre los pies',
+  fondos_triceps: 'con cinturón o una mancuerna entre los pies',
+  fondos_banco: 'con un disco sobre los muslos',
+  flexiones: 'con un disco sobre la espalda',
+  bulgara: 'con una mancuerna en cada mano',
+  step_up: 'con una mancuerna en cada mano',
+  zancadas_corporal: 'con una mancuerna en cada mano',
+  sentadilla_corporal: 'con una mancuerna junto al pecho',
+  puente_gluteo: 'con un disco o una mancuerna sobre la cadera',
+  pantorrilla_de_pie: 'con una mancuerna en la mano',
+  crunch: 'con un disco sobre el pecho',
+};
+/**
+ * Cómo sumarle peso a un ejercicio de peso corporal ("con cinturón o una mancuerna entre los pies"), o null si no se
+ * suele hacer. Las versiones con lastre del catálogo ya anotan su peso como carga, así que tampoco.
+ */
+export const comoLastre = ej => (ej && !esAsistido(ej) && !conLastre(ej) && sinCargaExterna(ej) ? COMO_LASTRE[ej.id] ?? null : null);
 export const nivelAlcanza = (nivel, minimo) => NIVELES.indexOf(nivel) >= NIVELES.indexOf(minimo);
 
 /** El ejercicio se puede hacer con este equipamiento (lista de ids de cuestionario.json). */

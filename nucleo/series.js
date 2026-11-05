@@ -43,7 +43,8 @@ export function prioridadEsfuerzo(e, ej, d = {}, zonasConMolestia = []) {
  * @param incremento kg que se pueden sumar o restar (null en peso corporal)
  * @param o.previas  series de trabajo ya hechas hoy en este ejercicio, antes de esta (para ver si va bajando)
  * @param o.quedan   series de trabajo que faltan; con 0 no se habla de "la siguiente". Sin contexto (null), como antes.
- * @param o.lastre   el ejercicio de peso corporal tiene versión con lastre (dominadas, fondos): con eso se le suma peso
+ * @param o.lastre   al ejercicio de peso corporal se le puede sumar peso: true, o cómo hacerlo en ese ejercicio ("con
+ *                   cinturón o una mancuerna entre los pies", nucleo/catalogo.js: comoLastre)
  * @param o.correccion lo que suele quedarle de más según su serie de comprobación (nucleo/comprobacion-rir.js): se suma a
  *                   la reserva anotada, salvo al fallo
  * @param o.tecnica  'tecnica' o 'rango' si el ejercicio va con la técnica primero (nucleo/tecnica-primero.js): aunque
@@ -141,7 +142,8 @@ const kgTexto = x => `${String(Math.round(x * 100) / 100).replace('.', ',')} kg`
 /** Sin peso anotado ni escalón de equipo (dominadas, fondos): no hay kilos que subir o bajar en la serie siguiente. */
 const corporalDe = (s, incremento, asistido) => !asistido && !(Number(s.kg) > 0) && !incremento;
 const MAS_LENTA = 'hazla más lenta: 3 segundos al bajar y 1 de pausa en la parte más difícil';
-const CON_LASTRE = 'agrega 2,5 kg con cinturón o un disco';
+/** "agrega 2,5 kg con cinturón o una mancuerna entre los pies": con el cómo de ese ejercicio, o el de siempre (true). */
+const textoLastre = lastre => `agrega 2,5 kg ${typeof lastre === 'string' && lastre ? lastre : 'con cinturón o un disco'}`;
 
 /**
  * Qué cambiar en la serie siguiente, en concreto: el peso al que ir y no "un escalón" (Francisco, 28 de octubre de 2026:
@@ -161,7 +163,7 @@ function cambioDe(s, incremento, asistido) {
 /** "Te sobró: …" al terminar el ejercicio: con qué partir la próxima vez. */
 function proximaVez(s, incremento, { asistido, lastre }) {
   const kg = Number(s.kg) > 0 ? Number(s.kg) : null, paso = incremento || (kg ? 2.5 : null);
-  if (corporalDe(s, incremento, asistido)) return lastre ? `la próxima vez ${CON_LASTRE}.` : 'la próxima vez hazla más lenta o con más repeticiones.';
+  if (corporalDe(s, incremento, asistido)) return lastre ? `la próxima vez ${textoLastre(lastre)}.` : 'la próxima vez hazla más lenta o con más repeticiones.';
   if (!kg || !paso) return 'la próxima vez puede costar un poco más.';
   if (asistido) return kg - paso > 0 ? `la próxima vez puede ir con ${kgTexto(kg - paso)} de ayuda.` : 'la próxima vez prueba sin ayuda.';
   return `la próxima vez puede ir con ${kgTexto(kg + paso)}.`;
@@ -184,10 +186,13 @@ function consejoSolo(e, s, incremento = null, { asistido = false, lastre = false
   return { tipo: 'bien', texto: 'Justo lo pedido. Sigue igual.' };
 }
 
-/** Con el cuerpo (dominadas, fondos, flexiones): más difícil es más lenta o, si quedó sobre el rango, con lastre; más
- *  fácil es parar antes. */
+/** Con el cuerpo (dominadas, fondos, flexiones): más difícil es más lenta o, en el tope y si se puede, con lastre; más
+ *  fácil es parar antes. En el tope con reserva de sobra, el lastre va ya en la serie siguiente si hay con qué: antes
+ *  quedaba para la próxima sesión, o ni se decía (Francisco, 5 de noviembre de 2026, con dominadas escapulares de 15
+ *  repeticiones a RPE 7: "me ha ido bien en este ejercicio pero no me recomienda más peso"). */
 function consejoCorporal(e, reps, r, fallo, lastre) {
-  const sobra = reps >= e.reps_max ? `En la siguiente serie, ${MAS_LENTA}.${lastre ? ` Si igual te sobra, la próxima sesión ${CON_LASTRE}.` : ''}`
+  const sobra = reps >= e.reps_max
+    ? (lastre ? `En la siguiente serie, si tienes cómo, ${textoLastre(lastre)} y anótalos en KG; si no, ${MAS_LENTA}.` : `En la siguiente serie, ${MAS_LENTA}.`)
     : `En la siguiente haz más, hasta ${e.reps_max}, o ${MAS_LENTA}.`;
   if (fallo && e.rir >= 1) return { tipo: 'bajar', texto: `Llegaste al fallo y el plan pedía dejar ${e.rir}. En la siguiente serie para 1 a 2 repeticiones antes.` };
   if (reps < e.reps_min && r != null && r < e.rir) return { tipo: 'bajar', texto: `No llegaste a ${e.reps_min} y quedaste más cerca del fallo de lo pedido. En la siguiente para con ${e.rir} en reserva, aunque salgan menos.` };

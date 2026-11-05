@@ -1,7 +1,7 @@
 // Ajuste semanal de cargas: las reglas de contenido/checkin.json → semanal.reglas_de_ajuste, como código.
 // Son las mismas que se venían aplicando a mano en el tablero.
 import { e1rm, incrementoPara } from './motor-plan.js';
-import { esAsistido } from './catalogo.js';
+import { esAsistido, comoLastre, PASO_LASTRE } from './catalogo.js';
 import { calidadPermiteSubir } from './notas.js';
 
 /** Kilos con coma decimal, como se escriben en Chile. */
@@ -36,10 +36,12 @@ export function ajustarEjercicio(p) {
   return { ...r, motivo: `Según tu serie de comprobación, te quedan unas ${correccion} más de las que anotas. ${r.motivo}` };
 }
 
-function ajustarBase({ objetivo: o, hechas, semanas = [], subioRecien = false, incremento, calidad = null, asistido = false, correccion = 0 }) {
+function ajustarBase({ objetivo: o, hechas, semanas = [], subioRecien = false, incremento, calidad = null, asistido = false, correccion = 0, lastre = null }) {
   if (asistido) return ajustarAsistido({ objetivo: o, hechas, subioRecien, incremento, calidad });
   // Si el plan no indicaba carga ("elige un peso"), la referencia es la más pesada que anotó.
   const carga = o.carga_kg ?? (Math.max(0, ...hechas.map(s => Number(s.carga_kg) || 0)) || null);
+  // De peso corporal con lastre ya anotado (nucleo/catalogo.js, comoLastre): sube de a 2,5 kg como cualquier carga.
+  if (!incremento && lastre && carga) incremento = PASO_LASTRE;
   const mantener = (regla, motivo) => ({ accion: 'mantener', carga_kg: carga, reps_min: o.reps_min, reps_max: o.reps_max, regla, motivo });
   if (!hechas.length) return mantener('sin_registro', 'No hay series registradas esta semana.');
   if (o.unidad === 'seg') return mantener('isometrico', 'Los isométricos progresan en segundos dentro del rango.');
@@ -109,6 +111,14 @@ function ajustarBase({ objetivo: o, hechas, semanas = [], subioRecien = false, i
 
   if ((todasAlTope && conReserva) || sobrabanMuchas) {
     if (!incremento) {
+      // Solo con el cuerpo y en el tope con reserva: si se le puede sumar peso, se empieza con 2,5 kg en vez de subir las
+      // repeticiones sin fin (Francisco, 5 de noviembre de 2026: dominadas escapulares de 15 y 20 repeticiones con reserva
+      // y "no me recomienda más peso").
+      if (lastre) {
+        const base = o.rango_extendido ? { reps_min: o.reps_min, reps_max: o.reps_max - 2 } : { reps_min: o.reps_min, reps_max: o.reps_max };
+        return { accion: 'subir_carga', carga_kg: PASO_LASTRE, ...base, regla: 'lastre',
+          motivo: `Completas el tope con reserva solo con tu peso: la próxima vez agrega 2,5 kg ${lastre}.` };
+      }
       return { accion: 'subir_reps', carga_kg: carga, reps_min: o.reps_min + 2, reps_max: o.reps_max + 2, regla: 'doble_progresion',
         motivo: 'Sin peso que sumar: sube el rango de repeticiones.' };
     }
@@ -235,7 +245,7 @@ export function ajustarTrasSesion({ plan, fecha, series, indice, lugar = null, h
     const subioRecien = !reanclado && previo?.carga_kg != null && planeada != null && planeada > Number(previo.carga_kg);
     const r = ajustarEjercicio({
       objetivo: reanclado ? { ...base, carga_kg: usada } : base, hechas, semanas: historialSemanas[id] || [], subioRecien,
-      incremento, calidad: calidades[id] || null, asistido, correccion,
+      incremento, calidad: calidades[id] || null, asistido, correccion, lastre: comoLastre(ej),
     });
     if (r.accion === 'mantener' && !reanclado) continue;
     const dias = [];

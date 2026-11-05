@@ -7,7 +7,7 @@ import { E, guardar, guardarPronto, R, D, C, K, indice, hoy, ahora, esc, $, fech
 import { estadoDelPlan } from '../nucleo/registrado.js';
 import { sesionesPorRevisar } from '../nucleo/sin-registro.js';
 import { recordsDeSerie } from '../nucleo/records.js';
-import { esAsistido, conLastre, sinCargaExterna, tieneEquipo } from '../nucleo/catalogo.js';
+import { esAsistido, conLastre, sinCargaExterna, tieneEquipo, comoLastre, PASO_LASTRE } from '../nucleo/catalogo.js';
 import { sufijo, porReps, camposGuardados, modoCardio, relojTexto, leerReloj } from '../nucleo/unidades.js';
 import { evaluarDia, ajustarSesion, TEXTO_RECOMENDACION } from '../nucleo/bienestar.js';
 import { cicloActivo, estadoCiclo, registrarInicio, NOMBRE_FASE, SINTOMAS } from '../nucleo/ciclo-menstrual.js';
@@ -1262,10 +1262,12 @@ function enlazar(ir, dia) {
     const ej = indice.porId.get(e.ejercicio_id);
     const previas = lista.slice(0, Math.max(0, i)).filter(x => x?.hecho && deTrabajo(tipoDe(x))).map(x => ({ ...x, fallo: tipoDe(x) === 'fallo' }));
     const quedan = i < 0 ? null : lista.slice(i + 1).filter(x => !x?.hecho && deTrabajo(tipoDe(x))).length;
-    // lastre: las de peso corporal con versión con lastre (dominadas, fondos), donde sumar peso es cómo seguir.
+    // lastre: a las de peso corporal que lo admiten se les suma peso para seguir, con el cómo de cada una
+    // (nucleo/catalogo.js, comoLastre). Con el lastre ya anotado sube de a 2,5 kg y la serie siguiente lo deja en gris.
     // tecnica y correccion: técnica primero y la puntería de RIR (extrasHoy). La serie de comprobación dice lo suyo arriba.
     if (r.comprobacion) return null;
-    return deTrabajo(tipoDe(r)) ? consejoSerie(e, { ...r, fallo: tipoDe(r) === 'fallo' }, ej ? incrementoPara(ej, lugar) : null, { asistido: esAsistido(ej), lastre: Boolean(ej && indice.porId.has(`${ej.id}_lastre`)), previas, quedan,
+    const paso = ej ? incrementoPara(ej, lugar) ?? (comoLastre(ej) && Number(r.kg) > 0 ? PASO_LASTRE : null) : null;
+    return deTrabajo(tipoDe(r)) ? consejoSerie(e, { ...r, fallo: tipoDe(r) === 'fallo' }, paso, { asistido: esAsistido(ej), lastre: comoLastre(ej) || Boolean(ej && indice.porId.has(`${ej.id}_lastre`)), previas, quedan,
       tecnica: extrasHoy.tecnica.get(e.ejercicio_id) || null, correccion: extrasHoy.correccion }) : null;
   };
 
