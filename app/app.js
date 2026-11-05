@@ -120,7 +120,7 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
     comprobar();
     avisos.push({ parte, mensaje: e.datos?.errores?.map(x => x.mensaje).join(' ') || e.message });
   };
-  let planIntentado = false;
+  let planIntentado = false, planGuardado = false;
   if (E.chatPorTraer) {
     if (!await consultar(() => actualizarChatConfirmado())) throw new Error('La cuenta cambió al recuperar los cambios del chat.');
     respuestasAlEntrar = JSON.stringify(E.respuestas); planAlEntrar = JSON.stringify(E.plan);
@@ -140,6 +140,8 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
       const r = await consultar(() => nube.guardarPlan(enviado));
       if (JSON.stringify(E.plan) === firma) { E.plan = { ...E.plan, id: r.id }; planAlEntrar = JSON.stringify(E.plan); }
       if (JSON.stringify(E.planPendiente) === firma) delete E.planPendiente;
+      // El plan que se había cambiado en el teléfono (y quizás rechazado) ya está en la cuenta: la campanita lo dice.
+      planGuardado = true; delete E.planRechazado;
       guardar();
     } catch (e) { avisar('Plan', e); }
   }
@@ -211,11 +213,13 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
   if (pendientes) partes.push(`${pendientes} elementos pendientes`);
   if (Object.entries(E.nubeDatos || {}).some(([k, v]) => v.pendiente && (k !== 'medidas_cuerpo' || E.consentimientos?.medidas_cuerpo === true)) && !avisos.some(x => x.parte === 'Datos del teléfono')) partes.push('datos del teléfono pendientes');
   const completa = !partes.length;
-  const mensaje = completa ? `Todo sincronizado. ${E.sesiones.length} sesiones en tu cuenta.`
-    : `Sincronización incompleta. ${partes.join('. ')}. La copia del teléfono se conserva.`;
+  const textoPlan = planGuardado ? ' Tu plan quedó guardado en la cuenta.' : '';
+  const mensaje = completa ? `Todo sincronizado.${textoPlan} ${E.sesiones.length} sesiones en tu cuenta.`
+    : `Sincronización incompleta.${textoPlan} ${partes.join('. ')}. La copia del teléfono se conserva.`;
   // Va a la campanita, no a un aviso flotante (el de una versión anterior que haya quedado guardado se descarta).
   if (E.mensaje === E.sincronizacionCuenta?.mensaje) E.mensaje = null;
-  anotarSinc(mensaje, completa ? { resuelve: true } : { problema: true });
+  // Con el plan ya guardado, el rechazo anterior del plan deja de marcar el punto aunque falte otra cosa.
+  anotarSinc(mensaje, completa ? { resuelve: true } : { problema: true, ...(planGuardado ? { resuelve: 'plan' } : {}) });
   E.sincronizacionCuenta = { completa, pendientes, avisos, mensaje };
   comprobar();
   if (completa) marcarCuentaRecuperada(usuario);

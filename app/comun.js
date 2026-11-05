@@ -348,6 +348,13 @@ export const ctxNucleo = () => ({
 /** Cambia el plan aquí y, con cuenta, en el servidor. Devuelve el aviso si el servidor no lo aceptó (o null). */
 /** Avisos de cambio del plan (app/datos-nube.js sube aparte sus ejercicios propios). Se llaman con (anterior, nuevo). */
 export const alCambiarPlan = new Set();
+/**
+ * Cómo terminó el guardado del plan en la cuenta, para la campanita (app/campana.js): {rechazo} si el servidor no lo
+ * aceptó, {sinSenal} si no se pudo llegar a él, y {guardado: true} cuando un plan que había quedado rechazado por fin
+ * se guarda. El aviso flotante dura un par de segundos; en la campanita el rechazo queda con su punto rojo hasta que se
+ * revisa (Francisco, 5 de noviembre de 2026: el rechazo del servidor no aparecía en la campana).
+ */
+export const alGuardarPlanCuenta = new Set();
 export async function cambiarPlan(plan, mensaje, nube) {
   const estado = E, usuario = nube?.usuarioId?.();
   if (E.chatPorTraer) {
@@ -377,13 +384,21 @@ export async function cambiarPlan(plan, mensaje, nube) {
   try {
     const r = await nube.guardarPlan(plan);
     if (!vigente()) return cambioDeAmbito;
-    E.plan.id = r.id; delete E.planPendiente; guardar(); return null;
+    const habiaRechazo = Boolean(E.planRechazado);
+    E.plan.id = r.id; delete E.planPendiente; delete E.planRechazado; guardar();
+    if (habiaRechazo) for (const fn of alGuardarPlanCuenta) fn({ guardado: true });
+    return null;
   }
   catch (e) {
     if (!vigente()) return cambioDeAmbito;
-    const aviso = `Se cambió en este teléfono, pero el servidor no lo aceptó: ${e.datos?.errores?.map(x => x.mensaje).join(' ') || e.message}`;
+    const motivo = e.datos?.errores?.map(x => x.mensaje).join(' ') || e.message;
+    const aviso = `Se cambió en este teléfono, pero el servidor no lo aceptó: ${motivo}`;
     E.mensaje = aviso; guardar();
-    E.planPendiente = structuredClone(plan); guardar();
+    E.planPendiente = structuredClone(plan);
+    // Con respuesta del servidor es un rechazo; sin respuesta, falta de señal (se sube al sincronizar).
+    if (e.status) E.planRechazado = { cuando: new Date().toISOString(), motivo };
+    guardar();
+    for (const fn of alGuardarPlanCuenta) fn(e.status ? { rechazo: motivo } : { sinSenal: motivo });
     return aviso;
   }
 }

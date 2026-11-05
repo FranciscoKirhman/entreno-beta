@@ -46,6 +46,8 @@ input[type=file]{max-width:100%;font-size:14px}
 .campana-lista li{display:flex;flex-direction:column;gap:2px;padding:10px 16px;font-size:15px}
 .campana-lista li+li{border-top:1px solid var(--line)}
 .campana-lista li.problema{color:var(--critical)}
+.campana-lista li.reciente{background:var(--good-soft)}
+.campana-lista li.reciente.problema{background:var(--critical-soft)}
 .campana-lista li .pequeno{color:var(--ink-muted)}
 .campana-cola{margin:0 0 12px}
 .campana-vacia{text-align:center;color:var(--ink-muted);margin:0 0 14px}
