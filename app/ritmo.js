@@ -14,10 +14,10 @@ let memo = { clave: null, valor: null };
 /** {factor, sesiones} de tus últimas sesiones, o null si todavía no hay suficientes. Se recalcula al guardar una sesión. */
 export function ritmoHoy() {
   const s = E.sesiones || [];
-  const clave = JSON.stringify([s, E.plan, E.descansos, hoy()]);
+  const clave = JSON.stringify([s, E.plan, E.descansosMedidos, hoy()]);
   if (memo.clave !== clave) {
     let valor = null;
-    try { valor = ritmoPersonal({ sesiones: s, plan: E.plan, porId: indice.porId, descansos: E.descansos || {}, hasta: hoy() }); } catch { valor = null; }
+    try { valor = ritmoPersonal({ sesiones: s, plan: E.plan, porId: indice.porId, descansos: E.descansosMedidos || {}, hasta: hoy() }); } catch { valor = null; }
     memo = { clave, valor };
   }
   return memo.valor;
@@ -36,7 +36,7 @@ export function textoRitmo() {
   if (!r) return '';
   if (r.descansos) return `con los descansos medidos de ${r.descansos.sesiones} sesiones y tu ritmo ajustado a ellos${r.descansos.basicos ? ` (básicos: ${reloj(r.descansos.basicos.real)})` : ''}`;
   if (Math.abs(r.factor - 1) < 0.08) return '';
-  const t = tendenciaDescansos(E.descansos || {});
+  const t = tendenciaDescansos(E.descansosMedidos || {});
   const porque = t?.basicos && t.basicos.real > t.basicos.pedido + 30 ? `: descansas ${reloj(t.basicos.real)} en los básicos y el plan pide ${reloj(t.basicos.pedido)}` : '';
   return `a tu ritmo de las últimas ${r.sesiones} sesiones (las pesas te toman ${String(r.factor).replace('.', ',')} veces lo que estima el plan${porque})`;
 }

@@ -143,16 +143,16 @@ export function mensajeSesionCoach(sesion, notas = null) {
 }
 
 /**
- * Los descansos reales de la sesión (nucleo/descansos.js, guardados al terminar en E.descansos): cuánto se descansó en
+ * Los descansos reales de la sesión (nucleo/descansos.js, guardados al terminar en E.descansosMedidos): cuánto se descansó en
  * los básicos y en los accesorios contra lo pedido, cuánto tomó cambiar de ejercicio y cuántos minutos sumó eso. Con
  * más sesiones medidas, también la tendencia. Sin horas de series (una sesión de Hevy o anotada después), no aparece.
  */
 function descansosHtml(sesion) {
-  const d = E.descansos?.[sesion.id];
+  const d = E.descansosMedidos?.[sesion.id];
   if (!d) return '';
   const fila = (nombre, x) => (x ? `<li><span>${nombre}</span><strong class="num">${reloj(x.real)}</strong><small class="suave">${x.real > x.pedido + 20 ? `pedía ${reloj(x.pedido)}` : 'lo pedido'}</small></li>` : '');
   const largos = (d.porEjercicio || []).filter(p => p.real > p.pedido + 45).sort((a, b) => (b.real - b.pedido) - (a.real - a.pedido)).slice(0, 3);
-  const t = tendenciaDescansos(E.descansos);
+  const t = tendenciaDescansos(E.descansosMedidos);
   const extra = d.extraMin >= 3 ? `Descansar más de lo pedido y cambiar de ejercicio sumaron unos ${d.extraMin} minutos a la sesión.` : 'Descansaste casi lo que pedía el plan.';
   return `<section class="tarjeta descansos-resumen"><h3>Tus descansos</h3>
     <ul class="lista-descansos">${fila('Básicos', d.basicos)}${fila('Accesorios', d.accesorios)}${d.cambios ? `<li><span>Cambio de ejercicio</span><strong class="num">${reloj(d.cambios.real)}</strong><small class="suave">entre la última serie y la primera del siguiente</small></li>` : ''}</ul>

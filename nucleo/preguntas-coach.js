@@ -1,3 +1,4 @@
+import { unirDescansosMedidos } from './descansos-guardados.js';
 import { preguntasSeguimiento, efectoSeguimiento } from './preguntas-seguimiento.js';
 // Preguntas con evidencia y efectos explícitos. Aquí solo se calculan propuestas, nunca se guarda un plan.
 import { ritmoPersonal } from './tiempo-sesion.js';
@@ -22,6 +23,7 @@ const MINUTOS_PERFIL = [30, 45, 60, 75, 90];
 const MARGEN_MIN = 5;
 
 export function preguntasCoach({ plan, sesiones = [], respuestas = {}, descansos = {}, notas = {}, saludFeed = {}, indice, hoy }) {
+  descansos = unirDescansosMedidos(descansos);
   if (!plan?.dias?.length || plan.libre || plan.bloqueado) return [];
   const desde = [plan.inicio || '', sumarDias(hoy, -28)].sort().at(-1);
   const recientes = [...sesiones].filter(s => s.fecha >= desde && s.fecha <= hoy).sort((a, b) => orden(b).localeCompare(orden(a)));

@@ -1,3 +1,4 @@
+import { unirDescansosMedidos, esDescansoMedido } from '../nucleo/descansos-guardados.js';
 // Lo que antes quedaba solo en el teléfono ahora también va a la cuenta (si la persona entró): ejercicios propios,
 // medidas del cuerpo, notas fijas, rutinas, ¿cómo se sintió?, meta de peso, ajustes de la sesión y las fechas de la
 // regla. Cada cambio se sube al tiro; si no hay señal, queda pendiente y se sube al sincronizar. Al entrar en otro teléfono, se baja lo de la cuenta. Las medidas y el ciclo
@@ -17,7 +18,15 @@ const LOCAL = {
   ejercicios_propios: campo('ejerciciosPropios', []), medidas_cuerpo: campo('medidas', []), notas_fijas: campo('notasFijas', {}),
   calendario_asistencia: campo('marcasPlan', {}), rutinas: campo('rutinas', []), sensaciones: campo('sensaciones', {}),
   // Los descansos reales de cada sesión (nucleo/descansos.js): la hora de cada serie no se guarda en la tabla series.
-  descansos: campo('descansos', {}),
+  descansos: {
+    leer: () => unirDescansosMedidos(E.descansosMedidos),
+    poner: (v, editadoDuranteLectura = false) => {
+      const local = E.descansosMedidos || {};
+      E.descansosMedidos = editadoDuranteLectura || E.nubeDatos?.descansos?.pendiente ? unirDescansosMedidos(v, local) : unirDescansosMedidos(local, v);
+      // También reparamos copias mezcladas subidas por una versión anterior, sin importar sus números al teléfono.
+      if (Object.values(v || {}).some(d => !esDescansoMedido(d))) (E.nubeDatos ||= {}).descansos = { pendiente: true };
+    },
+  },
   seguimiento_molestias: { leer: () => E.saludFeed || {}, poner: v => { E.saludFeed = { respuestas: unirProgresion(E.saludFeed?.respuestas, v?.respuestas) }; } },
   feed_vistas: { leer: () => E.feedVistas || {}, poner: v => { E.feedVistas = unirProgresion(E.feedVistas, v); } },
   // Con los ajustes de la sesión viajan dos preferencias de cómo se anota, que viven en las respuestas: RPE o RIR y
@@ -124,7 +133,7 @@ export async function sincronizarDatosTelefono() {
   for (const clave of Object.keys(LOCAL)) {
     if (!permitido(clave)) continue;
     const fila = filas.find(f => f.clave === clave);
-    if (['progresion_sesion', 'feed_vistas', 'seguimiento_molestias'].includes(clave) && fila) LOCAL[clave].poner(fila.valor);
+    if (['progresion_sesion', 'feed_vistas', 'seguimiento_molestias', 'descansos'].includes(clave) && fila) LOCAL[clave].poner(fila.valor, revisionDe(clave) !== alLeer[clave]);
     if (E.nubeDatos?.[clave]?.pendiente || (!fila && tieneDatos(clave))) {
       await guardarDato(clave, contexto);
       contexto.comprobar();

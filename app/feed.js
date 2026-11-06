@@ -10,7 +10,7 @@ import * as nube from './nube.js';
 const estados = new WeakMap();
 function estado() { if (!estados.has(E)) estados.set(E, { historial: false, limite: 12, revisiones: new Map() }); return estados.get(E); }
 const contexto = () => ({ ...ctxNucleo(), marcas: E.marcasPlan || {}, enCurso: Object.keys(E.inicioSesion || {}).filter(f => !E.sesiones.some(s => s.fecha === f && !s.origen)) });
-const modelo = () => armarFeed({ ...E, indice, hoy: hoy(), marcas: E.marcasPlan || {} });
+const modelo = () => armarFeed({ ...E, descansos: E.descansosMedidos || {}, indice, hoy: hoy(), marcas: E.marcasPlan || {} });
 const etiqueta = t => ({ pregunta: 'Tu coach pregunta', avance: 'Tu avance', cambio: 'Cambios del plan', falta: 'Lo que falta', respondida: 'Ya respondiste' })[t];
 function grafico(puntos) {
   const valores = puntos.map(p => p.valor), min = Math.min(...valores), max = Math.max(...valores);

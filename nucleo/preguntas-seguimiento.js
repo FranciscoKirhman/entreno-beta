@@ -1,4 +1,4 @@
-import { guardarEnBorrador } from './ciclo-siguiente.js';
+import { guardarEnBorrador, guardarCambioEjercicio } from './ciclo-siguiente.js';
 import { esDeTrabajoGuardada } from './registro.js';
 import { sumarDias } from './agenda.js';
 import { lunesDe, hechasPorMusculo, planeadasPorMusculo, CON_FRANJA } from './volumen-semana.js';
@@ -34,7 +34,11 @@ export function preguntasSeguimiento({ plan, sesiones = [], respuestas = {}, sal
   for (const s of sesiones) for (const n of s.notas || []) agregar(s.fecha, n.ejercicio_id, n.respuestas);
   for (const [fecha, ns] of Object.entries(notas)) for (const [id, r] of Object.entries(ns || {})) agregar(fecha, id, r);
   for (const [zona, dato] of zonas) {
-    const id = `molestia:${bloque}:${zona}`;
+    const prefijo = `molestia:${bloque}:${zona}`;
+    const respondidas = Object.entries(saludFeed.respuestas || {}).filter(([id, r]) => r.dato?.zona === zona || id === prefijo || id.startsWith(prefijo + ':'));
+    const ultimaRespuesta = respondidas.map(([, r]) => r.fecha).filter(Boolean).sort().at(-1);
+    if (ultimaRespuesta && dato.fecha <= ultimaRespuesta) continue;
+    const id = `${prefijo}:${dato.fecha}`;
     if (saludFeed.respuestas?.[id]) continue;
     out.push({ id, tipo: 'molestia', salud: true, fecha: dato.fecha, zona, dato, titulo: '¿Sigue molestando?', texto: `Anotaste una molestia en ${zona === 'muneca' ? 'la muñeca' : zona}. ¿Cómo está ahora? Esta respuesta es privada y no se envía al coach con IA.`, opciones: [
       { id: 'no', etiqueta: 'Ya no molesta', efecto: 'molestia_resuelta' }, { id: 'poco', etiqueta: 'Un poco, aliviar la próxima sesión', efecto: 'aliviar' }, { id: 'harto', etiqueta: 'Harto, ver alternativas y consultar', efecto: 'alternativa_zona' },
@@ -64,8 +68,7 @@ export function preguntasSeguimiento({ plan, sesiones = [], respuestas = {}, sal
 export function efectoSeguimiento(p, o, ctx) {
   const r = ctx.respuestas || {}, lista = k => r.ciclo_siguiente?.[k] || r[k] || [];
   if (['favorito', 'evitar'].includes(o.efecto)) {
-    const agregar = o.efecto === 'favorito' ? 'favoritos' : 'prohibidos', quitar = agregar === 'favoritos' ? 'prohibidos' : 'favoritos';
-    return { respuestas: guardarEnBorrador(r, { [agregar]: [...new Set([...lista(agregar), p.ejercicio_id])], [quitar]: lista(quitar).filter(id => id !== p.ejercicio_id) }), detalle: `${nombre(ctx.indice, p.ejercicio_id)} quedaría ${agregar === 'favoritos' ? 'como favorito' : 'fuera'} en el próximo bloque. El plan actual sigue igual.` };
+    return { respuestas: guardarCambioEjercicio(r, p.ejercicio_id, o.efecto), detalle: `${nombre(ctx.indice, p.ejercicio_id)} quedaría ${o.efecto === 'favorito' ? 'como favorito' : 'fuera'} en el próximo bloque. El plan actual sigue igual.` };
   }
   if (o.efecto === 'prioridad') return { respuestas: guardarEnBorrador(r, { musculos_prioridad: [...new Set([...lista('musculos_prioridad'), p.musculo])] }), detalle: `${MUSCULOS[p.musculo]} quedaría como prioridad del próximo bloque, que confirmarás al armarlo.` };
   if (o.efecto === 'molestia_resuelta') return { detalle: 'Guardaré que ya no molesta. Esto no borra lesiones ni restricciones de tu perfil.' };

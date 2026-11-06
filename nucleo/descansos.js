@@ -94,7 +94,7 @@ export const reloj = seg => `${Math.floor(Math.round(seg) / 60)}:${String(Math.r
 /**
  * La tendencia de las últimas sesiones con descansos medidos: medianas de las medianas, para decir "en tus últimas 5
  * sesiones descansaste 3:35 en los básicos (el plan pide 2:30)". null con menos de 2 sesiones.
- * @param porSesion {[id]: {fecha, basicos, accesorios, cambios, extraMin}} (E.descansos)
+ * @param porSesion {[id]: {fecha, basicos, accesorios, cambios, extraMin}} (E.descansosMedidos)
  */
 export function tendenciaDescansos(porSesion = {}, { ultimas = 5 } = {}) {
   const xs = Object.values(porSesion).filter(x => x?.fecha && x.medidos).sort((a, b) => (a.fecha < b.fecha ? 1 : -1)).slice(0, ultimas);
@@ -109,7 +109,7 @@ export function tendenciaDescansos(porSesion = {}, { ultimas = 5 } = {}) {
   };
 }
 
-/** Lo que se guarda por sesión (E.descansos[id]): sin el detalle por ejercicio más que lo necesario, para que pese poco. */
+/** Lo que se guarda por sesión (E.descansosMedidos[id]): sin el detalle por ejercicio más que lo necesario, para que pese poco. */
 export function paraGuardar(d, fecha) {
   if (!d) return null;
   return { fecha, basicos: d.basicos, accesorios: d.accesorios, cambios: d.cambios, extraMin: d.extraMin, largas: d.largas, medidos: d.medidos,

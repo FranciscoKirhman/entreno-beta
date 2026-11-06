@@ -24,7 +24,7 @@ import { derivar } from '../nucleo/derivar.js';
 import { sumarDias } from '../nucleo/agenda.js';
 import { normalizar } from '../nucleo/catalogo.js';
 import { planATexto } from '../nucleo/importar-plan.js';
-import { borradorCiclo, respuestasDelCiclo, guardarEnBorrador, cambioPrioridades, anotarCambio, semanasDesde } from '../nucleo/ciclo-siguiente.js';
+import { borradorCiclo, respuestasDelCiclo, guardarEnBorrador, guardarCambioEjercicio, cambioPrioridades, anotarCambio, semanasDesde } from '../nucleo/ciclo-siguiente.js';
 import { suplementosHtml, indicacionesHtml, notasEntrenadorHtml, enlazarCuidados } from './cuidados.js';
 import { abrirCambiosPlan, hayCambiosPlan } from './cambios-plan.js';
 import { abrirHoja } from './hoja.js';
@@ -234,23 +234,23 @@ function guardarRespuestas(nuevas) {
 }
 
 function enlazarEjercicios(repintar) {
-  const cambiar = (campo, fn, aviso) => { guardarRespuestas({ ...R(), [campo]: fn(R()[campo] || []) }); avisar(aviso); repintar(); };
+  const cambiar = (campo, fn, aviso, id) => { guardarRespuestas({ ...guardarCambioEjercicio(R(), id, null), [campo]: fn(R()[campo] || []) }); avisar(aviso); repintar(); };
   const enlazarAgregar = () => {
   document.querySelectorAll('[data-agregar-fav]').forEach(b => b.onclick = () => {
     const id = b.dataset.agregarFav; buscarFav = '';
     // Un favorito no puede estar evitado a la vez.
     guardarRespuestas({ ...R(), prohibidos: (R().prohibidos || []).filter(x => x !== id) });
-    cambiar('favoritos', xs => [...new Set([...xs, id])], `${nombreEj(id)} quedó en favoritos.`);
+    cambiar('favoritos', xs => [...new Set([...xs, id])], `${nombreEj(id)} quedó en favoritos.`, id);
   });
   document.querySelectorAll('[data-agregar-evitar]').forEach(b => b.onclick = () => {
     const id = b.dataset.agregarEvitar; buscarEvitar = '';
     guardarRespuestas({ ...R(), favoritos: (R().favoritos || []).filter(x => x !== id) });
-    cambiar('prohibidos', xs => [...new Set([...xs, id])], `${nombreEj(id)} no aparece en tus planes nuevos.`);
+    cambiar('prohibidos', xs => [...new Set([...xs, id])], `${nombreEj(id)} no aparece en tus planes nuevos.`, id);
   });
   };
   enlazarAgregar();
-  document.querySelectorAll('[data-quitar-fav]').forEach(b => b.onclick = () => cambiar('favoritos', xs => xs.filter(x => x !== b.dataset.quitarFav), `${nombreEj(b.dataset.quitarFav)} ya no es favorito.`));
-  document.querySelectorAll('[data-permitir]').forEach(b => b.onclick = () => cambiar('prohibidos', xs => xs.filter(x => x !== b.dataset.permitir), `${nombreEj(b.dataset.permitir)} puede volver a tus planes.`));
+  document.querySelectorAll('[data-quitar-fav]').forEach(b => b.onclick = () => cambiar('favoritos', xs => xs.filter(x => x !== b.dataset.quitarFav), `${nombreEj(b.dataset.quitarFav)} ya no es favorito.`, b.dataset.quitarFav));
+  document.querySelectorAll('[data-permitir]').forEach(b => b.onclick = () => cambiar('prohibidos', xs => xs.filter(x => x !== b.dataset.permitir), `${nombreEj(b.dataset.permitir)} puede volver a tus planes.`, b.dataset.permitir));
   // El buscador repinta solo sus resultados, para no perder el teclado.
   $('mp-buscar-fav')?.addEventListener('input', ev => { buscarFav = ev.target.value; $('mp-buscar-fav-res').innerHTML = resultadosHtml(buscarFav, R().favoritos || [], 'agregar-fav'); enlazarAgregar(); });
   $('mp-buscar-evitar')?.addEventListener('input', ev => { buscarEvitar = ev.target.value; $('mp-buscar-evitar-res').innerHTML = resultadosHtml(buscarEvitar, R().prohibidos || [], 'agregar-evitar'); enlazarAgregar(); });
@@ -433,6 +433,9 @@ function vistaCiclo(ir) {
     <h2 class="titulo-seccion">Ejercicios${cambio('rotacion')}</h2>
     ${seg('rotacion', [['mismos', 'Mantener'], ['algunos', 'Rotar'], ['variar', 'Variar']], r.rotacion || 'algunos')}
     <p class="pequeno suave">${esc({ mismos: 'Repite los mismos para comparar tu progreso.', variar: 'Cambia varios ejercicios para no aburrirte.' }[r.rotacion] || 'Mantiene los principales y cambia algunos.')} Los favoritos se mantienen siempre y los evitados no vuelven.</p>
+    ${Object.keys(b.cambios_ejercicios || {}).length ? `<h2 class="titulo-seccion">Favoritos y evitados${cambio('cambios_ejercicios')}</h2>
+    <section class="tarjeta"><p class="pequeno suave">Estos cambios se aplican sobre tus preferencias vigentes al armar el siguiente bloque.</p>
+    <ul class="lista-simple">${Object.entries(b.cambios_ejercicios).map(([id, accion]) => `<li><span>${accion === 'favorito' ? 'Dejar como favorito' : 'Evitar'}: ${esc(nombreEj(id))}</span><button type="button" class="enlace" data-ciclo-quitar-ejercicio="${esc(id)}" aria-label="Quitar el cambio de ${esc(nombreEj(id))}">Quitar</button></li>`).join('')}</ul></section>` : ''}
     <h2 class="titulo-seccion">Vista previa</h2>
     ${!previa ? '' : previa.bloqueado ? `<div class="aviso alerta">${esc(previa.mensaje)}</div>` : `<section class="tarjeta">
       <p class="pequeno">${semana1.length} sesiones a la semana: ${esc(semana1.map(d => `${d.foco} (~${minutosDe(d)} min)`).join(', '))}.</p>
@@ -456,6 +459,7 @@ function vistaCiclo(ir) {
     guardarRespuestas(guardarEnBorrador(R(), { [campo]: v }));
     repintar();
   });
+  document.querySelectorAll('[data-ciclo-quitar-ejercicio]').forEach(x => x.onclick = () => { guardarRespuestas(guardarCambioEjercicio(R(), x.dataset.cicloQuitarEjercicio, null)); repintar(); });
   $('mp-borrador-no')?.addEventListener('click', () => { const r2 = { ...R() }; delete r2.ciclo_siguiente; guardarRespuestas(r2); avisar('Descarté los cambios del siguiente ciclo.'); repintar(); });
   $('mp-armar')?.addEventListener('click', async ev => { ev.currentTarget.disabled = true; await armarBloqueSiguiente(); ir('miplan'); });
   $('mp-antes')?.addEventListener('click', ev => abrirHoja({

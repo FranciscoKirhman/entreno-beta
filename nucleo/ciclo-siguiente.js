@@ -3,7 +3,7 @@
 // del perfil. Se aplica recién al armar el bloque siguiente, que la persona confirma con un botón (AGENTS.md, regla 10).
 
 /** Lo que el borrador puede cambiar del perfil. */
-export const CAMPOS_CICLO = ['musculos_prioridad', 'dias_meta', 'duracion_min', 'rotacion', 'favoritos', 'prohibidos'];
+export const CAMPOS_CICLO = ['musculos_prioridad', 'dias_meta', 'duracion_min', 'rotacion', 'cambios_ejercicios'];
 const MAX_HISTORIAL = 20;
 
 /** El borrador del siguiente ciclo, solo con sus campos válidos, o null si no hay nada elegido. */
@@ -11,13 +11,47 @@ export function borradorCiclo(r) {
   const b = r?.ciclo_siguiente;
   if (!b || typeof b !== 'object') return null;
   const limpio = Object.fromEntries(CAMPOS_CICLO.filter(k => b[k] !== undefined).map(k => [k, structuredClone(b[k])]));
+  // Compatibilidad con las copias completas de la primera versión del feed: recuperar solo las decisiones
+  // identificables en sus respuestas, nunca reponer el resto de una lista antigua sobre el perfil actual.
+  const cambios = {};
+  for (const [id, x] of Object.entries(r.preguntas_coach || {}).sort((a, b) => (a[1].fecha || '').localeCompare(b[1].fecha || ''))) {
+    if (!id.startsWith('nuevo:')) continue;
+    const ejercicio = id.split(':').at(-1);
+    if (x.opcion === 'favorito' && b.favoritos?.includes?.(ejercicio)) cambios[ejercicio] = 'favorito';
+    if (x.opcion === 'sacar' && b.prohibidos?.includes?.(ejercicio)) cambios[ejercicio] = 'evitar';
+  }
+  for (const [id, accion] of Object.entries(b.cambios_ejercicios || {})) if (['favorito', 'evitar'].includes(accion)) cambios[id] = accion;
+  delete limpio.cambios_ejercicios;
+  if (Object.keys(cambios).length) limpio.cambios_ejercicios = cambios;
   return Object.keys(limpio).length ? limpio : null;
 }
 
 /** Las respuestas con las que se arma el siguiente ciclo: el perfil con el borrador encima. */
 export function respuestasDelCiclo(r) {
   const b = borradorCiclo(r);
-  return b ? { ...r, ...b } : r;
+  if (!b) return r;
+  const { cambios_ejercicios, ...campos } = b;
+  const nuevo = { ...r, ...campos };
+  if (cambios_ejercicios) {
+    const favoritos = new Set(r.favoritos || []), prohibidos = new Set(r.prohibidos || []);
+    for (const [id, accion] of Object.entries(cambios_ejercicios)) {
+      if (accion === 'favorito') { favoritos.add(id); prohibidos.delete(id); }
+      else { prohibidos.add(id); favoritos.delete(id); }
+    }
+    nuevo.favoritos = [...favoritos]; nuevo.prohibidos = [...prohibidos];
+  }
+  return nuevo;
+}
+
+
+/** Una decisión por ejercicio: sumar a una lista y quitar de la otra, sobre el perfil que esté vigente. */
+export function guardarCambioEjercicio(r, id, accion) {
+  const b = { ...(borradorCiclo(r) || {}) }, cambios = { ...b.cambios_ejercicios };
+  if (['favorito', 'evitar'].includes(accion)) cambios[id] = accion; else delete cambios[id];
+  if (Object.keys(cambios).length) b.cambios_ejercicios = cambios; else delete b.cambios_ejercicios;
+  const nuevo = { ...r };
+  if (Object.keys(b).length) nuevo.ciclo_siguiente = b; else delete nuevo.ciclo_siguiente;
+  return nuevo;
 }
 
 const igualLista = (a = [], b = []) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
@@ -62,7 +96,9 @@ export function aplicarBorrador(r, fecha) {
   if (b.musculos_prioridad) {
     nuevo.historial_prioridades = anotarCambio(r.historial_prioridades, cambioPrioridades(r.musculos_prioridad, b.musculos_prioridad, { fecha, desde: 'ciclo' }));
   }
-  return { ...nuevo, ...b };
+  const aplicado = respuestasDelCiclo({ ...nuevo, ciclo_siguiente: b });
+  delete aplicado.ciclo_siguiente;
+  return aplicado;
 }
 
 /**
@@ -99,6 +135,7 @@ export function quitarDelBorrador(r, campos) {
   const b = borradorCiclo(r);
   if (!b) return r;
   for (const k of campos) delete b[k];
+  if (campos.some(k => ['favoritos', 'prohibidos'].includes(k))) delete b.cambios_ejercicios;
   const nuevo = { ...r };
   if (Object.keys(b).length) nuevo.ciclo_siguiente = b; else delete nuevo.ciclo_siguiente;
   return nuevo;

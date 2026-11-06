@@ -2057,9 +2057,9 @@ function enlazar(ir, dia) {
     // Los descansos reales (nucleo/descansos.js), desde la hora de cada serie marcada: aparte, como la sensación, porque
     // la tabla series no guarda la hora. Se recalculan si se guarda de nuevo; quedan los de las últimas 40 sesiones.
     const descansos = descansosParaGuardar(descansosDeSesion({ ejercicios: dia.ejercicios, filas: dia.ejercicios.map((e, k) => filasDe(f, e, k)), tipoDe, porId: indice.porId }), f);
-    if (descansos || E.descansos?.[id]) {
-      const resto = Object.entries(E.descansos || {}).filter(([k]) => k !== id).sort((a, b) => (a[1]?.fecha < b[1]?.fecha ? 1 : -1)).slice(0, 39);
-      E.descansos = Object.fromEntries(descansos ? [[id, descansos], ...resto] : resto);
+    if (descansos || E.descansosMedidos?.[id]) {
+      const resto = Object.entries(E.descansosMedidos || {}).filter(([k]) => k !== id).sort((a, b) => (a[1]?.fecha < b[1]?.fecha ? 1 : -1)).slice(0, 39);
+      E.descansosMedidos = Object.fromEntries(descansos ? [[id, descansos], ...resto] : resto);
       datoCambiado('descansos');
     }
     E.mensaje = `Sesión guardada: ${series.length} serie${series.length === 1 ? '' : 's'}.`;
