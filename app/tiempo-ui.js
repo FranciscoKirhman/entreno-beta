@@ -70,6 +70,46 @@ function resumen(r, base, hechas, enCurso, delPlan = false) {
 }
 
 /**
+ * Guarda la sesión de hoy con el tiempo elegido. Elegir es decidir: un ajuste automático pendiente ya no corre, y con
+ * "plan" tampoco se propone de nuevo hoy, aunque se haya elegido antes de empezar, y la nota del recorte se va.
+ * @param o.minutos un número, null (sin límite) o 'plan'
+ */
+async function guardarTiempo({ f, r, minutos, base, mensaje, alCambiar }) {
+  const nuevo = structuredClone(E.plan), d = sesionDe(nuevo, f);
+  d.ejercicios = r.ejercicios; d.cardio = r.cardio;
+  const aviso = await cambiarPlan(nuevo, mensaje, nube);
+  if (E.plan !== nuevo) { if (aviso) avisar(aviso); return; }
+  // Las filas de cada ejercicio siguen a sus series nuevas, sin borrar lo hecho ni lo escrito.
+  for (const e of d.ejercicios) {
+    const lista = E.registro?.[f]?.[e.ejercicio_id];
+    if (!lista) continue;
+    const t = filasTrasAjuste(lista, e.series);
+    E.registro[f][e.ejercicio_id] = t.lista;
+    if (E.filas?.[f]?.[e.ejercicio_id] != null) E.filas[f][e.ejercicio_id] = t.filas;
+  }
+  // Solo se guarda el día de hoy: la base de otros días ya no sirve.
+  E.tiempoHoy = minutos === 'plan' ? {} : { [f]: { base, firma: firmaDe(d), minutos } };
+  const id = `tiempo:${f}`;
+  if (E.vivaPend?.[f]?.tipo === 'tiempo') delete E.vivaPend[f];
+  if (minutos === 'plan') {
+    ((E.vivaNo ||= {})[f] ||= {})[id] = true;
+    if (E.vivaHecho?.[f]) delete E.vivaHecho[f][id];
+  }
+  guardar();
+  avisar(aviso || mensaje);
+  alCambiar?.();
+}
+
+/** Vuelve a la sesión del plan sin abrir la rueda: el botón de la nota del recorte, en Hoy. */
+export function volverAlPlan({ f = hoy(), alCambiar } = {}) {
+  const dia = E.plan && sesionDe(E.plan, f);
+  if (!dia) return null;
+  const { base } = baseDe(f, dia);
+  const r = { ejercicios: structuredClone(base.ejercicios), cardio: base.cardio };
+  return guardarTiempo({ f, r, minutos: 'plan', base, mensaje: 'Sesión de hoy de vuelta como venía en el plan.', alCambiar });
+}
+
+/**
  * Abre la hoja con la rueda para la sesión de hoy.
  * @param o.alCambiar () => void después de guardar
  */
@@ -152,25 +192,9 @@ export function abrirTiempo({ volver = null, alCambiar } = {}) {
 
   async function aplicar(minutos) {
     const r = minutos === 'plan' ? calcular(redondear(planMin)) : ajustarTiempo(base, { minutos, ...opciones });
-    const nuevo = structuredClone(E.plan), d = sesionDe(nuevo, f);
-    d.ejercicios = r.ejercicios; d.cardio = r.cardio;
     const mensaje = minutos === 'plan' ? 'Sesión de hoy de vuelta como venía en el plan.' : minutos == null ? `Sesión de hoy sin límite: unos ${r.minutos} minutos, lo más que rinde hoy.`
       : r.tope && r.minutos < minutos - 5 ? `Sesión de hoy ajustada: unos ${r.minutos} minutos, lo razonable para hoy.` : `Sesión de hoy ajustada a ${minutos} minutos.`;
-    const aviso = await cambiarPlan(nuevo, mensaje, nube);
-    if (E.plan !== nuevo) { if (aviso) avisar(aviso); return; }
-    // Las filas de cada ejercicio siguen a sus series nuevas, sin borrar lo hecho ni lo escrito.
-    for (const e of d.ejercicios) {
-      const lista = E.registro?.[f]?.[e.ejercicio_id];
-      if (!lista) continue;
-      const t = filasTrasAjuste(lista, e.series);
-      E.registro[f][e.ejercicio_id] = t.lista;
-      if (E.filas?.[f]?.[e.ejercicio_id] != null) E.filas[f][e.ejercicio_id] = t.filas;
-    }
-    // Solo se guarda el día de hoy: la base de otros días ya no sirve.
-    E.tiempoHoy = minutos === 'plan' ? {} : { [f]: { base, firma: firmaDe(d), minutos } };
-    guardar();
-    avisar(aviso || mensaje);
-    alCambiar?.();
+    await guardarTiempo({ f, r, minutos, base, mensaje, alCambiar });
   }
 }
 

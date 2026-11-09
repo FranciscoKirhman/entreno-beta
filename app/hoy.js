@@ -18,7 +18,8 @@ import { sesionDe } from '../nucleo/agenda.js';
 import { incrementoPara, cargaSugerida, registrosParaCarga, prescripcion, repsObjetivo, lugaresDe, conDosMancuernas } from '../nucleo/motor-plan.js';
 import { prioridadEsfuerzo, consejoSerie } from '../nucleo/series.js';
 import { ajusteDelDia, previasDeHoy } from '../nucleo/fatiga-sesion.js';
-import { sesionViva, aplicarViva, SEGUNDOS_PARA_ACEPTAR } from '../nucleo/sesion-viva.js';
+import { sesionViva, aplicarViva } from '../nucleo/sesion-viva.js';
+import { restanAceptar, contarSegundo, huellaAjuste, ajusteVigente } from '../nucleo/cuenta-viva.js';
 import { alternativas } from '../nucleo/checkin.js';
 import { filasTrasAjuste, ajustarTiempo, hechasDelDia, duracionReal, minutosRestantes, resumenSesion } from '../nucleo/tiempo-sesion.js';
 import { factorRitmo, minutosDe as minutosARitmo, textoRitmo, accesoriosHoy, topeSeriesHoy } from './ritmo.js';
@@ -46,7 +47,7 @@ import { icono } from './iconos.js';
 import { miniatura } from './imagenes.js';
 import { NOMBRE_MUSCULO, lista, mayuscula, imagenesMusculos } from './musculos.js';
 import { seguir, abrirAjustarHoy } from './cambios-ui.js';
-import { abrirTiempo, etiquetaTiempo, firmaDe } from './tiempo-ui.js';
+import { abrirTiempo, etiquetaTiempo, firmaDe, volverAlPlan } from './tiempo-ui.js';
 import { aplicarOpcion } from '../nucleo/coach.js';
 import { nombreAsistente, asistenteActual } from './cuestionario.js';
 import { capasAsistente } from '../nucleo/asistente-capas.js';
@@ -119,11 +120,30 @@ export function vistaHoy(ir, extra) {
   celebrarSiSeCompleto(f);
 }
 
+/** Si hay un ajuste de tiempo por decidir, la pantalla va a él y no al ejercicio: cambia la sesión entera y tiene que
+ *  verse (propuestaTiempo). @returns true si fue. */
+function irAlAjustePendiente(f) {
+  if (E.vivaPend?.[f]?.tipo !== 'tiempo') return false;
+  const aviso = document.querySelector('[data-viva-pendiente]');
+  if (!aviso) return false;
+  aviso.scrollIntoView({ block: 'center', behavior: sinMovimiento() ? 'auto' : 'smooth' });
+  return true;
+}
+
+/** De verdad a la vista: la pantalla encendida y, en el centro del botón, el botón (ni la cabecera, ni una hoja encima,
+ *  ni fuera de la pantalla). */
+function aLaVista(boton) {
+  if (!boton || document.visibilityState !== 'visible') return false;
+  const r = boton.getBoundingClientRect(), el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+  return Boolean(el) && (el === boton || boton.contains(el));
+}
+
 /** Con la sesión empezada, al llegar a Hoy la pantalla queda en el ejercicio que se está haciendo: el de la serie que
  *  sigue a la última marcada. Sin series marcadas, Hoy parte arriba. */
 export function irAlEjercicioEnCurso() {
   const f = fechaSesionActiva(E, hoy()), dia = sesionDe(E.plan, f);
   if (!dia || !enCurso(f)) return;
+  if (irAlAjustePendiente(f)) return;
   const sigue = siguienteSerie(dia, dia.ejercicios.map((e, k) => filasDe(f, e, k)));
   if (!sigue) return;
   const control = document.querySelector(`#vista-hoy [data-hecho="${CSS.escape(sigue.ejercicioId)}"][data-i="${sigue.filaIndice}"]`);
@@ -783,7 +803,8 @@ function extrasDe(dia, f) {
 /**
  * Al empezar, la sesión se ajusta al tiempo de tu perfil, a tu ritmo (app/ritmo.js): si a tu ritmo no cabe, sale lo
  * menos importante (el core se acorta, no sale); si sobra bastante, entran accesorios opcionales, hasta lo razonable.
- * Es un cambio de la sesión viva: se ve el antes y el después, se aplica solo a los 10 segundos y se puede rechazar.
+ * Es un cambio de la sesión viva: se ve el antes y el después, se aplica solo a los 10 segundos que se haya visto
+ * (nucleo/cuenta-viva.js) y se puede rechazar, o deshacer después con un toque desde su nota.
  * Una vez por día; si ya elegiste el tiempo con la rueda, no se propone. Pedido de Francisco, 4 de noviembre de 2026:
  * "el tiempo se debería ajustar apenas empezar la sesión".
  */
@@ -846,26 +867,33 @@ function vivaDe(dia, f) {
   const v = sesionViva(dia, E.registro[f] || {}, { notas, porId: indice.porId, minutos: avance(dia).cifras.minutos, disponibles,
     prioridad: R().musculos_prioridad || [], candidato, alternativa, incrementoDe: ej => incrementoPara(ej, lugar) });
   const ya = { ...(E.vivaNo?.[f] || {}), ...(E.vivaHecho?.[f] || {}) };
+  // Un ajuste de tiempo que espera a verse no pisa lo que cambió mientras tanto: se calcula de nuevo con lo de ahora.
+  // Con más de 3 series hechas ya no se propone (propuestaTiempo), y la sesión sigue como va.
+  const huella = huellaAjuste(firmaDe(dia), hechasDelDia(E.registro?.[f]));
+  if (!ajusteVigente(E.vivaPend?.[f], huella)) { delete E.vivaPend[f]; guardar(); }
   // El ajuste de tiempo va primero: después, lo de cada ejercicio.
   const tiempo = ya[`tiempo:${f}`] || E.vivaPend?.[f] ? null : propuestaTiempo(dia, f);
   const nuevas = [...(tiempo ? [tiempo] : []), ...v.propuestas].filter(p => !ya[p.id]);
-  if (!E.vivaPend?.[f] && nuevas.length) { (E.vivaPend ||= {})[f] = { ...nuevas[0], desde: Date.now() }; guardar(); }
+  if (!E.vivaPend?.[f] && nuevas.length) { (E.vivaPend ||= {})[f] = { ...nuevas[0], desde: Date.now(), ...(nuevas[0].tipo === 'tiempo' ? { huella } : {}) }; guardar(); }
   // Vista previa del cambio pendiente: lo que hay y lo que quedaría, siempre a la vista.
   const pend = E.vivaPend?.[f] || null;
   const previa = pend && pend.tipo !== 'tiempo' && aplicarViva(dia.ejercicios, pend, E.registro[f] || {}, (id, orden, como) => {
     const ej = indice.porId.get(id);
     return { ejercicio_id: id, nombre: ej.nombre, orden, ...(como ? { series: como.series, reps_min: como.reps_min, reps_max: como.reps_max, rir: como.rir } : { ...prescripcion(ej, 3, D()), series: 3 }) };
   });
-  return { ...v, pendiente: pend && { ...pend, antes: previa ? previa.antes : pend.antes, ahora: previa ? previa.ahora : pend.ahora }, hechos: Object.values(E.vivaHecho?.[f] || {}) };
+  // La nota del recorte se ve mientras la sesión siga como la dejó: con eso se puede volver al plan con un toque. Si
+  // después cambió (por ejemplo, llegó otro plan de la cuenta), ya no cuenta lo que pasa ahora.
+  const recorteVigente = E.tiempoHoy?.[f]?.firma === firmaDe(dia);
+  const hechos = Object.values(E.vivaHecho?.[f] || {}).filter(h => h.tipo !== 'tiempo' || recorteVigente);
+  return { ...v, pendiente: pend && { ...pend, antes: previa ? previa.antes : pend.antes, ahora: previa ? previa.ahora : pend.ahora }, hechos };
 }
-const restanAceptar = p => Math.max(0, SEGUNDOS_PARA_ACEPTAR - Math.floor((Date.now() - p.desde) / 1000));
 // ejercicioId null: lo de toda la sesión (agregar un ejercicio, abajo); 'tiempo': el ajuste de tiempo, arriba.
 const vivaHtml = (o, ejercicioId) => {
   const deSesion = t => t === 'agregar_ejercicio' || t === 'tiempo';
   const es = t => (ejercicioId === 'tiempo' ? t === 'tiempo' : ejercicioId == null ? t === 'agregar_ejercicio' : false);
   const pend = o?.pendiente && (ejercicioId == null || ejercicioId === 'tiempo' ? es(o.pendiente.tipo) : o.pendiente.ejercicio_id === ejercicioId && !deSesion(o.pendiente.tipo)) ? o.pendiente : null;
   const hechos = (o?.hechos || []).filter(h => (ejercicioId == null || ejercicioId === 'tiempo' ? es(h.tipo) : h.ejercicio_id === ejercicioId && !deSesion(h.tipo)));
-  return `${hechos.map(h => `<div class="ajuste-vivo hecho"><p><b>Ajuste en vivo:</b> ${esc(h.hecho)}, porque ${esc(h.motivo)}.</p><p class="pequeno antes-ahora">Antes: ${esc(h.antes)} · Ahora: ${esc(h.ahora)}</p></div>`).join('')}
+  return `${hechos.map(h => `<div class="ajuste-vivo hecho"><p><b>Ajuste en vivo:</b> ${esc(h.hecho)}, porque ${esc(h.motivo)}.</p><p class="pequeno antes-ahora">Antes: ${esc(h.antes)} · Ahora: ${esc(h.ahora)}</p>${h.tipo === 'tiempo' ? '<div class="fila-propuesta"><button type="button" class="boton chico" data-tiempo-plan>Volver a la sesión del plan</button></div>' : ''}</div>`).join('')}
   ${pend ? `<div class="ajuste-vivo pendiente" data-viva-pendiente><p><b>Voy a ${esc(pend.accion)}</b>, porque ${esc(pend.motivo)}.</p>
     <p class="pequeno antes-ahora">Antes: ${esc(pend.antes)} · Quedaría: ${esc(pend.ahora)}</p>
     <div class="fila-propuesta"><button type="button" class="boton chico primario" data-viva-si><span>Aceptar (<span data-viva-cuenta>${restanAceptar(pend)}</span>)</span></button><button type="button" class="boton chico" data-viva-no>Rechazar</button></div></div>` : ''}`;
@@ -1521,6 +1549,7 @@ function enlazar(ir, dia) {
     pasosAbierta = null;
     guardar(); repintar();
     actualizarPantalla();
+    if (irAlAjustePendiente(f)) return;
     document.querySelector('.pasos-tabla, #vista-hoy .ej [data-hecho]')?.closest('.pasos-tabla, .ej')?.scrollIntoView({ block: 'start', behavior: sinMovimiento() ? 'auto' : 'smooth' });
   });
   // Minimizar, como la flecha de Hevy: la sesión sigue corriendo y queda una barra sobre las pestañas.
@@ -1993,7 +2022,7 @@ function enlazar(ir, dia) {
     else relojViva = setInterval(() => {
       const p = E.vivaPend?.[f], el = document.querySelector('[data-viva-cuenta]');
       if (!p || !el) { clearInterval(relojViva); relojViva = null; return; }
-      const n = restanAceptar(p);
+      const n = contarSegundo(p, aLaVista(el.closest('button')));
       el.textContent = n;
       if (n <= 0) { clearInterval(relojViva); relojViva = null; aceptarViva(); }
     }, 1000);
@@ -2005,6 +2034,8 @@ function enlazar(ir, dia) {
     if (p) { ((E.vivaNo ||= {})[f] ||= {})[p.id] = true; delete E.vivaPend[f]; guardar(); }
     repintar();
   });
+  // La nota del recorte: deshacerlo con un toque, sin pasar por la rueda.
+  raiz.querySelector('[data-tiempo-plan]')?.addEventListener('click', () => volverAlPlan({ f, alCambiar: repintar }));
   // Al terminar de escribir una nota de ejercicio, se lee: "pesado", "fácil", "me duele", "ocupada" cambian lo que queda.
   raiz.addEventListener('focusout', ev => { if (ev.target.matches?.('textarea[data-nota]') && enCurso(f)) setTimeout(repintar, 0); });
 
