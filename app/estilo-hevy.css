@@ -172,17 +172,24 @@ body.con-mini-sesion #descanso{display:none!important}
 
 /* ── Pestaña Entrenar ── */
 #vista-entrenar .titulo-seccion{font:700 20px/1.25 var(--f-titulo);margin:22px 0 8px}
-.hoy-entrenar{display:flex;flex-direction:column;gap:10px;padding:16px}
-.hoy-entrenar-abrir{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:0;border:0;background:none;color:inherit;text-align:left;cursor:pointer}
-.hoy-entrenar-titulo{font:700 24px/1.2 var(--f-titulo)}
-.hoy-entrenar-lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
-.hoy-entrenar-lista li{display:flex;align-items:center;gap:10px;min-width:0}
-.hoy-entrenar-lista .miniatura{width:36px;height:36px;flex:0 0 36px;border-radius:50%}
-.hoy-entrenar-lista li > span{display:flex;flex-direction:column;min-width:0}
+.hoy-entrenar{display:flex;flex-direction:column;gap:10px;padding:16px;margin-top:10px}
+.hoy-entrenar-cab{display:flex;flex-direction:column;gap:2px}
+.hoy-entrenar-titulo{margin:0;font:700 24px/1.2 var(--f-titulo)}
+.hoy-entrenar-cab p{margin:0}
+.hoy-entrenar-cambio{margin:0;color:var(--ink)}
+.hoy-entrenar-cambio .enlace{min-height:32px;padding:0 4px}
+.hoy-entrenar-acciones{display:flex;flex-wrap:wrap;gap:8px}
+.hoy-entrenar-acciones .boton{flex:1 1 150px;display:flex;align-items:center;justify-content:center;gap:6px;min-height:46px;padding:8px 12px;white-space:nowrap}
+.hoy-entrenar-acciones .icono{flex:none;width:20px;height:20px}
+.hoy-tiempo b{font-weight:500;color:var(--ink-muted)}
+.hoy-entrenar-lista{list-style:none;margin:2px 0 0;padding:0;display:flex;flex-direction:column}
+.hoy-entrenar-lista li{min-width:0;border-top:.5px solid var(--line)}
+.hoy-entrenar-lista li > button{display:flex;align-items:center;gap:10px;width:100%;min-width:0;min-height:52px;padding:6px 0;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.hoy-entrenar-lista .miniatura{width:40px;height:40px;flex:0 0 40px;border-radius:50%}
+.hoy-entrenar-lista li > button > span:last-child{display:flex;flex-direction:column;min-width:0}
 .hoy-entrenar-lista strong{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hoy-entrenar-lista small{font-size:13px;color:var(--ink-muted)}
-.hoy-entrenar-mas{padding-left:46px}
-.hoy-entrenar .enlace{align-self:center;min-height:40px}
+.hoy-entrenar-cardio{padding:12px 0 2px}
 .inicio-rapido{display:flex;gap:10px}
 .inicio-rapido .boton{flex:1;min-width:0;justify-content:flex-start;background:var(--surface);color:var(--ink);min-height:52px}
 .inicio-rapido .boton .icono{width:20px;height:20px;fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}

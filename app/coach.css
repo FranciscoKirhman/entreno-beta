@@ -87,6 +87,7 @@ body.con-mini-sesion #vista-coach .coach-abajo{bottom:calc(var(--coach-redaccion
 #vista-coach .burbuja.persona.en-espera{opacity:.72}
 .estado-envio{display:block;align-self:flex-end;margin:-2px 4px 4px;font-size:12px;color:var(--ink-muted)}
 #vista-coach .opciones-chat .boton{border-radius:14px}
+#vista-coach .deshacer-chat{display:block;min-height:36px;margin-top:4px}
 
 /* Redacción: ideas en una fila que se desliza, luego ＋ y el campo redondo con la flecha adentro. Sin caja alrededor. */
 #coach-redaccion{background:transparent;border:0;box-shadow:none;padding:0;left:12px;right:12px;display:grid;gap:8px}

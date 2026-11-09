@@ -5,18 +5,19 @@ import { sinMovimiento } from './movimiento.js';
 
 let alCerrar = null;
 
-/** Cierra la hoja abierta. Baja antes de retirarse; mientras baja ya no es "la hoja" (sin id) y no recibe toques,
- *  así una opción no se confirma dos veces y lo elegido se aplica de inmediato, sin esperar la animación. */
+/** La opción se aplica de inmediato. El fondo absorbe los toques durante el cierre para que un segundo toque
+ *  no llegue a una serie o un campo que estaba debajo, también con movimiento reducido. */
 export function cerrarHoja() {
   const fondo = document.getElementById('hoja');
   document.removeEventListener('keydown', teclaEscape);
   const f = alCerrar; alCerrar = null;
   if (fondo) {
     fondo.removeAttribute('id');
-    fondo.inert = true;
+    fondo.querySelector('.hoja').inert = true;
     fondo.classList.add('cerrando');
     fondo.classList.remove('abierta');
-    if (sinMovimiento()) fondo.remove(); else setTimeout(() => fondo.remove(), 240);
+    if (sinMovimiento()) fondo.querySelector('.hoja').hidden = true;
+    setTimeout(() => fondo.remove(), 240);
   }
   f?.();
 }
@@ -73,7 +74,7 @@ function arrastrarParaCerrar(fondo) {
  * @param nota     explicación corta bajo el título (opcional)
  * @param notaOculta la explicación queda detrás de un "?" junto al título
  * @param contenido HTML ya escapado que va entre la nota y las opciones (por ejemplo, el dibujo de los discos)
- * @param opciones [{ valor, letra, imagen o icono (svg de iconos.js), clase, nombre, ayuda?, peligro? }]
+ * @param opciones [{ valor, letra, imagen o icono (svg de iconos.js), clase, nombre, detalle?, ayuda?, peligro? }]
  * @param alElegir (valor) => void
  * @param volver   foco a devolver al cerrar
  */
@@ -94,7 +95,7 @@ export function abrirHoja({ titulo, nota = '', notaOculta = false, contenido = '
     ${contenido}
     <ul class="opciones-hoja">${opciones.map(o => `<li>
       <div class="opcion-hoja">
-        <button type="button" class="elegir${o.peligro ? ' peligro' : ''}" data-elegir="${esc(o.valor)}">${o.imagen ? `<img class="imagen-opcion" src="${esc(o.imagen)}" alt="" width="64" height="64">` : o.icono ? `<span class="letra icono-hoja ${esc(o.clase || '')}">${o.icono}</span>` : `<span class="letra ${esc(o.clase || '')}">${esc(o.letra)}</span>`}${esc(o.nombre)}</button>
+        <button type="button" class="elegir${o.peligro ? ' peligro' : ''}" data-elegir="${esc(o.valor)}">${o.imagen ? `<img class="imagen-opcion" src="${esc(o.imagen)}" alt="" width="64" height="64">` : o.icono ? `<span class="letra icono-hoja ${esc(o.clase || '')}">${o.icono}</span>` : `<span class="letra ${esc(o.clase || '')}">${esc(o.letra)}</span>`}${o.detalle ? `<span class="opcion-textos"><span>${esc(o.nombre)}</span><small>${esc(o.detalle)}</small></span>` : esc(o.nombre)}</button>
         ${o.ayuda ? `<button type="button" class="ayuda" data-ayuda="${esc(o.valor)}" aria-expanded="false" aria-label="¿Qué es ${esc(o.nombre.toLowerCase())}?">?</button>` : ''}
       </div>
       ${o.ayuda ? `<p class="explicacion pequeno" data-explica="${esc(o.valor)}" hidden>${esc(o.ayuda)}</p>` : ''}

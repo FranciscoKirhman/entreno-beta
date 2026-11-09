@@ -58,7 +58,7 @@ export function armarFeed({ sesiones = [], plan = null, indice, hoy, progresionS
   }
   for (const [id, r] of Object.entries(progresionSesion)) if (r.estado === 'aplicado') {
     const s = ss.find(s => s.id === id);
-    tarjetas.push({ id: `progresion:${id}:${r.huella || r.cuando}`, tipo: 'cambio', cuando: r.cuando, fecha: s?.fecha || hoy, titulo: 'Para la próxima', texto: (r.cambios || []).map(c => `${c.nombre}: ${c.motivo}`).join(' '), sesionId: id, cambios: r.cambios || [] });
+    tarjetas.push({ id: `progresion:${id}:${r.huella || r.cuando}`, tipo: 'cambio', cuando: r.cuando, fecha: s?.fecha || hoy, titulo: 'Para la próxima', texto: r.cambios?.length === 1 ? 'Cambia 1 ejercicio.' : `Cambian ${r.cambios?.length || 0} ejercicios.`, sesionId: id, cambios: r.cambios || [] });
   }
   for (const [fecha, cambios] of Object.entries(vivaHecho).filter(([f]) => f <= hoy)) for (const [id, c] of Object.entries(cambios || {})) {
     tarjetas.push({ id: `viva:${fecha}:${id}`, tipo: 'cambio', fecha, cuando: c.t, titulo: 'Ajuste durante la sesión', texto: `${c.hecho || 'Sesión ajustada'}. ${c.motivo || ''}`, antes: c.antes, ahora: c.ahora });
@@ -77,3 +77,12 @@ export function armarFeed({ sesiones = [], plan = null, indice, hoy, progresionS
 }
 
 export const verTarjeta = (vistas, tarjeta, cuando = Date.now()) => ({ ...vistas, [tarjeta.id]: { cuando, tarjeta: structuredClone(tarjeta) } });
+
+/** La presentación no archiva ni modifica tarjetas. Preguntas y sesiones pendientes no comparten el tope. */
+export function seleccionarTarjetasFeed(feed, { historial = false, verTodo = false } = {}) {
+  const todas = historial ? feed.historial : feed.nuevas;
+  if (verTodo) return { tarjetas: [...todas], hayMas: false };
+  let informativas = 0;
+  const tarjetas = todas.filter(t => !historial && accionable(t) === 0 || ++informativas <= 3);
+  return { tarjetas, hayMas: tarjetas.length < todas.length };
+}

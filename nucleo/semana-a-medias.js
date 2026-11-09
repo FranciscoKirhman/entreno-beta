@@ -228,6 +228,8 @@ export const confirmarSemanaAMedias = accion => ({ menos_dias: `Sí, pasar a ${a
 export function cambioSemanaAMedias(accion, { plan, hoy, indice, respuestas = {}, hechas = [] }) {
   if (accion.firma && accion.firma !== firmaPlan(plan)) return { error: 'Tu plan cambió desde esa propuesta: si todavía la quieres, pídemela de nuevo en el chat.' };
   const semana = Number(accion.semana);
+  // Un botón de una semana que ya pasó: mostraba "desde esta semana" con fechas de la semana anterior.
+  if (accion.tipo !== 'repetir_semana' && semana < semanaDeFecha(plan, hoy)) return { error: 'Esa propuesta era para una semana que ya pasó. Si quieres cambiar algo, dímelo ahora.' };
   if (accion.tipo === 'menos_dias') {
     const r = pasarADias(plan, { semana, dias: Number(accion.dias), faltan: accion.faltan || [], prioridad: respuestas.musculos_prioridad || [], hechas, hoy, indice });
     if (r.error) return r;

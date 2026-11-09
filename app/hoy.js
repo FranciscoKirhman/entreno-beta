@@ -653,7 +653,7 @@ function cabSesionHtml(dia) {
     <div class="cab-sesion-fila">
       <button type="button" class="cab-sesion-boton" data-minimizar aria-label="${corriendo ? 'Minimizar la sesión' : 'Volver a Entrenar'}">${icono('flecha', 'icono icono-abajo')}</button>
       <h1 class="cab-sesion-titulo"><button type="button" class="cab-sesion-menu" data-menu-sesion aria-haspopup="dialog" aria-label="${esc(`${dia.foco}: ajustar hoy, detalles y más`)}"><span>${esc(dia.foco)}</span>${icono('flecha', 'icono cab-sesion-chevron')}</button></h1>
-      <button type="button" class="cab-sesion-boton" data-temporizador aria-label="Temporizador">${icono('reloj')}</button>
+      <button type="button" class="cab-sesion-boton" data-temporizador aria-label="Tiempo: ajustar la sesión o un temporizador" aria-haspopup="dialog">${icono('reloj')}</button>
       ${accion}
     </div>
     <div class="cab-sesion-cifras">
@@ -914,7 +914,7 @@ function sesionHoy(dia) {
       <button type="button" class="boton-icono" id="ver-detalles-sesion" aria-label="Detalles de la sesión">${icono('info')}</button>
     </div>
   </section>
-  ${dia.ejercicios.length && !guardada ? `<div class="fila-tiempo"><button type="button" class="boton chico boton-tiempo" id="ajustar-tiempo" aria-haspopup="dialog">${icono('reloj')}<span>${esc(etiquetaTiempo(dia))}</span><b>Ajustar el tiempo</b></button></div>` : ''}
+  ${dia.ejercicios.length && !guardada ? `<div class="fila-tiempo"><button type="button" class="boton chico boton-tiempo" id="ajustar-tiempo" aria-haspopup="dialog">${icono('reloj')}<span>${esc(etiquetaTiempo(dia))}</span><b>Ajustar tiempo</b></button></div>` : ''}
   ${vivaHtml(vivaActual, 'tiempo')}
   ${filaPasosHtml(dia, f, 'cal')}
   ${dia.ejercicios.length ? '' : `<div class="sesion-vacia-estado">${icono('pesa')}<h2>Comienza</h2><p class="suave">Agrega un ejercicio para empezar tu sesión</p></div>`}
@@ -1554,12 +1554,19 @@ function enlazar(ir, dia) {
   });
   // Minimizar, como la flecha de Hevy: la sesión sigue corriendo y queda una barra sobre las pestañas.
   raiz.querySelector('[data-minimizar]')?.addEventListener('click', () => ir('entrenar'));
-  // El reloj de arriba: un temporizador suelto, aparte del descanso automático.
-  raiz.querySelector('[data-temporizador]')?.addEventListener('click', ev => abrirHoja({
-    titulo: 'Temporizador', volver: ev.currentTarget, nota: 'Corre abajo, como el descanso. Puedes sumar o restar 15 segundos.',
-    opciones: [30, 60, 90, 120, 180, 300].map(x => ({ valor: String(x), icono: icono('reloj'), nombre: largo(x) })),
-    alElegir: x => iniciarDescanso(Number(x), 'Temporizador'),
-  }));
+  // El reloj de arriba es donde se busca el tiempo (Francisco, 9 de noviembre de 2026: "les cuesta encontrarlo"): primero
+  // Ajustar tiempo, que queda a mano a mitad de sesión aunque se haya bajado, y después un temporizador suelto.
+  raiz.querySelector('[data-temporizador]')?.addEventListener('click', ev => {
+    const volver = ev.currentTarget, ajustable = dia.ejercicios.length && !guardadaHoy(f);
+    abrirHoja({
+      titulo: 'Tiempo', volver,
+      opciones: [
+        ...(ajustable ? [{ valor: 'ajustar', icono: icono('ajustes'), nombre: 'Ajustar tiempo de la sesión', detalle: etiquetaTiempo(dia) }] : []),
+        ...[30, 60, 90, 120, 180, 300].map(x => ({ valor: String(x), icono: icono('reloj'), nombre: `Temporizador de ${largo(x)}` })),
+      ],
+      alElegir: x => (x === 'ajustar' ? abrirTiempo({ volver, alCambiar: repintar }) : iniciarDescanso(Number(x), 'Temporizador')),
+    });
+  });
   // La línea "Descanso" de cada ejercicio abre su selector, como en Hevy.
   raiz.querySelectorAll('[data-descanso-ej]').forEach(b => b.onclick = () => abrirDescanso(b.dataset.descansoEj, b));
   // Tocar lo de la vez anterior lo copia a la fila.

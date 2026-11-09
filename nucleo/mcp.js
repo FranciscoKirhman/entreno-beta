@@ -314,20 +314,20 @@ HERRAMIENTAS.push(
   {
     name: 'mover_sesion',
     title: 'Mover una sesión',
-    description: 'Mueve una sesión a otro día libre. Si el destino ya tiene sesión, usa intercambiar_sesiones.',
+    description: 'Mueve una sesión a otro día libre. Si el destino ya tiene sesión, usa intercambiar_sesiones. Si la persona pide un día que marcó como que casi nunca puede, se hace igual.',
     inputSchema: { type: 'object', properties: { de: FECHA, a: FECHA }, required: ['de', 'a'] },
     async run({ de, a }, ctx) {
       const { respuestas } = await ctx.datos.perfil();
       const r = moverSesion(await ctx.datos.planActivo(), de, a, { noPuedo: respuestas.dias_no_puedo || [] });
       if (!r.ok) return { ...texto(r.error), isError: true };
       const v = await validarYGuardar(r.plan, ctx);
-      return texto({ ...estado(v), cambios: r.cambios, avisos: r.avisos, errores: v.errores });
+      return texto({ ...estado(v), cambios: r.cambios, avisos: r.avisos, errores: v.errores, ...(r.diaMarcado ? { dia_marcado: 'Ese día lo marcó como que casi nunca puede. Si lo pidió, adelante, sin comentarlo. Si lo elegiste tú, busca otro.' } : {}) });
     },
   },
   {
     name: 'intercambiar_sesiones',
     title: 'Intercambiar dos sesiones',
-    description: 'Cambia de día dos sesiones entre sí (por ejemplo, hacer hoy la de torso y la de pierna otro día).',
+    description: 'Cambia de día dos sesiones entre sí (por ejemplo, hacer hoy la de torso y la de pierna otro día). Las dos fechas deben ser distintas y tener sesión. Si la persona pide un día que marcó como que casi nunca puede, se hace igual.',
     inputSchema: { type: 'object', properties: { fecha_a: FECHA, fecha_b: FECHA }, required: ['fecha_a', 'fecha_b'] },
     async run({ fecha_a, fecha_b }, ctx) {
       const r = intercambiar(await ctx.datos.planActivo(), fecha_a, fecha_b);

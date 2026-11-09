@@ -137,8 +137,10 @@ export function abrirTiempo({ volver = null, alCambiar } = {}) {
 
   abrirHoja({
     titulo: pregunta, volver,
+    // La rueda y el resumen de abajo ya dicen cómo queda: el detalle del ritmo se abre con el "?" del título.
+    notaOculta: true,
     nota: enCurso ? `Lo que ya hiciste se queda. Lo que falta del plan toma unos ${planMin} minutos${textoRitmo() ? `, ${textoRitmo()}` : ''}.`
-      : `La sesión del plan toma unos ${planMin} minutos${textoRitmo() ? `, ${textoRitmo()}` : ''}. Gira la rueda y te muestro cómo queda: con menos tiempo sale lo menos importante; con más, entran series y accesorios.`,
+      : `La sesión del plan toma unos ${planMin} minutos${textoRitmo() ? `, ${textoRitmo()}` : ''}. Con menos tiempo sale lo menos importante; con más, entran series y accesorios.`,
     contenido: ruedaHtml(v, planMin, pregunta),
     opciones: [
       { valor: 'aplicar', icono: icono('visto'), clase: 'confirmar', nombre: textoBoton(v) },
@@ -199,6 +201,13 @@ export function abrirTiempo({ volver = null, alCambiar } = {}) {
 }
 
 /** El texto del botón de Hoy: cuánto dura la sesión, o cuánto queda si ya empezó. */
+/** Para el botón Ajustar tiempo de Entrenar, en corto: "70 min", "Quedan 35 min" o "Sin límite". */
+export function minutosDeBoton(dia) {
+  const t = etiquetaTiempo(dia);
+  if (t === 'Sin límite de tiempo') return 'Sin límite';
+  const m = t.match(/(\d+) min/);
+  return !m ? '' : t.startsWith('Quedan') ? `Quedan ${m[1]} min` : `${m[1]} min`;
+}
 export function etiquetaTiempo(dia) {
   const f = dia.fecha, hechas = hechasDelDia(E.registro?.[f]);
   const marca = E.cardioHecho?.[f];

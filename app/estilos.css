@@ -255,7 +255,7 @@ body.con-descanso main{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 170
 .hoja-fondo.abierta{background:rgba(0,0,0,.42)}
 .hoja{width:100%;max-width:560px;background:var(--bg);border-radius:18px 18px 0 0;padding:8px 16px calc(env(safe-area-inset-bottom,0px) + 16px);transform:translateY(100%);transition:transform .22s ease-out;max-height:85vh;overflow-y:auto}
 .hoja-fondo.abierta .hoja{transform:none}
-.hoja-fondo.cerrando{pointer-events:none}
+.hoja-fondo.cerrando{pointer-events:auto}
 .hoja-fondo.cerrando .hoja{transition-timing-function:ease-in;transition-duration:.2s}
 .hoja:focus{outline:none}
 .hoja .asa{width:44px;height:5px;border-radius:5px;background:var(--border);margin:0 auto 10px}
@@ -1006,6 +1006,8 @@ main:has(#vista-coach){padding-bottom:calc(var(--coach-redaccion-alto,100px) + v
 
 /* Ajustar el tiempo (app/tiempo-ui.js): el botón de Hoy y la rueda que se gira, como en Down Dog. */
 .fila-tiempo{margin:6px 0 2px}
+.opcion-textos{display:flex;flex-direction:column;gap:2px;min-width:0;text-align:left}
+.opcion-textos small{font-size:13px;font-weight:400;color:var(--ink-muted);line-height:1.25;white-space:normal}
 .boton-tiempo{display:flex;align-items:center;gap:8px;width:100%;justify-content:flex-start;text-align:left}
 /* Con "Quedan unos 48 min · terminas 19:49" el texto pasa a dos líneas: antes no se achicaba, "Ajustar el tiempo"
    se salía del botón y el reloj quedaba de ancho cero (iPhone de 390 pt). */

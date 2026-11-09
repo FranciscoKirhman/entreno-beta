@@ -14,8 +14,9 @@ const lunesDe = iso => sumarDias(iso, -((diaSemana(iso) + 6) % 7));
 
 /** Grupo muscular de un día del plan, para no repetirlo en días seguidos. */
 export function familia(plantilla = '') {
-  if (plantilla.startsWith('pierna')) return 'pierna';
-  if (plantilla.startsWith('torso')) return 'torso';
+  // Los planes armados a mano usan otros nombres: "inferior_a" y "gluteo_b" son pierna; "superior", torso.
+  if (/^(pierna|inferior|gluteo)/.test(plantilla)) return 'pierna';
+  if (/^(torso|superior)/.test(plantilla)) return 'torso';
   if (plantilla.startsWith('empuje')) return 'empuje';
   if (plantilla.startsWith('tiron')) return 'tiron';
   if (plantilla.startsWith('cuerpo')) return 'cuerpo';
@@ -25,6 +26,15 @@ export function familia(plantilla = '') {
 const chocan = (a, b) => a === b || a === 'cuerpo' || b === 'cuerpo';
 
 export const sesionDe = (plan, fecha) => plan.dias.find(d => d.fecha === fecha) || null;
+/**
+ * Cómo le dice la persona a una sesión, para un botón: "Inferior A: glúteo y femoral" es "glúteo y femoral" (la letra no
+ * le dice nada) y "Tren superior: espalda, pecho y hombro" es "tren superior".
+ */
+export function nombreSimple(foco = '') {
+  const [antes, despues] = String(foco).split(':').map(x => x.trim());
+  const nombre = despues && /\s[A-F]$/.test(antes) ? despues : antes;
+  return nombre.charAt(0).toLowerCase() + nombre.slice(1);
+}
 const copiar = plan => structuredClone(plan);
 const ordenar = plan => { plan.dias.sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0)); return plan; };
 
@@ -37,21 +47,28 @@ export function conflictos(plan, fecha, plantilla, ignorar = null) {
     .map(x => `Queda pegado a ${x.foco} del ${nombreDia(x.fecha)} ${Number(x.fecha.slice(8))}.`);
 }
 
-/** Mueve una sesión a otra fecha. Si la fecha ya tiene sesión, no la mueve (usar intercambiar). */
+/**
+ * Mueve una sesión a otra fecha. Si la fecha ya tiene sesión, no la mueve (usar intercambiar). Los días que la persona
+ * marcó que casi nunca puede guían lo que la app elige sola, no lo que ella pide (Francisco, 9 de noviembre de 2026: pedir
+ * ese día "es una forma de decir que sí puedo"): aquí la fecha ya está elegida, así que no se discute ni se advierte.
+ * diaMarcado le avisa a la IA, por si la fecha la eligió ella y no la persona.
+ */
 export function moverSesion(plan, de, a, { noPuedo = [] } = {}) {
+  if (de === a) return { ok: false, plan, error: 'Esa sesión ya está en ese día.' };
   const nuevo = copiar(plan);
   const s = sesionDe(nuevo, de);
   if (!s) return { ok: false, plan, error: `No hay sesión el ${de}.` };
   if (sesionDe(nuevo, a)) return { ok: false, plan, error: `Ya hay una sesión el ${nombreDia(a)} ${a.slice(8)}. Puedo intercambiarlas.` };
   const avisos = conflictos(nuevo, a, s.plantilla, s);
-  if (noPuedo.includes(diaSemana(a))) avisos.push(`Marcaste que los ${nombreDia(a)} casi nunca puedes.`);
   s.fecha = a;
   s.semana = s.semana; // la semana del bloque no cambia aunque se mueva de día
-  return { ok: true, plan: ordenar(nuevo), cambios: [{ tipo: 'mover', de, a, foco: s.foco }], avisos };
+  return { ok: true, plan: ordenar(nuevo), cambios: [{ tipo: 'mover', de, a, foco: s.foco }], avisos, ...(noPuedo.includes(diaSemana(a)) ? { diaMarcado: true } : {}) };
 }
 
 /** Intercambia dos sesiones de fecha ("hoy hago torso y las piernas otro día"). */
 export function intercambiar(plan, fechaA, fechaB) {
+  // Un día consigo mismo no cambia nada: antes el botón decía "Listo" sin haber hecho nada.
+  if (fechaA === fechaB) return { ok: false, plan, error: 'Esa sesión ya está en ese día.' };
   const nuevo = copiar(plan);
   const a = sesionDe(nuevo, fechaA), b = sesionDe(nuevo, fechaB);
   if (!a || !b) return { ok: false, plan, error: 'Una de las dos fechas no tiene sesión.' };
@@ -159,6 +176,25 @@ export function opcionesParaHoy(plan, hoy, { evitar = null } = {}) {
   opciones.push({ tipo: 'descanso_activo', foco: 'Descanso activo: 20 a 30 minutos de caminata o bicicleta suave y movilidad', avisos: [] });
   if (actual) opciones.push({ tipo: 'mover', foco: `Mover ${actual.foco} al próximo día libre`, avisos: [] });
   return { hoy: actual ? { fecha: hoy, foco: actual.foco } : null, opciones };
+}
+
+/**
+ * Quiere entrenar hoy, o hacer hoy otra sesión: las de los próximos 7 días, una por nombre, sin la de hoy ni lo ya hecho.
+ * Si hoy hay sesión se intercambian los días; si no, la elegida se trae a hoy. Cada una trae la acción que lo hace.
+ */
+export function sesionesParaHoy(plan, hoy, { hechas = [] } = {}) {
+  const actual = sesionDe(plan, hoy);
+  if (!plan?.dias?.length || (actual && hechas.includes(hoy))) return [];
+  const fin = sumarDias(hoy, 7), vistas = new Set(actual?.ejercicios?.length ? [actual.foco] : []), out = [];
+  for (const d of plan.dias) {
+    if (d.fecha <= hoy || d.fecha > fin || !d.ejercicios?.length || d.libre || hechas.includes(d.fecha) || vistas.has(d.foco)) continue;
+    const r = actual ? intercambiar(plan, hoy, d.fecha) : moverSesion(plan, d.fecha, hoy);
+    if (!r.ok) continue;
+    vistas.add(d.foco);
+    out.push({ tipo: actual ? 'intercambiar' : 'traer', fecha: d.fecha, foco: d.foco, ejercicios: d.ejercicios, avisos: r.avisos || [],
+      accion: actual ? { tipo: 'intercambiar', fechas: [hoy, d.fecha] } : { tipo: 'mover', de: d.fecha, a: hoy } });
+  }
+  return out;
 }
 
 /**

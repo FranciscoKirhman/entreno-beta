@@ -1,6 +1,6 @@
 import { responderSalud } from '../nucleo/preguntas-seguimiento.js';
 import { E, R, hoy, indice, esc, guardar, fechaCorta, peso, ctxNucleo, cambiarPlan, avisar } from './comun.js';
-import { armarFeed, verTarjeta } from '../nucleo/feed.js';
+import { armarFeed, verTarjeta, seleccionarTarjetasFeed } from '../nucleo/feed.js';
 import { efectoPregunta, responderPregunta } from '../nucleo/preguntas-coach.js';
 import { aplicarOpcion } from '../nucleo/coach.js';
 import { abrirHoja } from './hoja.js';
@@ -8,9 +8,9 @@ import { datoCambiado } from './datos-nube.js';
 import * as nube from './nube.js';
 
 const estados = new WeakMap();
-function estado() { if (!estados.has(E)) estados.set(E, { historial: false, limite: 12, revisiones: new Map() }); return estados.get(E); }
+function estado() { if (!estados.has(E)) estados.set(E, { historial: false, verTodo: false, revisiones: new Map() }); return estados.get(E); }
 const contexto = () => ({ ...ctxNucleo(), marcas: E.marcasPlan || {}, enCurso: Object.keys(E.inicioSesion || {}).filter(f => !E.sesiones.some(s => s.fecha === f && !s.origen)) });
-const modelo = () => armarFeed({ ...E, descansos: E.descansosMedidos || {}, indice, hoy: hoy(), marcas: E.marcasPlan || {} });
+export const modeloFeed = () => armarFeed({ ...E, descansos: E.descansosMedidos || {}, indice, hoy: hoy(), marcas: E.marcasPlan || {} });
 const etiqueta = t => ({ pregunta: 'Tu coach pregunta', avance: 'Tu avance', cambio: 'Cambios del plan', falta: 'Lo que falta', respondida: 'Ya respondiste' })[t];
 function grafico(puntos) {
   const valores = puntos.map(p => p.valor), min = Math.min(...valores), max = Math.max(...valores);
@@ -19,7 +19,7 @@ function grafico(puntos) {
 }
 function calendario(cal, id) {
   return `<div class="feed-cal" aria-label="Calendario de las opciones">${['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(d => `<b aria-hidden="true">${d}</b>`).join('')}${cal.dias.map(d => {
-    const contenido = `<span>${Number(d.fecha.slice(8))}</span><small>${esc(d.letra || ({ faltada: '×', hecha: '✓', sesion: '•', saltada: '×', no_puedo: 'No' })[d.tipo] || (d.elegible ? '+' : ''))}</small>`;
+    const contenido = `<span>${Number(d.fecha.slice(8))}</span><small>${esc(d.letra || (d.elegible ? '+' : ({ faltada: '×', hecha: '✓', sesion: '•', saltada: '×', no_puedo: 'No' })[d.tipo] || ''))}</small>`;
     return d.elegible ? `<button class="feed-cal-dia" data-feed-fecha="${d.fecha}" data-feed-id="${esc(id)}" aria-label="Ponerla el ${esc(fechaCorta(d.fecha))}">${contenido}</button>` : `<span class="feed-cal-dia ${d.tipo === 'faltada' ? 'feed-faltada' : ''}" aria-label="${esc(`${fechaCorta(d.fecha)}: ${d.foco || d.tipo}`)}">${contenido}</span>`;
   }).join('')}</div><p class="pequeno suave">× sin hacer · ✓ hecha · • planificada · cada letra señala su opción</p>`;
 }
@@ -30,7 +30,7 @@ function revisionHtml(t) {
 }
 function tarjetaHtml(t, historial) {
   const serie = t.serie;
-  return `<article class="tarjeta feed-tarjeta feed-${t.tipo}" data-tarjeta-id="${esc(t.id)}">
+  return `<article class="tarjeta feed-tarjeta feed-${t.tipo}" data-tarjeta-id="${esc(t.id)}" tabindex="-1">
     <div class="feed-meta"><span>${etiqueta(t.tipo)}</span><time datetime="${esc(t.fecha)}">${esc(fechaCorta(t.fecha))}</time></div>
     <h3>${esc(t.titulo)}</h3><p>${esc(t.texto)}</p>
     ${serie ? `<p class="feed-cifra">${esc(`${serie.carga_kg != null ? peso(serie.carga_kg) + ' × ' : ''}${serie.reps || (serie.duracion_seg ? serie.duracion_seg + ' s' : '')}`)}</p>` : ''}
@@ -43,11 +43,11 @@ function tarjetaHtml(t, historial) {
   </article>`;
 }
 const dosis = e => e ? `${e.carga_kg != null ? peso(e.carga_kg) + ' × ' : ''}${e.reps_min} a ${e.reps_max}` : '';
-export function feedHtml() {
-  const e = estado(), f = modelo(), tarjetas = e.historial ? f.historial : f.nuevas;
-  return `<section class="entrenar-feed" aria-label="Tu actividad"><div class="feed-cab"><h2>Tu actividad</h2><button class="enlace" data-feed-historial>${e.historial ? 'Ver novedades' : 'Historial'}</button></div>
-    ${tarjetas.slice(0, e.limite).map(t => tarjetaHtml(t, e.historial)).join('') || `<div class="tarjeta feed-vacio"><h3>${e.historial ? 'Aquí queda lo que revisaste' : 'Estás al día'}</h3><p class="suave">${e.historial ? 'Las tarjetas que marques como listas y tus respuestas aparecerán aquí.' : 'Tus próximos avances, cambios y preguntas aparecerán aquí.'}</p></div>`}
-    ${tarjetas.length > e.limite ? '<button class="boton" data-feed-mas>Ver más</button>' : ''}</section>`;
+export function feedHtml(f) {
+  const e = estado(), { tarjetas, hayMas } = seleccionarTarjetasFeed(f, e);
+  return `<section class="entrenar-feed" aria-label="Tu actividad"><div class="feed-cab"><h2 tabindex="-1" data-feed-titulo>Tu actividad</h2><button class="enlace" data-feed-historial>${e.historial ? 'Ver novedades' : 'Historial'}</button></div>
+    ${tarjetas.map(t => tarjetaHtml(t, e.historial)).join('') || `<div class="tarjeta feed-vacio"><h3>${e.historial ? 'Aquí queda lo que revisaste' : 'Estás al día'}</h3><p class="suave">${e.historial ? 'Las tarjetas que marques como listas y tus respuestas aparecerán aquí.' : 'Tus próximos avances, cambios y preguntas aparecerán aquí.'}</p></div>`}
+    ${hayMas ? '<button class="boton" data-feed-mas>Ver más</button>' : ''}<p class="sr-only" aria-live="polite" data-feed-anuncio></p></section>`;
 }
 function vista(t) { E.feedVistas = verTarjeta(E.feedVistas, t); datoCambiado('feed_vistas'); }
 async function guardarRespuesta(p, o, efecto, original) {
@@ -82,14 +82,24 @@ function responder(t, opcion, volver, repintar, ir) {
     },
   });
 }
-export function enlazarFeed(raiz, ir, repintar) {
-  raiz.querySelector('[data-feed-historial]')?.addEventListener('click', () => { estado().historial = !estado().historial; estado().limite = 12; repintar(); });
-  raiz.querySelector('[data-feed-mas]')?.addEventListener('click', () => { estado().limite += 12; repintar(); });
-  const tarjetas = new Map(modelo().nuevas.map(t => [t.id, t]));
-  raiz.querySelectorAll('[data-feed-vista]').forEach(b => b.onclick = () => { vista(tarjetas.get(b.dataset.feedVista)); repintar(); });
+export function enlazarFeed(raiz, ir, repintar, feed) {
+  const trasRetirar = b => {
+    const siguiente = b.closest('[data-tarjeta-id]')?.nextElementSibling?.dataset.tarjetaId;
+    return () => {
+      repintar();
+      const destino = siguiente && document.querySelector(`[data-tarjeta-id="${CSS.escape(siguiente)}"]`);
+      (destino || document.querySelector('[data-feed-titulo]'))?.focus({ preventScroll: true });
+      const anuncio = document.querySelector('[data-feed-anuncio]');
+      if (anuncio) requestAnimationFrame(() => { anuncio.textContent = 'Guardado en el historial.'; });
+    };
+  };
+  raiz.querySelector('[data-feed-historial]')?.addEventListener('click', () => { estado().historial = !estado().historial; estado().verTodo = false; repintar(); });
+  raiz.querySelector('[data-feed-mas]')?.addEventListener('click', () => { estado().verTodo = true; repintar(); });
+  const tarjetas = new Map(feed.nuevas.map(t => [t.id, t]));
+  raiz.querySelectorAll('[data-feed-vista]').forEach(b => b.onclick = () => { const terminar = trasRetirar(b); vista(tarjetas.get(b.dataset.feedVista)); terminar(); });
   raiz.querySelectorAll('[data-feed-ejercicio]').forEach(b => b.onclick = () => { const t = tarjetas.get(b.dataset.feedEjercicio); vista(t); ir('ficha', { id: t.ejercicio_id, desde: 'entrenar' }); });
   raiz.querySelectorAll('[data-feed-progreso]').forEach(b => b.onclick = () => { vista(tarjetas.get(b.dataset.feedProgreso)); ir('progreso'); });
-  raiz.querySelectorAll('[data-feed-responder]').forEach(b => b.onclick = () => responder(tarjetas.get(b.dataset.feedId), b.dataset.feedResponder, b, repintar, ir));
+  raiz.querySelectorAll('[data-feed-responder]').forEach(b => b.onclick = () => responder(tarjetas.get(b.dataset.feedId), b.dataset.feedResponder, b, trasRetirar(b), ir));
   const poner = (t, r) => { estado().revisiones.set(t.id, { r, firma: JSON.stringify([E.plan, E.sesiones, E.marcasPlan]) }); repintar(); };
   raiz.querySelectorAll('[data-feed-revisar]').forEach(b => b.onclick = () => {
     const t = tarjetas.get(b.dataset.feedRevisar);

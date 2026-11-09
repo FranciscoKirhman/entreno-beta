@@ -61,11 +61,18 @@ export function vistaBienvenida(ir, { abrirEjemplo }) {
   entrarEnOrden([document.querySelector('#vista-inicio .inicio-portada'), ...document.querySelectorAll('#vista-inicio .opcion-inicio'), document.querySelector('#vista-inicio .cuenta-nueva')]);
 }
 
-/** Qué hay que elegir hoy al abrir la app, o null. */
-export const eleccionPendiente = () => (modoEjemplo ? null
-  : eleccionDeHoy({ plan: E.plan, hoy: hoy(), registro: E.registro, sesiones: E.sesiones, elegido: E.eleccionInicio }));
+/**
+ * Qué hay que elegir hoy al abrir la app, o null. Con un plan no hay nada que elegir: se abre el entrenamiento del día, sin
+ * "¿Cómo entrenas hoy?" de por medio (Francisco, 9 de noviembre de 2026: esperan verlo de inmediato). La pregunta queda
+ * para quien entrena sin plan, que todavía no tiene un entrenamiento que mostrar.
+ */
+export const eleccionPendiente = () => {
+  if (modoEjemplo) return null;
+  const x = eleccionDeHoy({ plan: E.plan, hoy: hoy(), registro: E.registro, sesiones: E.sesiones, elegido: E.eleccionInicio });
+  return x?.libre ? x : null;
+};
 
-/** Para quien ya tiene plan: la sesión planificada o una vacía (o, con plan libre, armar el plan). */
+/** Para quien entrena sin plan: armar el plan o una sesión vacía. */
 export function vistaEleccion(ir) {
   const x = eleccionDeHoy({ plan: E.plan, hoy: hoy(), registro: {}, sesiones: [] });
   if (!x) return ir('hoy', { sesion: true });

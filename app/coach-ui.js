@@ -29,6 +29,8 @@ import { historiasDeHoy, idHistoria } from '../nucleo/historias.js';
 
 const borradores = new WeakMap(), decisiones = new WeakSet();
 let consultaActual = null, limpiarRedaccion = () => {}, irActual = null, estadoChatTexto = null, pidiendoIdeas = null;
+// Lo que pone lo nuevo del chat en la pantalla viva (vistaCoach) y la pantalla a la que pertenece.
+let refrescarLista = null, vistaViva = null, revisarAbajoActual = null;
 function borradorChat() {
   if (!borradores.has(E)) borradores.set(E, { texto: E.borradorChat || '', archivo: null, lectura: 0, leyendo: false });
   return borradores.get(E);
@@ -115,7 +117,9 @@ export function vistaCoach(ir, mensajeInicial) {
   // Desde Tu plan: {plan: 'afinar' | 'explicar'} abre una conversación de planificación con la IA.
   const desdePlan = mensajeInicial && typeof mensajeInicial === 'object' && mensajeInicial.plan;
   if (desdePlan) E.chatModo = 'plan';
-  const porRevisar = sesionesPorRevisar(E.plan, E.sesiones, { hoy: hoy(), marcas: E.marcasPlan || {}, despues: E.revisarDespues || {} });
+  const leerPorRevisar = () => sesionesPorRevisar(E.plan, E.sesiones, { hoy: hoy(), marcas: E.marcasPlan || {}, despues: E.revisarDespues || {} });
+  let porRevisar = leerPorRevisar();
+  const listaHtml = () => `${E.chat.map(burbuja).join('')}${E.chat.some(m => m.pendiente) ? '' : revisionHtml(porRevisar.filter(x => !abiertaEnChat(x.fecha)))}`;
   irActual = ir;
   if (E.chatSinLeer) { delete E.chatSinLeer; guardar(); marcarNovedadCoach(); }
   const quien = nombreAsistente(), adjunto = borrador.archivo || borrador.leyendo;
@@ -124,7 +128,7 @@ export function vistaCoach(ir, mensajeInicial) {
     ${E.chatModo === 'plan' ? `<div class="modo-plan"><span>${icono('calendario', 'icono icono-chico')} Afinando tu plan</span><button type="button" class="enlace" id="salir-modo-plan">Volver al chat</button></div>` : ''}
     ${sensacionHtml()}
     ${E.chat.length ? '' : holaHtml()}
-    <div class="chat" id="chat" aria-live="polite">${E.chat.map(burbuja).join('')}${E.chat.some(m => m.pendiente) ? '' : revisionHtml(porRevisar.filter(x => !abiertaEnChat(x.fecha)))}</div>
+    <div class="chat" id="chat" aria-live="polite">${listaHtml()}</div>
     <section id="permisos-chat" class="tarjeta" hidden></section>
     <button type="button" class="coach-abajo" id="coach-abajo" aria-label="Ir a lo último" hidden>${icono('flecha', 'icono icono-abajo')}</button>
     <div id="coach-redaccion">
@@ -182,13 +186,22 @@ export function vistaCoach(ir, mensajeInicial) {
   };
   const chat = $('chat');
   prepararRedaccion();
-  $('form-chat').onsubmit = ev => { ev.preventDefault(); const t = $('mensaje').value.trim(); if (borrador.leyendo) return avisar('Espera a que termine de leer el archivo.'); if (t || borrador.archivo) return enviar(t || 'Quiero importar este archivo.', ir, borrador.archivo); };
+  const alEnviar = () => { const t = $('mensaje').value.trim(); if (borrador.leyendo) return avisar('Espera a que termine de leer el archivo.'); if (t || borrador.archivo) return enviar(t || 'Quiero importar este archivo.', ir, borrador.archivo); };
+  $('form-chat').onsubmit = ev => { ev.preventDefault(); return alEnviar(); };
+  // Como en Mensajes: tocar la flecha no cierra el teclado. En el iPhone ese toque le quita el foco al campo antes del
+  // click: el teclado se cerraba y la pantalla cambiaba de zona de desplazamiento justo al enviar.
+  $('enviar-chat').addEventListener('touchend', ev => {
+    const b = ev.currentTarget, t = ev.changedTouches?.[0], r = b.getBoundingClientRect();
+    if (b.disabled || document.activeElement !== $('mensaje') || !t || t.clientX < r.left - 10 || t.clientX > r.right + 10 || t.clientY < r.top - 10 || t.clientY > r.bottom + 10) return;
+    ev.preventDefault();
+    alEnviar();
+  });
   $('vista-coach').addEventListener('click', ev => { const b = ev.target.closest('.sugerencia'); if (b) enviar(b.textContent, ir); });
   // ＋: herramientas a un toque. Las de hoy cambian el plan con las reglas del teléfono (sin señal) y dejan una línea
   // con Deshacer; las del plan abren el chat encaminado; Importar y Pegar usan este mismo campo.
   $('coach-herramientas').onclick = ev => abrirHerramientas({
     ir, volver: ev.currentTarget,
-    alCambiar: r => { if (!vigente()) return; E.mensaje = null; lineaCambio(r.texto); guardar(); vistaCoach(ir, { respuesta: true }); },
+    alCambiar: r => { if (!vigente()) return; E.mensaje = null; lineaCambio(r.texto); guardar(); actualizarChat(ir, { respuesta: true, seguir: true }); },
     alDolor: nube.conectado() && navigator.onLine !== false ? texto => enviar(texto, ir) : null, // sin señal, las reglas
     planChat: modo => vistaCoach(ir, { plan: modo }),
     adjuntar: () => $('archivo-chat').click(),
@@ -217,15 +230,32 @@ export function vistaCoach(ir, mensajeInicial) {
       E.chat = E.chat.filter(m => m !== msg);
       return enviar(persona.texto, ir, null, { existente: persona });
     }
+    // El mensaje que pedía el permiso de la IA trae su botón: lo activa y manda lo que se había escrito, sin buscar otro
+    // enlace ni volver a escribirlo. Va con otro id: el anterior quedó en "pensando" en el servidor.
+    if (op.accion.tipo === 'activar_chat') {
+      decisiones.add(msg); b.disabled = true;
+      try { await nube.consentirChat(); }
+      catch { if (vigente()) { avisar('No pude registrar el permiso. Reintenta con señal.'); decisiones.delete(msg); actualizarChat(ir, { respuesta: true }); } return; }
+      decisiones.delete(msg);
+      if (!vigente()) return;
+      E.consentimientos.ia_transferencia = true;
+      const persona = E.chat.find(m => m.rol === 'persona' && m.consulta === op.accion.consulta);
+      E.chat = E.chat.filter(m => m !== msg);
+      guardar();
+      if (!persona) return actualizarChat(ir);
+      if (borrador.texto.trim() === persona.texto.trim()) borrador.texto = E.borradorChat = '';
+      delete persona.consulta;
+      return enviar(persona.texto, ir, null, { existente: persona });
+    }
     decisiones.add(msg);
     b.closest('.opciones-chat')?.querySelectorAll('button').forEach(x => { x.disabled = true; });
     try {
       const aceptada = await decidir(op.accion, op.etiqueta, ir);
       if (E !== estadoVista || nube.usuarioId() !== usuarioVista) return;
       if (aceptada) { msg.opciones = null; msg.estadoPropuesta = op.accion.tipo === 'confirmar_ia' ? 'aplicada' : op.accion.tipo === 'descartar_ia' ? 'descartada' : null; }
-      else if (E.chatPorTraer?.id === op.accion.id) msg.estadoPropuesta = 'por_comprobar';
+      else if (op.accion.id && E.chatPorTraer?.id === op.accion.id) msg.estadoPropuesta = 'por_comprobar';
       guardar();
-    } finally { decisiones.delete(msg); if (vigente()) vistaCoach(ir, { respuesta: true, enfocarAlternativas: true }); }
+    } finally { decisiones.delete(msg); if (vigente()) actualizarChat(ir, { respuesta: true, seguir: true, enfocar: true }); }
   });
   // La pregunta por las sesiones sin registro (abajo, como mensaje del coach): cada respuesta se ve en el chat, como si
   // se hubiera escrito. Con dos o más, en el calendario se tocan las que se hicieron y "Guardar" las anota todas.
@@ -246,7 +276,7 @@ export function vistaCoach(ir, mensajeInicial) {
     if (r === 'despues' || r === 'despues-todas') {
       const fechas = r === 'despues' ? [fecha] : porRevisar.map(x => x.fecha);
       for (const x of fechas) (E.revisarDespues ||= {})[x] = hoy();
-      guardar(); vistaCoach(ir);
+      guardar(); actualizarChat(ir);
       avisar(r === 'despues' ? `Te pregunto de nuevo mañana por ${foco} del ${diaCorto(fecha)}.` : 'Te pregunto de nuevo mañana.');
       return;
     }
@@ -254,12 +284,37 @@ export function vistaCoach(ir, mensajeInicial) {
     b.disabled = true;
     if (r === 'guardar') {
       guardarRevision(porRevisar);
-      vistaCoach(ir, { respuesta: true, enfocarAlternativas: true });
+      actualizarChat(ir, { respuesta: true, seguir: true, enfocar: true });
       return;
     }
     try { await decidir(r === 'hice' ? { tipo: 'la_hice', fecha } : { tipo: 'no_hecha', fecha }, r === 'hice' ? `La hice: ${foco} del ${diaCorto(fecha)}` : `No hice ${foco} del ${diaCorto(fecha)}`, ir); }
-    finally { if (vigente()) vistaCoach(ir, { respuesta: true, enfocarAlternativas: true }); }
+    finally { if (vigente()) actualizarChat(ir, { respuesta: true, seguir: true, enfocar: true }); }
   });
+  // Lo nuevo del chat sin volver a dibujar la pantalla: el campo, el teclado y la zona de desplazamiento siguen siendo los
+  // mismos, así que nada puede saltar (Francisco, 9 de noviembre de 2026: "va al primer mensaje en vez de quedarse en el
+  // lugar"). Lo que hizo la persona (enviar, tocar un botón) siempre se muestra; una respuesta que llega sola mueve la
+  // pantalla solo si estaba abajo: quien subió a leer se queda donde está, con la flecha para bajar.
+  refrescarLista = ({ respuesta = false, seguir = false, enfocar = false } = {}) => {
+    if (!vigente()) return false;
+    const cerca = distanciaAlFinal() < 240;
+    porRevisar = leerPorRevisar();
+    $('chat').innerHTML = listaHtml();
+    const hola = document.querySelector('.coach-hola');
+    if (hola && E.chat.length) hola.hidden = true;
+    const linea = $('coach-estado');
+    if (linea) linea.innerHTML = estadoCabeceraHtml();
+    $('ideas-ia').innerHTML = ideasHtml(sobre);
+    const campo = $('mensaje');
+    if (campo.value !== borrador.texto) { campo.value = borrador.texto; crecer(campo); }
+    pintarAdjunto();
+    if (!respuesta) { alFinal(); requestAnimationFrame(() => { if (vigente()) alFinal(); }); }
+    else if (seguir || cerca) mostrarUltimaRespuesta(estadoVista, usuarioVista, enfocar || document.activeElement !== campo);
+    revisarAbajoActual?.();
+    pedirIdeas(sobre);
+    revisarSemanaSiToca();
+    return true;
+  };
+  vistaViva = $('vista-coach');
   const pregunta = $('revision-registro');
   // Desde el aviso de Hoy: la pregunta está abajo, en lo último; el foco va a ella para que se lea primero.
   if (revisar && pregunta) {
@@ -275,7 +330,7 @@ export function vistaCoach(ir, mensajeInicial) {
   // El chat se abre abajo, en lo último, como Mensajes (Francisco, 28 de octubre de 2026). Antes, con una sesión sin
   // registro se quedaba arriba. Una respuesta nueva se muestra desde sus opciones (mostrarUltimaRespuesta).
   if (mensajeInicial?.respuesta) mostrarUltimaRespuesta(estadoVista, usuarioVista, !redaccionActiva);
-  else if (!revisar) requestAnimationFrame(() => { if (vigente()) alFinal(); });
+  else if (!(revisar && pregunta)) requestAnimationFrame(() => { if (vigente()) alFinal(); });
   if (typeof mensajeInicial === 'string') enviar(mensajeInicial, ir);
   else if (sobre) { const m = $('mensaje'); if (!borrador.texto) { m.value = `Sobre ${sobre.nombre}: `; borrador.texto = E.borradorChat = m.value; guardar(); } m.focus(); m.setSelectionRange(m.value.length, m.value.length); }
   if (desdePlan) enviar(desdePlan === 'explicar' ? 'Explícame mi plan día por día: qué trabaja cada día y por qué.' : 'Quiero afinar mi plan. Hazme las preguntas que necesites antes de cambiarlo.', ir);
@@ -292,16 +347,19 @@ function srcPose(pose) {
 }
 const sinSenal = () => typeof navigator !== 'undefined' && navigator.onLine === false;
 /** Cabecera como un contacto en Mensajes: cara, nombre y en qué está (en línea, sin señal, mensajes en espera). */
-function cabeceraHtml() {
+function estadoCabeceraHtml() {
   const espera = E.chat.filter(m => m.porEnviar).length;
   const [clase, texto] = !nube.hay() || !nube.usuarioId() ? ['', 'Sin cuenta']
     : sinSenal() ? ['en-espera', espera ? `Sin señal · ${espera} en espera` : 'Sin señal']
     : espera ? ['en-espera', `${espera} en espera`]
     : ['en-linea', E.chatModo === 'plan' ? 'Afinando tu plan' : 'Tu coach'];
+  return `<span class="punto-estado ${clase}"></span>${esc(texto)}`;
+}
+function cabeceraHtml() {
   return `<header class="coach-cabecera"><h1 class="sr-only">Coach</h1>
     <div class="coach-quien">${historiaNueva()
       ? `<button type="button" class="coach-avatar con-historia" id="coach-historia" aria-label="${esc(`${nombreAsistente()} tiene una historia nueva: verla`)}">${imagenAsistente('saludo', 'asistente-mini')}</button>`
-      : `<span class="coach-avatar">${imagenAsistente(sinSenal() ? 'sin_senal' : 'saludo', 'asistente-mini')}</span>`}<strong>${esc(nombreAsistente())}</strong><small><span class="punto-estado ${clase}"></span>${esc(texto)}</small></div>
+      : `<span class="coach-avatar">${imagenAsistente(sinSenal() ? 'sin_senal' : 'saludo', 'asistente-mini')}</span>`}<strong>${esc(nombreAsistente())}</strong><small id="coach-estado">${estadoCabeceraHtml()}</small></div>
     <button type="button" class="coach-mas" id="coach-menu" aria-label="Más opciones del chat" aria-haspopup="dialog">${icono('puntos')}</button>
   </header>`;
 }
@@ -373,7 +431,7 @@ async function deshacerCambio(ir) {
   if (aviso) { avisar(aviso); return; }
   E.mensaje = null;
   E.chat.push({ rol: 'coach', sistema: true, texto: 'Deshiciste el cambio: el plan quedó como antes.' });
-  guardar(); vistaCoach(ir, { respuesta: true });
+  guardar(); actualizarChat(ir, { respuesta: true, seguir: true });
 }
 
 // ── Ideas de mensajes: las propone la IA con tu plan y cómo vienes (una vez al día, o al cambiar algo) ──────────
@@ -446,6 +504,8 @@ export function proponerSemanaAMediasSiToca() {
   if (!Array.isArray(E.chat)) return false;
   const p = semanaMedias();
   if (!p?.ofrecer || E.chat.some(m => m.clave === p.clave)) return false;
+  // Solo vale la de la semana que acaba de terminar: los botones de una anterior ya hablan de días que pasaron.
+  for (const m of E.chat) if (m.tipo === 'semana_a_medias') m.opciones = null;
   E.chat.push({ rol: 'coach', app: true, tipo: 'semana_a_medias', clave: p.clave, texto: p.texto, opciones: p.opciones });
   if (!$('vista-coach')?.isConnected) { E.chatSinLeer = true; marcarNovedadCoach(); }
   guardar();
@@ -475,7 +535,13 @@ function procesarColaCoach({ forzar = false } = {}) {
   enviar(m.texto, irActual, null, { existente: m }).then(ok => { if (ok) procesarColaCoach(); });
 }
 function pintarChat() {
-  if ($('vista-coach')?.isConnected && irActual) vistaCoach(irActual, { respuesta: true });
+  if ($('vista-coach')?.isConnected && irActual) actualizarChat(irActual, { respuesta: true });
+}
+/** Lo nuevo del chat, si está a la vista. Sin una pantalla viva de esta misma cuenta, la dibuja entera. */
+function actualizarChat(ir, opciones = {}) {
+  const vista = $('vista-coach');
+  if (!vista?.isConnected) return;
+  if (vista !== vistaViva || refrescarLista?.(opciones) !== true) vistaCoach(ir, { respuesta: Boolean(opciones.respuesta), enfocarAlternativas: Boolean(opciones.enfocar) });
 }
 
 /** El campo crece con el texto hasta unas cinco líneas, como iMessage; recién ahí se desplaza por dentro (T24). */
@@ -542,6 +608,7 @@ function prepararRedaccion() {
     const d = distanciaAlFinal();
     abajo.hidden = d < 240; pegadoAbajo = d < 80;
   };
+  revisarAbajoActual = revisarAbajo;
   if (abajo) abajo.onclick = () => { abajo.hidden = true; alFinal({ suave: true }); };
   function limpiar() {
     observador?.disconnect(); vv?.removeEventListener('resize', ubicar); vv?.removeEventListener('scroll', ubicar);
@@ -615,7 +682,10 @@ async function decidir(accion, etiqueta, ir) {
   if (!vigente()) return false;
   if (r.plan && E.plan !== r.plan) aceptada = false;
   const cambio = Boolean(r.plan && !aviso) || r.marca?.valor === 'saltada';
-  E.chat.push({ rol: 'coach', app: true, texto: aviso || r.texto, opciones: r.opciones || (cambio ? irA(r.ir) : null), semana: r.semana || null, calendario: r.calendario || null });
+  // Mover o intercambiar con un toque, sin otra pregunta: se puede deshacer ahí mismo.
+  const conDeshacer = r.plan && !aviso && ['intercambiar', 'mover'].includes(accion.accion?.tipo) && E.cambiosPlan?.[0]?.cuando;
+  if (conDeshacer) for (const m of E.chat) delete m.deshacer;
+  E.chat.push({ rol: 'coach', app: true, texto: aviso || r.texto, opciones: r.opciones || (cambio ? irA(r.ir) : null), semana: r.semana || null, calendario: r.calendario || null, ...(conDeshacer ? { deshacer: conDeshacer } : {}) });
   guardar();
   return aceptada;
 }
@@ -737,13 +807,13 @@ function alFinal({ suave = false } = {}) {
 
 /** Botones para ir a ver lo que cambió. */
 const irA = donde => [
-  ...(donde === 'hoy' ? [{ etiqueta: 'Ver Hoy', accion: { tipo: 'ir', vista: 'hoy' } }] : []),
+  ...(donde === 'hoy' ? [{ etiqueta: 'Ver el entrenamiento de hoy', accion: { tipo: 'ir', vista: 'hoy' } }] : []),
   { etiqueta: 'Ver la semana', accion: { tipo: 'ir', vista: 'semana' } },
 ];
 const confirmarIA = id => [{ etiqueta: 'Aceptar estos cambios', accion: { tipo: 'confirmar_ia', id } }, { etiqueta: 'Descartar', accion: { tipo: 'descartar_ia', id } }];
 function opcionesMensaje(m) {
   const pendiente = m.propuesta?.id && E.chatPorTraer?.id === m.propuesta.id;
-  if (pendiente || m.estadoPropuesta === 'por_comprobar') return [
+  if (pendiente || (m.estadoPropuesta === 'por_comprobar' && m.propuesta?.id)) return [
     { etiqueta: 'Revisar y sincronizar en Perfil', accion: { tipo: 'ir', vista: 'mas' } },
     ...(!pendiente || !E.chatPorTraer.confirmado ? [{ etiqueta: 'Descartar', accion: { tipo: 'descartar_ia', id: m.propuesta.id } }] : []),
   ];
@@ -803,7 +873,7 @@ function burbuja(m, i) {
   const cabeza = etiqueta ? `<span class="tipo-mensaje">${icono(m.tipo === 'revision' || m.tipo === 'descarga' || m.tipo === 'semana_a_medias' ? 'calendario' : m.tipo === 'sesion' ? 'pesa' : 'lapiz', 'icono icono-chico')} ${etiqueta}${m.porEnviar ? ` · ${esperaTexto()}` : ''}</span>` : '';
   // Lo escrito sin señal: el mensaje queda a la vista, más tenue, con "En espera" debajo.
   const espera = m.porEnviar && !etiqueta ? `<span class="estado-envio">En espera · ${esperaTexto()}</span>` : '';
-  return `<div id="mensaje-chat-${i}" tabindex="-1" class="burbuja ${m.rol}${etiqueta ? ' automatico' : ''}${espera ? ' en-espera' : ''}${m.propuesta ? ' con-propuesta' : ''}">${cabeza}<div class="texto-chat">${m.rol === 'coach' || etiqueta ? textoRico(m.texto) : esc(m.texto)}${m.enlace ? ` <a class="enlace" href="${esc(m.enlace)}" target="_blank" rel="noopener">Ver videos</a>` : ''}</div>${calendario}${semana}${m.propuesta ? propuestaChatHtml({ ...m.propuesta, estado: m.estadoPropuesta || m.propuesta.estado }) : ''}${opciones?.length ? `<div class="opciones-chat" ${ocupada ? 'aria-busy="true"' : ''}>${opciones.map((o, k) => `<button type="button" ${ocupada ? 'disabled' : ''} class="boton${['confirmar', 'confirmar_ia', 'aceptar_alternativa'].includes(o.accion?.tipo) && k === 0 ? ' primario' : ''}" data-msg="${i}" data-opcion="${k}"${o.letra ? ` aria-label="${esc(`Opción ${o.letra}: ${o.etiqueta}`)}"` : ''}>${o.letra ? `<b class="letra-opcion" aria-hidden="true">${esc(o.letra)}</b>` : ''}${esc(o.etiqueta)}</button>${o.nota ? `<span class="pequeno suave nota-opcion">${esc(o.nota)}</span>` : ''}${o.avisos?.length ? `<span class="pequeno suave">${esc(o.avisos.join(' '))}</span>` : ''}`).join('')}</div>` : ''}${m.sugerencias?.length && i === E.chat.length - 1 ? `<div class="chips respuestas-rapidas" role="group" aria-label="Respuestas rápidas">${m.sugerencias.map(x => `<button type="button" class="sugerencia">${esc(x)}</button>`).join('')}</div>` : ''}</div>${espera}`;
+  return `<div id="mensaje-chat-${i}" tabindex="-1" class="burbuja ${m.rol}${etiqueta ? ' automatico' : ''}${espera ? ' en-espera' : ''}${m.propuesta ? ' con-propuesta' : ''}">${cabeza}<div class="texto-chat">${m.rol === 'coach' || etiqueta ? textoRico(m.texto) : esc(m.texto)}${m.enlace ? ` <a class="enlace" href="${esc(m.enlace)}" target="_blank" rel="noopener">Ver videos</a>` : ''}</div>${calendario}${semana}${m.propuesta ? propuestaChatHtml({ ...m.propuesta, estado: m.estadoPropuesta || m.propuesta.estado }) : ''}${opciones?.length ? `<div class="opciones-chat" ${ocupada ? 'aria-busy="true"' : ''}>${opciones.map((o, k) => `<button type="button" ${ocupada ? 'disabled' : ''} class="boton${['confirmar', 'confirmar_ia', 'aceptar_alternativa'].includes(o.accion?.tipo) && k === 0 ? ' primario' : ''}" data-msg="${i}" data-opcion="${k}"${o.letra ? ` aria-label="${esc(`Opción ${o.letra}: ${o.etiqueta}`)}"` : ''}>${o.letra ? `<b class="letra-opcion" aria-hidden="true">${esc(o.letra)}</b>` : ''}${esc(o.etiqueta)}</button>${o.nota ? `<span class="pequeno suave nota-opcion">${esc(o.nota)}</span>` : ''}${o.avisos?.length ? `<span class="pequeno suave">${esc(o.avisos.join(' '))}</span>` : ''}`).join('')}</div>` : ''}${m.deshacer ? '<button type="button" class="enlace deshacer-chat" data-deshacer>Deshacer</button>' : ''}${m.sugerencias?.length && i === E.chat.length - 1 ? `<div class="chips respuestas-rapidas" role="group" aria-label="Respuestas rápidas">${m.sugerencias.map(x => `<button type="button" class="sugerencia">${esc(x)}</button>`).join('')}</div>` : ''}</div>${espera}`;
 }
 
 /**
@@ -839,7 +909,7 @@ async function aceptarConTexto({ msg, op }, texto, ir, borrador) {
     else if (E.chatPorTraer?.id === op.accion.id) msg.estadoPropuesta = 'por_comprobar';
     guardar();
     return aceptada;
-  } finally { decisiones.delete(msg); if (E === estado && $('vista-coach')?.isConnected) vistaCoach(ir, { respuesta: true }); }
+  } finally { decisiones.delete(msg); if (E === estado && $('vista-coach')?.isConnected) actualizarChat(ir, { respuesta: true, seguir: true }); }
 }
 
 /** existente: un mensaje que ya está en el chat esperando salir (nota de sesión o revisión semanal). */
@@ -869,7 +939,7 @@ async function enviar(texto, ir, archivo = null, { existente = null } = {}) {
     if (!existente && borrador.texto.trim() === texto.trim()) borrador.texto = E.borradorChat = '';
     if (!existente && archivo && borrador.archivo === archivo) borrador.archivo = null;
     guardar(); avisoChat();
-    if (enVista()) vistaCoach(ir, { respuesta: true });
+    if (enVista()) actualizarChat(ir);
     return false;
   }
   if (nube.conectado()) {
@@ -877,7 +947,7 @@ async function enviar(texto, ir, archivo = null, { existente = null } = {}) {
     consulta = consultaActual = { estado, usuario, mensaje };
     E.chat.splice(E.chat.indexOf(persona) + 1, 0, mensaje);
     guardar();
-    if (enVista()) vistaCoach(ir);
+    if (enVista()) actualizarChat(ir);
     try {
       const historial = historialParaIA(E.chat.slice(0, E.chat.indexOf(persona)));
       const ia = await nube.chat(persona.paraIA || texto, historial, archivo ? { tipo: archivo.tipo, texto: archivo.texto } : null, modo, persona.consulta);
@@ -887,12 +957,14 @@ async function enviar(texto, ir, archivo = null, { existente = null } = {}) {
       if (existente && ia.requiere_permiso) {
         // Sin el permiso de la IA, la nota queda a la vista esperando; se manda al activarlo.
         existente.porEnviar = true; E.consentimientos.ia_transferencia = false; guardar();
-        if (enVista()) vistaCoach(ir, { respuesta: true });
+        if (enVista()) { actualizarChat(ir, { respuesta: true }); revisarEstadoChat(ir); }
         return false;
       }
       completada = !ia.requiere_ia && !ia.requiere_permiso && !ia.motivo;
-      E.chat.splice(E.chat.indexOf(persona) + 1, 0, { rol: 'coach', texto: ia.texto || r.texto, propuesta: ia.propuesta || null, opciones: ia.propuesta ? confirmarIA(ia.propuesta.id) : ia.opciones || null, sugerencias: ia.sugerencias || null, enlace: ia.enlace || null, ...(persona.sesionId ? { sesionId: persona.sesionId } : {}) });
+      const pidePermiso = ia.requiere_permiso ? { app: true, opciones: [{ etiqueta: 'Activar el chat y enviar', accion: { tipo: 'activar_chat', consulta: persona.consulta } }] } : {};
+      E.chat.splice(E.chat.indexOf(persona) + 1, 0, { rol: 'coach', texto: ia.texto || r.texto, propuesta: ia.propuesta || null, opciones: ia.propuesta ? confirmarIA(ia.propuesta.id) : ia.opciones || null, sugerencias: ia.sugerencias || null, enlace: ia.enlace || null, ...(persona.sesionId ? { sesionId: persona.sesionId } : {}), ...pidePermiso });
       if (!enVista()) { E.chatSinLeer = true; marcarNovedadCoach(); }
+      else if (ia.requiere_permiso) revisarEstadoChat(ir);
     } catch (e) {
       if (E !== estado || usuario !== nube.usuarioId()) return false;
       completada = false;
@@ -924,7 +996,7 @@ async function enviar(texto, ir, archivo = null, { existente = null } = {}) {
     if (archivo && borrador.archivo === archivo) borrador.archivo = null;
   } else if (vaciado && !persona.porEnviar && !borrador.texto) borrador.texto = E.borradorChat = texto;
   guardar(); avisoChat();
-  if (enVista()) vistaCoach(ir, { respuesta: true });
+  if (enVista()) actualizarChat(ir, { respuesta: true });
   return completada;
 }
 

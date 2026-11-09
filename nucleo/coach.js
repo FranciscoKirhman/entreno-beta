@@ -6,7 +6,7 @@ import { alarmaCoach } from './alarma-coach.js';
 // cuando la persona confirma (y elige si es solo hoy o desde hoy en adelante, cuando corresponde).
 import { sufijo } from './unidades.js';
 import { normalizar } from './catalogo.js';
-import { marcarFaltada, moverSesion, intercambiar, opcionesParaHoy, sesionDe, sumarDias, diaSemana, nombreDia, familia } from './agenda.js';
+import { marcarFaltada, moverSesion, intercambiar, opcionesParaHoy, sesionesParaHoy, sesionDe, sumarDias, diaSemana, nombreDia, nombreSimple, familia } from './agenda.js';
 import { alternativas, recortarSesion } from './checkin.js';
 import { evaluarDia, ajustarSesion, TEXTO_RECOMENDACION } from './bienestar.js';
 import { explicarEjercicio } from './explicar.js';
@@ -44,6 +44,23 @@ function fechasMencionadas(n, hoy) {
   return out;
 }
 
+// Lo que nombra una sesión cuando se pide ("hoy glúteo", "cámbiame a pierna"): cada palabra escrita y con qué se busca en
+// el nombre de las sesiones del plan.
+const PIDE = [
+  [/\b(gluteos?|poto)\b/, ['gluteo']], [/\b(cuadriceps?|cuads?)\b/, ['cuadriceps']], [/\b(femoral(es)?|isquios?)\b/, ['femoral']],
+  [/\b(piernas?|tren inferior|inferior)\b/, ['pierna', 'inferior', 'gluteo', 'cuadriceps', 'femoral']],
+  [/\b(tren superior|superior|torso)\b/, ['torso', 'superior', 'espalda', 'pecho']],
+  [/\bespaldas?\b/, ['espalda']], [/\bpechos?\b/, ['pecho']], [/\bhombros?\b/, ['hombro']], [/\b(brazos?|biceps|triceps)\b/, ['brazo', 'biceps', 'triceps']],
+  [/\bempuje\b/, ['empuje']], [/\btiron\b/, ['tiron']],
+];
+const palabrasPedidas = n => { const p = PIDE.filter(([re]) => re.test(n)).flatMap(([, x]) => x); return p.length ? [...new Set(p)] : null; };
+const NIEGA = /\b(no quiero|no tengo ganas de|prefiero no|no puedo|no voy a)\b/;
+const QUIERE_ENTRENAR = /\b(quiero|quisiera|me gustaria|prefiero|necesito|voy a|vengo a|vine a|puedo|podria) (\w+ )?(entrenar|ejercitar)\b|\b(hagamos|entrenemos)\b|\bentrenar hoy\b/;
+const QUIERE_HACER = /\b(quiero|quisiera|me gustaria|prefiero) (\w+ )?(hacer|trabajar)\b/;
+const CAMBIAR = /\b(mueve|mueveme|mover|cambia|cambiar|cambiame|pasa|pasar|pasame|trae|traeme|traer|adelanta|adelantame|adelantar)\b/;
+// Eso habla de un ejercicio, una dosis o el plan, no de qué sesión hacer hoy.
+const SOBRE_OTRA_COSA = /\b(series?|repeticiones|reps?|kilos?|kg|pesos?|ejercicios?|maquinas?|mancuernas?|barra|minutos?|min|plan|bloque|proxim[oa]|semana que viene)\b/;
+
 /** Qué quiere la persona. Devuelve {intencion, ...datos} o {intencion: 'desconocida'}. */
 export function entender(texto, { hoy, indice, plan }) {
   const n = normalizar(texto);
@@ -66,13 +83,17 @@ export function entender(texto, { hoy, indice, plan }) {
   if (/\b(falte|no fui|no pude ir|me salte|me perdi|no alcance a ir|no entrene|no pude entrenar|no alcance a entrenar|no hice (la sesion|el entreno|el entrenamiento|nada)|no fui a entrenar)\b/.test(n)) {
     return { intencion: 'falte', fecha: fechaEscrita(texto, hoy) || fechaMencionada(n, hoy, { pasado: true }) || hoy };
   }
+  const fechas = fechasMencionadas(n, hoy), soloHoy = fechas.every(f => f === hoy);
+  // "Hoy no tenía sesión pero quiero entrenar": primero lo que quiere hacer, no lo que no toca.
+  if (soloHoy && !NIEGA.test(n) && QUIERE_ENTRENAR.test(n) && !SOBRE_OTRA_COSA.test(n)) return { intencion: 'hacer_hoy', palabras: palabrasPedidas(n) };
   if (/\b(no quiero|no tengo ganas de|prefiero no|otra opcion|otra cosa|cambiar el dia)\b/.test(n) && !/\b(maquina|ocupad)\b/.test(n)) {
     const evitar = FAMILIAS.find(([re]) => re.test(n))?.[1] || (dia ? familia(dia.plantilla) : null);
     return { intencion: 'otra_opcion', evitar };
   }
-  if (/\b(mueve|mover|cambia|cambiar|pasa|pasar|cambiame)\b/.test(n) && fechasMencionadas(n, hoy).length) {
-    const f = fechasMencionadas(n, hoy);
-    return { intencion: 'mover', de: f.length > 1 ? f[0] : hoy, a: f.at(-1) };
+  if (CAMBIAR.test(n) && fechas.length) {
+    const de = fechas.length > 1 ? fechas[0] : hoy, a = fechas.at(-1);
+    // "Cámbiame glúteo a hoy" nombra un solo día, el de hoy: no es mover un día a otro, es hacer otra sesión hoy (abajo).
+    if (de !== a) return { intencion: 'mover', de, a };
   }
   if (/\b(ocupad[ao]s?|no hay|no esta|no tienen|esta malo|esta mala)\b/.test(n)) return { intencion: 'maquina_ocupada', ejercicio: ejercicioEn() };
   const min = n.match(/\b(\d{2,3})\s*(min|minutos)\b/);
@@ -84,6 +105,9 @@ export function entender(texto, { hoy, indice, plan }) {
   if (/\b(por que|porque)\b/.test(n)) return { intencion: 'por_que', ejercicio: ejercicioEn() };
   if (/\b(como se hace|tecnica|video|como hago)\b/.test(n)) return { intencion: 'tecnica', ejercicio: ejercicioEn() };
   if (/\b(que (me )?toca|mi rutina|mi sesion|hoy que|que hago hoy|que entreno)\b/.test(n)) return { intencion: 'que_toca' };
+  // "Hoy glúteo o cuádriceps", "cámbiame a glúteo", "quiero hacer pierna": qué sesión hacer hoy.
+  const palabras = palabrasPedidas(n);
+  if (palabras && soloHoy && !NIEGA.test(n) && !SOBRE_OTRA_COSA.test(n) && (fechas.length || CAMBIAR.test(n) || QUIERE_HACER.test(n))) return { intencion: 'hacer_hoy', palabras };
   return { intencion: 'desconocida' };
 }
 
@@ -107,16 +131,15 @@ export function responder(texto, ctx) {
       return { texto: `Hoy no tienes sesión.${(() => { const p = plan?.dias.find(d => d.fecha > hoy); return p ? ` La próxima es ${resumenDia(p)}` : ''; })()}` };
     case 'falte': return opcionesNoHecha(q.fecha, ctx);
     case 'mover': return vistaPrevia(sesionDe(plan, q.a) ? { tipo: 'intercambiar', fechas: [q.de, q.a] } : { tipo: 'mover', de: q.de, a: q.a }, ctx);
+    case 'hacer_hoy': return hacerHoy(q, ctx);
     case 'otra_opcion': {
       const o = opcionesParaHoy(plan, hoy, { evitar: q.evitar });
       return {
+        titulo: 'Otra opción para hoy',
         texto: `${o.hoy ? `Hoy tocaba ${o.hoy.foco}.` : 'Hoy no tenías sesión.'} Estas son tus opciones:`,
-        opciones: o.opciones.map(x => ({
-          etiqueta: x.tipo === 'intercambiar' ? `Hacer hoy ${x.foco} (del ${nombreDia(x.fecha)}) y cambiar los días` : x.tipo === 'traer' ? `Traer ${x.foco} del ${nombreDia(x.fecha)} a hoy` : x.foco,
-          accion: x.tipo === 'intercambiar' ? { tipo: 'intercambiar', fechas: [hoy, x.fecha] } : x.tipo === 'traer' ? { tipo: 'mover', de: x.fecha, a: hoy }
-            : x.tipo === 'mover' ? { tipo: 'falte', fecha: hoy } : { tipo: 'descanso_activo', fecha: hoy },
-          avisos: x.avisos,
-        })),
+        opciones: o.opciones.map(x => (x.tipo === 'intercambiar' || x.tipo === 'traer' ? opcionHacerHoy({ ...x, accion: x.tipo === 'intercambiar' ? { tipo: 'intercambiar', fechas: [hoy, x.fecha] } : { tipo: 'mover', de: x.fecha, a: hoy } }, dia)
+          : x.tipo === 'mover' ? { etiqueta: `Dejar ${nombreSimple(dia?.foco)} para otro día`, accion: { tipo: 'falte', fecha: hoy }, avisos: x.avisos }
+            : { etiqueta: 'Descanso activo', nota: '20 a 30 minutos de caminata o bicicleta suave y movilidad', accion: { tipo: 'descanso_activo', fecha: hoy }, avisos: x.avisos })),
       };
     }
     case 'maquina_ocupada': {
@@ -175,6 +198,42 @@ export function responder(texto, ctx) {
   }
 }
 
+/**
+ * Un botón para hacer hoy una sesión: lo que se hace en grande y lo que pasa con la de hoy debajo. Quien está en el gimnasio
+ * no lee una vista previa (Francisco, 9 de noviembre de 2026): el botón ya dice cómo queda, tocarlo es el sí y se puede
+ * deshacer. Por eso va directo a 'confirmar', sin otra pregunta.
+ */
+function opcionHacerHoy(o, dia) {
+  const nombre = nombreSimple(dia?.foco);
+  return {
+    etiqueta: `Hacer hoy ${nombreSimple(o.foco)}`,
+    nota: dia?.ejercicios?.length ? `${nombre.charAt(0).toUpperCase()}${nombre.slice(1)} pasa al ${fechaCorta(o.fecha)}.` : `Se adelanta desde el ${fechaCorta(o.fecha)}.`,
+    accion: { tipo: 'confirmar', accion: o.accion },
+    avisos: o.avisos,
+  };
+}
+
+/** Cuánto calza una sesión con lo pedido: "glúteo o cuádriceps" calza más con "cuádriceps y glúteo" que con "glúteo y femoral". */
+const calzaCon = (d, palabras) => (palabras || []).filter(p => normalizar(d?.foco || '').includes(p)).length;
+
+/** "Hoy glúteo", "cámbiame a pierna", "quiero entrenar hoy": un botón por sesión, primero lo pedido. Nunca se le niega. */
+function hacerHoy(q, ctx) {
+  const { plan, hoy } = ctx;
+  const dia = sesionDe(plan, hoy), hechaHoy = (ctx.hechas || []).includes(hoy);
+  const otras = sesionesParaHoy(plan, hoy, { hechas: ctx.hechas || [] }).map(o => ({ ...o, calza: calzaCon(o, q.palabras) })).sort((a, b) => b.calza - a.calza);
+  const mejor = otras[0]?.calza || 0;
+  const verHoy = { etiqueta: 'Ver el entrenamiento de hoy', accion: { tipo: 'ir', vista: 'hoy' } };
+  if (dia?.ejercicios?.length && !hechaHoy && calzaCon(dia, q.palabras) > 0 && calzaCon(dia, q.palabras) >= mejor) return { texto: `Hoy ya te toca ${dia.foco}.`, opciones: [verHoy] };
+  if (hechaHoy) return { texto: `Hoy ya hiciste ${dia?.foco || 'tu sesión'}. Si quieres sumar algo, empieza una sesión vacía en Entrenar.`, opciones: [verHoy] };
+  const lista = mejor ? otras.filter(o => o.calza) : otras;
+  if (!lista.length) return { texto: dia?.ejercicios?.length ? `Hoy te toca ${dia.foco} y no hay otra sesión en los próximos días.` : 'No hay sesiones en los próximos días. En Entrenar puedes empezar una sesión vacía.', opciones: [verHoy] };
+  return {
+    titulo: 'Entrenar hoy',
+    texto: `${dia?.ejercicios?.length ? `Hoy tenías ${dia.foco}.` : 'Hoy no tenías sesión.'} Toca la que quieres y queda para hoy.`,
+    opciones: lista.slice(0, 4).map(o => opcionHacerHoy(o, dia)),
+  };
+}
+
 function opcionesAlternativa(ctx, fecha, id) {
   const { plan, respuestas: r = {}, indice } = ctx;
   const dia = sesionDe(plan, fecha);
@@ -208,16 +267,26 @@ export function calcularCambio(accion, ctx) {
   };
   switch (accion.tipo) {
     case 'intercambiar': {
+      if (accion.fechas.some(f => (ctx.hechas || []).includes(f))) return { error: 'Esa sesión ya está hecha: no la muevo.' };
       const r = intercambiar(plan, ...accion.fechas);
       if (!r.ok) return { error: r.error };
-      const [a, b] = accion.fechas;
-      return { plan: r.plan, ir: 'semana', propone: `Cambiaría el ${fechaCorta(a)} con el ${fechaCorta(b)}: el ${nombreDia(a)} harías ${sesionDe(r.plan, a).foco} y el ${nombreDia(b)}, ${sesionDe(r.plan, b).foco}.${r.avisos.length ? ' Ojo: ' + r.avisos.join(' ') : ''}`, hecho: `Listo: el ${nombreDia(a)} haces ${sesionDe(r.plan, a).foco}.` };
+      const [a, b] = accion.fechas, ojo = r.avisos.length ? ' Ojo: ' + r.avisos.join(' ') : '';
+      // Con hoy de por medio se dice lo que importa: qué haces hoy y adónde pasa la otra.
+      const delHoy = a === ctx.hoy ? a : b === ctx.hoy ? b : null;
+      if (delHoy) {
+        const otra = delHoy === a ? b : a, enHoy = nombreSimple(sesionDe(r.plan, delHoy).foco), enOtra = nombreSimple(sesionDe(r.plan, otra).foco);
+        const mayuscula = t => t.charAt(0).toUpperCase() + t.slice(1);
+        return { plan: r.plan, ir: 'hoy', confirmar: `Sí, hacer ${enHoy} hoy`, propone: `Hoy harías ${enHoy}. ${mayuscula(enOtra)} pasa al ${fechaCorta(otra)}.${ojo}`, hecho: `Listo: hoy haces ${enHoy}. ${mayuscula(enOtra)} pasa al ${fechaCorta(otra)}.` };
+      }
+      return { plan: r.plan, ir: 'semana', confirmar: 'Sí, cambiar los días', propone: `Cambiaría el ${fechaCorta(a)} con el ${fechaCorta(b)}: el ${nombreDia(a)} harías ${sesionDe(r.plan, a).foco} y el ${nombreDia(b)}, ${sesionDe(r.plan, b).foco}.${ojo}`, hecho: `Listo: el ${nombreDia(a)} haces ${sesionDe(r.plan, a).foco}.` };
     }
     case 'mover': {
+      if ((ctx.hechas || []).includes(accion.de)) return { error: 'Esa sesión ya está hecha: no la muevo.' };
       const r = moverSesion(plan, accion.de, accion.a, { noPuedo });
       if (!r.ok) return { error: r.error };
-      const foco = sesionDe(r.plan, accion.a).foco;
-      return { plan: r.plan, ir: 'semana', propone: `${foco} pasaría del ${fechaCorta(accion.de)} al ${fechaCorta(accion.a)}.${r.avisos?.length ? ' Ojo: ' + r.avisos.join(' ') : ''}`, hecho: `Listo: ${foco} quedó para el ${fechaCorta(accion.a)}.` };
+      const foco = sesionDe(r.plan, accion.a).foco, ojo = r.avisos?.length ? ' Ojo: ' + r.avisos.join(' ') : '';
+      if (accion.a === ctx.hoy) return { plan: r.plan, ir: 'hoy', confirmar: `Sí, hacer ${nombreSimple(foco)} hoy`, propone: `Hoy harías ${nombreSimple(foco)}, que estaba para el ${fechaCorta(accion.de)}.${ojo}`, hecho: `Listo: hoy haces ${nombreSimple(foco)}.` };
+      return { plan: r.plan, ir: 'semana', confirmar: 'Sí, moverla', propone: `${foco} pasaría del ${fechaCorta(accion.de)} al ${fechaCorta(accion.a)}.${ojo}`, hecho: `Listo: ${foco} quedó para el ${fechaCorta(accion.a)}.` };
     }
     case 'falte': case 'descanso_activo': {
       const r = marcarFaltada(plan, accion.fecha, { hoy: ctx.hoy, noPuedo, hechas: ctx.hechas || [] });
@@ -297,7 +366,7 @@ export function vistaPrevia(accion, ctx) {
   if (accion.tipo === 'quitar_zona_hoy') return { texto: `${r.propone} ¿Solo hoy o toda la semana?`, opciones: [confirmar('Solo hoy', { alcance: 'hoy' }), confirmar('Toda la semana', { alcance: 'semana' }), no] };
   if (accion.tipo === 'descarga_temprana') return { texto: `${r.propone} ¿La adelanto?`, semana: r.semana, opciones: [confirmar('Sí, adelantar la descarga'), no] };
   if (CAMBIOS_SEMANA_A_MEDIAS.has(accion.tipo)) return { texto: `${r.propone} ¿Lo cambio?`, semana: r.semana, opciones: [confirmar(confirmarSemanaAMedias(accion)), no] };
-  return { texto: `${r.propone} ¿Lo cambio?`, opciones: [confirmar(r.ir === 'semana' ? 'Sí, cambiar la semana' : 'Sí, cambiar la sesión de hoy'), no] };
+  return { texto: `${r.propone} ¿Lo cambio?`, opciones: [confirmar(r.confirmar || (r.ir === 'semana' ? 'Sí, cambiar la semana' : 'Sí, cambiar la sesión de hoy')), no] };
 }
 
 /** Una opción elegida en el chat. Lo que cambia el plan primero muestra la vista previa; 'confirmar' lo aplica. */
@@ -371,12 +440,13 @@ export function opcionesNoHecha(fecha, ctx) {
 
 /** Los días libres para poner la sesión (la persona elige). */
 function elegirFecha(fecha, ctx) {
-  const libres = fechasLibres(ctx.plan, { hoy: ctx.hoy, noPuedo: ctx.respuestas?.dias_no_puedo || [], hechas: ctx.hechas || [], hasta: sumarDias(ctx.hoy, 13) });
+  // La fecha la elige la persona: también los días que marcó que casi nunca puede.
+  const libres = fechasLibres(ctx.plan, { hoy: ctx.hoy, hechas: ctx.hechas || [], hasta: sumarDias(ctx.hoy, 13) });
   if (!libres.length) return { texto: 'No quedan días libres en las próximas dos semanas. Puedes saltarla.', opciones: [{ etiqueta: 'Volver a las opciones', accion: { tipo: 'no_hecha', fecha } }] };
   const base = firma(ctx.plan);
   return {
     texto: `¿Qué día quieres hacer ${sesionDe(ctx.plan, fecha)?.foco || 'esa sesión'}? Estos días no tienen sesión:`,
-    opciones: [...libres.slice(0, 8).map(f => ({ etiqueta: diaCorto(f), accion: { tipo: 'ver_alternativa', fecha, opcion: 'fecha', destino: f, base } })),
+    opciones: [...libres.slice(0, 10).map(f => ({ etiqueta: diaCorto(f), accion: { tipo: 'ver_alternativa', fecha, opcion: 'fecha', destino: f, base } })),
       { etiqueta: 'Volver a las opciones', accion: { tipo: 'no_hecha', fecha } }],
   };
 }

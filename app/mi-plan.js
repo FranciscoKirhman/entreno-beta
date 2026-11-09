@@ -14,7 +14,7 @@ import { E, R, D, C, guardar, esc, $, hoy, indice, fechaCorta, cambiarPlan, avis
 import { semanaPorMusculo } from '../nucleo/volumen-semana.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { NOMBRE_MUSCULO, mayuscula } from './musculos.js';
-import { macroActual, planBloqueSiguiente, armarBloqueSiguiente, lunesDesde, historialReciente, tarjetaDescarga, enlazarTemporada } from './temporada.js';
+import { macroActual, planBloqueSiguiente, confirmarBloqueSiguiente, resumenCambiosCicloHtml, lunesDesde, historialReciente, tarjetaDescarga, enlazarTemporada } from './temporada.js';
 import { semanaDe, aplicarFase } from '../nucleo/ciclos.js';
 import { bloqueSiguienteDisponible } from '../nucleo/bloque-siguiente.js';
 import { estadoDelPlan } from '../nucleo/registrado.js';
@@ -424,6 +424,8 @@ function vistaCiclo(ir) {
       <p class="pequeno">${esc(sig?.enfoque || 'Terminas la temporada: la siguiente parte con tus pesos de ahora.')}</p>
     </section>
     <p class="pequeno suave">Lo que elijas acá queda guardado y se aplica cuando armes el bloque siguiente. El bloque actual no cambia.</p>
+    <h2 class="titulo-seccion">Cambios pendientes</h2>
+    <section class="tarjeta">${resumenCambiosCicloHtml(R(), { quitar: true })}</section>
     <h2 class="titulo-seccion">Músculos prioridad${cambio('musculos_prioridad')}</h2>
     <button type="button" class="tarjeta mp-semana" id="mp-ciclo-prioridades"><span>${esc(listaZonas(r.musculos_prioridad || []))}</span><span class="pequeno mp-enlace">Cambiar ${icono('flecha', 'icono icono-chico')}</span></button>
     <h2 class="titulo-seccion">Días por semana${cambio('dias_meta')}</h2>
@@ -433,22 +435,19 @@ function vistaCiclo(ir) {
     <h2 class="titulo-seccion">Ejercicios${cambio('rotacion')}</h2>
     ${seg('rotacion', [['mismos', 'Mantener'], ['algunos', 'Rotar'], ['variar', 'Variar']], r.rotacion || 'algunos')}
     <p class="pequeno suave">${esc({ mismos: 'Repite los mismos para comparar tu progreso.', variar: 'Cambia varios ejercicios para no aburrirte.' }[r.rotacion] || 'Mantiene los principales y cambia algunos.')} Los favoritos se mantienen siempre y los evitados no vuelven.</p>
-    ${Object.keys(b.cambios_ejercicios || {}).length ? `<h2 class="titulo-seccion">Favoritos y evitados${cambio('cambios_ejercicios')}</h2>
-    <section class="tarjeta"><p class="pequeno suave">Estos cambios se aplican sobre tus preferencias vigentes al armar el siguiente bloque.</p>
-    <ul class="lista-simple">${Object.entries(b.cambios_ejercicios).map(([id, accion]) => `<li><span>${accion === 'favorito' ? 'Dejar como favorito' : 'Evitar'}: ${esc(nombreEj(id))}</span><button type="button" class="enlace" data-ciclo-quitar-ejercicio="${esc(id)}" aria-label="Quitar el cambio de ${esc(nombreEj(id))}">Quitar</button></li>`).join('')}</ul></section>` : ''}
-    <h2 class="titulo-seccion">Vista previa</h2>
-    ${!previa ? '' : previa.bloqueado ? `<div class="aviso alerta">${esc(previa.mensaje)}</div>` : `<section class="tarjeta">
+    ${previa?.bloqueado ? `<div class="aviso alerta">${esc(previa.mensaje)}</div>` : ''}
+    ${!previa?.plan ? '' : `<details class="tarjeta mp-previa"><summary>Ver cómo quedaría</summary>
       <p class="pequeno">${semana1.length} sesiones a la semana: ${esc(semana1.map(d => `${d.foco} (~${minutosDe(d)} min)`).join(', '))}.</p>
       <ul class="lista-simple pequeno">${Object.entries(vol).filter(([k, n]) => NOMBRE_ZONA[k] && n).sort((x, y) => y[1] - x[1]).map(([k, n]) => `<li><span>${esc(mayus(nombreZona(k)))}${(r.musculos_prioridad || []).includes(k) ? ' <span class="chip-prioridad">Prioridad</span>' : ''}</span><span class="num">${coma(n)} series</span></li>`).join('')}</ul>
       <details class="extra"><summary>Ejercicios de la primera semana</summary>${semana1.map(d => `<p class="pequeno"><strong>${esc(d.foco)}:</strong> ${esc(d.ejercicios.map(e => nombreEj(e.ejercicio_id)).join(', '))}</p>`).join('')}</details>
       <p class="pequeno suave">Los ejercicios pueden variar un poco al armarlo, según lo que anotes de aquí a esa fecha.</p>
-    </section>`}
+    </details>`}
     <div class="fila-botones">
       ${disp ? `<button type="button" class="boton primario" id="mp-armar">${sig ? `Armar el bloque ${sig.n}` : 'Empezar una temporada nueva'}</button>`
         : `<button type="button" class="boton" id="mp-antes">Empezarlo antes, el ${esc(fechaCorta(proximoLunes()))}</button>`}
       ${Object.keys(b).length ? '<button type="button" class="boton" id="mp-borrador-no">Descartar los cambios</button>' : ''}
     </div>
-    ${disp ? '' : `<p class="pequeno suave">Desde el ${esc(fechaCorta(sumarDias(finDelPlan(), -6)))} te aviso en Entrenar para armarlo con un toque.</p>`}
+    ${disp ? '' : `<p class="pequeno suave">Desde el ${esc(fechaCorta(sumarDias(finDelPlan(), -6)))} te aviso en Entrenar para revisar y confirmar el siguiente bloque.</p>`}
   </div>`;
   const repintar = () => { const y = scrollY; vistaCiclo(ir); scrollTo(0, y); };
   $('mp-volver').onclick = () => ir('miplan');
@@ -461,12 +460,8 @@ function vistaCiclo(ir) {
   });
   document.querySelectorAll('[data-ciclo-quitar-ejercicio]').forEach(x => x.onclick = () => { guardarRespuestas(guardarCambioEjercicio(R(), x.dataset.cicloQuitarEjercicio, null)); repintar(); });
   $('mp-borrador-no')?.addEventListener('click', () => { const r2 = { ...R() }; delete r2.ciclo_siguiente; guardarRespuestas(r2); avisar('Descarté los cambios del siguiente ciclo.'); repintar(); });
-  $('mp-armar')?.addEventListener('click', async ev => { ev.currentTarget.disabled = true; await armarBloqueSiguiente(); ir('miplan'); });
-  $('mp-antes')?.addEventListener('click', ev => abrirHoja({
-    titulo: '¿Empiezo el siguiente ciclo antes?', volver: ev.currentTarget,
-    nota: `El bloque actual termina este domingo y el siguiente parte el ${fechaCorta(proximoLunes())}, con lo que elegiste acá. Lo registrado no cambia y puedes deshacerlo.`,
-    opciones: [{ valor: 'si', icono: icono('visto'), clase: 'confirmar', nombre: 'Sí, empezarlo el lunes' }, { valor: 'no', icono: icono('cerrar'), nombre: 'No, esperar' }],
-    alElegir: async x => { if (x !== 'si') return; await armarBloqueSiguiente({ forzar: true }); ir('miplan'); },
-  }));
+  document.querySelectorAll('[data-ciclo-quitar-campo]').forEach(x => x.onclick = () => { guardarRespuestas(guardarEnBorrador(R(), { [x.dataset.cicloQuitarCampo]: null })); repintar(); });
+  $('mp-armar')?.addEventListener('click', ev => confirmarBloqueSiguiente({ volver: ev.currentTarget, alConfirmar: () => ir('miplan') }));
+  $('mp-antes')?.addEventListener('click', ev => confirmarBloqueSiguiente({ forzar: true, volver: ev.currentTarget, alConfirmar: () => ir('miplan') }));
   mostrarMensaje();
 }

@@ -1,7 +1,10 @@
-import { ritmoHoy } from './ritmo.js';
+import { ritmoHoy, minutosDe } from './ritmo.js';
+import { abrirHoja } from './hoja.js';
+import { cambiosDelBorrador, primeraSemanaDelBloque, compararInicioBloques } from '../nucleo/resumen-ciclo.js';
+import { NOMBRE_MUSCULO } from './musculos.js';
 // La temporada (macrociclo, nucleo/ciclos.js) en la vista Semana: los bloques con su fase, en qué semana vas,
 // la propuesta de adelantar la descarga cuando vienes cansado y armar el bloque siguiente al terminar.
-import { E, guardar, R, D, C, esc, $, hoy, indice, fechaCorta, cambiarPlan, mostrarSemana } from './comun.js';
+import { E, guardar, R, D, C, esc, $, hoy, indice, fechaCorta, cambiarPlan, mostrarSemana, avisar, peso } from './comun.js';
 import { derivar } from '../nucleo/derivar.js';
 import { borradorCiclo, respuestasDelCiclo, aplicarBorrador } from '../nucleo/ciclo-siguiente.js';
 import { macroDelPlan, semanaDe, propuestaDescarga, adelantarDescarga, aplicarFase } from '../nucleo/ciclos.js';
@@ -116,7 +119,7 @@ export function avisoBloqueSiguiente() {
 export function planBloqueSiguiente({ forzar = false, cambios = null } = {}) {
   const disp = bloqueSiguienteDisponible(E.plan, hoy()) || (forzar && E.plan?.dias?.length && !E.plan.libre && !E.plan.bloqueado ? { desde: hoy() } : null);
   if (!disp) return null;
-  const m = macroActual();
+  const m = macroDelPlan(E.plan, E.macro, { nivel: D().nivel });
   const sig = m?.bloques.find(b => b.n === m.actual + 1);
   // El nivel sube entre bloques, con lo que se entrenó.
   const nv = progresoNivel({ respuestas: R(), fechas: fechasEntrenadas(), hoy: hoy() });
@@ -133,23 +136,77 @@ export function planBloqueSiguiente({ forzar = false, cambios = null } = {}) {
   return { plan, sig, nv, anteriores, respuestas, derivados };
 }
 
-/** Arma el bloque siguiente (Semana, Entrenar o Mi plan). Es la confirmación de la persona: lo pidió con el botón. */
-export async function armarBloqueSiguiente({ forzar = false } = {}) {
-  const r = planBloqueSiguiente({ forzar });
-  if (!r) return;
-  if (r.bloqueado) { E.mensaje = r.mensaje; guardar(); return; }
+/** Aplica exactamente la propuesta que se acaba de confirmar. */
+async function armarBloqueSiguiente(r) {
+  if (E.chatPorTraer) { avisar('Sincroniza los cambios del chat antes de modificar el plan.'); return false; }
+  const original = E;
   const { plan, sig, nv, anteriores } = r;
   // Lo elegido para el siguiente ciclo pasa al perfil (y a la cuenta) junto con el bloque nuevo.
   const tenia = Boolean(borradorCiclo(R()));
   E.respuestas = aplicarBorrador(R(), hoy());
   if (nv.sube) R().nivel_ganado = nv.alcanzado;
-  if (tenia && nube.conectado()) nube.guardarCuestionario(structuredClone(R())).catch(() => {});
   mostrarSemana(1);
   const subio = nv.sube ? ` Subiste a nivel ${nv.alcanzado}: el plan sube un poco el volumen.` : '';
   const nuevos = new Set(plan.dias.flatMap(d => d.ejercicios.map(e => e.ejercicio_id)).filter(id => !anteriores.has(id))).size;
   const variedad = nuevos && ['variar', 'algunos'].includes(R().rotacion) ? ` Como te gusta variar, ${nuevos === 1 ? 'cambió 1 ejercicio' : `cambiaron ${nuevos} ejercicios`}.` : '';
   const fin = plan.dias.map(d => d.fecha).sort().at(-1);
   await cambiarPlan(plan, (sig ? `Bloque ${sig.n} armado: ${sig.nombre.toLowerCase()}. Parte el ${fechaCorta(plan.inicio)} y llega hasta el ${fechaCorta(fin)}, con los pesos que anotaste.` : `Temporada nueva: parte el ${fechaCorta(plan.inicio)} y llega hasta el ${fechaCorta(fin)}.`) + subio + variedad, nube);
+  if (E !== original || E.plan !== plan) return false;
+  if (tenia && nube.conectado()) nube.guardarCuestionario(structuredClone(R())).catch(() => {});
+  return true;
+}
+
+
+const CAMPO_CICLO = { musculos_prioridad: 'Músculos prioridad', dias_meta: 'Días por semana', duracion_min: 'Minutos por sesión', rotacion: 'Ejercicios' };
+const valorCiclo = (campo, valor) => campo === 'musculos_prioridad' ? (valor || []).map(m => NOMBRE_MUSCULO[m] || m).join(', ') || 'Sin prioridad'
+  : campo === 'rotacion' ? ({ mismos: 'Mantener', algunos: 'Rotar', variar: 'Variar' }[valor] || 'Rotar') : String(valor ?? 'Sin elegir');
+const preferenciaEjercicio = valor => ({ favorito: 'Favorito', evitar: 'Evitado', sin_preferencia: 'Sin preferencia' }[valor]);
+
+/** Resumen compartido por la edición del borrador y su confirmación. Quitar usa los guardados existentes. */
+export function resumenCambiosCicloHtml(respuestas, { quitar = false } = {}) {
+  const cambios = cambiosDelBorrador(respuestas);
+  if (!cambios.length) return '<p class="pequeno suave">No tienes cambios pendientes en tus preferencias.</p>';
+  return `<ul class="lista-simple ciclo-cambios">${cambios.map(c => {
+    const nombre = c.id ? indice.porId.get(c.id)?.nombre || c.id : CAMPO_CICLO[c.campo];
+    const valor = v => c.id ? preferenciaEjercicio(v) : valorCiclo(c.campo, v);
+    return `<li><div><strong>${esc(nombre)}</strong> <span class="chip hoy">Cambia</span><p class="pequeno">Ahora: ${esc(valor(c.antes))}<br>Siguiente: ${esc(valor(c.despues))}</p></div>${quitar ? `<button type="button" class="enlace" ${c.id ? `data-ciclo-quitar-ejercicio="${esc(c.id)}"` : `data-ciclo-quitar-campo="${c.campo}"`} aria-label="Quitar el cambio de ${esc(nombre)}">Quitar</button>` : ''}</li>`;
+  }).join('')}</ul>`;
+}
+
+const firmaCiclo = () => JSON.stringify([E.plan, R(), E.registro, E.sesiones, E.inicioSesion, E.descansosMedidos, E.macro, hoy()]);
+const dosisCiclo = e => `${e.series} series de ${e.reps_min} a ${e.reps_max}${e.unidad === 's' ? ' s' : ' reps'}${e.carga_kg != null ? `, ${peso(e.carga_kg)}` : ''}, ${e.rir} en reserva, ${e.descanso_seg} s de descanso`;
+const semanaCicloHtml = plan => primeraSemanaDelBloque(plan).map(d => `<p class="pequeno"><strong>${esc(d.foco)} · ${esc(fechaCorta(d.fecha))} · ~${minutosDe(d)} min</strong></p><ul class="pequeno">${(d.ejercicios || []).map(e => `<li>${esc(e.nombre || indice.porId.get(e.ejercicio_id)?.nombre || 'Ejercicio')}: ${esc(dosisCiclo(e))}</li>`).join('')}</ul>`).join('');
+
+/** Todas las entradas muestran la misma propuesta y avisos. Cancelar no modifica el plan ni el borrador. */
+export function confirmarBloqueSiguiente({ forzar = false, volver = null, alConfirmar = () => {} } = {}) {
+  const original = E, r = planBloqueSiguiente({ forzar });
+  if (!r) { avisar('Todavía no está disponible el siguiente bloque.'); return; }
+  const validacion = r.bloqueado ? null : validarPlan(r.plan, { respuestas: r.respuestas, derivados: r.derivados, indice, hoy: hoy() });
+  const bloqueado = r.bloqueado || !validacion.ok;
+  const avisos = r.bloqueado ? [r.mensaje] : [...validacion.errores, ...validacion.advertencias].map(a => a.mensaje);
+  const firma = firmaCiclo();
+  let consumida = false;
+  const comparacion = compararInicioBloques(E.plan, r.plan);
+  const nombres = ids => ids.map(id => indice.porId.get(id)?.nombre || id).join(', ');
+  abrirHoja({ titulo: 'Así quedaría el siguiente ciclo', volver,
+    nota: bloqueado ? 'Revisa estos avisos antes de armar el bloque.' : `${forzar ? 'El siguiente bloque se adelanta. ' : ''}Parte el ${fechaCorta(r.plan.inicio)}. Lo registrado no cambia. Confirma solo si quieres aplicar esta propuesta.`,
+    contenido: `${avisos.length ? `<div class="aviso ojo"><ul>${[...new Set(avisos)].map(a => `<li>${esc(a)}</li>`).join('')}</ul></div>` : ''}${bloqueado ? '' : `
+      <p class="pequeno"><strong>Primera semana de cada bloque</strong><br>Ahora: ${comparacion.antes.sesiones} sesiones, ${comparacion.antes.series} series.<br>Siguiente: ${comparacion.despues.sesiones} sesiones, ${comparacion.despues.series} series.</p>
+      ${comparacion.entran.length ? `<p class="pequeno">Entran: ${esc(nombres(comparacion.entran))}.</p>` : ''}
+      ${comparacion.salen.length ? `<p class="pequeno">Salen: ${esc(nombres(comparacion.salen))}.</p>` : ''}
+      <h4>Preferencias</h4>${resumenCambiosCicloHtml(R())}
+      ${r.nv.sube ? `<p class="aviso">Subes a nivel ${esc(r.nv.alcanzado)}; el volumen puede aumentar.</p>` : ''}
+      <p class="pequeno">${esc(r.sig?.enfoque || 'Empieza una temporada nueva con las cargas de tus registros.')}</p>
+      <details><summary>Comparar ejercicios, series y descansos</summary><h4>Ahora</h4>${semanaCicloHtml(E.plan)}<h4>Siguiente</h4>${semanaCicloHtml(r.plan)}</details>
+      <p class="pequeno">El bloque llega hasta el ${esc(fechaCorta(r.plan.dias.map(d => d.fecha).sort().at(-1)))}.</p>`}`,
+    opciones: [...(bloqueado ? [] : [{ valor: 'si', nombre: 'Confirmar y armar el bloque' }]), { valor: 'no', nombre: 'Volver sin cambiar' }],
+    alElegir: async valor => {
+      if (valor !== 'si' || consumida || bloqueado) return;
+      consumida = true;
+      if (E !== original || firma !== firmaCiclo()) { avisar('Tus datos cambiaron. Abre de nuevo la propuesta antes de confirmar.'); return; }
+      if (await armarBloqueSiguiente(r)) alConfirmar();
+    },
+  });
 }
 
 /** Botones de las tarjetas. `volver` repinta la vista. */
@@ -165,9 +222,5 @@ export function enlazarTemporada(volver) {
     await cambiarPlan(adelantarDescarga(E.plan, p.semana), `Descarga adelantada: la semana ${p.semana} es de descarga y el bloque termina el ${fechaCorta(sumarDias(p.desde, 6))}.`, nube);
     mostrarSemana(p.semana); guardar(); volver();
   });
-  $('bloque-siguiente')?.addEventListener('click', async ev => {
-    ev.currentTarget.disabled = true;
-    await armarBloqueSiguiente();
-    volver();
-  });
+  $('bloque-siguiente')?.addEventListener('click', ev => confirmarBloqueSiguiente({ volver: ev.currentTarget, alConfirmar: volver }));
 }

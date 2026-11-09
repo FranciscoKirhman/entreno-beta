@@ -2,7 +2,7 @@
 // (nucleo/coach.js), en hojas que suben desde abajo. Siempre se muestra cómo quedaría y se pregunta antes de cambiar.
 // También "Ajustar hoy", que comparten Hoy y la hoja ＋ del Coach.
 import { E, C, hoy, ctxNucleo, cambiarPlan, avisar } from './comun.js';
-import { sesionDe } from '../nucleo/agenda.js';
+import { sesionDe, sesionesParaHoy, nombreSimple } from '../nucleo/agenda.js';
 import { abrirTiempo } from './tiempo-ui.js';
 import { nombreAsistente } from './cuestionario.js';
 import { srcArticulacion } from './articulaciones.js';
@@ -31,7 +31,7 @@ export async function seguir(r, { titulo, alCambiar, volver = null }) {
   if (!r.opciones?.length) { avisar(r.texto); return; }
   const confirma = r.opciones.some(o => o.accion?.tipo === 'confirmar');
   abrirHoja({
-    titulo: confirma ? '¿Lo cambio?' : titulo,
+    titulo: r.titulo || (confirma ? '¿Lo cambio?' : titulo),
     nota: r.texto,
     volver,
     opciones: r.opciones.map((o, i) => {
@@ -39,7 +39,7 @@ export async function seguir(r, { titulo, alCambiar, volver = null }) {
       // Al elegir con qué cambiar un ejercicio, se ve su dibujo o su máquina (también cuando elegirlo ya lo confirma).
       const cambio = o.accion?.tipo === 'confirmar' ? o.accion.accion : o.accion;
       const imagen = cambio?.tipo === 'reemplazar_hoy' ? srcMiniatura(cambio.a) : null;
-      return { valor: String(i), ...(imagen ? { imagen } : { icono: icono(ic) }), clase, nombre: o.etiqueta };
+      return { valor: String(i), ...(imagen ? { imagen } : { icono: icono(ic) }), clase, nombre: o.etiqueta, ...(o.nota ? { detalle: o.nota } : {}) };
     }),
     alElegir: v => seguir(aplicarOpcion(r.opciones[Number(v)].accion, ctxNucleo()), { titulo, alCambiar, volver }),
   });
@@ -49,6 +49,56 @@ export async function seguir(r, { titulo, alCambiar, volver = null }) {
 export const preguntar = (texto, o) => seguir(responder(texto, ctxNucleo()), o);
 /** Una acción directa del entrenador (por ejemplo, {tipo: 'elegir_alternativa', fecha, ejercicio}). */
 export const proponer = (accion, o) => seguir(aplicarOpcion(accion, ctxNucleo()), o);
+
+const mayuscula = t => t.charAt(0).toUpperCase() + t.slice(1);
+const fechaEnPalabras = f => new Date(`${f}T12:00:00Z`).toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', timeZone: 'UTC' }).replace(',', '');
+export const hayOtraSesionParaHoy = () => Boolean(E.plan?.dias?.length && sesionesParaHoy(E.plan, hoy(), { hechas: ctxNucleo().hechas || [] }).length);
+// El último cambio hecho desde Entrenar, para ofrecer Deshacer ahí mismo mientras siga siendo el último del plan.
+let cambioDeHoy = null;
+export const ultimoCambioDeHoy = () => (cambioDeHoy && E.cambiosPlan?.[0]?.cuando === cambioDeHoy.cuando && cambioDeHoy.fecha === hoy() ? cambioDeHoy.texto : null);
+export async function deshacerCambioDeHoy(alCambiar) {
+  const copia = E.cambiosPlan?.[0];
+  if (!copia || copia.cuando !== cambioDeHoy?.cuando) return;
+  cambioDeHoy = null;
+  const aviso = await cambiarPlan(structuredClone(copia.plan), null, nube);
+  if (aviso) avisar(aviso);
+  alCambiar?.();
+}
+
+/**
+ * Entrenar hoy otra sesión, o entrenar en un día sin sesión: las de los próximos días, cada una con lo que pasa con la de
+ * hoy. Tocar una ya es el sí: la pantalla muestra de inmediato el entrenamiento nuevo, con Deshacer al lado. Los días
+ * marcados como que casi nunca puede no se discuten: si la persona lo pide aquí, es que hoy sí puede.
+ */
+export function elegirSesionDeHoy({ volver = null, alCambiar, alVacia = null } = {}) {
+  const f = hoy(), ctx = ctxNucleo(), actual = sesionDe(E.plan, f);
+  const opciones = sesionesParaHoy(E.plan, f, { hechas: ctx.hechas || [] });
+  const conSesion = actual?.ejercicios?.length;
+  abrirHoja({
+    titulo: '¿Qué entrenas hoy?',
+    volver,
+    opciones: [
+      ...opciones.map((o, i) => ({ valor: String(i), imagen: o.ejercicios?.[0]?.ejercicio_id ? srcMiniatura(o.ejercicios[0].ejercicio_id) : null, icono: icono('pesa'), nombre: mayuscula(nombreSimple(o.foco)),
+        detalle: conSesion ? `${mayuscula(nombreSimple(actual.foco))} pasa al ${fechaEnPalabras(o.fecha)}` : `Estaba para el ${fechaEnPalabras(o.fecha)}` })),
+      ...(alVacia ? [{ valor: 'vacia', icono: icono('mas'), nombre: 'Sesión vacía', detalle: 'Eliges los ejercicios tú' }] : []),
+    ],
+    alElegir: async v => {
+      if (v === 'vacia') return alVacia?.();
+      const o = opciones[Number(v)];
+      const r = aplicarOpcion({ tipo: 'confirmar', accion: o.accion }, ctxNucleo());
+      if (!r.plan) { avisar(r.texto); return; }
+      // El plan del teléfono cambia al tiro y la pantalla lo muestra sin esperar al servidor, que confirma después.
+      const guardado = cambiarPlan(r.plan, r.texto, nube);
+      if (E.plan === r.plan) {
+        E.mensaje = null;
+        cambioDeHoy = { cuando: E.cambiosPlan?.[0]?.cuando, fecha: f, texto: conSesion ? `${mayuscula(nombreSimple(actual.foco))} pasó al ${fechaEnPalabras(o.fecha)}.` : `La adelantaste desde el ${fechaEnPalabras(o.fecha)}.` };
+        alCambiar?.();
+      }
+      const aviso = await guardado;
+      if (aviso) { avisar(aviso); alCambiar?.(); }
+    },
+  });
+}
 
 const articulo = z => (z === 'lumbar' ? 'la zona lumbar' : `${['muneca', 'cadera', 'rodilla'].includes(z) ? 'la' : 'el'} ${C.zonas.articulaciones.find(x => x[0] === z)[1].toLowerCase()}`);
 

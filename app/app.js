@@ -247,7 +247,7 @@ const PESTANA = { eleccion: 'entrenar', hoy: 'entrenar', rutina: 'entrenar', sem
 let antesDeFicha = null, finEntrada = null, extraActual = null, primeraVista = true, retornoInicial = null;
 let planConImagenes;
 function ir(vista, extra) {
-  if (vista === 'hoy' && primeraVista && E.plan) vista = 'eleccion';
+  if (vista === 'hoy' && primeraVista && eleccionPendiente()) vista = 'eleccion';
   if (VISTAS_CON_PLAN.includes(vista) && (!E.plan)) vista = 'inicio';
   if (VISTAS_CON_PLAN.includes(vista) && E.plan?.bloqueado) { vistaBloqueada(); return; }
   if (vista === 'plan' && E.plan?.libre) vista = 'inicio'; // sin plan todavía: armarlo o seguir sin plan
@@ -256,13 +256,14 @@ function ir(vista, extra) {
   const anterior = E.vista;
   // La sesión es una pantalla aparte: llegar a 'hoy' sin sesión en curso ni pedirla (al abrir la app, después de un
   // cambio del Coach) muestra Entrenar. Volver de una ficha o del banco sí vuelve a la sesión.
-  if (vista === 'hoy' && !extra && !sesionEnCurso() && !['ejercicio', 'banco', 'hoy'].includes(anterior)) vista = 'entrenar';
+  if (vista === 'hoy' && !extra && !sesionEnCurso() && (primeraVista || !['ejercicio', 'banco', 'hoy'].includes(anterior))) vista = 'entrenar';
   document.body.classList.toggle('en-sesion', vista === 'hoy');
   // Al abrir una ficha se recuerda dónde estaba la persona; al volver, queda en el mismo ejercicio y a la misma altura.
   if (vista === 'ejercicio' && anterior !== 'ejercicio') antesDeFicha = { vista: anterior, y: scrollY, id: extra?.id };
   const volviendo = anterior === 'ejercicio' && antesDeFicha?.vista === vista ? antesDeFicha : null;
   if (vista !== 'ejercicio') antesDeFicha = null;
-  extraActual = extra;
+  // Un mensaje que se manda al abrir el Coach se manda una vez: repintar o volver a abrir la app no lo repite.
+  extraActual = vista === 'coach' && (typeof extra === 'string' || extra?.plan) ? null : extra;
   E.vista = vista; guardar();
   $('nav').hidden = !E.plan || E.plan.bloqueado;
   const pestana = ['ejercicio', 'resumen'].includes(vista) ? PESTANA[extra?.desde] || extra?.desde || 'hoy' : vista === 'seccion' && E.seccionDesde === 'miplan' ? 'miplan' : PESTANA[vista] || vista;
@@ -289,7 +290,8 @@ function ir(vista, extra) {
   if (vista === 'hoy' && (vista !== anterior || primeraVista) && !volviendo && !extra?.ej && !retornoInicial) requestAnimationFrame(irAlEjercicioEnCurso);
   if (retornoInicial?.vista === vista) {
     const y = retornoInicial.y; retornoInicial = null;
-    requestAnimationFrame(() => scrollTo(0, y));
+    // El chat siempre abre en lo último: con el teclado abierto la posición guardada es 0, el primer mensaje.
+    if (vista !== 'coach') requestAnimationFrame(() => scrollTo(0, y));
   }
   primeraVista = false;
   if (volviendo) requestAnimationFrame(() => {
@@ -310,7 +312,8 @@ function ir(vista, extra) {
   actualizarPantalla(); // con una sesión en curso, la pantalla no se apaga sola
 }
 // Tocar una pestaña abre su portada (en Progreso, sin la subpantalla que quedó abierta), como Hevy.
-$('nav').addEventListener('click', e => { const b = e.target.closest('[data-ir]'); if (!b) return; if (b.dataset.ir === 'miplan') elegirSeccionProgreso(null); ir(b.dataset.ir === 'hoy' && E.plan ? 'eleccion' : b.dataset.ir); });
+// Con una sesión en curso, tocar Entrenar vuelve a ella.
+$('nav').addEventListener('click', e => { const b = e.target.closest('[data-ir]'); if (!b) return; if (b.dataset.ir === 'miplan') elegirSeccionProgreso(null); if (b.dataset.ir === 'entrenar' && sesionEnCurso()) return ir('hoy', { sesion: true }); ir(b.dataset.ir); });
 // El enlace de los perfiles también sirve si la app ya estaba abierta (solo cambia lo que va después del #).
 addEventListener('hashchange', () => abrirEnlacePerfiles());
 

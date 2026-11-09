@@ -74,11 +74,12 @@ const valida = (f, { noPuedo, hechas }) => !noPuedo.includes(diaSemana(f)) && !h
  * Pone la sesión de "fecha" en "destino". Si "destino" ya tiene una sesión, esa pasa al siguiente día en que se puede
  * entrenar, y así en cadena hasta caer en un día libre (como correr las sesiones). Nunca toca lo ya hecho.
  */
-export function correr(plan, fecha, destino, { noPuedo = [], hechas = [], hasta } = {}) {
+export function correr(plan, fecha, destino, { noPuedo = [], hechas = [], hasta, elegido = false } = {}) {
   if (hechas.includes(fecha)) return null;
   const nuevo = structuredClone(plan);
   let mover = sesionDe(nuevo, fecha), a = destino;
-  if (!mover || !valida(destino, { noPuedo, hechas })) return null;
+  // elegido: el día lo tocó la persona, así que vale aunque lo haya marcado como que casi nunca puede.
+  if (!mover || (elegido ? hechas.includes(destino) : !valida(destino, { noPuedo, hechas }))) return null;
   const cambios = [];
   const limite = hasta || sumarDias(destino, 14);
   while (mover) {
@@ -253,7 +254,8 @@ export function calendarioNoHecha(plan, fecha, { hoy, noPuedo = [], hechas = [],
     const d = sesionDe(plan, f);
     const tipo = f === fecha ? 'faltada' : hechas.includes(f) ? 'hecha' : d && marcas[f] === 'saltada' ? 'saltada' : d ? 'sesion'
       : noPuedo.includes(diaSemana(f)) ? 'no_puedo' : f < hoy ? 'pasado' : 'libre';
-    dias.push({ fecha: f, tipo, ...(d ? { foco: d.foco } : {}), ...(letras.has(f) ? { letra: letras.get(f) } : {}), elegible: tipo === 'libre' && f >= hoy });
+    // Los días marcados como que casi nunca puede también se tocan: elegirlo es decir que ese día sí puede.
+    dias.push({ fecha: f, tipo, ...(d ? { foco: d.foco } : {}), ...(letras.has(f) ? { letra: letras.get(f) } : {}), elegible: (tipo === 'libre' || tipo === 'no_puedo') && f >= hoy });
   }
   return { dias };
 }
@@ -270,7 +272,7 @@ export function alternativaEnFecha(plan, fecha, destino, ctx) {
   const s = sesionDe(plan, fecha);
   if (!s) return { error: `El ${diaCorto(fecha)} no tenías sesión.` };
   if ((ctx.hechas || []).includes(fecha)) return { error: `${s.foco} del ${diaCorto(fecha)} ya está registrada como hecha.` };
-  const r = correr(plan, fecha, destino, { noPuedo: ctx.respuestas?.dias_no_puedo || [], hechas: ctx.hechas || [], hasta: sumarDias(ctx.hoy, 20) });
+  const r = correr(plan, fecha, destino, { noPuedo: ctx.respuestas?.dias_no_puedo || [], hechas: ctx.hechas || [], hasta: sumarDias(ctx.hoy, 20), elegido: true });
   if (!r) return { error: `No puedo poner ${s.foco} el ${diaCorto(destino)}.` };
   return { id: `fecha:${destino}`, titulo: `Hacer ${s.foco} el ${diaCorto(destino)}`, detalle: demas(r.cambios, fecha), diferencia: 'La fecha la elegiste tú.', avisos: r.avisos, cambios: r.cambios, plan: r.plan, destino };
 }
