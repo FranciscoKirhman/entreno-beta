@@ -36,7 +36,9 @@ export function diasQueQuedan(actual, nuevo, hoy, ctx = null) {
   const descartados = [], quitados = [];
   if (!ctx?.respuestas || !ctx?.indice) return { dias: previos, descartados, quitados };
   const { respuestas: r, derivados: d, indice } = ctx;
-  const noPuedo = new Set(r.dias_no_puedo || []), prohibidos = new Set(r.prohibidos || []);
+  // noPuedoAntes: lo marcado antes de este cambio. Solo sale lo que cae en un día recién marcado; si ya estaba marcado y la
+  // sesión sigue ahí, es porque la persona entrena ese día.
+  const noPuedo = new Set((r.dias_no_puedo || []).filter(x => !(ctx.noPuedoAntes || []).includes(x))), prohibidos = new Set(r.prohibidos || []);
   const lugares = r.lugares?.length ? r.lugares : [{ nombre: 'Casa', equipamiento: [] }];
   const rirMinimo = d ? Math.max(d.rir_minimo || 0, d.nivel === 'principiante' ? 2 : 0) : 0;
   const dias = [];

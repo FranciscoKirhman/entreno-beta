@@ -152,9 +152,9 @@ export function alternativasNoHecha(plan, fecha, ctx) {
     const destino = r.cambios.find(c => c.de === fecha)?.a;
     opciones.push({ id, titulo, detalle: demas(r.cambios, fecha), diferencia, avisos: r.avisos || [], cambios: r.cambios, plan: r.plan, destino });
   };
-  // A. Hacerla hoy (si hoy se puede): las demás siguen igual, o la de hoy se corre.
-  if (fecha < hoy && valida(hoy, regla)) {
-    const r = correr(plan, fecha, hoy, { ...regla, hasta });
+  // A. Hacerla hoy, aunque hoy esté marcado: quien está mirando esto puede elegirlo. Las demás siguen igual, o la de hoy se corre.
+  if (fecha < hoy && !hechas.includes(hoy)) {
+    const r = correr(plan, fecha, hoy, { ...regla, hasta, elegido: true });
     agregar('hoy', r, `Hacer ${s.foco} hoy`, r?.cambios.length > 1 ? 'Recuperas hoy y la sesión de hoy se corre.' : 'Recuperas hoy, sin mover nada más.');
   }
   // B. Ponerla en el día de la próxima sesión y correr las siguientes.

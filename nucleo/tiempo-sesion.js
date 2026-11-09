@@ -20,6 +20,16 @@ const MAX_SERIES = 5, CARDIO_MIN = 10, CARDIO_EXTRA = 15, CARDIO_TOPE = 45;
 const PASOS_EXTRA = ['accesorio', [1, 1], 'accesorio', ['cardio'], [2, 1], 'accesorio', [3, 1], [1, 2]];
 /** Series de trabajo por sesión, como máximo razonable, según el nivel. */
 export const TOPE_SERIES_SESION = { principiante: 20, intermedio: 26, avanzado: 30 };
+/**
+ * Más de un cuarto de las series es demasiado para recortar sin que la persona lo pida. En la beta (9 de noviembre de
+ * 2026) el ritmo topado en 1,7 dejaba casi toda sesión normal de 17 a 20 series en 10, aunque sus sesiones reales cabían
+ * en su tiempo. Con un recorte así no hay aviso: la fila de Ajustar tiempo sigue a la vista con los minutos.
+ */
+export const RECORTE_MAX = 0.25;
+export function recorteGrande(antes = [], despues = []) {
+  const series = xs => xs.reduce((a, e) => a + (Number(e.series) || 0), 0), a = series(antes);
+  return a > 0 && (a - series(despues)) / a > RECORTE_MAX;
+}
 /** Ritmo personal: mediana de las últimas sesiones, entre estos límites, con un mínimo de sesiones que sirvan. */
 export const RITMO = { min: 0.9, max: 1.7, sesiones: 8, minimo: 3 };
 

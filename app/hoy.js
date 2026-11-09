@@ -21,7 +21,7 @@ import { ajusteDelDia, previasDeHoy } from '../nucleo/fatiga-sesion.js';
 import { sesionViva, aplicarViva } from '../nucleo/sesion-viva.js';
 import { restanAceptar, contarSegundo, huellaAjuste, ajusteVigente } from '../nucleo/cuenta-viva.js';
 import { alternativas } from '../nucleo/checkin.js';
-import { filasTrasAjuste, ajustarTiempo, hechasDelDia, duracionReal, minutosRestantes, resumenSesion } from '../nucleo/tiempo-sesion.js';
+import { filasTrasAjuste, ajustarTiempo, hechasDelDia, duracionReal, minutosRestantes, resumenSesion, recorteGrande } from '../nucleo/tiempo-sesion.js';
 import { factorRitmo, minutosDe as minutosARitmo, textoRitmo, accesoriosHoy, topeSeriesHoy } from './ritmo.js';
 import { descansosDeSesion, paraGuardar as descansosParaGuardar } from '../nucleo/descansos.js';
 import { TIPOS_SERIE, tipoDe, etiquetas, cuantasFilas, anterior, cifras, tipoParaGuardar } from '../nucleo/registro.js';
@@ -840,6 +840,7 @@ function propuestaTiempo(dia, f) {
   const crece = r.agregados.length > 0 && !r.quitados.length;
   // Cabía igual: lo opcional sale porque la persona eligió mantener su tiempo sin lo opcional (preguntas del coach).
   const porPedido = opcionales.length > 0 && ahora <= quedan + 5;
+  if (!crece && !porPedido && recorteGrande(base.ejercicios, r.ejercicios)) return null;
   return {
     id: `tiempo:${f}`, tipo: 'tiempo', ejercicio_id: null, nombre: 'Tiempo de hoy',
     accion: crece ? `sumar ${lista(r.agregados.map(nombre).map(x => x.toLowerCase()))} como opcional` : `ajustar la sesión a tus ${disponibles} minutos`,
