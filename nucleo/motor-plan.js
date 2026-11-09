@@ -104,17 +104,41 @@ export function ayudaInicial(registros) {
 
 const n = v => (v === null || v === undefined || v === '' ? null : Number(v));
 
+/**
+ * Equipos cuyo kilo depende de la máquina: el de otra máquina u otro gimnasio no sirve para esta. En la beta, la patada
+ * de glúteo en máquina de junio decía 54 kg × 15 y, en otra máquina cinco meses después, salieron 18. Barras,
+ * mancuernas y discos pesan lo mismo en todas partes (docs/51-pesos-y-reserva.md).
+ */
+export const EQUIPO_DE_MAQUINA = new Set(['maquinas', 'poleas', 'smith', 'prensa', 'jalon', 'extension_cuadriceps', 'curl_femoral', 'abductora', 'hip_thrust_maquina', 'kickback_maquina']);
+export const deMaquina = ej => (ej?.equipamiento || []).some(x => EQUIPO_DE_MAQUINA.has(x));
+const mediana = xs => { const s = [...xs].sort((a, b) => a - b), k = s.length >> 1; return s.length % 2 ? s[k] : (s[k - 1] + s[k]) / 2; };
+/** Lo de hace más de 8 semanas (registrosParaCarga lo marca): sirve con cuidado, y en una máquina no sirve. */
+const soloAntiguo = registros => registros.length > 0 && registros.every(s => s.antiguo);
+
 /** Repeticiones hasta el fallo que tenía la serie: reps + reserva (de RIR o de RPE). */
 const repsAlFallo = s => n(s.reps) + (n(s.rir) != null ? n(s.rir) : n(s.rpe) != null ? Math.max(0, 10 - n(s.rpe)) : 2);
 export const e1rm = s => n(s.carga_kg) * (1 + repsAlFallo(s) / 30); // Epley
 
-/** Carga para hacer `reps` dejando `rir` en reserva, según el mejor registro reciente. Nunca más de un 15% sobre
- *  lo más pesado que ya levantó: si un dato viene mal, el plan no puede mandar a levantar de más. */
+/**
+ * El máximo estimado con que se calculan el peso del plan y las repeticiones en gris: la mediana de las series de trabajo
+ * de las dos últimas sesiones del ejercicio. Antes era la mejor serie (de las dos últimas sesiones para las repeticiones y
+ * de 8 semanas, o de todo el historial, para el peso del plan). Probado con todo el historial de la beta (9 de noviembre
+ * de 2026), la mejor serie creía que quedaban 1,5 a 2,2 repeticiones más de las que de verdad quedaban, y en la mitad de
+ * las series 2 o más: la mejor serie es el mejor día, no el de hoy. La mediana acierta en promedio.
+ */
+export function e1rmReferencia(registros = []) {
+  const validas = registros.filter(s => n(s.carga_kg) > 0 && n(s.reps) > 0);
+  if (!validas.length) return null;
+  const ultimas = [...new Set(validas.map(s => s.fecha || ''))].sort().slice(-2);
+  return mediana(validas.filter(s => ultimas.includes(s.fecha || '')).map(e1rm));
+}
+
+/** Carga para hacer `reps` dejando `rir` en reserva, según las dos últimas sesiones (e1rmReferencia). Nunca más de un
+ *  15% sobre lo más pesado que ya levantó: si un dato viene mal, el plan no puede mandar a levantar de más. */
 export function cargaInicial(registros, reps, rir, incremento, maximo) {
   const validas = registros.filter(s => n(s.carga_kg) > 0 && n(s.reps) > 0);
   if (!validas.length || !incremento) return null;
-  const mejor = Math.max(...validas.map(e1rm));
-  let carga = mejor / (1 + (reps + rir) / 30);
+  let carga = e1rmReferencia(validas) / (1 + (reps + rir) / 30);
   const masPesada = Math.max(...validas.map(s => n(s.carga_kg)));
   carga = Math.min(carga, Math.max(masPesada * 1.15, masPesada + incremento));
   carga = Math.floor(carga / incremento) * incremento;
@@ -130,7 +154,8 @@ export function registrosParaCarga(series, id, fecha, semanas = 8) {
   const recientes = previas.filter(s => s.fecha && s.fecha >= desde);
   if (recientes.length) return recientes;
   const ultima = previas.reduce((m, s) => ((s.fecha || '') > m ? s.fecha : m), '');
-  return previas.filter(s => (s.fecha || '') === ultima);
+  // Van marcadas: con barra o mancuernas sirven con cuidado; en una máquina, no (cargaSugerida, repsObjetivo).
+  return previas.filter(s => (s.fecha || '') === ultima).map(s => ({ ...s, antiguo: true }));
 }
 
 /** La carga de un ejercicio que el plan no trae (recién cambiado, agregado o de un plan importado): la de su historial
@@ -138,14 +163,23 @@ export function registrosParaCarga(series, id, fecha, semanas = 8) {
  *  descarga pide más reserva, así que sale más liviana que copiar el peso de una semana normal. */
 export function cargaSugerida({ e, ej, registros = [], lugar = null }) {
   if (!ej || (e.unidad && e.unidad !== 'reps') || !(e.reps_min > 0)) return null;
+  const antiguo = soloAntiguo(registros);
+  // Lo de hace meses en una máquina o polea puede ser de otra máquina: que la persona elija, y la app aprende de lo que
+  // anote (el consejo de cada serie y Para la próxima). Así no vuelve a pedir 57,5 kg donde salen 18.
+  if (antiguo && deMaquina(ej)) return null;
   if (esAsistido(ej)) return ayudaInicial(registros);
   const maxMancuerna = ej.equipamiento.includes('mancuernas') ? topeMancuerna(ej, lugar) : null;
-  return cargaInicial(registros, Math.min(e.reps_min + 1, e.reps_max ?? Infinity), e.rir ?? 2, incrementoPara(ej, lugar), maxMancuerna);
+  const inc = incrementoPara(ej, lugar);
+  const carga = cargaInicial(registros, Math.min(e.reps_min + 1, e.reps_max ?? Infinity), e.rir ?? 2, inc, maxMancuerna);
+  if (carga == null || !antiguo || !inc) return carga;
+  // Con barra o mancuernas, lo de hace más de 8 semanas parte cerca de un 10% más liviano: después de una pausa cuesta
+  // volver. Al escalón más cercano, sin bajar de uno.
+  return Number(Math.min(carga, Math.max(inc, Math.round((carga * 0.9) / inc) * inc)).toFixed(2));
 }
 
 /**
  * Las repeticiones que se piden en una serie de trabajo: las que dejan la reserva del plan (RIR) con ese peso, según el
- * mejor máximo estimado de las dos últimas sesiones del ejercicio, dentro del rango. Antes se pedía siempre el tope del
+ * máximo estimado de las dos últimas sesiones del ejercicio (la mediana: e1rmReferencia), dentro del rango. Antes se pedía siempre el tope del
  * rango, pero el peso se calcula para pocas repeticiones sobre el mínimo (cargaSugerida): con 70 kg en 6 a 10 y RIR 2
  * el gris decía 10 y la serie terminaba al fallo (remo con barra en la beta, 20 de octubre de 2026: 8, 10 y 9 a RPE 9,5 a 10).
  * Sin peso, sin historial o en un asistido (el peso es la ayuda), el tope del rango, como antes.
@@ -153,9 +187,11 @@ export function cargaSugerida({ e, ej, registros = [], lugar = null }) {
  * @param carga     kg de la serie (lo que está en gris)
  * @param registros series de trabajo anteriores del ejercicio [{fecha, carga_kg, reps, rir?, rpe?}] (registrosParaCarga)
  */
-export function repsObjetivo({ e, carga, registros = [], asistido = false }) {
+export function repsObjetivo({ e, carga, registros = [], asistido = false, ej = null }) {
   const tope = e.reps_max ?? e.reps_min ?? null;
   if (asistido || (e.unidad && e.unidad !== 'reps') || !(e.reps_min > 0) || !tope) return tope;
+  // Lo de hace meses en una máquina no dice cuántas salen con esta: el rango, y la persona ajusta.
+  if (soloAntiguo(registros) && deMaquina(ej)) return tope;
   // Sin peso (dominadas, fondos): las que salían hasta el fallo en las dos últimas sesiones, menos la reserva pedida.
   // Antes era siempre el tope, y la serie siguiente a un "sigue igual" pedía más de lo que se acababa de hacer.
   if (!(n(carga) > 0)) {
@@ -167,9 +203,7 @@ export function repsObjetivo({ e, carga, registros = [], asistido = false }) {
   }
   const validas = registros.filter(s => n(s.carga_kg) > 0 && n(s.reps) > 0);
   if (!validas.length) return tope;
-  const ultimas = [...new Set(validas.map(s => s.fecha || ''))].sort().slice(-2);
-  const mejor = Math.max(...validas.filter(s => ultimas.includes(s.fecha || '')).map(e1rm));
-  const reps = Math.floor(30 * (mejor / n(carga) - 1) + 1e-9) - (e.rir ?? 2);
+  const reps = Math.floor(30 * (e1rmReferencia(validas) / n(carga) - 1) + 1e-9) - (e.rir ?? 2);
   return Math.max(e.reps_min, Math.min(tope, reps));
 }
 
@@ -336,7 +370,9 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     return cand.sort((a, b) => puntaje(a) - puntaje(b) || a.id.localeCompare(b.id))[0];
   };
 
-  const historialDe = id => historial.filter(s => s.ejercicio_id === id);
+  // Para el peso cuentan las últimas 8 semanas, hoy incluido, o la última vez marcada como antigua (registrosParaCarga):
+  // antes contaba todo el historial, y un récord de hace un año mandaba sobre cómo viene ahora.
+  const historialDe = id => registrosParaCarga(historial, id, hoy ? sumarDias(hoy, 1) : null);
   const cargasRef = (r.cargas_referencia || []).map(c => ({ ejercicio_id: c.ejercicio_id, carga_kg: c.peso_kg, reps: c.repeticiones, rir: 2 }));
   /** Un ejercicio del plan con su prescripción y, si hay historial, su carga inicial. */
   const armar = (ej, prioridad, orden, principal = false) => {

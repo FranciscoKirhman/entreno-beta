@@ -15,7 +15,7 @@ import { discosPorLado, discosDisponibles, BARRAS_KG, BARRAS_LB } from '../nucle
 import { checklist } from '../nucleo/suplementos.js';
 import { enlaceVideo } from '../nucleo/explicar.js';
 import { sesionDe } from '../nucleo/agenda.js';
-import { incrementoPara, cargaSugerida, registrosParaCarga, prescripcion, repsObjetivo, lugaresDe, conDosMancuernas } from '../nucleo/motor-plan.js';
+import { incrementoPara, cargaSugerida, registrosParaCarga, prescripcion, repsObjetivo, lugaresDe, conDosMancuernas, deMaquina } from '../nucleo/motor-plan.js';
 import { prioridadEsfuerzo, consejoSerie } from '../nucleo/series.js';
 import { ajusteDelDia, previasDeHoy } from '../nucleo/fatiga-sesion.js';
 import { sesionViva, aplicarViva } from '../nucleo/sesion-viva.js';
@@ -306,6 +306,11 @@ const fijarFilas = (f, id, n) => { ((E.filas ||= {})[f] ||= {})[id] = n; };
 // Con la forma de anotar las mancuernas (Más, Unidades): con "El par", el escalón de las de dos mancuernas es 4.
 const lugarDe = dia => { const l = lugaresDe(R()); return l.find(x => x.nombre === dia?.lugar) || l.find(x => x.principal) || l[0]; };
 const deTrabajoFila = x => ['normal', 'fallo'].includes(tipoDe(x));
+/** Lo de la vez anterior sirve para el peso en gris si es de las últimas 8 semanas, o con barra o mancuernas. En una
+ *  máquina o polea, lo de hace meses puede ser de otra máquina (nucleo/motor-plan.js: deMaquina): la patada de glúteo
+ *  mostraba 42,5 kg de junio y salían 18. Se sigue viendo en "Anterior", con su fecha. */
+const anteriorSirve = (ej, fechaPrev, f) => !fechaPrev || !deMaquina(ej) || fechaPrev >= sumarDias(f, -56);
+const fechaAnterior = (fechaPrev, f) => (fechaPrev && fechaPrev < sumarDias(f, -28) ? new Date(`${fechaPrev}T12:00:00Z`).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', timeZone: 'UTC' }).replace('.', '') : '');
 /**
  * El peso de un ejercicio según el plan o, si el plan no lo trae (recién cambiado o de un plan importado), el que sale
  * de su historial para las repeticiones y la reserva de hoy (nucleo/motor-plan.js: cargaSugerida). Antes se copiaba el
@@ -360,7 +365,8 @@ function repsObjetivoDe(e, kg, f, dia) {
   if (!e.ejercicio_id || e.unidad === 'm') return e.reps_max;
   const delDia = dia ? cargaHoyDe(e, dia, f) : null;
   const carga = delDia?.fatiga && Number(kg) === delDia.kg ? delDia.fatiga.base : kg;
-  return repsObjetivo({ e, carga, asistido: esAsistido(indice.porId.get(e.ejercicio_id)),
+  const ej = indice.porId.get(e.ejercicio_id);
+  return repsObjetivo({ e, carga, asistido: esAsistido(ej), ej,
     registros: registrosParaCarga(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f) });
 }
 /**
@@ -371,7 +377,8 @@ function aproximacionesHoy(dia, e, lista, f) {
   const plan = aproximacionesDelPlan(dia, e);
   if (plan.length) return plan;
   const ej = indice.porId.get(e.ejercicio_id);
-  const prev = e.ejercicio_id ? anterior(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f)?.series[0] : null;
+  const ant = e.ejercicio_id ? anterior(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f) : null;
+  const prev = anteriorSirve(ej, ant?.fecha, f) ? ant?.series[0] : null;
   const kgTrabajo = (lista || []).find(x => deTrabajoFila(x) && x.kg != null)?.kg ?? cargaPlanDe(e, dia, f) ?? prev?.carga_kg ?? null;
   // Con el cuerpo (dominadas, fondos) o con ayuda no hay "la mitad del peso": repeticiones fáciles (calentamientoCorporal).
   return seriesDeCalentamiento(kgTrabajo, { incremento: (ej && incrementoPara(ej, lugarDe(dia))) || 2.5, barra: ej?.equipamiento.includes('barra_rack') ? 20 : 0, esquema: ajuste('esquemaCal'), modo: modoCalentamiento(ej), repsMin: e.reps_min });
@@ -1052,7 +1059,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     // historial si el plan no trae peso) o la vez anterior.
     // Las de calentamiento puestas por la app traen su peso y repeticiones en gris (aproximacionesHoy).
     const sug = r.aprox != null ? aprox[r.aprox] : null;
-    const kgGris = trabajo ? ((!r.hecho && ajusteKg ? ajusteKg.kg : null) ?? kgHoy ?? cargaPlan ?? prev?.carga_kg ?? null) : sug?.kg ?? null;
+    const kgGris = trabajo ? ((!r.hecho && ajusteKg ? ajusteKg.kg : null) ?? kgHoy ?? cargaPlan ?? (anteriorSirve(ej, previas?.fecha, f) ? prev?.carga_kg : null) ?? null) : sug?.kg ?? null;
     if (trabajo && r.kg != null) kgHoy = r.kg;
     if (trabajo && r.hecho && r.consejo?.kg != null) kgHoy = r.consejo.kg; // el peso que sugirió el consejo pasa al gris
     if (trabajo && r.hecho && ajusteKg && (r.t || 0) > ajusteKg.t) ajusteKg = null; // ya se hizo una serie después del ajuste
@@ -1065,7 +1072,9 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     // Debajo, el esfuerzo de esa vez, como Hevy ("@ 9 rpe").
     const rpePrev = prev && !seg && !dist ? prev.rpe ?? (prev.rir != null ? 10 - prev.rir : null) : null;
     const esfPrev = rpePrev != null && conEsfuerzo ? `@ ${textoEsfuerzo(deRpe(rpePrev, modoEsfuerzo(R())), modoEsfuerzo(R()))} ${modoEsfuerzo(R()) === 'rir' ? 'rir' : 'rpe'}` : '';
-    const antesHtml = `${esc(antes)}${esfPrev ? `<small class="antes-esf">${esc(esfPrev)}</small>` : ''}`;
+    // Lo de hace más de 4 semanas lleva su fecha: "Anterior" puede ser de meses atrás.
+    const cuando = antes ? fechaAnterior(previas?.fecha, f) : '';
+    const antesHtml = `${esc(antes)}${esfPrev ? `<small class="antes-esf">${esc(esfPrev)}</small>` : ''}${cuando ? `<small class="antes-esf">${esc(cuando)}</small>` : ''}`;
     // Como en Hevy, tocar lo de la vez anterior lo copia a la fila (sin marcarla).
     const copiar = prev && !r.hecho && antes ? ` data-copiar="${id}" data-i="${i}" data-kg="${prev.carga_kg ?? ''}" data-reps="${seg ? prev.duracion_seg ?? prev.reps ?? '' : dist ? prev.distancia_m ?? '' : prev.reps ?? ''}"` : '';
     return `<div class="serie-contenedor"><button type="button" class="quitar-serie" data-quitar-serie="${id}" data-i="${i}" aria-label="Quitar la serie ${etiq[i]} de ${esc(e.nombre || ej?.nombre || id)}" tabindex="-1" hidden>Quitar</button><div class="serie tipo-${t}${r.hecho ? ' hecha' : ''}${seg ? ' seg' : dist ? ' dist' : !conEsfuerzo ? ' sin-esfuerzo' : ''}${r.record?.length && r.hecho ? ' con-record' : ''}">
@@ -1675,10 +1684,11 @@ function enlazar(ir, dia) {
   // vez anterior en esa misma serie.
   function sugerencia(e, lista, i) {
     const posicion = lista.slice(0, i).filter(x => deTrabajo(tipoDe(x))).length;
-    const prev = e.ejercicio_id ? anteriorEj(e.ejercicio_id, f, dia.foco)?.series[posicion] : null;
+    const ant = e.ejercicio_id ? anteriorEj(e.ejercicio_id, f, dia.foco) : null, prev = ant?.series[posicion] ?? null;
     const hoyAntes = [...lista.slice(0, i)].reverse().find(x => deTrabajo(tipoDe(x)) && x.kg != null);
     // Si el consejo de la serie anterior sugirió otro peso, ese es el que va (lo que se ve en gris).
-    return { kg: (hoyAntes?.hecho ? hoyAntes.consejo?.kg : null) ?? hoyAntes?.kg ?? cargaHoyDe(e, dia, f).kg ?? prev?.carga_kg ?? null, prev };
+    const delAnterior = anteriorSirve(indice.porId.get(e.ejercicio_id), ant?.fecha, f) ? prev?.carga_kg : null;
+    return { kg: (hoyAntes?.hecho ? hoyAntes.consejo?.kg : null) ?? hoyAntes?.kg ?? cargaHoyDe(e, dia, f).kg ?? delAnterior ?? null, prev };
   }
   function marcarSerie(id, i) {
     const { e, k } = ejercicioDe(id);

@@ -6,7 +6,7 @@
 // se cerraba y lo que salía bien quedaba anotado sin punto, así que no se veía nada. El guardado del plan también se
 // anota aquí: el rechazo del servidor con punto rojo y, cuando por fin se guarda, que quedó en la cuenta (Francisco,
 // 5 de noviembre de 2026: "sincronicé pero no salió en la campana").
-import { E, guardar, esc, avisar, alGuardarPlanCuenta } from './comun.js';
+import { E, guardar, esc, avisar, alGuardarPlanCuenta, alAvisar, configurarAvisos } from './comun.js';
 import { abrirHoja } from './hoja.js';
 import { estadoCola, subirPendientes } from './cola.js';
 import * as nube from './nube.js';
@@ -35,6 +35,22 @@ export function anotarSinc(texto, { problema = false, resuelve = false, tipo = n
   pintarCampana();
 }
 
+/**
+ * Los avisos flotantes también quedan aquí, como en el centro de notificaciones del teléfono: se ven solo unos
+ * segundos, así que lo que dijeron (un cambio del plan, un ajuste de la sesión) se puede volver a leer. Lo que solo
+ * avisa que algo está en curso ("Sincronizando…") no se guarda. Un aviso de cuidado deja el punto hasta abrirla.
+ */
+alAvisar.add(({ texto, tipo, cuando }) => {
+  if (/…$/.test(String(texto).trim())) return;
+  const lista = E.avisosSinc ||= [];
+  if (lista[0]?.texto === texto) lista[0].cuando = cuando;
+  else lista.unshift({ texto, cuando, problema: false, leido: tipo !== 'ojo', tipo: 'aviso' });
+  lista.length = Math.min(lista.length, MAX);
+  guardar();
+  pintarCampana();
+});
+configurarAvisos(cuando => abrirCampana(document.getElementById('campana'), { desde: cuando ? Date.parse(cuando) : null }));
+
 const conPunto = t => { const s = String(t || '').trim(); return /[.!?]$/.test(s) ? s : `${s}.`; };
 // El guardado del plan en la cuenta (app/comun.js, cambiarPlan).
 alGuardarPlanCuenta.add(({ rechazo, sinSenal, guardado }) => {
@@ -60,7 +76,7 @@ export function pintarCampana() {
   b.hidden = !nube.conectado() && !E.avisosSinc?.length;
   const punto = sinLeer();
   b.querySelector('.campana-punto').hidden = !punto;
-  b.setAttribute('aria-label', punto ? 'Avisos de sincronización, hay algo por revisar' : 'Avisos de sincronización');
+  b.setAttribute('aria-label', punto ? 'Avisos, hay algo por revisar' : 'Avisos');
 }
 
 const hora = iso => {
@@ -76,7 +92,7 @@ function abrirCampana(boton, { desde = null } = {}) {
   const reciente = x => desde != null && Date.parse(x.cuando) >= desde;
   const items = lista.length
     ? `<ul class="campana-lista">${lista.map(x => `<li class="${x.problema ? 'problema' : ''}${x.leido ? '' : ' nuevo'}${reciente(x) ? ' reciente' : ''}"><span class="pequeno">${esc(hora(x.cuando))}${reciente(x) ? ' · recién' : ''}</span>${esc(x.texto)}</li>`).join('')}</ul>`
-    : '<p class="pequeno campana-vacia">Todo al día. Aquí aparecen los avisos de sincronización.</p>';
+    : '<p class="pequeno campana-vacia">Todo al día. Aquí quedan los avisos de la app y de tu cuenta.</p>';
   const opciones = [
     ...(nube.conectado() && sincronizar ? [{ valor: 'sincronizar', letra: '↻', nombre: 'Sincronizar ahora' }] : []),
     ...(cola.total && nube.conectado() ? [{ valor: 'reintentar', letra: '↑', nombre: 'Reintentar la subida' }] : []),
@@ -85,7 +101,7 @@ function abrirCampana(boton, { desde = null } = {}) {
   lista.forEach(x => { x.leido = true; });
   guardar(); pintarCampana();
   abrirHoja({
-    titulo: 'Sincronización', contenido: espera + items, opciones, volver: boton,
+    titulo: 'Avisos', contenido: espera + items, opciones, volver: boton,
     alElegir: async valor => {
       if (valor === 'borrar') { E.avisosSinc = []; guardar(); pintarCampana(); return; }
       const desde = Date.now(), estado = E;

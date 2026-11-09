@@ -210,8 +210,14 @@ a.boton{text-decoration:none;color:inherit}
 /* Aviso flotante: arriba, como una notificación, y solo un par de segundos (app/comun.js, avisar). Abajo tapaba las
    series, el descanso y los botones de las hojas (Francisco, 5 de noviembre de 2026). Va sobre todo, también sobre el
    descanso a pantalla completa, y se cierra al tocarlo. */
-#aviso-flotante{position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:40;max-width:536px;margin:0 auto;
+#aviso-flotante{position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:70;max-width:536px;margin:0 auto;
   border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.2);opacity:0;transform:translateY(-16px);pointer-events:none;transition:opacity .2s,transform .25s;cursor:pointer}
+/* Como una notificación: fondo sólido, el color en un punto, hasta tres líneas y una flecha que dice que se abre. */
+#aviso-flotante.aviso{display:flex;align-items:center;gap:10px;min-height:48px;background:var(--surface);color:var(--ink);border:.5px solid var(--line)}
+#aviso-flotante.aviso::before{content:'';flex:none;width:10px;height:10px;border-radius:50%;background:var(--good)}
+#aviso-flotante.aviso.ojo::before{background:var(--warning)}
+#aviso-flotante .aviso-texto{flex:1;min-width:0;line-height:1.35;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+#aviso-flotante .aviso-ver{flex:none;font-size:24px;line-height:1;color:var(--ink-muted)}
 #aviso-flotante.visible{opacity:1;transform:none;pointer-events:auto}
 
 /* Hoy: check-in diario compacto */
@@ -1029,6 +1035,7 @@ main:has(#vista-coach){padding-bottom:calc(var(--coach-redaccion-alto,100px) + v
 .tiempo-menos,.tiempo-mas{width:44px;height:44px;border-radius:22px;font-size:26px;line-height:1;background:var(--surface);color:var(--ink);border:1px solid var(--line)}
 .tiempo-rueda .rueda{grid-column:2;grid-row:1}
 .tiempo-resumen{text-align:center;margin:0 4px 12px;color:var(--ink);min-height:2.9em;line-height:1.4}
+.tiempo-modo{display:block;min-height:44px;margin:0 auto 4px}
 
 /* Ajuste en vivo (app/hoy.js, nucleo/sesion-viva.js): el cambio que viene, con su cuenta, y los ya hechos con su antes y ahora. */
 .ajuste-vivo{margin:8px 0;padding:10px 12px;border-radius:12px;background:var(--accent-soft);color:var(--ink)}

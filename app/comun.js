@@ -417,8 +417,13 @@ export const coma = x => (x == null || x === '' ? '' : String(x).replace('.', ',
 
 // ── Avisos flotantes ────────────────────────────────────────────────────────
 let relojAviso = null;
-/** Milisegundos que se ve un aviso: 2,5 segundos, y hasta 4 si el texto es largo. */
-export const duracionAviso = texto => Math.min(4000, Math.max(2500, 1500 + String(texto).length * 25));
+/** Milisegundos que se ve un aviso: 4 segundos, y hasta 6,5 si el texto es largo, como una notificación del teléfono. */
+export const duracionAviso = texto => Math.min(6500, Math.max(4000, 2500 + String(texto).length * 30));
+/** Quién se entera de cada aviso: la campanita los guarda (app/campana.js). */
+export const alAvisar = new Set();
+let abrirAvisos = null;
+/** La campanita entrega cómo abrirse en un aviso: tocar el aviso flotante lo abre ahí, con el texto completo. */
+export const configurarAvisos = fn => { abrirAvisos = fn; };
 /**
  * Aviso arriba, como una notificación del teléfono: se ve desde cualquier parte de la página y se va solo en un par de
  * segundos (2,5; los largos, hasta 4 para alcanzar a leerlos) o al tocarlo. Lo que no resultó va en naranjo, no en
@@ -430,11 +435,17 @@ export function avisar(texto, tipo = /no se pudo|no pude|no se activ|no lo acept
     el = document.createElement('div');
     el.id = 'aviso-flotante';
     el.setAttribute('role', 'status');
-    el.addEventListener('click', () => el.classList.remove('visible'));
+    // Como una notificación del teléfono: tocarla la abre, con el texto completo y los avisos anteriores (la campanita).
+    // Antes tocarla la cerraba, y quien la tocaba para leerla no alcanzaba a ver nada (beta, 9 de noviembre de 2026).
+    el.addEventListener('click', () => { el.classList.remove('visible'); clearTimeout(relojAviso); abrirAvisos?.(el.dataset.cuando); });
     document.body.append(el);
   }
+  const cuando = new Date().toISOString();
   el.className = `aviso ${tipo}`;
-  el.textContent = texto;
+  el.dataset.cuando = cuando;
+  el.innerHTML = '<span class="aviso-texto"></span><span class="aviso-ver" aria-hidden="true">›</span>';
+  el.firstChild.textContent = texto;
+  for (const fn of alAvisar) { try { fn({ texto, tipo, cuando }); } catch { /* el aviso se ve igual */ } }
   requestAnimationFrame(() => el.classList.add('visible'));
   clearTimeout(relojAviso);
   relojAviso = setTimeout(() => el.classList.remove('visible'), duracionAviso(texto));

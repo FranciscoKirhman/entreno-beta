@@ -11,8 +11,9 @@
 //    se aceptó), aceptar otra vez no duplica el cambio.
 import { estadoDelPlan, VIGENCIA } from './registrado.js';
 import { sesionDe, sumarDias, diaSemana, nombreDia, moverSesion, marcarFaltada, conflictos } from './agenda.js';
-import { SERIES_SESION } from './fatiga-sesion.js';
-import { comoDescarga } from './motor-plan.js';
+import { SERIES_SESION, cargasAlReordenar } from './fatiga-sesion.js';
+import { comoDescarga, incrementoPara } from './motor-plan.js';
+import { esAsistido } from './catalogo.js';
 
 const POR_REVISAR = new Set(['pendiente', 'sin_datos']);
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -196,7 +197,30 @@ export function alternativasNoHecha(plan, fecha, ctx) {
  * @returns {{plan, sumas: [{fecha, foco, ids, nombres, series, descarga}], quedan: string[]} | null} null si no cabe nada
  *   series: las de cada ejercicio sumado, en el orden de ids; descarga: si ese día es de la semana de descarga
  */
-export function repartir(plan, fecha, { hoy, hechas = [], porId, porSesion = 2, cuantas = 3 } = {}) {
+// El orden de una sesión es parte del plan (Francisco, 9 de noviembre de 2026: "el orden del entrenamiento dejó de ser
+// intencional"). Antes, lo repartido iba al final: un press inclinado con barra después de los curls y de la plancha.
+const NIVEL_TIPO = { compuesto: 0, aislamiento: 1, core: 2, cardio: 3, movilidad: 3 };
+const pesoEquipo = ej => ((ej?.equipamiento || []).includes('barra_rack') ? 0 : (ej?.equipamiento || []).some(x => ['mancuernas', 'kettlebells', 'barra_ez'].includes(x)) ? 1 : 2);
+/**
+ * Dónde va un ejercicio sumado a otra sesión: los básicos antes que los aislados, y el core y el cardio al final; junto a
+ * lo que trabaja el mismo músculo, con barra antes que con mancuernas y estas antes que en máquina; nunca antes del
+ * primero de la sesión (su ejercicio principal) ni en medio de una superserie.
+ * @returns el índice donde insertarlo en `lista` (ordenada)
+ */
+export function posicionIntencional(lista, nuevo, porId) {
+  if (!lista.length) return 0;
+  const ej = e => porId.get(e.ejercicio_id), nivel = e => NIVEL_TIPO[ej(e)?.tipo] ?? 1, prim = e => ej(e)?.musculos_primarios || [];
+  const n = nivel(nuevo), ms = prim(nuevo), p = pesoEquipo(ej(nuevo));
+  const iguales = lista.map((_, k) => k).filter(k => nivel(lista[k]) === n && prim(lista[k]).some(m => ms.includes(m)));
+  let pos;
+  if (iguales.length) pos = iguales.find(k => k > 0 && pesoEquipo(ej(lista[k])) > p) ?? iguales.at(-1) + 1;
+  else pos = lista.reduce((u, e, k) => (nivel(e) <= n ? k : u), -1) + 1;
+  pos = Math.min(Math.max(pos, 1), lista.length);
+  while (pos < lista.length && lista[pos - 1].superserie && lista[pos].superserie === lista[pos - 1].superserie) pos++;
+  return pos;
+}
+
+export function repartir(plan, fecha, { hoy, hechas = [], porId, porSesion = 2, cuantas = 3, incrementoDe = ej => incrementoPara(ej, null) } = {}) {
   const s = sesionDe(plan, fecha);
   if (!s || !porId) return null;
   const nuevo = structuredClone(plan);
@@ -219,14 +243,22 @@ export function repartir(plan, fecha, { hoy, hechas = [], porId, porSesion = 2, 
       && (!cuenta(e.ejercicio_id) || ms.every(m => seriesDe(x, m) + series <= SERIES_SESION.aviso)))
       .sort((a, b) => comparte(b) - comparte(a) || puestos.get(a.fecha).length - puestos.get(b.fecha).length || (a.fecha < b.fecha ? -1 : 1))[0];
     if (!d) { quedan.push(ej(e.ejercicio_id).nombre); continue; }
-    const sumado = { ...structuredClone(e), series, prioridad: 3, orden: d.ejercicios.length, superserie: null };
+    const sumado = { ...structuredClone(e), series, prioridad: 3, superserie: null };
     // Sin reserva anotada (por ejemplo, una plancha por tiempo) solo bajan las series.
     const descarga = enDescarga(d), conReserva = sumado.rir != null && Number.isFinite(Number(sumado.rir));
     const final = !descarga ? sumado : conReserva ? comoDescarga({ ...sumado, rir: Number(sumado.rir) }) : { ...comoDescarga({ ...sumado, rir: 0 }), rir: sumado.rir };
     final.nota = descarga
       ? `De ${s.foco} del ${diaCorto(fecha)}, que no se hizo: ${final.series} serie${final.series === 1 ? '' : 's'} como el resto de la descarga${final.rir != null ? `, con ${final.rir} repeticiones de reserva` : ''}, para no perderla entera.`
       : `De ${s.foco} del ${diaCorto(fecha)}, que no se hizo: ${series} series para no perderla entera.`;
-    d.ejercicios.push(final);
+    // En su lugar, no al final, y con el peso de esa posición: viene fresco de su sesión (o cansado, según dónde iba) y
+    // llega después de lo que tenga antes del mismo músculo; lo que queda detrás también se recalcula.
+    const antes = [...d.ejercicios].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+    let despues = [...antes];
+    despues.splice(posicionIntencional(antes, final, porId), 0, final);
+    const origen = [...s.ejercicios].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map(x => (x === e ? final : x));
+    despues = cargasAlReordenar(origen, despues, porId, incrementoDe, esAsistido, x => x === final);
+    despues = cargasAlReordenar(antes, despues, porId, incrementoDe, esAsistido);
+    d.ejercicios = despues.map((x, k) => ({ ...x, orden: k }));
     puestos.get(d.fecha).push(e.ejercicio_id);
   }
   const sumas = destinos.filter(d => puestos.get(d.fecha).length).map(d => ({

@@ -198,7 +198,12 @@ const iguales = (a, b) => a.carga_kg === b.carga_kg && a.reps_min === b.reps_min
  * Una serie sin esfuerzo anotado toma el más duro anotado en ese ejercicio ese día (casi siempre se deja en blanco la
  * primera, la más fácil); sin ninguno, no se sube nada. Cuentan las series que pedía el plan, no las de más. La
  * descarga no sube por progresión: solo toma la carga nueva si es menor o si corrige un peso que estaba mal. Lo que ya
- * pasó, lo que alguien cambió aparte en un día y lo indicado por un profesional no se tocan. No aplica nada: devuelve
+ * pasó, lo que alguien cambió aparte en un día y lo indicado por un profesional no se tocan, salvo dos arreglos de peso
+ * (9 de noviembre de 2026, la patada de glúteo de la beta: 57,5 kg pedidos, 18 hechos, y la descarga siguió en 52,5):
+ * - Si el peso del plan estaba mal (se usó otro), las demás veces de ese ejercicio que traían otra carga o rango (la
+ *   descarga, otra sesión) se corrigen en la misma proporción, hacia abajo del escalón.
+ * - Una descarga nunca queda más pesada que lo que se acaba de levantar en una semana normal.
+ * No aplica nada: devuelve
  * el plan como quedaría, para mostrarlo y pedir el sí (regla 10 de AGENTS.md).
  * @param plan             plan vigente {dias: [{fecha, semana, plantilla, ejercicios}], semana_descarga}
  * @param fecha            día de la sesión 'AAAA-MM-DD'
@@ -228,7 +233,7 @@ export function ajustarTrasSesion({ plan, fecha, series, indice, lugar = null, h
     const pedido = valores(base);
     const destino = conEj.filter(d => d.ejercicios.some(e => e.ejercicio_id === id && (e.unidad || 'reps') === (base.unidad || 'reps')
       && valores(e).carga_kg === pedido.carga_kg && valores(e).reps_min === pedido.reps_min && valores(e).reps_max === pedido.reps_max));
-    if (!destino.length) continue;
+    // Sin otra vez igual a la de hoy, igual se revisan las demás (la descarga, una carga mal puesta): abajo, tocaOtras.
     const incremento = incrementoPara(ej, lugar);
     const asistido = esAsistido(ej);
     const comoPedidas = comoLoPedido(todas, pedido.reps_max);
@@ -247,7 +252,14 @@ export function ajustarTrasSesion({ plan, fecha, series, indice, lugar = null, h
       objetivo: reanclado ? { ...base, carga_kg: usada } : base, hechas, semanas: historialSemanas[id] || [], subioRecien,
       incremento, calidad: calidades[id] || null, asistido, correccion, lastre: comoLastre(ej),
     });
-    if (r.accion === 'mantener' && !reanclado) continue;
+    const inc = incremento || 2.5;
+    const escalonAbajo = x => Number(Math.max(inc, Math.floor(x / inc + 1e-9) * inc).toFixed(2));
+    const otras = conEj.filter(d => !destino.includes(d));
+    // Lo que se levantó hoy en una semana normal: el techo de la descarga.
+    const techo = !asistido && usada != null && !(delDia && descarga(delDia)) ? usada : null;
+    const tocaOtras = !asistido && ((reanclado && planeada > 0) || (techo != null && otras.some(d => descarga(d) && d.ejercicios.some(e => e.ejercicio_id === id && Number(e.carga_kg) > techo))));
+    if (!destino.length && !tocaOtras) continue;
+    if (r.accion === 'mantener' && !reanclado && !tocaOtras) continue;
     const dias = [];
     for (const d of destino) {
       for (const e of d.ejercicios.filter(x => x.ejercicio_id === id)) {
@@ -264,10 +276,26 @@ export function ajustarTrasSesion({ plan, fecha, series, indice, lugar = null, h
         dias.push({ fecha: d.fecha, descarga: descarga(d), antes, despues });
       }
     }
+    if (tocaOtras) {
+      const factor = reanclado && planeada > 0 ? (r.carga_kg ?? usada) / planeada : 1;
+      for (const d of otras) {
+        for (const e of d.ejercicios.filter(x => x.ejercicio_id === id && !x.indicacion && x.carga_kg != null && (x.unidad || 'reps') === (base.unidad || 'reps'))) {
+          const antes = valores(e);
+          let carga = factor !== 1 ? escalonAbajo(antes.carga_kg * factor) : antes.carga_kg;
+          if (descarga(d) && techo != null && carga > techo) carga = techo;
+          if (carga === antes.carga_kg) continue;
+          e.carga_kg = carga;
+          dias.push({ fecha: d.fecha, descarga: descarga(d), antes, despues: valores(e) });
+        }
+      }
+      dias.sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
+    }
     if (!dias.length) continue;
     const primero = dias.find(x => !x.descarga) || dias[0];
     const motivoReanclado = reanclado ? `Hiciste las series con ${kg(usada)} y el plan decía ${kg(planeada)}: lo que hiciste manda. ` : '';
-    cambios.push({ ejercicio_id: id, nombre: ej.nombre || id, accion: r.accion, regla: reanclado ? 'reanclado' : r.regla, motivo: `${motivoReanclado}${r.motivo}`,
+    const descargaTope = !reanclado && dias.some(x => x.descarga && techo != null && x.despues.carga_kg === techo && x.antes.carga_kg > techo);
+    const motivo = `${motivoReanclado}${r.motivo}${descargaTope ? ` La descarga no puede pesar más que lo que levantaste hoy: queda en ${kg(techo)}.` : ''}`;
+    cambios.push({ ejercicio_id: id, nombre: ej.nombre || id, accion: r.accion, regla: reanclado ? 'reanclado' : descargaTope ? 'descarga_tope' : r.regla, motivo,
       reanclado, desde: primero.fecha, antes: primero.antes, despues: primero.despues, dias });
   }
   return { plan: nuevo, cambios };

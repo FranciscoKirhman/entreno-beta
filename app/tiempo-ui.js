@@ -1,6 +1,8 @@
 // "Ajustar el tiempo": una rueda que se gira para elegir cuántos minutos hay hoy (como Down Dog), con la vista previa
 // de cómo queda la sesión y el botón para confirmar. También "Tengo tiempo indefinido" y volver a la sesión del plan.
-// Se puede abrir antes de empezar (minutos de la sesión completa) o a mitad (minutos que quedan; lo hecho no se toca).
+// Se puede abrir antes de empezar (minutos de la sesión completa) o a mitad. A mitad, la rueda muestra el tiempo total
+// (lo que llevas más lo que queda), con un botón para verlo como tiempo restante: con lo que queda, la gente ponía su
+// tiempo total y la sesión crecía de más (Francisco, 9 de noviembre de 2026). Lo hecho no se toca.
 // El cálculo está en nucleo/tiempo-sesion.js; aquí solo la rueda, la hoja y el guardado.
 import { E, hoy, esc, cambiarPlan, avisar, guardar, indice } from './comun.js';
 import { sesionDe } from '../nucleo/agenda.js';
@@ -10,6 +12,10 @@ import { factorRitmo, textoRitmo, accesoriosHoy, topeSeriesHoy } from './ritmo.j
 import { abrirHoja } from './hoja.js';
 import { icono } from './iconos.js';
 import * as nube from './nube.js';
+import { msActivos } from '../nucleo/duracion-sesion.js';
+
+/** Minutos que lleva la sesión de hoy (sin las pausas), o 0 si no empezó. */
+const llevaHoy = f => { const inicio = E.inicioSesion?.[f]; return inicio ? Math.max(0, Math.round(msActivos({ inicio, pausa: E.pausas?.[f] || null, ahora: Date.now() }) / 60000)) : 0; };
 
 const GRADOS = 330; // la rueda deja un hueco arriba para que el mínimo y el máximo no se toquen
 const R_ANILLO = 92, C = 120;
@@ -34,7 +40,7 @@ function arco(desde, hasta) {
   return `M ${x1.toFixed(1)} ${y1.toFixed(1)} A ${R_ANILLO} ${R_ANILLO} 0 ${hasta - desde > 180 ? 1 : 0} 1 ${x2.toFixed(1)} ${y2.toFixed(1)}`;
 }
 
-function ruedaHtml(v, planMin, pregunta) {
+function ruedaHtml(v, planMin, pregunta, cambio = '') {
   const [mx, my] = punto(gradosDe(redondear(planMin)));
   return `<div class="tiempo-rueda" data-sin-arrastre>
     <button type="button" class="boton-icono tiempo-menos" data-paso="-1" aria-label="Cinco minutos menos">−</button>
@@ -49,11 +55,12 @@ function ruedaHtml(v, planMin, pregunta) {
     </div>
     <button type="button" class="boton-icono tiempo-mas" data-paso="1" aria-label="Cinco minutos más">+</button>
   </div>
+  ${cambio}
   <p class="tiempo-resumen pequeno" aria-live="polite"></p>`;
 }
 
 /** Qué cambia respecto de la sesión del plan, en pocas palabras. A mitad de la sesión cuenta solo lo que falta. */
-function resumen(r, base, hechas, enCurso, delPlan = false) {
+function resumen(r, base, hechas, enCurso, delPlan = false, lleva = null) {
   const faltan = ejs => ejs.reduce((a, e) => a + Math.max(0, e.series - (enCurso ? hechas[e.ejercicio_id]?.trabajo || 0 : 0)), 0);
   const series = faltan(r.ejercicios), antes = faltan(base.ejercicios);
   const ejercicios = r.ejercicios.filter(e => !enCurso || e.series > (hechas[e.ejercicio_id]?.trabajo || 0)).length;
@@ -66,7 +73,8 @@ function resumen(r, base, hechas, enCurso, delPlan = false) {
   // Aunque se pidan tres horas, la sesión crece hasta lo razonable (series por músculo y por sesión).
   const tope = r.tope ? ' Más que esto no suma: hoy ya tiene lo que rinde, y más series serían cansancio para las próximas sesiones.' : '';
   const inicio = delPlan ? (enCurso ? 'Lo que falta del plan: ' : 'Así viene en el plan: ') : enCurso ? 'Te quedaría: ' : '';
-  return `${inicio}${partes.join(' · ')}. Unos ${r.minutos} minutos${enCurso ? ' más' : ''}.${fuera}${suma}${juntas}${tope}`;
+  const minutos = enCurso && lleva != null ? `Unos ${r.minutos + lleva} minutos en total (llevas ${lleva})` : `Unos ${r.minutos} minutos${enCurso ? ' más' : ''}`;
+  return `${inicio}${partes.join(' · ')}. ${minutos}.${fuera}${suma}${juntas}${tope}`;
 }
 
 /**
@@ -124,16 +132,29 @@ export function abrirTiempo({ volver = null, alCambiar } = {}) {
   // Los minutos van a tu ritmo (app/ritmo.js); con más tiempo entran accesorios, hasta el máximo razonable.
   const ritmo = factorRitmo();
   const opciones = { hechas, cardioHecho, ritmo, accesorios: accesoriosHoy({ ...dia, ejercicios: base.ejercicios }), porId: indice.porId, topeSeries: topeSeriesHoy() };
+  // A mitad de la sesión, los minutos de abajo (planMin, ahora, lo que calcula ajustarTiempo) son los que quedan; la
+  // rueda muestra el total salvo que se elija ver el restante.
   const planMin = enCurso ? minutosRestantes(base, hechas, cardioHecho, ritmo) : duracionReal(base, ritmo) ?? duracionSesion(base) ?? 60;
   const ahora = enCurso ? minutosRestantes(dia, hechas, cardioHecho, ritmo) : duracionReal(dia, ritmo) ?? planMin;
-  let v = redondear(elegido ?? ahora);
+  const lleva = enCurso ? llevaHoy(f) : 0;
+  let modo = enCurso && E.tiempoModo === 'restante' ? 'restante' : 'total';
+  const total = () => enCurso && modo === 'total';
+  const mostrar = restantes => (total() ? restantes + lleva : restantes);
+  const aRestantes = n => (total() ? Math.max(RUEDA.min, n - lleva) : n);
+  const minimo = () => (total() ? redondear(lleva + RUEDA.min) : RUEDA.min);
+  // Lo elegido se guarda como total (E.tiempoHoy, igual que el tiempo del perfil que usa la sesión viva).
+  let v = Math.max(minimo(), redondear(elegido != null ? (total() ? elegido : elegido - lleva) : mostrar(ahora)));
   const ajustada = E.tiempoHoy?.[f]?.firma === firmaDe(dia);
-  const pregunta = enCurso ? '¿Cuánto tiempo te queda?' : '¿Cuánto tiempo tienes hoy?';
+  const preguntaDe = () => (!enCurso ? '¿Cuánto tiempo tienes hoy?' : total() ? '¿Cuánto dura tu sesión en total?' : '¿Cuánto tiempo te queda?');
+  const pregunta = preguntaDe();
+  const enTotal = () => (total() ? ' en total' : '');
   // La rueda va de 5 en 5: en la marca del plan, la sesión queda tal como viene (86 minutos no se recortan a 85).
-  const esPlan = n => n === redondear(planMin);
-  const calcular = n => (esPlan(n) ? { ejercicios: structuredClone(base.ejercicios), cardio: base.cardio, minutos: planMin, quitados: [], agregados: [] } : ajustarTiempo(base, { minutos: n, ...opciones }));
+  const esPlan = n => n === redondear(mostrar(planMin));
+  const calcular = n => (esPlan(n) ? { ejercicios: structuredClone(base.ejercicios), cardio: base.cardio, minutos: planMin, quitados: [], agregados: [] } : ajustarTiempo(base, { minutos: aRestantes(n), ...opciones }));
   // Si la sesión no crece hasta lo pedido (el tope de lo razonable), el botón dice los minutos que de verdad tendrá.
-  const textoBoton = n => { if (esPlan(n)) return `Dejar la sesión del plan (unos ${planMin} min)`; const r = calcular(n); return r.tope && r.minutos < n - 5 ? `Ajustar: unos ${r.minutos} minutos, lo razonable para hoy` : `Ajustar a ${n} minutos`; };
+  const textoBoton = n => { if (esPlan(n)) return `Dejar la sesión del plan (unos ${mostrar(planMin)} min${enTotal()})`; const r = calcular(n); return r.tope && mostrar(r.minutos) < n - 5 ? `Ajustar: unos ${mostrar(r.minutos)} minutos${enTotal()}, lo razonable para hoy` : `Ajustar a ${n} minutos${enTotal()}`; };
+  const textoCambio = () => (modo === 'total' ? `Llevas ${lleva} min · Ver tiempo restante` : 'Ver tiempo total');
+  const cambio = enCurso ? `<button type="button" class="enlace tiempo-modo" data-tiempo-modo>${esc(textoCambio())}</button>` : '';
 
   abrirHoja({
     titulo: pregunta, volver,
@@ -141,11 +162,11 @@ export function abrirTiempo({ volver = null, alCambiar } = {}) {
     notaOculta: true,
     nota: enCurso ? `Lo que ya hiciste se queda. Lo que falta del plan toma unos ${planMin} minutos${textoRitmo() ? `, ${textoRitmo()}` : ''}.`
       : `La sesión del plan toma unos ${planMin} minutos${textoRitmo() ? `, ${textoRitmo()}` : ''}. Con menos tiempo sale lo menos importante; con más, entran series y accesorios.`,
-    contenido: ruedaHtml(v, planMin, pregunta),
+    contenido: ruedaHtml(v, mostrar(planMin), pregunta, cambio),
     opciones: [
       { valor: 'aplicar', icono: icono('visto'), clase: 'confirmar', nombre: textoBoton(v) },
       { valor: 'indefinido', icono: icono('reloj'), nombre: 'Tengo tiempo indefinido' },
-      ...(ajustada && !esPlan(v) ? [{ valor: 'plan', icono: icono('flecha'), nombre: `Volver a la sesión del plan (unos ${planMin} min)` }] : []),
+      ...(ajustada && !esPlan(v) ? [{ valor: 'plan', icono: icono('flecha'), nombre: `Volver a la sesión del plan (unos ${mostrar(planMin)} min${enTotal()})` }] : []),
     ],
     alElegir: valor => aplicar(valor === 'aplicar' ? (esPlan(v) ? 'plan' : v) : valor === 'indefinido' ? null : 'plan'),
   });
@@ -160,9 +181,22 @@ export function abrirTiempo({ volver = null, alCambiar } = {}) {
     centro.querySelector('strong').textContent = v;
     centro.setAttribute('aria-valuenow', v); centro.setAttribute('aria-valuetext', `${v} minutos`);
     boton.lastChild.textContent = textoBoton(v);
-    texto.textContent = resumen(calcular(v), base, hechas, enCurso, esPlan(v));
+    texto.textContent = resumen(calcular(v), base, hechas, enCurso, esPlan(v), total() ? lleva : null);
   };
-  const fijar = n => { const nuevo = redondear(n); if (nuevo !== v) { v = nuevo; pintar(); } };
+  const fijar = n => { const nuevo = Math.max(minimo(), redondear(n)); if (nuevo !== v) { v = nuevo; pintar(); } };
+  // Total o restante: la rueda pasa al otro y se recuerda para la próxima vez.
+  hoja.querySelector('[data-tiempo-modo]')?.addEventListener('click', ev => {
+    v = modo === 'total' ? Math.max(RUEDA.min, redondear(v - lleva)) : redondear(v + lleva);
+    modo = modo === 'total' ? 'restante' : 'total';
+    E.tiempoModo = modo; guardar();
+    ev.currentTarget.textContent = textoCambio();
+    hoja.querySelector('#hoja-titulo').firstChild.textContent = preguntaDe();
+    centro.setAttribute('aria-label', preguntaDe());
+    const [px, py] = punto(gradosDe(redondear(mostrar(planMin))));
+    const marca = hoja.querySelector('.rueda-plan'); marca.setAttribute('cx', px.toFixed(1)); marca.setAttribute('cy', py.toFixed(1));
+    v = Math.max(minimo(), v);
+    pintar();
+  });
   // Girar: el ángulo del dedo alrededor del centro da los minutos. Un salto de más de media vuelta es pasar por el
   // hueco de arriba: se queda en el extremo en vez de dar la vuelta.
   const desdePuntero = (ev, salto = false) => {
@@ -193,21 +227,23 @@ export function abrirTiempo({ volver = null, alCambiar } = {}) {
   pintar();
 
   async function aplicar(minutos) {
-    const r = minutos === 'plan' ? calcular(redondear(planMin)) : ajustarTiempo(base, { minutos, ...opciones });
-    const mensaje = minutos === 'plan' ? 'Sesión de hoy de vuelta como venía en el plan.' : minutos == null ? `Sesión de hoy sin límite: unos ${r.minutos} minutos, lo más que rinde hoy.`
-      : r.tope && r.minutos < minutos - 5 ? `Sesión de hoy ajustada: unos ${r.minutos} minutos, lo razonable para hoy.` : `Sesión de hoy ajustada a ${minutos} minutos.`;
-    await guardarTiempo({ f, r, minutos, base, mensaje, alCambiar });
+    const r = minutos === 'plan' ? calcular(redondear(mostrar(planMin))) : ajustarTiempo(base, { minutos: minutos == null ? null : aRestantes(minutos), ...opciones });
+    const mensaje = minutos === 'plan' ? 'Sesión de hoy de vuelta como venía en el plan.' : minutos == null ? `Sesión de hoy sin límite: unos ${mostrar(r.minutos)} minutos${enTotal()}, lo más que rinde hoy.`
+      : r.tope && mostrar(r.minutos) < minutos - 5 ? `Sesión de hoy ajustada: unos ${mostrar(r.minutos)} minutos${enTotal()}, lo razonable para hoy.` : `Sesión de hoy ajustada a ${minutos} minutos${enTotal()}.`;
+    // Se guarda el total: lo que queda más lo que ya pasó.
+    const guardado = minutos === 'plan' || minutos == null ? minutos : total() ? minutos : minutos + lleva;
+    await guardarTiempo({ f, r, minutos: guardado, base, mensaje, alCambiar });
   }
 }
 
-/** El texto del botón de Hoy: cuánto dura la sesión, o cuánto queda si ya empezó. */
-/** Para el botón Ajustar tiempo de Entrenar, en corto: "70 min", "Quedan 35 min" o "Sin límite". */
+/** Para el botón Ajustar tiempo de Entrenar, en corto: "70 min" (el total, también a mitad de la sesión) o "Sin límite". */
 export function minutosDeBoton(dia) {
   const t = etiquetaTiempo(dia);
   if (t === 'Sin límite de tiempo') return 'Sin límite';
   const m = t.match(/(\d+) min/);
-  return !m ? '' : t.startsWith('Quedan') ? `Quedan ${m[1]} min` : `${m[1]} min`;
+  return m ? `${m[1]} min` : '';
 }
+/** El texto del botón de Hoy: cuánto dura la sesión; si ya empezó, el total y a qué hora terminas. */
 export function etiquetaTiempo(dia) {
   const f = dia.fecha, hechas = hechasDelDia(E.registro?.[f]);
   const marca = E.cardioHecho?.[f];
@@ -221,5 +257,5 @@ export function etiquetaTiempo(dia) {
   if (!enCurso) return `Unos ${min} min`;
   // A mitad de la sesión, también a qué hora terminarías a este ritmo del plan.
   const fin = new Date(Date.now() + min * 60000);
-  return `Quedan unos ${min} min · terminas ${fin.getHours()}:${String(fin.getMinutes()).padStart(2, '0')}`;
+  return `Unos ${min + llevaHoy(f)} min en total · terminas ${fin.getHours()}:${String(fin.getMinutes()).padStart(2, '0')}`;
 }
