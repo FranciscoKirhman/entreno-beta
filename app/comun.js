@@ -416,7 +416,7 @@ export function numero(v) {
 export const coma = x => (x == null || x === '' ? '' : String(x).replace('.', ','));
 
 // ── Avisos flotantes ────────────────────────────────────────────────────────
-let relojAviso = null;
+let relojAviso = null, marcoAviso = 0;
 /** Milisegundos que se ve un aviso: 4 segundos, y hasta 6,5 si el texto es largo, como una notificación del teléfono. */
 export const duracionAviso = texto => Math.min(6500, Math.max(4000, 2500 + String(texto).length * 30));
 /** Quién se entera de cada aviso: la campanita los guarda (app/campana.js). */
@@ -425,8 +425,8 @@ let abrirAvisos = null;
 /** La campanita entrega cómo abrirse en un aviso: tocar el aviso flotante lo abre ahí, con el texto completo. */
 export const configurarAvisos = fn => { abrirAvisos = fn; };
 /**
- * Aviso arriba, como una notificación del teléfono: se ve desde cualquier parte de la página y se va solo en un par de
- * segundos (2,5; los largos, hasta 4 para alcanzar a leerlos) o al tocarlo. Lo que no resultó va en naranjo, no en
+ * Aviso arriba, como una notificación del teléfono: se ve desde cualquier parte de la página, se va solo en 4 a 6,5
+ * segundos y, al tocarlo, se abre en Avisos con el texto completo. Lo que no resultó lleva el punto naranjo, no el
  * verde (Francisco, 5 de noviembre de 2026).
  */
 export function avisar(texto, tipo = /no se pudo|no pude|no se activ|no lo acept|rechaz|bloquead|todavía no|marca al menos/i.test(texto) ? 'ojo' : 'bien') {
@@ -437,7 +437,8 @@ export function avisar(texto, tipo = /no se pudo|no pude|no se activ|no lo acept
     el.setAttribute('role', 'status');
     // Como una notificación del teléfono: tocarla la abre, con el texto completo y los avisos anteriores (la campanita).
     // Antes tocarla la cerraba, y quien la tocaba para leerla no alcanzaba a ver nada (beta, 9 de noviembre de 2026).
-    el.addEventListener('click', () => { el.classList.remove('visible'); clearTimeout(relojAviso); abrirAvisos?.(el.dataset.cuando); });
+    // Si se toca antes de terminar de aparecer, la entrada pendiente se cancela: si no, volvía a aparecer y sin reloj.
+    el.addEventListener('click', () => { cancelAnimationFrame(marcoAviso); el.classList.remove('visible'); clearTimeout(relojAviso); abrirAvisos?.(el.dataset.cuando); });
     document.body.append(el);
   }
   const cuando = new Date().toISOString();
@@ -446,7 +447,8 @@ export function avisar(texto, tipo = /no se pudo|no pude|no se activ|no lo acept
   el.innerHTML = '<span class="aviso-texto"></span><span class="aviso-ver" aria-hidden="true">›</span>';
   el.firstChild.textContent = texto;
   for (const fn of alAvisar) { try { fn({ texto, tipo, cuando }); } catch { /* el aviso se ve igual */ } }
-  requestAnimationFrame(() => el.classList.add('visible'));
+  cancelAnimationFrame(marcoAviso);
+  marcoAviso = requestAnimationFrame(() => el.classList.add('visible'));
   clearTimeout(relojAviso);
   relojAviso = setTimeout(() => el.classList.remove('visible'), duracionAviso(texto));
 }

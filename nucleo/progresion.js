@@ -255,9 +255,14 @@ export function ajustarTrasSesion({ plan, fecha, series, indice, lugar = null, h
     const inc = incremento || 2.5;
     const escalonAbajo = x => Number(Math.max(inc, Math.floor(x / inc + 1e-9) * inc).toFixed(2));
     const otras = conEj.filter(d => !destino.includes(d));
-    // Lo que se levantó hoy en una semana normal: el techo de la descarga.
+    // Lo que se levantó hoy en una semana normal es el techo de la descarga, en las veces que piden las mismas
+    // repeticiones o más: la descarga de un día pesado (5 a 7) puede llevar más peso que un día liviano (10 a 12).
     const techo = !asistido && usada != null && !(delDia && descarga(delDia)) ? usada : null;
-    const tocaOtras = !asistido && ((reanclado && planeada > 0) || (techo != null && otras.some(d => descarga(d) && d.ejercicios.some(e => e.ejercicio_id === id && Number(e.carga_kg) > techo))));
+    const sobreTecho = (d, e) => descarga(d) && techo != null && Number(e.carga_kg) > techo && (Number(e.reps_min) || 0) >= (Number(pedido.reps_min) || 0);
+    // Si el peso del plan estaba bastante mal (se usó al menos un 10% menos), las otras veces bajan en la misma
+    // proporción. Un escalón de diferencia lo corrige la misma sesión; y nunca suben solas: eso es de la progresión.
+    const factor = !asistido && reanclado && planeada > 0 && usada < planeada * 0.9 ? usada / planeada : 1;
+    const tocaOtras = !asistido && (factor < 1 || otras.some(d => d.ejercicios.some(e => e.ejercicio_id === id && sobreTecho(d, e))));
     if (!destino.length && !tocaOtras) continue;
     if (r.accion === 'mantener' && !reanclado && !tocaOtras) continue;
     const dias = [];
@@ -276,13 +281,13 @@ export function ajustarTrasSesion({ plan, fecha, series, indice, lugar = null, h
         dias.push({ fecha: d.fecha, descarga: descarga(d), antes, despues });
       }
     }
+    const cuantosDestino = dias.length;
     if (tocaOtras) {
-      const factor = reanclado && planeada > 0 ? (r.carga_kg ?? usada) / planeada : 1;
       for (const d of otras) {
         for (const e of d.ejercicios.filter(x => x.ejercicio_id === id && !x.indicacion && x.carga_kg != null && (x.unidad || 'reps') === (base.unidad || 'reps'))) {
           const antes = valores(e);
-          let carga = factor !== 1 ? escalonAbajo(antes.carga_kg * factor) : antes.carga_kg;
-          if (descarga(d) && techo != null && carga > techo) carga = techo;
+          let carga = factor < 1 ? escalonAbajo(antes.carga_kg * factor) : antes.carga_kg;
+          if (sobreTecho(d, { ...e, carga_kg: carga })) carga = techo;
           if (carga === antes.carga_kg) continue;
           e.carga_kg = carga;
           dias.push({ fecha: d.fecha, descarga: descarga(d), antes, despues: valores(e) });
@@ -293,9 +298,12 @@ export function ajustarTrasSesion({ plan, fecha, series, indice, lugar = null, h
     if (!dias.length) continue;
     const primero = dias.find(x => !x.descarga) || dias[0];
     const motivoReanclado = reanclado ? `Hiciste las series con ${kg(usada)} y el plan decía ${kg(planeada)}: lo que hiciste manda. ` : '';
-    const descargaTope = !reanclado && dias.some(x => x.descarga && techo != null && x.despues.carga_kg === techo && x.antes.carga_kg > techo);
-    const motivo = `${motivoReanclado}${r.motivo}${descargaTope ? ` La descarga no puede pesar más que lo que levantaste hoy: queda en ${kg(techo)}.` : ''}`;
-    cambios.push({ ejercicio_id: id, nombre: ej.nombre || id, accion: r.accion, regla: reanclado ? 'reanclado' : descargaTope ? 'descarga_tope' : r.regla, motivo,
+    const descargaTope = dias.some(x => x.descarga && techo != null && x.despues.carga_kg === techo && x.antes.carga_kg > techo);
+    // Si solo cambiaron otras sesiones (la descarga, otro rango), el consejo de hoy no quedó en ninguna parte: no se dice.
+    const soloOtras = cuantosDestino === 0;
+    const otrasTexto = soloOtras && factor < 1 ? 'Las otras veces de este ejercicio bajan en la misma proporción.' : '';
+    const motivo = `${motivoReanclado}${soloOtras ? otrasTexto : r.motivo}${descargaTope ? ` La descarga no puede pesar más que lo que levantaste hoy: queda en ${kg(techo)}.` : ''}`.trim();
+    cambios.push({ ejercicio_id: id, nombre: ej.nombre || id, accion: soloOtras ? 'bajar_carga' : r.accion, regla: reanclado ? 'reanclado' : descargaTope ? 'descarga_tope' : r.regla, motivo,
       reanclado, desde: primero.fecha, antes: primero.antes, despues: primero.despues, dias });
   }
   return { plan: nuevo, cambios };

@@ -190,7 +190,9 @@ export function abrirTiempo({ volver = null, alCambiar } = {}) {
     modo = modo === 'total' ? 'restante' : 'total';
     E.tiempoModo = modo; guardar();
     ev.currentTarget.textContent = textoCambio();
-    hoja.querySelector('#hoja-titulo').firstChild.textContent = preguntaDe();
+    // Con el espacio antes del botón de ayuda, si lo hay.
+    const titulo = hoja.querySelector('#hoja-titulo').firstChild;
+    titulo.textContent = preguntaDe() + (titulo.nextSibling ? ' ' : '');
     centro.setAttribute('aria-label', preguntaDe());
     const [px, py] = punto(gradosDe(redondear(mostrar(planMin))));
     const marca = hoja.querySelector('.rueda-plan'); marca.setAttribute('cx', px.toFixed(1)); marca.setAttribute('cy', py.toFixed(1));
