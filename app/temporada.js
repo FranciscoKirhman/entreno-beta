@@ -132,7 +132,9 @@ export function planBloqueSiguiente({ forzar = false, cambios = null } = {}) {
   if (base.bloqueado) return { bloqueado: true, mensaje: base.mensaje };
   let plan = sig ? aplicarFase(base, sig, { minutos: derivados.duracion_min, ritmo: ritmoHoy() }) : base;
   if (sig && !validarPlan(plan, ctx).ok) plan = { ...base, bloque: sig.n }; // si la fase no cabe en tus reglas, el plan base
-  plan = conDiasQueQuedan(E.plan, plan, hoy(), { respuestas, derivados, indice });
+  // Lo que queda del bloque actual solo sale si cae en un día recién marcado en este cambio: si ya estaba marcado y la
+  // sesión sigue ahí, es porque la persona entrena ese día (como en el chat, nucleo/agente-chat.js).
+  plan = conDiasQueQuedan(E.plan, plan, hoy(), { respuestas, derivados, indice, noPuedoAntes: R().dias_no_puedo || [] });
   return { plan, sig, nv, anteriores, respuestas, derivados };
 }
 

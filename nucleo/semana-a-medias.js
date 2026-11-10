@@ -181,7 +181,7 @@ export function primeroLoQueFalto(plan, { semana, faltan = [], hechas = [], hoy,
  * Repite la semana `n` en la semana siguiente (mismos días, ejercicios y series; cada peso, el que el plan ya tenía al
  * día para la próxima vez) y corre 7 días todo lo que seguía, descarga incluida. Solo si esa semana no empezó.
  */
-export function repetirSemana(plan, { semana: n, hechas = [], hoy }) {
+export function repetirSemana(plan, { semana: n, hechas = [], hoy, noPuedo = [] }) {
   const sig = n + 1, deSig = plan.dias.filter(d => d.semana === sig && entrena(d));
   if (!plan.dias.some(d => d.semana === n && entrena(d)) || !deSig.length) return { error: 'Tu plan cambió desde esa propuesta.' };
   if (deSig.some(d => d.fecha < hoy || hechas.includes(d.fecha))) return { error: 'Esta semana ya empezó: repetir la anterior correría lo que ya hiciste.' };
@@ -189,6 +189,23 @@ export function repetirSemana(plan, { semana: n, hechas = [], hoy }) {
   const nuevo = structuredClone(plan);
   for (const d of nuevo.dias) if (d.semana >= sig) { d.semana += 1; d.fecha = sumarDias(d.fecha, 7); }
   const copia = structuredClone(plan.dias.filter(d => d.semana === n)).map(d => ({ ...d, semana: sig, fecha: sumarDias(d.fecha, 7) }));
+  // Lo que se repite no vuelve a caer en un día que la persona casi nunca puede: pasa al día libre más cercano de esa
+  // semana. Si la sesión original sí se hizo ese día, se queda: marcar un día guía lo que la app elige, no lo que la
+  // persona hace (AGENTS.md, regla 11).
+  const movidas = new Map();
+  if (noPuedo.length) {
+    const hechasSet = new Set(hechas), lunes = lunesDe(copia.find(entrena)?.fecha || sumarDias(plan.inicio, n * 7));
+    const ocupadas = new Set(copia.filter(entrena).map(d => d.fecha));
+    for (const d of copia.filter(entrena)) {
+      if (!noPuedo.includes(diaSemana(d.fecha)) || hechasSet.has(sumarDias(d.fecha, -7))) continue;
+      const dist = f => Math.abs((Date.parse(f) - Date.parse(d.fecha)) / 864e5);
+      const libre = [0, 1, 2, 3, 4, 5, 6].map(k => sumarDias(lunes, k))
+        .filter(f => f >= hoy && !ocupadas.has(f) && !noPuedo.includes(diaSemana(f)))
+        .sort((x, y) => dist(x) - dist(y) || (x < y ? 1 : -1))[0];
+      if (!libre) continue;
+      ocupadas.delete(d.fecha); ocupadas.add(libre); movidas.set(libre, d.fecha); d.fecha = libre;
+    }
+  }
   for (const d of copia) for (const e of d.ejercicios || []) {
     const proxima = nuevo.dias.filter(x => x.fecha > d.fecha).sort((a, b) => (a.fecha < b.fecha ? -1 : 1))
       .flatMap(x => x.ejercicios || []).find(x => x.ejercicio_id === e.ejercicio_id);
@@ -203,7 +220,9 @@ export function repetirSemana(plan, { semana: n, hechas = [], hoy }) {
   }
   const desde = lunesDe(copia.find(entrena)?.fecha || sumarDias(plan.inicio, n * 7));
   const descarga = nuevo.dias.filter(d => d.semana === nuevo.semana_descarga).map(d => d.fecha).sort()[0] || null;
-  return { plan: nuevo, desde, descarga, semana: copia.filter(entrena).map(d => ({ fecha: d.fecha, foco: d.foco, cambio: d.firme === false ? 'Opcional' : '' })) };
+  const semana = copia.filter(entrena).sort((a, b) => (a.fecha < b.fecha ? -1 : 1))
+    .map(d => ({ fecha: d.fecha, foco: d.foco, cambio: movidas.has(d.fecha) ? `en vez del ${nombreDia(movidas.get(d.fecha))}, que casi nunca puedes` : d.firme === false ? 'Opcional' : '' }));
+  return { plan: nuevo, desde, descarga, semana, movidas: [...movidas].map(([a, de]) => ({ a, de })) };
 }
 
 /** Esta semana pasa a ser la descarga (nucleo/ciclos.js: adelantarDescarga): mismos ejercicios y pesos, menos series. */
@@ -250,12 +269,12 @@ export function cambioSemanaAMedias(accion, { plan, hoy, indice, respuestas = {}
     };
   }
   if (accion.tipo === 'repetir_semana') {
-    const r = repetirSemana(plan, { semana, hechas, hoy });
+    const r = repetirSemana(plan, { semana, hechas, hoy, noPuedo: respuestas.dias_no_puedo || [] });
     if (r.error) return r;
     const descarga = r.descarga ? `: la descarga pasa a la semana del ${diaCorto(lunesDe(r.descarga))}` : '';
     return {
       plan: r.plan, ir: 'semana', semana: r.semana,
-      propone: `Esta semana repetirías la semana ${semana}, con los pesos al día, y el resto del bloque se corre 7 días${descarga}.`,
+      propone: `Esta semana repetirías la semana ${semana}, con los pesos al día, y el resto del bloque se corre 7 días${descarga}.${r.movidas.length ? ` ${r.movidas.length === 1 ? 'Una sesión cambia' : `${r.movidas.length} sesiones cambian`} de día para no caer donde casi nunca puedes.` : ''}`,
       hecho: `Listo: esta semana repites la semana ${semana}${descarga}.`,
     };
   }
@@ -318,32 +337,28 @@ export function semanaAMedias({ plan, sesiones = [], bienestar = {}, marcas = {}
         : (parte < MUCHO && opciones.repetir) ? 'repetir'
           : opciones.primero ? 'primero' : 'seguir';
 
-  // El porqué, con sus cifras.
-  const hizo = act.sesiones.completas + (act.sesiones.aMedias ? ` de ${act.sesiones.plan} sesiones firmes y ${act.sesiones.aMedias === 1 ? 'una' : act.sesiones.aMedias} a medias` : ` de ${act.sesiones.plan} sesiones firmes`);
-  const grupoTexto = g => `${NOMBRE_GRUPO[g.grupo]} (${g.hechas} de ${g.plan} series)`;
-  const sueno = (() => { const xs = Object.entries(bienestar).filter(([f]) => f >= act.desde && f <= act.hasta).map(([, v]) => Number(v?.sueno_horas)).filter(x => x > 0); return xs.length ? Math.min(...xs) === Math.max(...xs) ? `${coma(xs[0])} horas` : `${coma(Math.min(...xs))} a ${coma(Math.max(...xs))} horas` : null; })();
-  const porque = cansancio.length ? `Esa semana ${lista(cansancio)}: el cuerpo pide descansar antes de seguir subiendo.`
-    : crecio ? `No parece cansancio${sueno ? ` (dormiste ${sueno})` : ''}: el plan pasó de ${prev.sesiones.plan} a ${act.sesiones.plan} sesiones firmes y de ${prev.series.plan} a ${act.series.plan} series, más de lo que te cupo.`
-      : patron ? 'Es la segunda semana seguida a medias: el plan pide más días de los que tienes.' : '';
+  // El mensaje, corto (9 de noviembre de 2026: "son cuatro párrafos para quien no lee"): qué pasó, por qué si se sabe y
+  // qué se propone, una línea cada uno. El detalle (series por grupo, qué sesiones quedan firmes, fechas) está en la
+  // vista previa de cada botón, que es donde se decide.
+  const hizo = `${act.sesiones.completas} de ${act.sesiones.plan} sesiones${act.sesiones.aMedias ? ` y ${act.sesiones.aMedias === 1 ? 'una' : act.sesiones.aMedias} a medias` : ''}`;
+  const porque = cansancio.length ? `Esa semana ${lista(cansancio)}.`
+    : crecio ? `El plan había crecido de ${prev.sesiones.plan} a ${act.sesiones.plan} sesiones.`
+      : patron ? 'Es la segunda semana seguida.' : '';
   const propuesta = {
     menos_dias: opciones.menos_dias && (() => {
       const r = pasarADias(plan, { semana: actual, dias, faltan: faltan.map(g => g.grupo), prioridad, hechas, hoy, indice });
-      return `Te propongo pasar a ${dias} días: ${lista(r.firmes)} quedan firmes, y ${lista(r.opcionales)} ${r.opcionales.length === 1 ? 'pasa' : 'pasan'} a opcional hasta el final del bloque (si te sobra un día, la haces).`;
+      return `Te propongo pasar a ${dias} días: ${lista(r.opcionales)} ${r.opcionales.length === 1 ? 'queda' : 'quedan'} como opcional.`;
     })(),
-    primero: 'Te propongo partir esta semana por lo que faltó, sin sumar sesiones: si no alcanzas a todo, lo que queda fuera es lo que ya hiciste la semana pasada.',
-    repetir: opciones.repetir && (() => {
-      const r = repetirSemana(plan, { semana: n, hechas, hoy });
-      return `Te propongo repetir la semana ${n} con los pesos al día y correr 7 días el resto del bloque${r.descarga ? `: la descarga pasa a la semana del ${diaCorto(lunesDe(r.descarga))}` : ''}.`;
-    })(),
-    descarga: 'Te propongo que esta semana sea de descarga: los mismos ejercicios y pesos, la mitad de las series y 2 repeticiones más de reserva.',
-    seguir: 'Te propongo seguir con el plan tal cual.',
+    primero: 'Te propongo partir esta semana por lo que faltó, sin sumar sesiones.',
+    repetir: `Te propongo repetir la semana ${n}; el resto del bloque se corre 7 días.`,
+    descarga: 'Te propongo una descarga esta semana: los mismos pesos y la mitad de las series.',
+    seguir: 'Te propongo seguir igual.',
   }[recomendada];
   const texto = [
-    `La semana ${n} quedó a medias: hiciste ${hizo} (${act.series.hechas} de ${act.series.plan} series).${faltan.length ? ` Lo que más faltó: ${lista(faltan.map(grupoTexto))}${cubiertos.length ? `; ${lista(cubiertos.map(g => NOMBRE_GRUPO[g.grupo]))} ${cubiertos.length === 1 ? 'quedó cubierto' : 'quedaron cubiertos'}` : ''}.` : ''}`,
+    `La semana ${n} quedó a medias: ${hizo}.${faltan.length ? ` Faltó más ${lista(faltan.map(g => NOMBRE_GRUPO[g.grupo]))}.` : ''}`,
     porque,
     propuesta,
-    'Una semana a medias no te hace perder fuerza ni músculo: no sumes lo que faltó a esta semana, y lo que no hiciste mantiene su peso.',
-  ].filter(Boolean).join('\n\n');
+  ].filter(Boolean).join('\n');
   const orden = [recomendada, 'menos_dias', 'primero', 'repetir', 'descarga'].filter((k, i, a) => a.indexOf(k) === i && opciones[k]);
   return {
     semana: n, clave, recomendada, texto, ofrecer: act.pendientes.length === 0, pendientes: act.pendientes,
