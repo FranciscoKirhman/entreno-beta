@@ -18,6 +18,7 @@ import { semanasDelPlan } from './semanal.js';
 import { fechaEnPalabras } from './prompts-coach.js';
 import { bloqueSiguienteDisponible, lunesDesde } from './bloque-siguiente.js';
 import { cargaSugerida, registrosParaCarga, TEXTO_DESCARGA, lugaresDe } from './motor-plan.js';
+import { caparCargas, textoCargasAjustadas } from './red-peso.js';
 
 export const VERSIONES = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 const SERVIDOR = { name: 'entreno', title: 'Entreno', version: '0.2.0' };
@@ -204,6 +205,10 @@ export const HERRAMIENTAS = [
         r.rechazados.push(...r.aplicados.map(cambio => ({ cambio, motivo: 'El plan ya está así: este cambio no modifica nada.' })));
         r.aplicados = [];
       }
+      // Un peso nuevo muy sobre lo levantado hace poco baja a lo que da el historial, y se le dice a la IA para que lo
+      // cuente (nucleo/red-peso.js). No se bloquea: en la sesión la persona puede escribir el peso que quiera.
+      const capado = datos.historial ? caparCargas(r.plan, plan, { series: seriesConFecha(await datos.historial(12)), indice, hoy, lugares: lugaresDe(respuestas) }) : { plan: r.plan, ajustadas: [] };
+      r.plan = capado.plan;
       const v = validarCambio(plan, r.plan, { derivados, respuestas, indice, hoy });
       // Solo las advertencias que trae este cambio: las que el plan ya tenía (un peso de máquina que no calza con los
       // discos) la IA las repetía en cada respuesta aunque no tuvieran que ver con lo pedido.
@@ -212,7 +217,8 @@ export const HERRAMIENTAS = [
       const listo = aplicar && v.ok && r.aplicados.length > 0;
       if (listo && ctx.soloProponer) ctx.propuesta = { ...r.plan, generado_por: 'ia_externa' };
       else if (listo) await datos.guardarPlan({ ...r.plan, generado_por: 'ia_externa' });
-      return texto({ guardado: listo && !ctx.soloProponer, ...(listo && ctx.soloProponer ? { esperando_confirmacion: true } : {}), aplicados: r.aplicados, rechazados: r.rechazados, errores_de_validacion: v.errores, advertencias: v.advertencias });
+      return texto({ guardado: listo && !ctx.soloProponer, ...(listo && ctx.soloProponer ? { esperando_confirmacion: true } : {}), aplicados: r.aplicados, rechazados: r.rechazados, errores_de_validacion: v.errores, advertencias: v.advertencias,
+        ...(capado.ajustadas.length ? { pesos_bajados: textoCargasAjustadas(capado.ajustadas), di_a_la_persona: 'Bajé esos pesos a lo que da su historial reciente. Dilo en una frase; si quiere más, lo sube al entrenar.' } : {}) });
     },
   },
   {
@@ -292,14 +298,18 @@ async function validarYGuardar(nuevo, ctx, origen) {
   const { respuestas, derivados } = await ctx.datos.perfil();
   const anterior = await ctx.datos.planActivo();
   const contexto = { derivados, respuestas, indice: ctx.indice, hoy: ctx.hoy };
+  // Lo mismo que en preparar_cambios: un peso nuevo muy sobre el historial reciente baja a lo calculado.
+  const capado = ctx.datos.historial ? caparCargas(nuevo, anterior, { series: seriesConFecha(await ctx.datos.historial(12)), indice: ctx.indice, hoy: ctx.hoy, lugares: lugaresDe(respuestas) }) : { plan: nuevo, ajustadas: [] };
+  nuevo = capado.plan;
+  const pesos = capado.ajustadas.length ? { pesos_bajados: textoCargasAjustadas(capado.ajustadas) } : {};
   const v = anterior ? validarCambio(anterior, nuevo, contexto) : validarPlan(nuevo, { ...contexto, edicionPersona: true });
   const plan = { ...nuevo, generado_por: origen || nuevo.generado_por };
-  if (v.ok && ctx.soloProponer) { ctx.propuesta = plan; return { ...v, propuesto: true }; }
+  if (v.ok && ctx.soloProponer) { ctx.propuesta = plan; return { ...v, ...pesos, propuesto: true }; }
   if (v.ok) await ctx.datos.guardarPlan(plan);
-  return v;
+  return { ...v, ...pesos };
 }
 /** Lo que se le cuenta a la IA después de un cambio: guardado, o esperando que la persona lo confirme. */
-const estado = v => ({ guardado: v.ok && !v.propuesto, ...(v.propuesto ? { esperando_confirmacion: true } : {}) });
+const estado = v => ({ guardado: v.ok && !v.propuesto, ...(v.propuesto ? { esperando_confirmacion: true } : {}), ...(v.pesos_bajados ? { pesos_bajados: v.pesos_bajados, di_a_la_persona: 'Bajé esos pesos a lo que da su historial reciente. Dilo en una frase; si quiere más, lo sube al entrenar.' } : {}) });
 
 const FECHA = { type: 'string', description: 'AAAA-MM-DD' };
 HERRAMIENTAS.push(

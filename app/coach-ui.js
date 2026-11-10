@@ -7,7 +7,7 @@
 // Se ve como Mensajes (docs/36-coach-estilo-apple.md, app/coach.css): cabecera con la cara del coach, saludo con lo de
 // hoy, campo redondo con ＋ (herramientas, app/herramientas-coach.js) y lo escrito sin señal queda en espera.
 import { propuestaChatHtml, confirmarCambioChat } from './propuesta-chat.js';
-import { E, guardar, esc, $, ctxNucleo, cambiarPlan, hoy, avisar, IMAGENES, indice } from './comun.js';
+import { E, R, guardar, esc, $, ctxNucleo, cambiarPlan, hoy, avisar, IMAGENES, indice } from './comun.js';
 import { aplicarOpcion } from '../nucleo/coach.js';
 import * as nube from './nube.js';
 import { sesionesPorRevisar, diaCorto } from '../nucleo/sin-registro.js';
@@ -24,6 +24,7 @@ import { abrirHoja } from './hoja.js';
 import { minutosDe } from './ritmo.js';
 import { senalesSobrecarga, propuestaSobrecarga } from '../nucleo/sobrecarga.js';
 import { semanaAMedias } from '../nucleo/semana-a-medias.js';
+import { ofertaDeTiempo } from '../nucleo/tiempo-sesion.js';
 import { esAsistido } from '../nucleo/catalogo.js';
 import { historiasDeHoy, idHistoria } from '../nucleo/historias.js';
 
@@ -398,9 +399,9 @@ function menuCoach(ir, volver) {
       if (v === 'borrar') {
         if (E.chat.some(m => m.pendiente) || E.chat.some(m => decisiones.has(m))) return avisar('Espera a que termine esta consulta o decisión antes de borrar la conversación.');
         abrirHoja({
-          titulo: '¿Borrar la conversación?', volver, nota: 'Se borra de este teléfono. Tu plan y tus sesiones no cambian.',
+          titulo: '¿Borrar la conversación?', volver, nota: 'Se borra de este teléfono y de tu cuenta. Tu plan y tus sesiones no cambian.',
           opciones: [{ valor: 'si', icono: icono('basurero'), nombre: 'Borrar', peligro: true }, { valor: 'no', icono: icono('cerrar'), nombre: 'Cancelar' }],
-          alElegir: x => { if (x !== 'si') return; E.chat = []; guardar(); vistaCoach(ir); },
+          alElegir: x => { if (x !== 'si') return; E.chat = []; E.chatBorrado = Date.now(); guardar(); vistaCoach(ir); },
         });
       }
     },
@@ -517,6 +518,17 @@ export function proponerDescargaSiToca() {
   const p = propuestaSobrecarga({ plan: E.plan, hoy: hoy(), senales, descartadas: E.sobrecargaNo || {} });
   if (!p || E.chat.some(m => m.clave === p.clave)) return false;
   E.chat.push({ rol: 'coach', app: true, tipo: 'descarga', clave: p.clave, texto: p.texto, opciones: p.opciones });
+  if (!$('vista-coach')?.isConnected) { E.chatSinLeer = true; marcarNovedadCoach(); }
+  guardar();
+  return true;
+}
+/** Tras dos rechazos del ajuste de tiempo, el coach ofrece una sola vez poner en el perfil lo que duran las sesiones. */
+export function proponerTiempoSiToca() {
+  if (!E.plan?.dias?.length || !Array.isArray(E.sesiones) || !Array.isArray(E.chat)) return false;
+  const p = ofertaDeTiempo({ vivaNo: E.vivaNo || {}, hoy: hoy(), perfilMin: R()?.duracion_min, descartadas: E.sobrecargaNo || {},
+    sesiones: E.sesiones.map(s => ({ fecha: s.fecha || String(s.inicio || '').slice(0, 10), duracion_min: s.duracion_min, series: s.series })) });
+  if (!p || E.chat.some(m => m.clave === p.clave)) return false;
+  E.chat.push({ rol: 'coach', app: true, tipo: 'tiempo', clave: p.clave, texto: p.texto, opciones: p.opciones });
   if (!$('vista-coach')?.isConnected) { E.chatSinLeer = true; marcarNovedadCoach(); }
   guardar();
   return true;
@@ -668,6 +680,11 @@ async function decidir(accion, etiqueta, ir) {
     } catch (e) { if (!vigente()) return false; r = { texto: e.message }; aceptada = false; }
   } else r = aplicarOpcion(accion, ctxNucleo());
   if (r.descartar) (E.sobrecargaNo ||= {})[r.descartar] = true; // "Ahora no": esta semana no se vuelve a proponer
+  // El tiempo por sesión que la persona aceptó subir: va a sus respuestas y a la cuenta, como cualquier cambio del perfil.
+  if (r.duracion_min && R()) {
+    R().duracion_min = typeof R().duracion_min === 'number' ? r.duracion_min : String(r.duracion_min);
+    if (nube.conectado()) nube.guardarCuestionario(structuredClone(R())).catch(() => {});
+  }
   if (r.consentimiento) {
     E.consentimientos[r.consentimiento] = true;
     if (nube.conectado()) nube.consentir(r.consentimiento).catch(() => {});

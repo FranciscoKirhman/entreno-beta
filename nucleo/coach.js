@@ -398,6 +398,9 @@ export function aplicarOpcion(accion, ctx) {
     case 'sobrecarga_no': return { texto: 'Bien, sigues con el plan. Esta semana, para cada serie cuando te queden las repeticiones que pide: la última tiene que salir igual de limpia que la primera.', descartar: accion.clave };
     // "Seguir igual" a una semana a medias (nucleo/semana-a-medias.js): no se vuelve a ofrecer por esa semana.
     case 'semana_a_medias_no': return { texto: 'Bien, sigues con el plan tal cual. No sumes a esta semana lo que faltó, y lo que no hiciste mantiene su peso.', descartar: accion.clave };
+    // El tiempo por sesión del perfil, cuando el recorte se rechazó dos veces (nucleo/tiempo-sesion.js: ofertaDeTiempo).
+    case 'tiempo_perfil': return { texto: `Listo: tu tiempo por sesión queda en ${accion.minutos} minutos. No te propongo más recortes, y el próximo bloque se arma para ese tiempo.`, descartar: accion.clave, duracion_min: Number(accion.minutos) };
+    case 'tiempo_perfil_no': return { texto: 'Bien, lo dejo como está y no te propongo más recortes al empezar. Si un día tienes menos tiempo, usa Ajustar tiempo.', descartar: accion.clave };
     default: return { texto: 'Perfecto.' };
   }
 }

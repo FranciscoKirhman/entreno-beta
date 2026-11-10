@@ -179,6 +179,16 @@ export function cargaInicial(registros, reps, rir, incremento, maximo) {
   return carga > 0 ? Number(carga.toFixed(2)) : null;
 }
 
+/**
+ * En una máquina, polea o Smith, solo sirven las series hechas en el mismo lugar: el kilo de una máquina no es el de la
+ * misma máquina en otro gimnasio. Las series sin lugar (todo lo anterior al 10 de noviembre de 2026 y lo importado)
+ * cuentan como siempre, para no perder el historial. Barra, mancuernas y discos se comparan entre lugares.
+ */
+export function delMismoLugar(series, ej, lugar) {
+  if (!lugar || !deMaquina(ej)) return series;
+  return series.filter(s => !s.lugar || s.lugar === lugar);
+}
+
 /** Las series de un ejercicio que sirven para estimar su carga: las de las 8 semanas antes de `fecha` o, si no hay, las
  *  de la última vez que se hizo, aunque sea hace meses. Así un récord de hace un año no manda sobre cómo viene ahora. */
 export function registrosParaCarga(series, id, fecha, semanas = 8) {
@@ -661,6 +671,31 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     }
     if (!puesto) break;
   }
+  // Espalda baja directa una vez por semana cuando las sesiones son de 60 minutos o más (Francisco, 10 de noviembre de
+  // 2026). Antes solo venía en dos plantillas y con la prioridad más baja: en el barrido faltaba en 3 de cada 4 planes
+  // de gimnasio y nunca estaba en semanas de 2 o 3 días. Va con 2 series al final del día con más holgura que no sea de
+  // pierna (el día siguiente a una bisagra pesada ya la carga), si cabe sin pasarse del tiempo.
+  const esLumbar = e => porId.get(e.ejercicio_id).musculos_primarios.includes('erectores');
+  if (d.duracion_min >= 60 && !conSemana.some(x => x.ejercicios.some(esLumbar))) {
+    const dePierna = x => (x.plantilla || '').startsWith('pierna') ? 1 : 0;
+    const dias = [...conSemana].sort((a, b) => dePierna(a) - dePierna(b) || estimar(a.ejercicios) - estimar(b.ejercicios));
+    // No puede dejar ningún músculo sobre el límite que el validador rechaza (también cuenta media serie para glúteo y
+    // femoral, que en la mayoría de los planes ya están en su tope).
+    const pasaTope = ej => {
+      const v = volumenTope();
+      return [...ej.musculos_primarios.map(k => [k, 1]), ...ej.musculos_secundarios.map(k => [k, 0.5])].some(([k, n]) => CONTADOS.includes(k)
+        && (v[k] || 0) + n * 2 > duro);
+    };
+    const cabe = (x, lista) => estimar(lista, 10) <= d.duracion_min;
+    for (const x of dias) {
+      const ej = elegir('extension_lumbar', new Set(x.ejercicios.map(e => e.ejercicio_id)));
+      if (!ej || !ej.musculos_primarios.includes('erectores')) break;
+      const nuevo = { ...armar(ej, 4, x.ejercicios.length), series: 2 };
+      if (pasaTope(ej) || !cabe(x, [...x.ejercicios, nuevo])) continue;
+      x.ejercicios.push(nuevo);
+      break;
+    }
+  }
   // Sesiones cortas: un músculo que quedó bajo el piso de su rango (brazos, aductores, pecho u hombro en 4 días de 45 o
   // 60 minutos) suma un accesorio de 2 series en superserie con otro accesorio del día, si cabe con el calentamiento
   // real. Antes el remo extra de una prioridad ocupaba el lugar de bíceps y tríceps y el torso quedaba sin brazos.
@@ -749,7 +784,7 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
       const candidatos = dia.ejercicios.filter(e => !favoritos.has(e.ejercicio_id) || e.series > 1);
       const resguardo = e => (protegido(e) || (principalDe.get(dia.plantilla) === e.ejercicio_id && e.series > 3 && d.nivel === 'avanzado') ? 1 : 0);
       const lista = candidatos.length ? candidatos : dia.ejercicios;
-      const prio = e => (unicoCore(dia.ejercicios, e) ? 1.5 : e.prioridad);
+      const prio = e => (unicoCore(dia.ejercicios, e) ? 1.5 : esLumbar(e) && d.duracion_min >= 60 ? 2.5 : e.prioridad);
       let ultimo = [...lista].sort((a, b) => resguardo(a) - resguardo(b) || prio(b) - prio(a) || b.orden - a.orden)[0];
       // Antes de sacar un básico, el único core del día o algo que deja un músculo bajo su piso, se le quita una serie a
       // otro que tenga más de 2 (el primero del día, si hace falta).

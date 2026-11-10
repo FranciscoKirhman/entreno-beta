@@ -15,14 +15,14 @@ import { discosPorLado, discosDisponibles, BARRAS_KG, BARRAS_LB } from '../nucle
 import { checklist } from '../nucleo/suplementos.js';
 import { enlaceVideo } from '../nucleo/explicar.js';
 import { sesionDe } from '../nucleo/agenda.js';
-import { incrementoPara, cargaSugerida, registrosParaCarga, prescripcion, repsObjetivo, lugaresDe, conDosMancuernas, deMaquina } from '../nucleo/motor-plan.js';
+import { incrementoPara, cargaSugerida, registrosParaCarga, prescripcion, repsObjetivo, lugaresDe, conDosMancuernas, deMaquina, delMismoLugar } from '../nucleo/motor-plan.js';
 import { prioridadEsfuerzo, consejoSerie } from '../nucleo/series.js';
 import { ajusteDelDia, previasDeHoy } from '../nucleo/fatiga-sesion.js';
 import { redDePeso } from '../nucleo/red-peso.js';
 import { sesionViva, aplicarViva } from '../nucleo/sesion-viva.js';
 import { restanAceptar, contarSegundo, huellaAjuste, ajusteVigente } from '../nucleo/cuenta-viva.js';
 import { alternativas } from '../nucleo/checkin.js';
-import { filasTrasAjuste, ajustarTiempo, hechasDelDia, duracionReal, minutosRestantes, resumenSesion, recorteGrande } from '../nucleo/tiempo-sesion.js';
+import { filasTrasAjuste, ajustarTiempo, hechasDelDia, duracionReal, minutosRestantes, resumenSesion, recorteGrande, rechazosDeTiempo, RECHAZOS_PARA_CALLAR } from '../nucleo/tiempo-sesion.js';
 import { factorRitmo, minutosDe as minutosARitmo, textoRitmo, accesoriosHoy, topeSeriesHoy } from './ritmo.js';
 import { descansosDeSesion, paraGuardar as descansosParaGuardar } from '../nucleo/descansos.js';
 import { TIPOS_SERIE, tipoDe, etiquetas, cuantasFilas, anterior, cifras, tipoParaGuardar } from '../nucleo/registro.js';
@@ -306,6 +306,8 @@ function materializar(f, e, k) {
 const fijarFilas = (f, id, n) => { ((E.filas ||= {})[f] ||= {})[id] = n; };
 // Con la forma de anotar las mancuernas (Más, Unidades): con "El par", el escalón de las de dos mancuernas es 4.
 const lugarDe = dia => { const l = lugaresDe(R()); return l.find(x => x.nombre === dia?.lugar) || l.find(x => x.principal) || l[0]; };
+/** Las series anotadas que sirven para este ejercicio en el lugar de hoy (nucleo/motor-plan.js: delMismoLugar). */
+const seriesAqui = (id, dia, registro = E.registro) => delMismoLugar(seriesAnotadas(E.sesiones, registro), indice.porId.get(id), lugarDe(dia)?.nombre);
 const deTrabajoFila = x => ['normal', 'fallo'].includes(tipoDe(x));
 /** Lo de la vez anterior sirve para el peso en gris si es de las últimas 8 semanas, o con barra o mancuernas. En una
  *  máquina o polea, lo de hace meses puede ser de otra máquina (nucleo/motor-plan.js: deMaquina): la patada de glúteo
@@ -327,7 +329,7 @@ function redDe(e, dia, f) {
   if (!redGuardada.has(clave)) {
     if (redGuardada.size > 300) redGuardada.clear();
     redGuardada.set(clave, redDePeso({ e, ej: indice.porId.get(e.ejercicio_id), lugar,
-      registros: registrosParaCarga(seriesAnotadas(E.sesiones, {}), e.ejercicio_id, f) }));
+      registros: registrosParaCarga(seriesAqui(e.ejercicio_id, dia, {}), e.ejercicio_id, f) }));
   }
   return redGuardada.get(clave);
 }
@@ -339,7 +341,7 @@ function cargaPlanDe(e, dia, f) {
   if (e.carga_kg != null && e.ejercicio_id) return redDe(e, dia, f)?.kg ?? e.carga_kg;
   if (e.carga_kg != null || !e.ejercicio_id) return e.carga_kg ?? null;
   return cargaSugerida({ e, ej: indice.porId.get(e.ejercicio_id), lugar: lugarDe(dia),
-    registros: registrosParaCarga(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f) });
+    registros: registrosParaCarga(seriesAqui(e.ejercicio_id, dia), e.ejercicio_id, f) });
 }
 /**
  * La carga de hoy: la del plan, con menos peso si lo ya hecho hoy de otro ejercicio del mismo músculo salió más duro de
@@ -388,7 +390,7 @@ function repsObjetivoDe(e, kg, f, dia) {
   const carga = delDia?.fatiga && Number(kg) === delDia.kg ? delDia.fatiga.base : kg;
   const ej = indice.porId.get(e.ejercicio_id);
   return repsObjetivo({ e, carga, asistido: esAsistido(ej), ej,
-    registros: registrosParaCarga(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f) });
+    registros: registrosParaCarga(seriesAqui(e.ejercicio_id, dia), e.ejercicio_id, f) });
 }
 /**
  * Las series de calentamiento de un ejercicio, como en el tablero: las que indica el plan o, si no, las que calcula la
@@ -869,6 +871,9 @@ function propuestaTiempo(dia, f) {
   // Cabía igual: lo opcional sale porque la persona eligió mantener su tiempo sin lo opcional (preguntas del coach).
   const porPedido = opcionales.length > 0 && ahora <= quedan + 5;
   if (!crece && !porPedido && recorteGrande(base.ejercicios, r.ejercicios)) return null;
+  // Rechazado dos veces en tres semanas: no se vuelve a proponer un recorte al empezar. El coach ofrece una vez subir el
+  // tiempo del perfil (nucleo/tiempo-sesion.js) y Ajustar tiempo sigue a mano para el día que haga falta.
+  if (!crece && !porPedido && rechazosDeTiempo(E.vivaNo || {}, f) >= RECHAZOS_PARA_CALLAR) return null;
   return {
     id: `tiempo:${f}`, tipo: 'tiempo', ejercicio_id: null, nombre: 'Tiempo de hoy',
     accion: crece ? `sumar ${lista(r.agregados.map(nombre).map(x => x.toLowerCase()))} como opcional` : `ajustar la sesión a tus ${disponibles} minutos`,
@@ -2032,7 +2037,7 @@ function enlazar(ir, dia) {
       repintar();
       return;
     }
-    const lugar = lugarDe(d), registros = id => registrosParaCarga(seriesAnotadas(E.sesiones, E.registro), id, f);
+    const lugar = lugarDe(d), registros = id => registrosParaCarga(seriesAqui(id, d), id, f);
     const nuevoEjercicio = (id, orden, como = null) => {
       const ej = indice.porId.get(id), pr = como ? { series: como.series, reps_min: como.reps_min, reps_max: como.reps_max, unidad: como.unidad || 'reps', rir: como.rir, descanso_seg: como.descanso_seg } : { ...prescripcion(ej, 3, D()), series: 3 };
       const carga = cargaSugerida({ e: pr, ej, lugar, registros: registros(id) });
@@ -2118,7 +2123,8 @@ function enlazar(ir, dia) {
     const hora = horaInicio || anteriorGuardada?.hora || ahora().slice(11);
     // Lo que duró: lo escrito al guardar o, si no, desde "Empezar" (o la primera serie) hasta ahora.
     const minutos = minutosElegidos != null ? minutosElegidos : anteriorGuardada ? anteriorGuardada.duracion_min : inicioDe(f) ? minutosDe(f) : avance(dia).cifras.minutos ?? (cardio ? Math.round(cardio.duracion_seg / 60) : null);
-    E.sesiones.push({ id, fecha: f, hora, titulo, duracion_min: minutos, series, notas, ...(comentario ? { comentario } : {}) });
+    // Con su lugar: una máquina solo se compara con la misma máquina del mismo gimnasio (docs/51, sección 6).
+    E.sesiones.push({ id, fecha: f, hora, titulo, duracion_min: minutos, series, notas, ...(comentario ? { comentario } : {}), ...(lugarDe(dia)?.nombre ? { lugar: lugarDe(dia).nombre } : {}) });
     // Queda por cerrar hasta que el coach la reciba y "Para la próxima" se muestre: si algo corta el guardado (sin
     // señal, la app cerrada), se completa solo al volver a abrir la app (app/cierre-sesion.js).
     marcarPorCerrar(id);

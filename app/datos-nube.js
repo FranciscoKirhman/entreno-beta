@@ -3,7 +3,8 @@ import { unirDescansosMedidos, esDescansoMedido } from '../nucleo/descansos-guar
 // medidas del cuerpo, notas fijas, rutinas, ¿cómo se sintió?, meta de peso, ajustes de la sesión y las fechas de la
 // regla. Cada cambio se sube al tiro; si no hay señal, queda pendiente y se sube al sincronizar. Al entrar en otro teléfono, se baja lo de la cuenta. Las medidas y el ciclo
 // son datos de salud: solo se suben con su permiso.
-import { E, R, guardar, modoEjemplo, ambitoDatos, alinearPropios, asegurarExtras, alCambiarPlan } from './comun.js';
+import { E, R, guardar, modoEjemplo, ambitoDatos, alinearPropios, asegurarExtras, alCambiarPlan, alGuardar } from './comun.js';
+import { sellarChat, chatParaNube, unirChats, huellaChat } from '../nucleo/chat-nube.js';
 import { propiosDelPlan, conPropiosGuardados } from '../nucleo/propios.js';
 import { unirInicios } from '../nucleo/ciclo-menstrual.js';
 import * as nube from './nube.js';
@@ -28,6 +29,17 @@ const LOCAL = {
     },
   },
   seguimiento_molestias: { leer: () => E.saludFeed || {}, poner: v => { E.saludFeed = { respuestas: unirProgresion(E.saludFeed?.respuestas, v?.respuestas) }; } },
+  // La conversación con el coach (nucleo/chat-nube.js): se junta con la de la cuenta, nunca se reemplaza a ciegas.
+  chat_coach: {
+    leer: () => { sellarChat(E.chat); return chatParaNube(E.chat, E.chatBorrado || 0); },
+    poner: v => {
+      const r = unirChats(E.chat || [], v || {}, E.chatBorrado || 0);
+      E.chat = r.chat; if (r.borrado) E.chatBorrado = r.borrado;
+      huellaSubida = huellaChat(E.chat, E.chatBorrado || 0);
+      // Si este teléfono traía algo que la cuenta no tenía, sube lo junto.
+      if (JSON.stringify(chatParaNube(E.chat, E.chatBorrado || 0)) !== JSON.stringify({ mensajes: v?.mensajes || [], ...(v?.borrado ? { borrado: v.borrado } : {}) })) (E.nubeDatos ||= {}).chat_coach = { pendiente: true };
+    },
+  },
   feed_vistas: { leer: () => E.feedVistas || {}, poner: v => { E.feedVistas = unirProgresion(E.feedVistas, v); } },
   // Con los ajustes de la sesión viajan dos preferencias de cómo se anota, que viven en las respuestas: RPE o RIR y
   // las mancuernas de a una o el par. Una cuenta que aún no las tiene recibe las de este teléfono (falta).
@@ -58,7 +70,7 @@ const LOCAL = {
   },
 };
 // Las medidas y la meta de peso son datos del cuerpo: solo con el permiso de las medidas.
-const permitido = clave => clave === 'seguimiento_molestias' ? R()?.consentimiento_salud === true && E.consentimientos?.datos_salud !== false : !['medidas_cuerpo', 'meta_peso'].includes(clave) || E.consentimientos?.medidas_cuerpo === true;
+const permitido = clave => ['seguimiento_molestias', 'chat_coach'].includes(clave) ? R()?.consentimiento_salud === true && E.consentimientos?.datos_salud !== false : !['medidas_cuerpo', 'meta_peso'].includes(clave) || E.consentimientos?.medidas_cuerpo === true;
 const valorLocal = clave => LOCAL[clave].leer();
 const tieneDatos = clave => { const v = valorLocal(clave); return Array.isArray(v) ? v.length > 0 : Object.keys(v).length > 0; };
 const enLinea = () => !modoEjemplo && nube.hay() && nube.conectado() && ambitoDatos === nube.usuarioId();
@@ -109,6 +121,20 @@ alCambiarPlan.add((anterior, nuevo) => {
   if (!nuevo?.libre && JSON.stringify(propiosDelPlan(anterior)) !== JSON.stringify(propiosDelPlan(nuevo))) datoCambiado('plan_propios');
 });
 
+// La conversación cambia en muchos lugares (cada mensaje, cada propuesta que se acepta): en vez de avisar desde cada
+// uno, se mira al guardar si lo que subiría es distinto de lo último que subió.
+let huellaSubida = null;
+alGuardar.add(() => {
+  if (!enLinea() || !permitido('chat_coach')) return;
+  const h = huellaChat(E.chat, E.chatBorrado || 0);
+  if (huellaSubida === null) { huellaSubida = h; return; } // el primer guardado solo toma la referencia
+  if (h === huellaSubida) return;
+  huellaSubida = h;
+  revisarEdicion('chat_coach');
+  (E.nubeDatos ||= {}).chat_coach = { pendiente: true };
+  subir('chat_coach');
+});
+
 /** Llamar después de cambiar cualquiera de las claves de LOCAL. */
 export function datoCambiado(clave) {
   revisarEdicion(clave);
@@ -133,7 +159,7 @@ export async function sincronizarDatosTelefono() {
   for (const clave of Object.keys(LOCAL)) {
     if (!permitido(clave)) continue;
     const fila = filas.find(f => f.clave === clave);
-    if (['progresion_sesion', 'feed_vistas', 'seguimiento_molestias', 'descansos'].includes(clave) && fila) LOCAL[clave].poner(fila.valor, revisionDe(clave) !== alLeer[clave]);
+    if (['progresion_sesion', 'feed_vistas', 'seguimiento_molestias', 'descansos', 'chat_coach'].includes(clave) && fila) LOCAL[clave].poner(fila.valor, revisionDe(clave) !== alLeer[clave]);
     if (E.nubeDatos?.[clave]?.pendiente || (!fila && tieneDatos(clave))) {
       await guardarDato(clave, contexto);
       contexto.comprobar();

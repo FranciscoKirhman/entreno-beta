@@ -12,6 +12,7 @@ export function sesionDelServidor(s) {
   const hh = Number(h) % 12 + (am === 'PM' ? 12 : 0);
   return { id: s.id, fecha, hora: `${String(hh).padStart(2, '0')}:${m}`, titulo: s.titulo,
     duracion_min: s.duracion_min, comentario: s.comentario, id_externo: s.id_externo, clave,
+    ...(s.lugar ? { lugar: s.lugar } : {}),
     ...(s.origen === 'app' ? {} : { origen: s.origen.startsWith('hevy') ? 'hevy' : s.origen }),
     enCuenta: true, series: (s.series || []).sort((a, b) => a.orden - b.orden).map(({ id, user_id, sesion_id, ...x }) => x),
     notas: (s.notas_ejercicio || []).map(({ id, user_id, sesion_id, creado, ...x }) => x) };

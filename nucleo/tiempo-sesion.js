@@ -314,3 +314,41 @@ export function filasTrasAjuste(lista = [], series) {
   while (nueva.length > cal + n) nueva.pop();
   return { lista: nueva, filas: cal + n };
 }
+
+// ── Cuando el recorte de tiempo se rechaza una y otra vez ────────────────────
+// Medido en la beta (10 de noviembre de 2026): con un perfil de 75 minutos, las sesiones reales de 13 series duraban
+// 75, y una de 15 no cabe; la app proponía recortar casi todos los días y la persona lo rechazaba. Después de dos
+// rechazos en tres semanas deja de proponerlo, y el coach ofrece una sola vez poner en el perfil lo que de verdad dura.
+export const RECHAZOS_PARA_CALLAR = 2, DIAS_DE_RECHAZOS = 21;
+const OPCIONES_MINUTOS = [30, 45, 60, 75, 90, 120];
+const menosDias = (iso, n) => new Date(Date.parse(iso + 'T12:00:00Z') - n * 864e5).toISOString().slice(0, 10);
+
+/** En cuántos días de las últimas tres semanas se rechazó el ajuste de tiempo (E.vivaNo: {fecha: {'tiempo:fecha': true}}). */
+export function rechazosDeTiempo(vivaNo = {}, hoy) {
+  const desde = menosDias(hoy, DIAS_DE_RECHAZOS);
+  return Object.entries(vivaNo || {}).filter(([f, ids]) => f >= desde && f <= hoy && Object.entries(ids || {}).some(([id, v]) => v && id.startsWith('tiempo:'))).length;
+}
+
+/**
+ * La oferta del coach: null si no corresponde (pocos rechazos, ya respondida, sin sesiones medidas o si lo que duran
+ * cabe en el tiempo del perfil).
+ * @param o.sesiones [{fecha, duracion_min, series: [...]}] de la persona
+ * @param o.descartadas {clave: true} lo ya respondido (E.sobrecargaNo)
+ */
+export function ofertaDeTiempo({ vivaNo = {}, hoy, perfilMin, sesiones = [], descartadas = {} }) {
+  const perfil = Number(perfilMin) || 0;
+  if (!perfil || rechazosDeTiempo(vivaNo, hoy) < RECHAZOS_PARA_CALLAR) return null;
+  const clave = `tiempo_perfil|${perfil}`;
+  if (descartadas[clave]) return null;
+  const desde = menosDias(hoy, 56);
+  const duraciones = sesiones.filter(s => s.fecha >= desde && Number(s.duracion_min) >= 20 && (s.series || []).length >= 6).map(s => Number(s.duracion_min));
+  if (duraciones.length < 3) return null;
+  const real = mediana(duraciones);
+  const nuevo = OPCIONES_MINUTOS.find(m => m >= real - 5) || OPCIONES_MINUTOS.at(-1);
+  if (nuevo <= perfil) return null;
+  return {
+    clave, minutos: nuevo, real: Math.round(real),
+    texto: `Rechazaste dos veces acortar la sesión. Tus sesiones duran unos ${Math.round(real)} minutos y tu perfil dice ${perfil}.\n¿Lo subo a ${nuevo}? Así dejo de proponerte recortes y el próximo bloque se arma para ese tiempo.`,
+    opciones: [{ etiqueta: `Subir a ${nuevo} minutos`, accion: { tipo: 'tiempo_perfil', minutos: nuevo, clave } }, { etiqueta: 'Dejarlo así', accion: { tipo: 'tiempo_perfil_no', clave } }],
+  };
+}

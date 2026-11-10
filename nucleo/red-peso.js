@@ -3,7 +3,7 @@
 // lo corrigen después de sufrirlo; esta red lo detiene antes. Si el plan pide bastante más que lo que la persona levantó
 // hace poco en ese mismo ejercicio, el gris parte con lo calculado desde su historial y dice por qué, con el peso del
 // plan a la vista. No toca el plan guardado: solo lo que hoy se muestra y se propone.
-import { cargaInicial, incrementoPara, deMaquina } from './motor-plan.js';
+import { cargaInicial, incrementoPara, deMaquina, registrosParaCarga } from './motor-plan.js';
 import { esAsistido } from './catalogo.js';
 
 /** Cuánto más que lo calculado puede pedir el plan sin que salte la red. En la revisión de la beta (16 sesiones, 73
@@ -49,4 +49,41 @@ export function redDePeso({ e, ej, registros = [], lugar = null }) {
   if (plan <= calculado * (1 + MARGEN_RED) || plan <= calculado + inc + 1e-9 || plan <= masPesado + inc + 1e-9) return null;
   const fecha = ref.map(s => s.fecha).sort().at(-1);
   return { kg: calculado, plan, masPesado, fecha, maquina: deMaquina(ej) };
+}
+
+/**
+ * La misma red para un plan que propone la IA o que llega importado: los pesos nuevos o cambiados de hoy en adelante
+ * que piden mucho más que lo levantado hace poco bajan a lo calculado, y se devuelve la lista para decirlo. El bloque
+ * del 19 de octubre de 2026 lo armó la IA con cargas sobre el historial y se aceptó así. Lo que el plan ya traía no se
+ * toca: eso lo muestra la sesión al empezar (app/hoy.js).
+ * @param nuevo     plan propuesto (se modifica una copia)
+ * @param anterior  plan vigente, o null
+ * @param ctx       { series: [{ejercicio_id, fecha, carga_kg, reps, rir?, rpe?, tipo?}], indice, hoy, lugares }
+ * @returns {{plan, ajustadas: {ejercicio, fecha, pedido, queda, mas_pesado}[]}}
+ */
+export function caparCargas(nuevo, anterior, { series = [], indice, hoy, lugares = [] }) {
+  const plan = structuredClone(nuevo), ajustadas = [];
+  // "Ya lo traía": ese ejercicio con ese mismo peso estaba en el plan vigente, en cualquier fecha (mover o intercambiar
+  // sesiones cambia la fecha, no el peso).
+  const antes = new Set((anterior?.dias || []).flatMap(d => (d.ejercicios || []).map(e => `${e.ejercicio_id}|${e.carga_kg}`)));
+  const lugarDe = nombre => lugares.find(l => l.nombre === nombre) || lugares.find(l => l.principal) || lugares[0] || null;
+  for (const d of plan.dias || []) {
+    if (d.fecha < hoy) continue;
+    for (const e of d.ejercicios || []) {
+      if (e.carga_kg == null || e.indicacion || antes.has(`${e.ejercicio_id}|${e.carga_kg}`)) continue;
+      const ej = indice.porId.get(e.ejercicio_id);
+      const red = redDePeso({ e, ej, lugar: lugarDe(d.lugar), registros: registrosParaCarga(series, e.ejercicio_id, d.fecha < hoy ? d.fecha : hoy) });
+      if (!red) continue;
+      ajustadas.push({ ejercicio: ej?.nombre || e.ejercicio_id, fecha: d.fecha, pedido: e.carga_kg, queda: red.kg, mas_pesado: red.masPesado });
+      e.carga_kg = red.kg;
+    }
+  }
+  return { plan, ajustadas };
+}
+
+/** Lo que se le dice a la IA para que lo cuente: un renglón por ejercicio, sin repetir fechas. */
+export function textoCargasAjustadas(ajustadas) {
+  const porEj = new Map();
+  for (const a of ajustadas) if (!porEj.has(a.ejercicio)) porEj.set(a.ejercicio, a);
+  return [...porEj.values()].map(a => `${a.ejercicio}: pedías ${a.pedido} kg y lo más pesado de sus últimas sesiones fue ${a.mas_pesado} kg; quedó en ${a.queda} kg.`);
 }
