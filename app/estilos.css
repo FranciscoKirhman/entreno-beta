@@ -25,6 +25,9 @@
     color-scheme: dark;
 }
 *{box-sizing:border-box}
+/* Un doble toque rápido sobre un ✓ o una opción ampliaba la página a 1,6×. Especificidad cero, para no pisar las
+   reglas que piden otro gesto (.rueda, .serie, el asa de ordenar). El pellizco sigue ampliando. */
+:where(*){touch-action:manipulation}
 [hidden]{display:none!important}
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font:16px/1.45 var(--f-texto);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}

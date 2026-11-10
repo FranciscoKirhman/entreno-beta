@@ -2,11 +2,13 @@
 // despliega su explicación sin elegirla. Se cierra tocando afuera, con Escape, al elegir o arrastrándola hacia abajo.
 import { esc } from './comun.js';
 import { sinMovimiento } from './movimiento.js';
+import { retirarFondo, vigilarFondo } from '../nucleo/retirar-fondo.js';
 
 let alCerrar = null;
 
 /** La opción se aplica de inmediato. El fondo absorbe los toques durante el cierre para que un segundo toque
- *  no llegue a una serie o un campo que estaba debajo, también con movimiento reducido. */
+ *  no llegue a una serie o un campo que estaba debajo, también con movimiento reducido. Se retira a los 400 ms,
+ *  o cuando termina el toque que tenga encima (nucleo/retirar-fondo.js). */
 export function cerrarHoja() {
   const fondo = document.getElementById('hoja');
   document.removeEventListener('keydown', teclaEscape);
@@ -17,7 +19,7 @@ export function cerrarHoja() {
     fondo.classList.add('cerrando');
     fondo.classList.remove('abierta');
     if (sinMovimiento()) fondo.querySelector('.hoja').hidden = true;
-    setTimeout(() => fondo.remove(), 240);
+    if (fondo.retirar) fondo.retirar(); else retirarFondo(fondo);
   }
   f?.();
 }
@@ -102,6 +104,7 @@ export function abrirHoja({ titulo, nota = '', notaOculta = false, contenido = '
     </li>`).join('')}</ul>
   </div>`;
   document.body.append(fondo);
+  fondo.retirar = vigilarFondo(fondo); // antes del clic de abajo: sabe si hay un dedo apoyado al cerrar
   alCerrar = volver ? () => volver.focus?.() : null;
   fondo.addEventListener('click', ev => {
     if (fondo.classList.contains('cerrando')) return; // ya se eligió: un segundo toque no confirma de nuevo

@@ -22,6 +22,7 @@ import { generarPlan, volumenSemanal, NOMBRE_ZONA } from '../nucleo/motor-plan.j
 import { minutosDe } from './ritmo.js';
 import { derivar } from '../nucleo/derivar.js';
 import { sumarDias } from '../nucleo/agenda.js';
+import { semanaAbierta, estaAbierta } from '../nucleo/semanas-mi-plan.js';
 import { normalizar } from '../nucleo/catalogo.js';
 import { planATexto } from '../nucleo/importar-plan.js';
 import { borradorCiclo, respuestasDelCiclo, guardarEnBorrador, guardarCambioEjercicio, cambioPrioridades, anotarCambio, semanasDesde } from '../nucleo/ciclo-siguiente.js';
@@ -50,6 +51,9 @@ const ESTADO_PASADA = { hecha: 'Hecha', recuperada: 'Hecha', adelantada: 'Hecha'
 let eleccion = null, desdeElegido = 'ciclo', buscarFav = '', buscarEvitar = '';
 // Las sesiones pasadas se ven al tocar su botón; quedan abiertas mientras la persona siga en Mi plan.
 let verPasadas = false;
+// Semanas que la persona abrió o cerró (lunes: true o false); se recuerdan mientras siga en la app. La que parte abierta
+// la elige nucleo/semanas-mi-plan.js. destinoPlan es la sesión a la que se llegó buscando, si la hay.
+let semanasElegidas = {}, destinoPlan = null;
 
 /** Lunes de la semana de f. */
 const lunesDe = f => sumarDias(f, -((new Date(f + 'T12:00:00Z').getUTCDay() + 6) % 7));
@@ -67,6 +71,7 @@ export function vistaMiPlan(ir, extra = {}) {
   if (panel === 'ciclo') return vistaCiclo(ir);
   if (SUBPANTALLAS[panel]) return vistaSub(ir, panel);
   const p = E.plan, conPlan = Boolean(p?.dias?.length && !p.libre);
+  if (extra?.fecha) { destinoPlan = extra.fecha; delete semanasElegidas[lunesDe(extra.fecha)]; }
   const repintar = () => { const y = scrollY; vistaMiPlan(ir); scrollTo(0, y); };
   $('app').innerHTML = `<div id="vista-miplan">
     <h1>Mi plan</h1>
@@ -81,6 +86,9 @@ export function vistaMiPlan(ir, extra = {}) {
     if (v === 'banco') return ir('banco', { desde: 'miplan', despues: null });
     ir(v);
   });
+  // Abrir o cerrar una semana no repinta: el details se abre solo y aquí solo se recuerda.
+  raiz.querySelectorAll('details.mp-sem').forEach(d => d.addEventListener('toggle', () => { semanasElegidas[d.dataset.mpSem] = d.open; }));
+  if (extra?.fecha) raiz.querySelector(`[data-mp-dia="${CSS.escape(extra.fecha)}"]`)?.scrollIntoView({ block: 'center' });
   raiz.querySelector('[data-mp-pasadas]')?.addEventListener('click', () => { verPasadas = !verPasadas; repintar(); });
   raiz.querySelectorAll('[data-mp-resumen]').forEach(b => b.onclick = () => ir('resumen', { id: b.dataset.mpResumen, desde: 'miplan' }));
   raiz.querySelectorAll('[data-mp-hoy]').forEach(b => b.onclick = () => ir('hoy', { sesion: true }));
@@ -134,7 +142,7 @@ function porSemana(dias) {
   for (const d of dias) { const l = lunesDe(d.fecha); if (!grupos.has(l)) grupos.set(l, []); grupos.get(l).push(d); }
   return [...grupos].map(([l, ds]) => {
     const nombre = l === lunes ? 'Esta semana' : l === sumarDias(lunes, 7) ? 'La próxima semana' : l === sumarDias(lunes, -7) ? 'La semana pasada' : `Semana del ${diaMes(l)}`;
-    return [`${nombre}${ds.some(d => d.semana != null && d.semana === E.plan.semana_descarga) ? ' · descarga' : ''}`, ds];
+    return [`${nombre}${ds.some(d => d.semana != null && d.semana === E.plan.semana_descarga) ? ' · descarga' : ''}`, ds, l];
   });
 }
 
@@ -147,7 +155,7 @@ function sesionHtml(d, estado, pasada) {
   const accion = pasada ? (estado?.sesion?.id ? `<button type="button" class="enlace" data-mp-resumen="${esc(estado.sesion.id)}">Ver lo que hiciste</button>` : '')
     : esHoy ? '<button type="button" class="enlace" data-mp-hoy>Ir a la sesión</button>' : '';
   const ejercicios = (d.ejercicios || []).map(e => `<li><span>${esc(e.nombre || nombreEj(e.ejercicio_id))}</span><span class="num">${esc(dosis(e))}</span></li>`).join('');
-  return `<details class="mp-sesion${esHoy ? ' hoy' : ''}">
+  return `<details class="mp-sesion${esHoy ? ' hoy' : ''}" data-mp-dia="${esc(d.fecha)}"${!pasada && d.fecha === destinoPlan ? ' open' : ''}>
     <summary><span class="mp-fecha">${esc(diaCorto(d.fecha))}</span><span class="mp-foco">${esc(d.foco)}</span>${chip ? `<span class="chip mp-chip ${clase}">${esc(chip)}</span>` : ''}</summary>
     <div class="mp-detalle">${ejercicios ? `<ul class="mp-ejs">${ejercicios}</ul>` : ''}${d.cardio ? `<p class="pequeno">${esc(d.cardio)}</p>` : ''}
       <p class="pequeno suave mp-pie"><span>~${minutosDe(d)} min</span>${accion}</p></div>
@@ -164,8 +172,15 @@ function calendarioHtml() {
   const pasadas = conSesion.filter(d => d.fecha < f || hecha(d)).sort((a, b) => b.fecha.localeCompare(a.fecha));
   const lista = (dias, pasada) => porSemana(dias).map(([titulo, ds]) => `<p class="mp-grupo">${esc(titulo)}</p>
     <div class="mp-sesiones">${ds.map(d => sesionHtml(d, reg.porDia.get(d.fecha), pasada)).join('')}</div>`).join('');
+  // Lo que viene: la primera semana con sesiones abierta y las demás en una fila con sus nombres en gris. Cada semana
+  // es un details nativo: abrirla no repinta, no mueve la pantalla ni cierra otra.
+  const abierta = semanaAbierta(proximas.map(d => d.fecha), { hoy: f, destino: destinoPlan });
+  const semanas = dias => porSemana(dias).map(([titulo, ds, l]) => `<details class="mp-sem" data-mp-sem="${l}"${estaAbierta(l, abierta, semanasElegidas) ? ' open' : ''}>
+    <summary><span class="mp-sem-textos"><span class="mp-sem-titulo">${esc(titulo)}</span><span class="mp-sem-nombres">${esc(ds.map(d => d.foco).filter(Boolean).join(', '))}</span></span></summary>
+    <div class="mp-sesiones">${ds.map(d => sesionHtml(d, reg.porDia.get(d.fecha), false)).join('')}</div>
+  </details>`).join('');
   return `<h2 class="titulo-seccion">Próximas sesiones</h2>
-    ${proximas.length ? lista(proximas, false) : '<p class="pequeno suave mp-vacio">No te quedan sesiones en este bloque.</p>'}
+    ${proximas.length ? semanas(proximas) : '<p class="pequeno suave mp-vacio">No te quedan sesiones en este bloque.</p>'}
     ${pasadas.length ? `<button type="button" class="boton mp-ver-pasadas" data-mp-pasadas aria-expanded="${verPasadas}">${verPasadas ? 'Ocultar las pasadas' : `Ver las pasadas (${pasadas.length})`}</button>
     ${verPasadas ? `<div class="mp-pasadas">${lista(pasadas, true)}</div>` : ''}` : ''}`;
 }

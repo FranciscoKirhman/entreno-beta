@@ -40,6 +40,9 @@ function crearBarra() {
   barra.innerHTML = '<button type="button" data-teclado="siguiente">Siguiente</button>';
   // pointerdown sin acción por defecto: el campo no pierde el foco y el teclado no se cierra.
   barra.addEventListener('pointerdown', ev => ev.preventDefault());
+  // En el iPhone el foco se pierde con mousedown (16 ms antes del clic), no con pointerdown: sin esto, el clic llegaba
+  // con el foco en la página, Siguiente no avanzaba y el teclado se cerraba en cada campo.
+  barra.addEventListener('mousedown', ev => ev.preventDefault());
   barra.addEventListener('click', ev => {
     const actual = document.activeElement;
     if (ev.target.closest('[data-teclado="siguiente"]') && actual?.matches?.(CAMPOS)) avanzar(actual);

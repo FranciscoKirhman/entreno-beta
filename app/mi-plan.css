@@ -50,11 +50,11 @@
 #vista-miplan .mp-grupo{margin:14px 4px 6px;font-size:.8125rem;font-weight:600;color:var(--ink-muted)}
 #vista-miplan .mp-sesiones{background:var(--surface);border-radius:16px;overflow:hidden}
 #vista-miplan .mp-sesion+.mp-sesion{border-top:1px solid var(--line)}
-#vista-miplan .mp-sesion summary{display:flex;align-items:center;gap:10px;min-height:52px;padding:10px 14px;cursor:pointer;list-style:none}
-#vista-miplan .mp-sesion summary::-webkit-details-marker{display:none}
-#vista-miplan .mp-sesion summary::after{content:'';flex:0 0 auto;width:7px;height:7px;margin:0 4px 3px 2px;border-right:2px solid var(--ink-muted);border-bottom:2px solid var(--ink-muted);transform:rotate(45deg);transition:transform .15s}
-#vista-miplan .mp-sesion[open] summary::after{transform:rotate(-135deg);margin-bottom:-3px}
-#vista-miplan .mp-sesion.hoy summary{box-shadow:inset 3px 0 0 var(--accent)}
+#vista-miplan .mp-sesion>summary{display:flex;align-items:center;gap:10px;min-height:52px;padding:10px 14px;cursor:pointer;list-style:none}
+#vista-miplan .mp-sesion>summary::-webkit-details-marker{display:none}
+#vista-miplan .mp-sesion>summary::after{content:'';flex:0 0 auto;width:7px;height:7px;margin:0 4px 3px 2px;border-right:2px solid var(--ink-muted);border-bottom:2px solid var(--ink-muted);transform:rotate(45deg);transition:transform .15s}
+#vista-miplan .mp-sesion[open]>summary::after{transform:rotate(-135deg);margin-bottom:-3px}
+#vista-miplan .mp-sesion.hoy>summary{box-shadow:inset 3px 0 0 var(--accent)}
 #vista-miplan .mp-fecha{flex:0 0 50px;font-size:.8125rem;color:var(--ink-muted)}
 #vista-miplan .mp-foco{flex:1;min-width:0;font-weight:600;overflow-wrap:anywhere}
 #vista-miplan .mp-chip{flex:0 0 auto;font-size:.75rem}
@@ -74,3 +74,20 @@
 #vista-miplan .mp-leyenda{margin:10px 0 0}
 
 .ciclo-cambios li{gap:12px;align-items:flex-start}.ciclo-cambios li>div{min-width:0;flex:1}.ciclo-cambios .enlace{flex-shrink:0;min-height:44px}.mp-previa>summary{min-height:44px;display:flex;align-items:center;color:var(--accent);cursor:pointer}
+
+/* Semanas plegadas (forma B, 6 de noviembre de 2026): cada semana es una fila con su fecha y, en gris, los nombres de
+   sus sesiones; la primera con sesiones parte abierta. Cada flecha mira solo su propia fila (">"). */
+#vista-miplan .mp-sem{margin-top:8px}
+#vista-miplan .mp-sem>summary{display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 4px;cursor:pointer;list-style:none}
+#vista-miplan .mp-sem>summary::-webkit-details-marker{display:none}
+#vista-miplan .mp-sem>summary::after{content:'';flex:0 0 auto;width:7px;height:7px;margin:0 8px 3px 2px;border-right:2px solid var(--ink-muted);border-bottom:2px solid var(--ink-muted);transform:rotate(45deg);transition:transform .15s}
+#vista-miplan .mp-sem[open]>summary::after{transform:rotate(-135deg);margin-bottom:-3px}
+#vista-miplan .mp-sem-textos{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+#vista-miplan .mp-sem-titulo{font-size:.8125rem;font-weight:600;color:var(--ink-muted)}
+#vista-miplan .mp-sem-nombres{font-size:.8125rem;color:var(--ink-muted);overflow-wrap:anywhere}
+#vista-miplan .mp-sem[open] .mp-sem-nombres{display:none}
+#vista-miplan .mp-sem>summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+@media (prefers-reduced-motion:reduce){#vista-miplan .mp-sem>summary::after{transition:none}}
+/* La flecha de los botones de Más va encima del botón: se le reserva su espacio para que no pise la última letra. */
+#vista-miplan .mp-tablero .tablero-boton{padding-right:32px}
+#vista-miplan .mp-tablero .tablero-boton>span{min-width:0;overflow-wrap:anywhere}

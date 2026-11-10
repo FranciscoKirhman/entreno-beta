@@ -18,6 +18,7 @@ import { sesionDe } from '../nucleo/agenda.js';
 import { incrementoPara, cargaSugerida, registrosParaCarga, prescripcion, repsObjetivo, lugaresDe, conDosMancuernas, deMaquina } from '../nucleo/motor-plan.js';
 import { prioridadEsfuerzo, consejoSerie } from '../nucleo/series.js';
 import { ajusteDelDia, previasDeHoy } from '../nucleo/fatiga-sesion.js';
+import { redDePeso } from '../nucleo/red-peso.js';
 import { sesionViva, aplicarViva } from '../nucleo/sesion-viva.js';
 import { restanAceptar, contarSegundo, huellaAjuste, ajusteVigente } from '../nucleo/cuenta-viva.js';
 import { alternativas } from '../nucleo/checkin.js';
@@ -316,7 +317,26 @@ const fechaAnterior = (fechaPrev, f) => (fechaPrev && fechaPrev < sumarDias(f, -
  * de su historial para las repeticiones y la reserva de hoy (nucleo/motor-plan.js: cargaSugerida). Antes se copiaba el
  * de la vez anterior tal cual: en una descarga quedaba el peso de una semana normal, casi al fallo.
  */
+// Red de seguridad (nucleo/red-peso.js): si el plan pide mucho más que lo levantado hace poco, hoy parte con lo
+// calculado. Se consulta varias veces por dibujo, así que el resultado se guarda mientras no cambien el plan ni el historial.
+const redGuardada = new Map();
+function redDe(e, dia, f) {
+  if (e.carga_kg == null || !e.ejercicio_id) return null;
+  const lugar = lugarDe(dia);
+  const clave = [e.ejercicio_id, f, e.carga_kg, e.reps_min, e.reps_max, e.rir, e.unidad, lugar?.nombre, E.sesiones.length].join('|');
+  if (!redGuardada.has(clave)) {
+    if (redGuardada.size > 300) redGuardada.clear();
+    redGuardada.set(clave, redDePeso({ e, ej: indice.porId.get(e.ejercicio_id), lugar,
+      registros: registrosParaCarga(seriesAnotadas(E.sesiones, {}), e.ejercicio_id, f) }));
+  }
+  return redGuardada.get(clave);
+}
+/** "El plan pedía 27,5 kg y lo más pesado de tus últimas sesiones fue 20: parte con 20." */
+function textoRed(x) {
+  return `El plan pedía ${coma(enUnidad(x.plan))} ${unidadPeso()} y lo más pesado de tus últimas sesiones fue ${coma(enUnidad(x.masPesado))}: parte con ${coma(enUnidad(x.kg))}. Si te sobra, sube.`;
+}
 function cargaPlanDe(e, dia, f) {
+  if (e.carga_kg != null && e.ejercicio_id) return redDe(e, dia, f)?.kg ?? e.carga_kg;
   if (e.carga_kg != null || !e.ejercicio_id) return e.carga_kg ?? null;
   return cargaSugerida({ e, ej: indice.porId.get(e.ejercicio_id), lugar: lugarDe(dia),
     registros: registrosParaCarga(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f) });
@@ -329,17 +349,18 @@ function cargaPlanDe(e, dia, f) {
 function cargaHoyDe(e, dia, f) {
   const base = cargaPlanDe(e, dia, f);
   const k = dia.ejercicios.indexOf(e), ej = indice.porId.get(e.ejercicio_id);
-  if (base == null || k < 0 || !ej || esAsistido(ej)) return { kg: base, fatiga: null };
+  const red = redDe(e, dia, f);
+  if (base == null || k < 0 || !ej || esAsistido(ej)) return { kg: base, fatiga: null, red };
   const a = ajusteDelDia(dia.ejercicios, k, indice.porId, E.registro[f] || {});
   // Además, lo ya hecho del mismo músculo que en la lista va más abajo (subido sobre uno ya hecho, o hecho fuera de
   // orden) también cansa: la carga del plan solo supone lo de arriba (nucleo/fatiga-sesion.js: previasDeHoy).
   const p = previasDeHoy(dia.ejercicios, k, indice.porId, E.registro[f] || {});
-  if (a.factor >= 1 && p.factor >= 1) return { kg: base, fatiga: null };
+  if (a.factor >= 1 && p.factor >= 1) return { kg: base, fatiga: null, red };
   const inc = incrementoPara(ej, lugarDe(dia)) || 2.5;
   // Con esfuerzo de más, hacia abajo como siempre; solo por volumen, al escalón más cercano (como al mover).
   const redondeo = a.factor < 1 ? Math.floor : Math.round;
   const kg = Number(Math.max(inc, redondeo((base * a.factor * p.factor) / inc + 1e-9) * inc).toFixed(2));
-  return kg < base ? { kg, fatiga: { ...a, base, porVolumen: p.factor < 1, hechas: p.hechas } } : { kg: base, fatiga: null };
+  return kg < base ? { kg, fatiga: { ...a, base, porVolumen: p.factor < 1, hechas: p.hechas }, red } : { kg: base, fatiga: null, red };
 }
 /** Por qué parte más liviano: por lo que ya hiciste del mismo músculo (volumen), porque salió más duro de lo pedido, o
  *  las dos cosas. Solo dice "más duro" cuando lo fue. */
@@ -1104,6 +1125,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     </div>
     <textarea class="nota-ej" rows="1" data-nota="${id}" data-p="nota" data-visible placeholder="Nota para tu entrenador" aria-label="Nota para tu entrenador sobre ${esc(nombre)}">${esc(nota.nota || '')}</textarea>
     ${vivaHtml(vivaActual, e.ejercicio_id)}
+    ${cargaHoy.red && !filas.some(x => x.hecho && deTrabajo(tipoDe(x))) ? `<p class="consejo bajar" data-red-peso>${esc(textoRed(cargaHoy.red))}</p>` : ''}
     ${cargaHoy.fatiga && !filas.some(x => x.hecho && deTrabajo(tipoDe(x))) ? `<p class="consejo bajar">${esc(textoFatiga(cargaHoy))}</p>` : ''}
     ${calentarCorporal(ejCat, aprox, filas) ? `<p class="nota-sesion pequeno"><strong>Calentamiento, fila C:</strong> ${esc(textoCalentamientoCorporal(aprox, modoCalentamiento(ejCat)))}</p>` : ''}
     ${tecnicaHtml(e, id, nota, ej)}
