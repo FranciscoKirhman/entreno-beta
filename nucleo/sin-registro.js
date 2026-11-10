@@ -256,7 +256,11 @@ export function repartir(plan, fecha, { hoy, hechas = [], porId, porSesion = 2, 
     let despues = [...antes];
     despues.splice(posicionIntencional(antes, final, porId), 0, final);
     const origen = [...s.ejercicios].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map(x => (x === e ? final : x));
+    const k = despues.indexOf(final);
     despues = cargasAlReordenar(origen, despues, porId, incrementoDe, esAsistido, x => x === final);
+    // Si llega más descansado que en su sesión, no sube: el descuento por cansancio es una estimación, y es mejor pedir
+    // una repetición menos que una de más (docs/51-pesos-y-reserva.md). Más cansado, sí baja.
+    if (Number(despues[k].carga_kg) > Number(final.carga_kg)) despues[k] = final;
     despues = cargasAlReordenar(antes, despues, porId, incrementoDe, esAsistido);
     d.ejercicios = despues.map((x, k) => ({ ...x, orden: k }));
     puestos.get(d.fecha).push(e.ejercicio_id);
