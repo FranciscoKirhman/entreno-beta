@@ -114,7 +114,8 @@ export function resumenPlan({ plan, respuestas: r, derivados: d, indice, hoy }) 
   const resto = volumen.filter(v => !v.prioridad && comparables.has(v.musculo) && !deFavoritos.has(v.musculo) && v.series);
   const promedio = resto.length ? resto.reduce((a, v) => a + v.series, 0) / resto.length : 0;
   for (const v of volumen.filter(x => x.prioridad)) {
-    const bien = v.series + 0.5 >= promedio * 0.9;
+    // Con todo marcado como prioridad no queda resto con qué comparar: igual, una zona sin ninguna serie no está cumplida.
+    const bien = v.series + 0.5 >= promedio * 0.9 && !(comparables.has(v.musculo) && !v.series);
     cumple.push({
       tema: 'Prioridad',
       estado: bien ? 'si' : v.series ? 'parcial' : 'no',

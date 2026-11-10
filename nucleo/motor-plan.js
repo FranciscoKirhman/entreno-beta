@@ -55,17 +55,50 @@ const DIA_MS = 864e5;
 const sumarDias = (iso, n) => new Date(Date.parse(iso + 'T12:00:00Z') + n * DIA_MS).toISOString().slice(0, 10);
 const diaSemana = iso => new Date(iso + 'T12:00:00Z').getUTCDay();
 
+/** Los descansos entre sesiones seguidas de una semana que se repite (domingo y lunes están pegados), en orden. */
+const descansosEntre = dias => { const o = [...dias].sort((a, b) => a - b); return o.map((x, i) => (i ? x - o[i - 1] : x + 7 - o.at(-1))); };
+const distanciaDia = (a, b) => Math.min(Math.abs(a - b), 7 - Math.abs(a - b));
+const lunesPrimero = dias => [...dias].sort((a, b) => (a || 7) - (b || 7));
+
+/** La racha más larga de días seguidos con sesión, en una semana que se repite. */
+function rachaMasLarga(dias) {
+  const con = new Set(dias);
+  if (con.size >= 7) return 7;
+  let mejor = 0;
+  for (const d of con) { if (con.has((d + 6) % 7)) continue; let n = 1; while (con.has((d + n) % 7)) n++; mejor = Math.max(mejor, n); }
+  return mejor;
+}
+
+/**
+ * Los días de la semana en que se entrena. Sin días marcados son los preferidos (lunes y jueves; lunes, miércoles y
+ * viernes; lunes, martes, jueves y viernes...). Con días que la persona casi nunca puede, se elige entre los libres la
+ * combinación que no deja las sesiones más pegadas que la semana preferida y, entre esas, la más cercana a los días
+ * preferidos. Antes se tomaba el día libre más cercano a cada preferido, uno por uno, y las sesiones quedaban pegadas
+ * habiendo cómo separarlas: con miércoles, jueves, sábado y domingo libres, dos sesiones salían miércoles y jueves; con
+ * el lunes ocupado, cuatro sesiones salían de martes a viernes seguidas.
+ */
 export function elegirDias(cantidad, noPuedo = []) {
   const libres = [1, 2, 3, 4, 5, 6, 0].filter(d => !noPuedo.includes(d));
   const n = Math.min(cantidad, libres.length);
-  const elegidos = [];
-  for (const pref of DIAS_PREFERIDOS[Math.min(7, Math.max(2, n))].slice(0, n)) {
-    const opciones = libres.filter(d => !elegidos.includes(d))
-      .sort((a, b) => Math.min(Math.abs(a - pref), 7 - Math.abs(a - pref)) - Math.min(Math.abs(b - pref), 7 - Math.abs(b - pref)));
-    if (opciones.length) elegidos.push(opciones[0]);
-  }
-  const orden = d => (d === 0 ? 7 : d);
-  return elegidos.sort((a, b) => orden(a) - orden(b));
+  const preferidos = DIAS_PREFERIDOS[Math.min(7, Math.max(2, n))].slice(0, n);
+  if (!n) return [];
+  if (preferidos.every(d => libres.includes(d))) return lunesPrimero(preferidos);
+  const pegadas = g => descansosEntre(g).filter(x => x === 1).length, minimo = g => (g.length < 2 ? 7 : Math.min(...descansosEntre(g)));
+  const meta = { racha: rachaMasLarga(preferidos), pegadas: pegadas(preferidos), minimo: minimo(preferidos) };
+  // En orden: no alargar la racha de días seguidos, no sumar días pegados, no achicar el descanso más corto y, al
+  // final, moverse lo menos posible de los días preferidos.
+  const costo = grupo => {
+    const g = lunesPrimero(grupo);
+    return [Math.max(0, rachaMasLarga(g) - meta.racha), Math.max(0, pegadas(g) - meta.pegadas), Math.max(0, meta.minimo - minimo(g)), g.reduce((a, x, i) => a + distanciaDia(x, preferidos[i]), 0)];
+  };
+  const menor = (a, b) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] < b[i]; return false; };
+  let mejor = null, costoMejor = null;
+  const combinar = (desde, grupo) => {
+    if (grupo.length === n) { const c = costo(grupo); if (!mejor || menor(c, costoMejor)) { mejor = grupo; costoMejor = c; } return; }
+    for (let i = desde; i < libres.length; i++) combinar(i + 1, [...grupo, libres[i]]);
+  };
+  combinar(0, []);
+  return lunesPrimero(mejor);
 }
 
 // Mancuernas: cada persona anota el peso de cada una (lo habitual) o el total del par (Más, Unidades: "mancuernas" en
@@ -504,7 +537,7 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
   const fav = ({ e }) => favoritos.has(e.ejercicio_id);
   // 1. Recortar lo que pasa el tope, también lo que llega por músculos secundarios (el hombro en cada press):
   //    primero series de lo que no es favorito, después sacar lo menos prioritario, al final series de favoritos.
-  //    Si aun así queda sobre el límite duro, se baja a 1 serie y se sacan ejercicios principales repetidos.
+  //    Si aun así queda sobre el límite duro, se baja hasta 2 series y se sacan ejercicios principales repetidos.
   const atascados = new Set(); // lo que no se puede recortar más (todo es favorito): se sigue con los demás músculos
   for (let vuelta = 0; vuelta < 400; vuelta++) {
     const v = volumenTope();
@@ -517,7 +550,9 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     const serieNoFav = t.filter(x => !fav(x) && x.e.series > 2 && !esPrincipal(x.x, x.e) && !(esBasico(x.e) && x.e.series <= 3)).sort(orden)[0];
     const sobra = t.filter(x => !fav(x) && x.e.prioridad >= 2 && x.x.ejercicios.length > 2).sort((a, b) => b.e.prioridad - a.e.prioridad || aporta(b.e, m) - aporta(a.e, m))[0];
     const serieFav = t.filter(x => fav(x) && x.e.series > 2).sort(orden)[0];
-    const duro1 = (v[m] || 0) > duro && t.filter(x => !fav(x) && x.e.series > 1).sort(orden)[0];
+    // Nunca a 1 serie: casi no aporta. En la beta de pruebas, una prensa de principiante quedaba en 1 serie con la
+    // extensión de cuádriceps en 4. Si con 2 series sigue sobre el límite, se saca un ejercicio (duro2).
+    const duro1 = (v[m] || 0) > duro && t.filter(x => !fav(x) && x.e.series > 2).sort(orden)[0];
     const duro2 = (v[m] || 0) > duro && t.filter(x => !fav(x) && x.x.ejercicios.length > 2).sort(orden)[0];
     if (serieNoFav) serieNoFav.e.series--;
     else if (sobra) sobra.x.ejercicios = sobra.x.ejercicios.filter(e => e !== sobra.e);
@@ -592,11 +627,11 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
     // segundo remo de una prioridad que ya está en su tope) antes que los brazos o los aductores.
     const acciones = () => { const v = volumenSemanal(conSemana, porId); const bajoPiso = (e, n) => porId.get(e.ejercicio_id).musculos_primarios.some(k => CONTADOS.includes(k) && (v[k] || 0) - n < lo); return x.ejercicios.flatMap(e => [
       ...(e.series > 2 ? [{ e, costo: importa(e) + (e.series <= 3 ? 1 : 0) + (esPrincipal(x, e) && e.series > 3 && d.nivel === 'avanzado' ? 2 : esBasico(e) && e.series <= 3 ? 1 : 0) + (bajoPiso(e, 1) ? 1 : 0), hacer: () => { e.series--; } }] : []),
-      ...(x.ejercicios.length > 2 ? [{ e, costo: importa(e) + 1.5 + (ultimo(e) ? 3 : 0) + (esBasico(e) ? 1.5 : 0) + (bajoPiso(e, e.series) ? 2 : 0) + (favoritos.has(e.ejercicio_id) ? 3 : 0) + (unicoCore(x.ejercicios, e) ? 2 : 0), hacer: () => { x.ejercicios = x.ejercicios.filter(y => y !== e); } }] : []),
+      ...(x.ejercicios.length > 2 ? [{ e, costo: importa(e) + 1.5 + (ultimo(e) ? 3 : 0) + (esBasico(e) ? 1.5 : 0) + (bajoPiso(e, e.series) ? 2 : 0) + (favoritos.has(e.ejercicio_id) ? 3 : 0) + (unicoCore(x.ejercicios, e) ? 4 : 0), hacer: () => { x.ejercicios = x.ejercicios.filter(y => y !== e); } }] : []),
     ]).sort((a, b) => a.costo - b.costo || b.e.prioridad - a.e.prioridad || b.e.orden - a.e.orden); };
     while (sobra()) { const [a] = acciones(); if (!a) break; a.hacer(); }
     for (const e of x.ejercicios) if (sobra()) e.descanso_seg = Math.min(e.descanso_seg, 90);
-    const prio = e => (unicoCore(x.ejercicios, e) ? 2.5 : e.prioridad);
+    const prio = e => (unicoCore(x.ejercicios, e) ? 1.5 : e.prioridad);
     const menor = () => [...x.ejercicios].sort((a, b) => importa(a) - importa(b) || prio(b) - prio(a) || b.orden - a.orden)[0];
     while (sobra() && x.ejercicios.length > 1) x.ejercicios = x.ejercicios.filter(y => y !== menor());
   }
@@ -714,7 +749,7 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
       const candidatos = dia.ejercicios.filter(e => !favoritos.has(e.ejercicio_id) || e.series > 1);
       const resguardo = e => (protegido(e) || (principalDe.get(dia.plantilla) === e.ejercicio_id && e.series > 3 && d.nivel === 'avanzado') ? 1 : 0);
       const lista = candidatos.length ? candidatos : dia.ejercicios;
-      const prio = e => (unicoCore(dia.ejercicios, e) ? 2.5 : e.prioridad);
+      const prio = e => (unicoCore(dia.ejercicios, e) ? 1.5 : e.prioridad);
       let ultimo = [...lista].sort((a, b) => resguardo(a) - resguardo(b) || prio(b) - prio(a) || b.orden - a.orden)[0];
       // Antes de sacar un básico, el único core del día o algo que deja un músculo bajo su piso, se le quita una serie a
       // otro que tenga más de 2 (el primero del día, si hace falta).
