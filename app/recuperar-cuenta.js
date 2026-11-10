@@ -28,7 +28,7 @@ export async function recuperarCuentaPrincipal() {
   for (const [clave, campo] of Object.entries({ ejercicios_propios: 'ejerciciosPropios', medidas_cuerpo: 'medidas', notas_fijas: 'notasFijas', calendario_asistencia: 'marcasPlan' })) {
     const fila = filas.find(f => f.clave === clave); if (fila) E[campo] = fila.valor;
   }
-  for (const campo of ['planPendiente', 'preferenciasPendientes', 'firmaPlan', 'chatPorTraer', 'elegido']) delete E[campo];
+  for (const campo of ['planPendiente', 'planBase', 'preferenciasPendientes', 'firmaPlan', 'chatPorTraer', 'elegido']) delete E[campo];
   guardar();
   return true;
 }

@@ -8,6 +8,7 @@ import { sincronizarDatosTelefono, limpiarProgresionSesion } from './datos-nube.
 import { revisarSesionEnCuenta, alReponerSesion } from './sesion-nube.js';
 import { hevyAlAbrir } from './hevy-auto.js';
 import { conPropios, idsPropios } from '../nucleo/propios.js';
+import { baseParaGuardar, conservarPlanLocal, MENSAJE_CONFLICTO } from '../nucleo/base-plan.js';
 import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo, entrarEjemplo, salirEjemplo, modoEjemplo, errorGuardado, errorRetornoCuenta, activarCuenta, perfilDePrueba, recuperarCopia, claveSesionCuenta, marcarCuentaRecuperada, EXTRAS, asegurarExtras, usaExtras } from './comun.js';
 import { prepararSesion, unirSesiones } from '../nucleo/sincronizacion.js';
 import { historialDeEjemplo } from '../nucleo/historial-ejemplo.js';
@@ -120,7 +121,7 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
     comprobar();
     avisos.push({ parte, mensaje: e.datos?.errores?.map(x => x.mensaje).join(' ') || e.message });
   };
-  let planIntentado = false, planGuardado = false;
+  let planIntentado = false, planGuardado = false, conflictoPlan = false;
   if (E.chatPorTraer) {
     if (!await consultar(() => actualizarChatConfirmado())) throw new Error('La cuenta cambió al recuperar los cambios del chat.');
     respuestasAlEntrar = JSON.stringify(E.respuestas); planAlEntrar = JSON.stringify(E.plan);
@@ -137,20 +138,33 @@ async function sincronizarAlEntrar({ forzar = false } = {}) {
     planIntentado = true;
     try {
       await consultar(() => nube.guardarCuestionario(structuredClone(R())));
-      const r = await consultar(() => nube.guardarPlan(enviado));
+      const r = await consultar(() => nube.guardarPlan(enviado, baseParaGuardar(E)));
       if (JSON.stringify(E.plan) === firma) { E.plan = { ...E.plan, id: r.id }; planAlEntrar = JSON.stringify(E.plan); }
       if (JSON.stringify(E.planPendiente) === firma) delete E.planPendiente;
+      E.planBase = r.id;
       // El plan que se había cambiado en el teléfono (y quizás rechazado) ya está en la cuenta: la campanita lo dice.
       planGuardado = true; delete E.planRechazado;
       guardar();
-    } catch (e) { avisar('Plan', e); }
+    } catch (e) {
+      // El plan cambió en la cuenta mientras este teléfono tenía un cambio sin subir: manda el de la cuenta, y lo de
+      // este teléfono queda en Cambios del plan para recuperarlo con un toque (nucleo/base-plan.js).
+      if (e.status === 409 && e.datos?.conflicto && JSON.stringify(E.planPendiente) === firma) {
+        conservarPlanLocal(E);
+        planAlEntrar = JSON.stringify(E.plan); // así la lectura de abajo toma el plan de la cuenta
+        conflictoPlan = true;
+        guardar();
+      } else avisar('Plan', e);
+    }
   }
   const [respuestas, plan] = await consultar(() => Promise.all([nube.cargarRespuestas(), nube.cargarPlan()]));
   if (respuestas) {
     const borrador = E.firmaPlan && firmaRespuestas(E.firmaPlan) !== firmaRespuestas();
     if (!E.planPendiente && !borrador && JSON.stringify(E.respuestas) === respuestasAlEntrar) E.respuestas = { ...respuestas, escala_esfuerzo: R().escala_esfuerzo ?? respuestas.escala_esfuerzo, mancuernas: R().mancuernas ?? respuestas.mancuernas };
   }
-  if (plan) { if (!E.planPendiente && JSON.stringify(E.plan) === planAlEntrar) E.plan = conPropios(plan, E.plan); }
+  if (plan) {
+    if (!E.planPendiente && JSON.stringify(E.plan) === planAlEntrar) { E.plan = conPropios(plan, E.plan); E.planBase = plan.id; }
+    if (conflictoPlan) { E.mensaje = MENSAJE_CONFLICTO; avisos.push({ parte: 'Plan', mensaje: MENSAJE_CONFLICTO }); }
+  }
   else if (!planIntentado && !E.planPendiente && R().objetivo_principal && E.plan?.dias?.length && !E.plan.bloqueado && !E.plan.id && !E.plan.libre) {
     // Perfil local copiado a una cuenta vacía: se sube su plan tal cual (el servidor lo valida), sin armar otro.
     const enviado = structuredClone(E.plan), firma = JSON.stringify(enviado);

@@ -186,7 +186,9 @@ export async function cargarRespuestas() {
 export const generarPlan = () => funcion('generar-plan');
 // El plan de la cuenta solo guarda ejercicios del catálogo (nucleo/propios.js); los propios y los del banco ampliado van
 // aparte, en datos_telefono (plan_propios, app/datos-nube.js).
-export const guardarPlan = plan => funcion('guardar-plan', { cuerpo: { plan: planParaCuenta(planSinPropios(plan)) } });
+// Con la base (el plan de la cuenta del que partió este cambio) el servidor no deja que una copia vieja pise un plan
+// más nuevo: responde 409 con conflicto (nucleo/base-plan.js: baseParaGuardar). Sin base conocida se guarda como antes.
+export const guardarPlan = (plan, base = null) => funcion('guardar-plan', { cuerpo: { plan: planParaCuenta(planSinPropios(plan)), ...(base ? { base } : {}) } });
 export async function cargarPlan() {
   const p = ok(await supa.from('planes').select('*, plan_dias(*, plan_ejercicios(*), lugares(nombre))').eq('estado', 'activo').maybeSingle());
   if (!p) return null;

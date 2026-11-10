@@ -18,6 +18,7 @@ import { revisarTrasladoCuenta } from '../nucleo/consentimiento-nube.js';
 import { corregirHistorial } from '../nucleo/corregir-historial.js';
 import { compactarChat } from '../nucleo/compactar-chat.js';
 import { retiradosAlCambiar } from '../nucleo/series-retiradas.js';
+import { baseParaGuardar } from '../nucleo/base-plan.js';
 
 // La portada de la versión de prueba ya pidió estos archivos (herramientas/beta.mjs, precargas): se usa esa respuesta.
 const pedir = u => { const p = globalThis.entrenoPrecarga?.[u]; if (p) delete globalThis.entrenoPrecarga[u]; return p || fetch(u); };
@@ -364,6 +365,9 @@ export async function cambiarPlan(plan, mensaje, nube) {
     E.mensaje = aviso; guardar(); return aviso;
   }
   const remoto = nube?.conectado() && !plan.libre;
+  // La base de este cambio: el plan de la cuenta que el teléfono tenía antes de tocarlo. Con un cambio todavía sin
+  // subir, la base sigue siendo la de ese primer cambio (nucleo/base-plan.js).
+  if (!E.planPendiente && E.plan?.id) E.planBase = E.plan.id;
   // La copia pendiente también impide confirmar otra propuesta mientras esta
   // escritura sigue en curso, y permite recuperarla si se cierra la app.
   if (remoto) E.planPendiente = structuredClone(plan);
@@ -384,15 +388,23 @@ export async function cambiarPlan(plan, mensaje, nube) {
   const vigente = () => E === estado && nube?.usuarioId?.() === usuario && E.plan === plan && JSON.stringify(E.plan) === firma && !E.chatPorTraer;
   const cambioDeAmbito = 'La cuenta o el plan cambió mientras se guardaba. Revisa el estado actual antes de continuar.';
   try {
-    const r = await nube.guardarPlan(plan);
+    const r = await nube.guardarPlan(plan, baseParaGuardar(E));
     if (!vigente()) return cambioDeAmbito;
     const habiaRechazo = Boolean(E.planRechazado);
-    E.plan.id = r.id; delete E.planPendiente; delete E.planRechazado; guardar();
+    E.plan.id = r.id; E.planBase = r.id; delete E.planPendiente; delete E.planRechazado; guardar();
     if (habiaRechazo) for (const fn of alGuardarPlanCuenta) fn({ guardado: true });
     return null;
   }
   catch (e) {
     if (!vigente()) return cambioDeAmbito;
+    // El plan cambió en la cuenta: no es un rechazo del plan. Queda pendiente y la sincronización lo resuelve mostrando
+    // cuál queda (app/app.js), sin cambiarle la sesión a media serie.
+    if (e.status === 409 && e.datos?.conflicto) {
+      const aviso = 'Tu plan cambió en tu cuenta. El cambio quedó en este teléfono; al sincronizar te digo cuál queda.';
+      E.mensaje = aviso; E.planPendiente = structuredClone(plan); guardar();
+      for (const fn of alGuardarPlanCuenta) fn({ sinSenal: aviso });
+      return aviso;
+    }
     const motivo = e.datos?.errores?.map(x => x.mensaje).join(' ') || e.message;
     const aviso = `Se cambió en este teléfono, pero el servidor no lo aceptó: ${motivo}`;
     E.mensaje = aviso; guardar();
