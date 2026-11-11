@@ -111,7 +111,7 @@ let lecturaFallida = Boolean(errorPerfilPrueba);
 const VACIO = () => ({
   vista: 'inicio', seccion: 0, respuestas: {}, plan: null, semana: 1,
   bienestar: {}, registro: {}, notas: {}, sesiones: [], chat: [], consentimientos: {},
-  suplementos: [], tomas: [], indicaciones: [], checkins: {}, macro: null, descargaNo: {}, filas: {}, descansos: {}, descansosMedidos: {}, pedido: '', mensaje: null,
+  suplementos: [], tomas: [], indicaciones: [], checkins: {}, macro: null, descargaNo: {}, lugarSesion: {}, filas: {}, descansos: {}, descansosMedidos: {}, pedido: '', mensaje: null,
   marcasPlan: {},
 });
 export let E = VACIO();

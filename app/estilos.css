@@ -660,16 +660,13 @@ details.pasos > summary{font-weight:600}
 .ficha-dibujo{display:block;width:100%;height:auto;aspect-ratio:3/2;object-fit:contain;border-radius:16px;background:#FFFFFF;margin:8px 0 4px}
 .ficha-sub{margin:-2px 0 6px}
 /* Acciones de la ficha, como las de un contacto del iPhone: el ícono arriba y el nombre debajo, en tres partes iguales. */
-.acciones-ficha{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0 14px}
+.acciones-ficha{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0 14px}
 .accion-ficha{display:flex;flex-direction:column;align-items:center;gap:4px;min-height:68px;padding:10px 4px 8px;border:1px solid transparent;border-radius:14px;background:var(--surface);color:var(--accent);font:500 13px/1.2 var(--f-texto);text-align:center;text-decoration:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .accion-ficha .icono{width:24px;height:24px}
-.accion-ficha small{font-size:11px;font-weight:400;color:var(--ink-muted)}
 .accion-ficha[aria-disabled="true"]{color:var(--ink-muted);cursor:default}
 .accion-ficha:active:not([aria-disabled="true"]){background:var(--fill)}
 .accion-ficha:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.accion-futura{border-style:dashed;border-color:var(--border);color:var(--ink-muted)}
 .acciones-motivo{margin:-6px 0 12px}
-.acciones-ficha~.aviso-futuro{margin:-4px 0 12px}
 .ficha-musculos .sobretitulo{margin:0 0 4px}
 .ficha-maquina{display:block;width:72px;height:72px;object-fit:contain;padding:4px;border-radius:12px;background:var(--fondo-icono);margin-top:10px}
 #vista-ficha .tarjeta h2{font-size:20px;margin:0 0 8px}
@@ -1068,3 +1065,25 @@ main:has(#vista-coach){padding-bottom:calc(var(--coach-redaccion-alto,100px) + v
 .lista-descansos li{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;align-items:baseline}
 .lista-descansos strong{font-size:20px;font-weight:650}
 .lista-descansos small{grid-column:1/-1;font-size:12.5px}
+/* Áreas táctiles de 44 px (revisión a 375 px del 10 de noviembre de 2026): lo que medía 19 a 37 px de alto. El control
+   se ve igual o casi; el dedo tiene más margen. */
+.volver{min-height:44px}
+button.ej-semana{min-height:44px}
+#vista-semana details.extra>summary{margin-top:0;padding-block:13px}
+#vista-semana #ver-plan,#vista-progreso #ver-todo,.feed-cab .enlace{display:inline-flex;align-items:center;min-height:44px}
+.feed-acciones .enlace{min-width:44px}
+.descanso-compacto #entrenar-igual{min-height:44px}
+/* Para la próxima, en el resumen (app/progresion-sesion.js): un cambio por tarjeta, antes y después en grande. */
+.prox-item{margin:10px 0;padding:12px;border-radius:14px;background:var(--fill)}
+.prox-cab{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.prox-cab b{min-width:0;font-weight:600;overflow-wrap:anywhere}
+.prox-chip{flex:none;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--surface);color:var(--ink-muted);white-space:nowrap}
+.prox-sube .prox-chip,.prox-mas_reps .prox-chip,.prox-peso .prox-chip{background:var(--good-soft);color:var(--good)}
+.prox-baja .prox-chip,.prox-menos_reps .prox-chip{background:var(--warning-soft);color:var(--warning)}
+.prox-cambio{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:8px 0 6px;font-variant-numeric:tabular-nums}
+.prox-cambio .prox-antes{color:var(--ink-muted);font-size:15px}
+.prox-cambio .icono{flex:none;width:16px;height:16px;color:var(--ink-muted)}
+.prox-cambio strong{font-size:19px;font-weight:650}
+.prox-dato{margin:0 0 4px;font-size:13px;font-variant-numeric:tabular-nums}
+.prox-dato span{margin-right:8px;color:var(--ink-muted)}
+.prox-porque{margin:0;font-size:13px;line-height:1.4;color:var(--ink-muted)}

@@ -1,7 +1,7 @@
 // Revisa un plan antes de guardarlo, venga del motor de reglas, del coach Pro o de la IA de la persona.
 // Si hay errores, el plan no se guarda: se reintenta o se usa el plan de reglas.
 import { tieneEquipo, nivelAlcanza, articulacionesBloqueadas, cargaZonaBloqueada } from './catalogo.js';
-import { incrementoPara, duracionSesion, volumenParaTopes, lugaresDe, topeMancuerna, conDosMancuernas } from './motor-plan.js';
+import { incrementoPara, duracionSesion, volumenParaTopes, lugaresDe, topeMancuerna, conDosMancuernas, CARGA_MAXIMA_KG } from './motor-plan.js';
 import { grupos } from './superseries.js';
 import { conSemanasPrevias } from './semanas-plan.js';
 import { seriesPorMusculo, SERIES_SESION } from './fatiga-sesion.js';
@@ -57,7 +57,7 @@ export function validarPlan(plan, { derivados: d, respuestas: r, indice, hoy, ed
       if (!(e.rir >= rirMinimo && e.rir <= 5)) err('reserva', `${ej.nombre}: ${e.rir} repeticiones de reserva; el mínimo para ti es ${rirMinimo}.`, en);
       if (e.carga_kg != null) {
         const inc = incrementoPara(ej, lugar);
-        if (!(e.carga_kg > 0 && e.carga_kg < 500)) err('carga', `${ej.nombre}: ${e.carga_kg} kg no es válido.`, en);
+        if (!(e.carga_kg > 0 && e.carga_kg < CARGA_MAXIMA_KG)) err('carga', `${ej.nombre}: ${e.carga_kg} kg no es válido.`, en);
         // Solo donde el peso se arma con discos o mancuernas fijas: las máquinas y poleas tienen placas de otros pesos
         // (61 kg en un curl femoral es normal) y el aviso se repetía en cada propuesta.
         else if (inc && ['barra_rack', 'smith', 'mancuernas', 'kettlebells'].some(q => ej.equipamiento.includes(q)) && Math.abs(e.carga_kg / inc - Math.round(e.carga_kg / inc)) > 1e-6

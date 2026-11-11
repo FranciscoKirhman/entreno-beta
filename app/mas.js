@@ -19,7 +19,6 @@ import * as nube from './nube.js';
 import { pintarProveedores } from './cuenta-ui.js';
 import { encendidaDisponible, actualizarPantalla } from './pantalla.js';
 import { estadoVistaMas, organizarMas } from './mas-paneles.js';
-import { conexionFuturaHtml, enlazarConexionesFuturas } from './conexiones-futuras.js';
 
 /** Tema elegido en este teléfono: 'auto' (como el teléfono), 'claro' u 'oscuro'. index.html lo aplica al abrir. */
 // Color de acento, como los 8 de OpenGym: se guarda en este teléfono y se aplica antes de pintar (index.html).
@@ -289,7 +288,6 @@ async function restaurarFoto(f) {
 const ICONOS = {
   hevy: '<path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/>',
   ia: '<path d="M12 3.5l1.8 4.7 4.7 1.8-4.7 1.8L12 16.5l-1.8-4.7L5.5 10l4.7-1.8z"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
-  strava: '<path d="M3.5 18.5l5-9 4 6 3-4.5 5 7.5"/>',
   salud: '<path d="M12 20s-7.5-4.6-7.5-10A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 7.5 3c0 5.4-7.5 10-7.5 10z"/>',
 };
 const icono = n => `<span class="icono-app" aria-hidden="true"><svg viewBox="0 0 24 24">${ICONOS[n]}</svg></span>`;
@@ -325,13 +323,10 @@ function conexionesHtml() {
         <div class="cab-conexion">${icono('ia')}<strong>ChatGPT y Claude</strong><a class="accion-conexion" href="#tu-ia">Usar ahora</a></div>
         <p class="pequeno suave">Tu IA arma o ajusta el plan y la app lo revisa con sus reglas antes de guardarlo. Copiando y pegando funciona sin cuenta; la conexión directa con ChatGPT requiere una cuenta.</p>
       </li>
-      ${conexionFuturaHtml('strava', icono('strava'))}
-      ${conexionFuturaHtml('health-connect', icono('salud'))}
     </ul>`;
 }
 
 function enlazarConexiones(repintar) {
-  enlazarConexionesFuturas($('conexiones'));
   $('archivo-hevy').onchange = async ev => {
     const archivo = ev.target.files[0];
     if (!archivo) return;

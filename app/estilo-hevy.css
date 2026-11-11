@@ -113,6 +113,8 @@ body:has(.barra :is(#modo, #campana):not([hidden])) .cab-sesion{top:calc(env(saf
 /* El consejo del entrenador, una línea sin caja bajo la última serie hecha. */
 #vista-hoy .serie .consejo{grid-column:1 / -1;margin:0;padding:0 0 4px 50px;background:none;font-size:var(--hoy13,13px);line-height:1.35}
 #vista-hoy .serie .consejo.bien{color:var(--good)}
+#vista-hoy .serie .consejo.record-alcance{display:flex;align-items:center;gap:5px;color:var(--accent);font-weight:600}
+#vista-hoy .serie .consejo.record-alcance .icono{flex:0 0 14px;width:14px;height:14px}
 #vista-hoy .fila-agregar{margin-top:8px}
 #vista-hoy .agregar-serie{width:100%;min-height:44px;background:var(--fill);color:var(--ink);border-radius:10px;font-weight:600}
 .sesion-vacia-estado{display:flex;flex-direction:column;align-items:center;text-align:center;padding:40px 0 16px}
@@ -761,3 +763,14 @@ body.escribiendo-coach #nav{display:none!important}
 #descanso.extra.pasado{background:color-mix(in srgb,var(--surface) 92%,transparent);color:var(--ink)}
 #descanso.extra.pasado .tiempo{color:var(--warning)}
 #descanso.extra.pasado [data-listo]{background:var(--fill);color:var(--ink)}
+/* Bajo la nota de un ejercicio: enviarla al coach ahora o guardarla para mí. Solo con algo escrito. */
+#vista-hoy .nota-acciones{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 6px}
+#vista-hoy textarea.nota-ej:placeholder-shown+.nota-acciones{display:none}
+#vista-hoy .nota-accion{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;border:0;border-radius:999px;background:var(--accent-soft);color:var(--accent);font:600 14px/1.2 var(--f-texto);cursor:pointer}
+#vista-hoy .nota-accion .icono{flex:0 0 16px;width:16px;height:16px}
+#vista-hoy .nota-respuesta{margin:0 0 6px;font-size:var(--hoy15,15px);line-height:1.4}
+#vista-hoy .nota-respuesta:empty{display:none}
+#vista-hoy .nota-respuesta p{margin:0 0 4px}
+#vista-hoy .nota-enviada,#vista-hoy .nota-estado{color:var(--ink-muted);font-size:13px}
+#vista-hoy .nota-coach{padding:10px 12px;border-radius:14px;background:var(--fill);color:var(--ink)}
+#vista-hoy.reordenando .nota-acciones,#vista-hoy.reordenando .nota-respuesta{display:none}

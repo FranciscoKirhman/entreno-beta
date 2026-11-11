@@ -13,12 +13,16 @@ import { SEGUNDOS_PARA_ACEPTAR } from '../nucleo/sesion-viva.js';
 import { comprobaciones, punteria } from '../nucleo/comprobacion-rir.js';
 import { tecnicaPendiente } from '../nucleo/tecnica-primero.js';
 import { lugaresDe } from '../nucleo/motor-plan.js';
+import { lugarDeSesion } from '../nucleo/lugar-sesion.js';
+import { textoSeries, sentidoCambio, ETIQUETA_CAMBIO } from '../nucleo/desempeno-ejercicio.js';
+import { icono } from './iconos.js';
+import { unidadPeso, enUnidad } from './comun.js';
 import * as nube from './nube.js';
 import { registrarProgresion } from '../nucleo/registro-progresion.js';
 import { datoCambiado, limpiarProgresionSesion } from './datos-nube.js';
 
 // Con la forma de anotar las mancuernas: con "El par", las de dos mancuernas suben de a 4.
-const lugarDe = dia => { const l = lugaresDe(R()); return l.find(x => x.nombre === dia?.lugar) || l.find(x => x.principal) || l[0]; };
+const lugarDe = dia => lugarDeSesion(lugaresDe(R()), dia, E.lugarSesion);
 const serieDeTrabajo = s => ({ ejercicio_id: s.ejercicio_id, carga_kg: s.carga_kg ?? null, reps: s.reps ?? null, rir: s.tipo === 'fallo' ? 0 : s.rir ?? null, rpe: s.rpe ?? null });
 const trabajo = sesion => (sesion.series || []).filter(s => s.ejercicio_id && esDeTrabajoGuardada(s)).map(serieDeTrabajo);
 // Para ajustar, además, qué series fueron al fallo (la puntería no las corrige) y cuál fue la de comprobación: la última
@@ -55,7 +59,10 @@ function calcular(sesion, plan) {
   }
   // La puntería de sus series de comprobación, con la de hoy: a quien le queda más de lo que anota, se le corrige.
   const correccion = punteria(comprobaciones([...otras, sesion]), sesion.fecha)?.correccion || 0;
-  return ajustarTrasSesion({ plan, fecha: sesion.fecha, series: trabajoAjuste(sesion), indice, lugar: lugarDe(dia), historialSemanas: historialPorSemana(otras, sesion.fecha), calidades, correccion });
+  // El lugar donde de verdad se hizo (la sesión lo guarda): lo de una máquina solo ajusta los días del mismo lugar.
+  const lugares = lugaresDe(R()), lugar = lugares.find(x => x.nombre === sesion.lugar) || lugarDe(dia);
+  return ajustarTrasSesion({ plan, fecha: sesion.fecha, series: trabajoAjuste(sesion), indice, lugar,
+    mismoLugar: d => !lugar?.nombre || lugarDeSesion(lugares, d, null)?.nombre === lugar.nombre, historialSemanas: historialPorSemana(otras, sesion.fecha), calidades, correccion });
 }
 
 function registrar(id, dato) {
@@ -121,10 +128,18 @@ export function ajustesHtml(sesion) {
   const { estado, cambios, restan: n } = ajustesDeSesion(sesion);
   if (!estado) return '';
   const hecho = estado === 'aplicado';
-  const items = cambios.map(c => `<div class="ajuste-vivo${hecho ? ' hecho' : ' pendiente'}">
-      <p><b>${esc(c.nombre)}</b>, desde el ${esc(fechaCorta(c.desde))}: ${esc(c.motivo)}</p>
-      <p class="pequeno antes-ahora">Antes: ${esc(dosis(c.antes))} · ${hecho ? 'Ahora' : 'Quedaría'}: ${esc(dosis(c.despues))}</p>
-    </div>`).join('');
+  // Cada cambio de un vistazo: el nombre, hacia dónde va en una palabra, antes y después en grande, lo que hiciste hoy
+  // (para juzgarlo) y el porqué en chico.
+  const hoyDe = id => textoSeries((sesion.series || []).filter(s => s.ejercicio_id === id && esDeTrabajoGuardada(s)).map(s => ({ kg: s.carga_kg ?? null, reps: s.reps ?? null, seg: s.duracion_seg ?? null })), unidadPeso(), enUnidad);
+  const items = cambios.map(c => {
+    const sentido = sentidoCambio(c.antes, c.despues), hechoHoy = hoyDe(c.ejercicio_id);
+    return `<div class="prox-item prox-${sentido}${hecho ? ' hecho' : ''}">
+      <div class="prox-cab"><b>${esc(c.nombre)}</b><span class="prox-chip">${esc(ETIQUETA_CAMBIO[sentido])}</span></div>
+      <p class="prox-cambio" aria-label="${esc(`Antes ${dosis(c.antes)}, ${hecho ? 'ahora' : 'quedaría'} ${dosis(c.despues)}`)}"><span class="prox-antes">${esc(dosis(c.antes))}</span>${icono('flecha')}<strong>${esc(dosis(c.despues))}</strong></p>
+      ${hechoHoy ? `<p class="prox-dato"><span>Hoy</span>${esc(hechoHoy)}</p>` : ''}
+      <p class="prox-porque">${esc(c.motivo)} Desde el ${esc(fechaCorta(c.desde))}.</p>
+    </div>`;
+  }).join('');
   return `<h3>Para la próxima</h3>
     <p class="pequeno suave">${hecho ? 'Tu plan quedó ajustado con lo de hoy:' : 'Con lo que hiciste hoy, así quedan las próximas veces de estos ejercicios. Se aplica solo en unos segundos; si no te convence, recházalo.'}</p>
     ${items}

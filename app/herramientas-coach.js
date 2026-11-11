@@ -1,7 +1,7 @@
 // La hoja ＋ del Coach, como la de iMessage: herramientas a un toque en vez de escribir. "Para hoy" usa las reglas
 // del entrenador en el teléfono (app/cambios-ui.js), así funciona sin señal; "Tu plan" abre el chat con la IA ya
 // encaminado; las calculadoras (nucleo/calculadoras.js y nucleo/calentamiento.js) son locales; "Traer datos" usa el adjunto del chat.
-import { E, R, guardar, hoy, avisar, unidadPeso, coma } from './comun.js';
+import { E, R, guardar, hoy, unidadPeso, coma } from './comun.js';
 import { abrirHoja } from './hoja.js';
 import { accionHoy } from './cambios-ui.js';
 import { icono } from './iconos.js';
@@ -25,15 +25,15 @@ const hayPlan = () => Array.isArray(E.plan?.dias) && !E.plan.bloqueado;
  */
 export function abrirHerramientas(o) {
   const conPlan = hayPlan(), conHoy = conPlan && Boolean(sesionDe(E.plan, hoy()));
-  const grupo = (titulo, items) => `<section class="grupo-herramientas"><h4>${titulo}</h4><div class="rejilla-herramientas">${items.map(([valor, ic, nombre, tono, apagada]) =>
-    `<button type="button" class="herramienta${apagada ? ' apagada' : ''}" data-elegir="${valor}"><span class="ic-herramienta ${tono}">${icono(ic)}</span><span>${nombre}</span></button>`).join('')}</div></section>`;
+  const grupo = (titulo, items) => `<section class="grupo-herramientas"><h4>${titulo}</h4><div class="rejilla-herramientas">${items.map(([valor, ic, nombre, tono]) =>
+    `<button type="button" class="herramienta" data-elegir="${valor}"><span class="ic-herramienta ${tono}">${icono(ic)}</span><span>${nombre}</span></button>`).join('')}</div></section>`;
   abrirHoja({
     titulo: 'Herramientas', volver: o.volver,
     contenido: `<div class="herramientas-coach">
       ${conHoy ? grupo('Para hoy', [['tiempo', 'reloj', 'Poco tiempo', 'naranja'], ['maquina', 'cambiar', 'Cambiar ejercicio', 'naranja'], ['cansado', 'luna', 'Estoy cansado', 'naranja'], ['dolor', 'curita', 'Me duele algo', 'naranja']]) : ''}
       ${conPlan ? grupo('Tu plan', [['mover', 'calendario', 'Mover o faltar', 'azul'], ['afinar', 'ajustes', 'Afinar mi plan', 'azul'], ['explicar', 'libro', 'Explícame mi plan', 'azul'], ['checkin', 'visto', 'Check in semanal', 'azul']]) : ''}
       ${grupo('Calculadoras', [['discos', 'pesa', 'Discos', 'verde'], ['rm', 'medidor', '1RM y cargas', 'verde'], ['calentar', 'fuego', 'Series de calentamiento', 'verde']])}
-      ${grupo('Traer datos', [['importar', 'bajar', 'Importar de Hevy', 'morado'], ['pegar', 'lapiz', 'Pegar un plan', 'morado'], ['foto', 'camara', 'Foto o PDF (pronto)', 'morado', true]])}
+      ${grupo('Traer datos', [['importar', 'bajar', 'Importar de Hevy', 'morado'], ['pegar', 'lapiz', 'Pegar un plan', 'morado']])}
     </div>`,
     opciones: [],
     alElegir: v => elegir(v, o),
@@ -55,7 +55,6 @@ function elegir(v, o) {
   if (v === 'calentar') return calculadoraCalentamiento(o.volver);
   if (v === 'importar') return o.adjuntar();
   if (v === 'pegar') return o.pegarPlan();
-  if (v === 'foto') return avisar('Todavía no lee fotos, PDF ni audio. Por ahora adjunta CSV o texto.', 'neutro');
 }
 
 // ── Calculadoras: lo último que escribiste queda para la próxima vez (E.calculadoras) ────────────────────────

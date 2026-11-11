@@ -1,10 +1,12 @@
 // Vista Semana: el plan por semanas, mover o faltar a un día, y agendar según el calendario de Google (.ics).
 import { calendarioHtml, enlazarCalendario } from './calendario-asistencia.js';
-import { E, guardar, R, D, esc, $, fechaCorta, presc, cambiarPlan, hoy, indice, mostrarMensaje, sesionVista, mostrarSemana } from './comun.js';
+import { E, guardar, R, D, esc, $, fechaCorta, presc, cambiarPlan, hoy, indice, mostrarMensaje, sesionVista, mostrarSemana, avisar } from './comun.js';
 import { ordenarOpcionales } from '../nucleo/opcionales.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { NOMBRE_MUSCULO, lista } from './musculos.js';
 import { moverSesion, intercambiar, marcarFaltada, reagendarConCalendario, sesionDe, nombreDia } from '../nucleo/agenda.js';
+import { soltarSesion } from '../nucleo/arrastre-semana.js';
+import { abrirHoja } from './hoja.js';
 import { leerIcs } from '../nucleo/ics.js';
 import { minutosDe } from './ritmo.js';
 import { avisoCheckin } from './checkin.js';
@@ -76,7 +78,7 @@ export function vistaSemana(ir) {
     <h1>Semana</h1>
     <p class="resumen-plan">${p.semanas} semanas · ${resumen.sesiones} sesiones en ${diasSemana.length} días: ${esc(diasSemana.map(d => DIAS_CORTOS[d]).join(', '))}</p>
     <button type="button" class="enlace" id="ver-plan">Ver tu plan explicado&nbsp;›</button>
-    ${calendarioHtml()}
+    ${calendarioHtml({ arrastrable: true })}
     ${tarjetaDescarga()}
     ${avisoCheckin(true)}
     ${tarjetaTemporada()}
@@ -104,7 +106,22 @@ export function vistaSemana(ir) {
     </section>
   </div>`;
   const raiz = $('vista-semana');
-  enlazarCalendario(() => vistaSemana(ir));
+  // Semana arrastrable: soltar una sesión en otro día muestra cómo quedaría, con sus avisos, y pide el sí.
+  enlazarCalendario(() => vistaSemana(ir), { alSoltar: (de, a, celda) => {
+    const hechas = new Set(E.sesiones.map(s => s.fecha));
+    const r = soltarSesion(E.plan, de, a, { hoy: hoy(), noPuedo: R().dias_no_puedo || [], hechas });
+    if (!r.ok) { if (r.error) avisar(r.error, 'ojo'); return; }
+    abrirHoja({
+      titulo: r.tipo === 'intercambiar' ? '¿Intercambiar las sesiones?' : '¿Mover la sesión?', volver: celda,
+      nota: `${r.texto}${r.avisos.length ? ` Ojo: ${r.avisos.join(' ')}` : ''}`,
+      opciones: [{ valor: 'si', icono: icono('visto'), nombre: r.tipo === 'intercambiar' ? 'Intercambiar' : 'Mover' }, { valor: 'no', icono: icono('cerrar'), nombre: 'Dejar como está' }],
+      alElegir: async v => {
+        if (v !== 'si') return;
+        await cambiarPlan(r.plan, `Listo: ${r.texto}`, nube);
+        vistaSemana(ir);
+      },
+    });
+  } });
   enlazarTemporada(() => vistaSemana(ir));
   $('ver-plan').onclick = () => ir('plan');
   $('semana-volver').onclick = () => ir('miplan');

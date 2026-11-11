@@ -19,6 +19,7 @@ import { fechaEnPalabras } from './prompts-coach.js';
 import { bloqueSiguienteDisponible, lunesDesde } from './bloque-siguiente.js';
 import { cargaSugerida, registrosParaCarga, TEXTO_DESCARGA, lugaresDe } from './motor-plan.js';
 import { caparCargas, textoCargasAjustadas } from './red-peso.js';
+import { lugarDeSesion } from './lugar-sesion.js';
 
 export const VERSIONES = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 const SERVIDOR = { name: 'entreno', title: 'Entreno', version: '0.2.0' };
@@ -104,6 +105,23 @@ export function permitidos({ indice, respuestas: r, derivados: d, hoy }) {
   return indice.ejercicios.filter(e => !e.extra && tieneEquipo(e, lugar.equipamiento || []) && nivelAlcanza(d.nivel, e.nivel_minimo) && !cargaZonaBloqueada(e, bloqueadas));
 }
 
+/** Qué toca hoy y mañana, con su fecha: {hoy: 'martes 10: Pierna A' | 'martes 10: sin sesión', manana: ...}. */
+export function hoyYManana(plan, hoy) {
+  const manana = new Date(Date.parse(`${hoy}T12:00:00Z`) + 864e5).toISOString().slice(0, 10);
+  const de = f => `${fechaEnPalabras(f)}: ${(plan?.dias || []).find(d => d.fecha === f && d.tipo !== 'descanso')?.foco || 'sin sesión'}`;
+  return { hoy: de(hoy), manana: de(manana) };
+}
+
+/** El nombre del lugar donde toca entrenar en una fecha: el del día del plan o el principal. Sin lugares, nada. */
+export async function lugarDeFecha(datos, fecha) {
+  try {
+    const { respuestas } = await datos.perfil();
+    const plan = datos.planActivo ? await datos.planActivo() : null;
+    const dia = (plan?.dias || []).find(d => d.fecha === fecha) || { fecha };
+    return lugarDeSesion(lugaresDe(respuestas || {}), dia, null)?.nombre || null;
+  } catch { return null; }
+}
+
 /**
  * @typedef {object} Datos  acceso a los datos de la persona autenticada (en la función: Supabase con RLS)
  * @property {() => Promise<{respuestas, derivados}>} perfil
@@ -139,7 +157,9 @@ export const HERRAMIENTAS = [
         musculos_prioridad: d.musculos_prioridad || [],
         // Lo que la persona dejó elegido en Mi plan para su siguiente bloque (nucleo/ciclo-siguiente.js).
         ...(cicloParaIA(r, plan) ? { siguiente_ciclo_elegido: cicloParaIA(r, plan) } : {}),
-        plan: plan ? { inicio: plan.inicio, semana_descarga: plan.semana_descarga, bloque: bloqueDe(plan, hoy), proximos_dias: semana.map(x => diaParaIA(x, { historial: series, indice, lugares: lugaresDe(r) })),
+        // Dicho en palabras, para que no confunda la sesión de hoy con la de mañana (quinta ronda del ensayo, 10 de
+        // noviembre de 2026): proximos_dias parte en la primera sesión que venga, que puede no ser la de hoy.
+        plan: plan ? { inicio: plan.inicio, semana_descarga: plan.semana_descarga, bloque: bloqueDe(plan, hoy), ...hoyYManana(plan, hoy), proximos_dias: semana.map(x => diaParaIA(x, { historial: series, indice, lugares: lugaresDe(r) })),
           sin_registro: await sinRegistro(plan, datos, hoy, sesiones) } : null,
         // Cómo vienes: sensaciones, esfuerzo, check-ins y tendencias (solo donde el servidor lo ofrece).
         ...(datos.contexto && indice ? { como_vienes: contextoIA({ historial: (sesiones || []).filter(s => fechaSesion(s) >= hace8), ...(await datos.contexto()), indice, hoy, respuestas: r, plan }) } : {}),
@@ -254,7 +274,9 @@ export const HERRAMIENTAS = [
         orden: orden++, ejercicio_id: e.ejercicio, ejercicio_nombre: indice.porId.get(e.ejercicio).nombre,
         tipo: 'efectiva', carga_kg: s.carga_kg ?? null, reps: s.reps, rir: s.rir ?? null,
       })));
-      const id = await datos.registrarSesion({ sesion: { fecha, titulo: titulo || 'Sesión', origen: 'manual' }, series });
+      // Con su lugar, el del día del plan o el principal: una máquina solo se compara con la del mismo lugar.
+      const lugar = await lugarDeFecha(datos, fecha);
+      const id = await datos.registrarSesion({ sesion: { fecha, titulo: titulo || 'Sesión', origen: 'manual', ...(lugar ? { lugar } : {}) }, series });
       const avisos = datos.historial ? cargasRaras(series, await datos.historial(12), indice) : [];
       return texto({ registrada: !ctx.soloProponer, ...(ctx.soloProponer ? { esperando_confirmacion: true } : {}), id, series: series.length, ...(avisos.length ? { avisos } : {}) });
     },

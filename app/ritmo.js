@@ -3,6 +3,7 @@
 // de 90 minutos del plan se muestra como de unos 115, que es lo que de verdad dura. Sin 3 sesiones que sirvan, se usa
 // el modelo del plan tal cual. Pedido de Francisco, 4 de noviembre de 2026: "mis entrenamientos están siendo más
 // largos de lo que propones".
+import { lugarDeSesion } from '../nucleo/lugar-sesion.js';
 import { E, R, D, hoy, indice } from './comun.js';
 import { duracionSesion, prescripcion, cargaSugerida, registrosParaCarga, incrementoPara, lugaresDe } from '../nucleo/motor-plan.js';
 import { duracionReal, ritmoPersonal, accesoriosParaDia, TOPE_SERIES_SESION } from '../nucleo/tiempo-sesion.js';
@@ -44,7 +45,7 @@ export function textoRitmo() {
 /** Series de trabajo por sesión como máximo razonable, según tu nivel. */
 export const topeSeriesHoy = () => TOPE_SERIES_SESION[D()?.nivel] ?? TOPE_SERIES_SESION.intermedio;
 
-const lugarDe = dia => { const l = lugaresDe(R()); return l.find(x => x.nombre === dia?.lugar) || l.find(x => x.principal) || l[0]; };
+const lugarDe = dia => lugarDeSesion(lugaresDe(R()), dia, E.lugarSesion);
 
 /**
  * Accesorios para alargar la sesión de un día cuando hay más tiempo, ya prescritos (series, repeticiones, reserva,

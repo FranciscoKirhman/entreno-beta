@@ -107,3 +107,30 @@ export function recordsPorSesion(sesiones, { asistidos = new Set() } = {}) {
   }
   return out;
 }
+
+/**
+ * El récord al alcance antes de hacer una serie: con el peso que ya está puesto, cuántas repeticiones faltan para
+ * superar algo de lo anterior. Solo se dice cuando conviene buscarlo: si queda a `margen` repeticiones o menos de las
+ * que la serie ya pide, nunca en una descarga ni en un ejercicio asistido (ahí el récord es bajar la ayuda).
+ * @param previas  series de trabajo anteriores del ejercicio, con las ya hechas hoy
+ * @param serie    {carga_kg, reps} lo que pide la serie que viene
+ * @returns {{reps: number, extra: number, tipo: 'peso' | 'reps_con_peso' | 'e1rm' | 'reps'} | null}
+ *          reps: las que dan récord; extra: cuántas más que las pedidas (0 si con las pedidas ya lo es)
+ */
+export function recordAlAlcance(previas, serie, { asistido = false, descarga = false, margen = 2, tope = 30 } = {}) {
+  const kg = n(serie?.carga_kg), pedidas = n(serie?.reps);
+  if (asistido || descarga || !previas?.length || !(pedidas > 0)) return null;
+  const sirve = new Set(kg > 0 ? ['peso', 'reps_con_peso', 'e1rm'] : ['reps']);
+  for (let reps = pedidas; reps <= Math.min(pedidas + margen, tope); reps++) {
+    const r = recordsDeSerie(previas, { carga_kg: kg, reps }).find(x => sirve.has(x.tipo));
+    if (r) return { reps, extra: reps - pedidas, tipo: r.tipo };
+  }
+  return null;
+}
+
+/** La frase del récord al alcance, para la tarjeta de la serie que sigue. */
+export function textoRecordAlAlcance(r) {
+  if (!r) return '';
+  if (r.tipo === 'peso') return 'Con este peso ya es récord';
+  return r.extra === 0 ? `Con ${r.reps} repeticiones es récord` : `Con ${r.extra} más (${r.reps}) es récord`;
+}

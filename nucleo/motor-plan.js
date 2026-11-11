@@ -132,7 +132,8 @@ export function ayudaInicial(registros) {
   const conAyuda = registros.filter(s => Number(s.carga_kg) > 0);
   if (!conAyuda.length) return null;
   const ultima = conAyuda.reduce((m, s) => ((s.fecha || '') > m ? s.fecha || '' : m), '');
-  return Math.min(...conAyuda.filter(s => (s.fecha || '') === ultima).map(s => Number(s.carga_kg)));
+  const ayuda = Math.min(...conAyuda.filter(s => (s.fecha || '') === ultima).map(s => Number(s.carga_kg)));
+  return ayuda < CARGA_MAXIMA_KG ? ayuda : null; // una ayuda mal escrita no pasa al plan
 }
 
 const n = v => (v === null || v === undefined || v === '' ? null : Number(v));
@@ -166,6 +167,9 @@ export function e1rmReferencia(registros = []) {
   return mediana(validas.filter(s => ultimas.includes(s.fecha || '')).map(e1rm));
 }
 
+/** Sobre esto un peso no es creíble: el validador (nucleo/validador.js, regla carga) rechaza 500 kg o más. */
+export const CARGA_MAXIMA_KG = 500;
+
 /** Carga para hacer `reps` dejando `rir` en reserva, según las dos últimas sesiones (e1rmReferencia). Nunca más de un
  *  15% sobre lo más pesado que ya levantó: si un dato viene mal, el plan no puede mandar a levantar de más. */
 export function cargaInicial(registros, reps, rir, incremento, maximo) {
@@ -176,7 +180,9 @@ export function cargaInicial(registros, reps, rir, incremento, maximo) {
   carga = Math.min(carga, Math.max(masPesada * 1.15, masPesada + incremento));
   carga = Math.floor(carga / incremento) * incremento;
   if (maximo) carga = Math.min(carga, maximo);
-  return carga > 0 ? Number(carga.toFixed(2)) : null;
+  // Un historial con un peso mal escrito (999 kg) no puede dar un plan que el validador rechaza (acepta menos de 500):
+  // sin peso, la persona lo elige y la app aprende de lo que anote.
+  return carga > 0 && carga < CARGA_MAXIMA_KG ? Number(carga.toFixed(2)) : null;
 }
 
 /**

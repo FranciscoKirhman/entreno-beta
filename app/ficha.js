@@ -21,7 +21,6 @@ import { sufijo } from '../nucleo/unidades.js';
 import { progresoEjercicioHtml, enlazarProgresoEjercicio } from './progreso-ejercicio.js';
 import { montarAnimacion } from './animacion-ui.js';
 import { animacionDe } from '../nucleo/animaciones.js';
-import { botonFuturo, avisoFuturo, enlazarFuturos } from './funciones-futuras.js';
 import { cuerpoHtml } from './cuerpo.js';
 
 const VOLVER = { hoy: 'Hoy', semana: 'Semana', plan: 'Tu plan', progreso: 'Progreso', miplan: 'Mi plan', banco: 'Banco de ejercicios', ejercicio: 'Atrás' };
@@ -144,7 +143,7 @@ function criteriosDeVariante(t) {
 }
 
 /** Acciones arriba, como la ficha de un contacto del iPhone: agregar a hoy (o ir a hoy, si ya está en la sesión),
- *  videos de técnica y "Revisar mi técnica", que llegará después. Si no se puede agregar, el motivo va debajo. */
+ *  y videos de técnica. Si no se puede agregar, el motivo va debajo. */
 function accionesHtml(ej, p) {
   const motivo = p?.esHoy ? null : motivoNoAgregar(ej, ctxNucleo());
   const hoyBoton = p?.esHoy
@@ -153,10 +152,8 @@ function accionesHtml(ej, p) {
   return `<div class="acciones-ficha" role="group" aria-label="Acciones">
       ${hoyBoton}
       <a class="accion-ficha" href="${esc(enlaceVideo(ej))}" target="_blank" rel="noopener">${icono('video')}<span>Videos</span></a>
-      ${botonFuturo('revisionTecnica', { forma: 'accion', simbolo: 'camara' })}
     </div>
-    ${motivo ? `<p class="pequeno suave acciones-motivo" id="acciones-motivo">${esc(motivo)}</p>` : ''}
-    ${avisoFuturo('revisionTecnica')}`;
+    ${motivo ? `<p class="pequeno suave acciones-motivo" id="acciones-motivo">${esc(motivo)}</p>` : ''}`;
 }
 
 /** El ejercicio en tu plan: el de hoy o, si no, la próxima vez que toca (o la última). */
@@ -262,7 +259,6 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
   if (anim) montarAnimacion($('ficha-animacion'), anim, { nombre: ej.nombre });
   // Banco ampliado: las instrucciones en español se cargan aparte, solo al abrir una de sus fichas.
   if (ej.extra) tecnicaExtra().then(t => { const ol = $('ficha-pasos'); if (ol && t[id]) ol.innerHTML = t[id].map(x => `<li>${esc(x)}</li>`).join(''); }).catch(() => {});
-  enlazarFuturos($('vista-ficha'));
   const atras = () => (antes ? vistaFicha(ir, antes) : ir(desde, desde === 'hoy' ? { ej: id } : undefined));
   $('volver').onclick = atras;
   $('anotar-ajustes')?.addEventListener('click', ev => {

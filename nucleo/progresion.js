@@ -1,6 +1,6 @@
 // Ajuste semanal de cargas: las reglas de contenido/checkin.json → semanal.reglas_de_ajuste, como código.
 // Son las mismas que se venían aplicando a mano en el tablero.
-import { e1rm, incrementoPara } from './motor-plan.js';
+import { e1rm, incrementoPara, deMaquina } from './motor-plan.js';
 import { esAsistido, comoLastre, PASO_LASTRE } from './catalogo.js';
 import { calidadPermiteSubir } from './notas.js';
 
@@ -214,7 +214,7 @@ const iguales = (a, b) => a.carga_kg === b.carga_kg && a.reps_min === b.reps_min
  * @returns {{plan, cambios}} plan nuevo (copia) y un cambio por ejercicio: {ejercicio_id, nombre, accion, regla,
  *          motivo, reanclado, desde, antes, despues, dias: [{fecha, descarga, antes, despues}]}
  */
-export function ajustarTrasSesion({ plan, fecha, series, indice, lugar = null, historialSemanas = {}, calidades = {}, correccion = 0 }) {
+export function ajustarTrasSesion({ plan, fecha, series, indice, lugar = null, historialSemanas = {}, calidades = {}, correccion = 0, mismoLugar = null }) {
   const nuevo = structuredClone(plan);
   const cambios = [];
   if (!Array.isArray(nuevo?.dias)) return { plan: nuevo, cambios };
@@ -225,7 +225,9 @@ export function ajustarTrasSesion({ plan, fecha, series, indice, lugar = null, h
   for (const [id, todas] of porEj) {
     const ej = indice.porId.get(id);
     if (!ej) continue;
-    const conEj = nuevo.dias.filter(d => d.fecha > fecha && d.tipo !== 'descanso' && d.ejercicios?.some(e => e.ejercicio_id === id)).sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
+    // En una máquina, polea o Smith, lo de hoy solo dice algo de los días que se hacen en el mismo lugar (mismoLugar).
+    const aqui = d => !mismoLugar || !deMaquina(ej) || mismoLugar(d);
+    const conEj = nuevo.dias.filter(d => d.fecha > fecha && d.tipo !== 'descanso' && aqui(d) && d.ejercicios?.some(e => e.ejercicio_id === id)).sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
     if (!conEj.length) continue;
     // Lo que pedía hoy el plan; si el ejercicio no estaba (se agregó o se cambió), lo que pide la próxima vez.
     const deHoy = delDia?.ejercicios?.find(e => e.ejercicio_id === id) || null;

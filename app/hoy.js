@@ -6,7 +6,7 @@ import { datoCambiado, cicloCambiado } from './datos-nube.js';
 import { E, guardar, guardarPronto, R, D, C, K, indice, hoy, ahora, esc, $, fechaCorta, ctxNucleo, escala, opcionesRadio, chk, cambiarPlan, numero, coma, mostrarMensaje, avisar, unidadPeso, enUnidad, aKilos, peso, volumenTexto, seriesTexto, modoEjemplo } from './comun.js';
 import { estadoDelPlan } from '../nucleo/registrado.js';
 import { sesionesPorRevisar } from '../nucleo/sin-registro.js';
-import { recordsDeSerie } from '../nucleo/records.js';
+import { recordsDeSerie, recordAlAlcance, textoRecordAlAlcance } from '../nucleo/records.js';
 import { esAsistido, conLastre, sinCargaExterna, tieneEquipo, comoLastre, PASO_LASTRE } from '../nucleo/catalogo.js';
 import { sufijo, porReps, camposGuardados, modoCardio, relojTexto, leerReloj } from '../nucleo/unidades.js';
 import { evaluarDia, ajustarSesion, TEXTO_RECOMENDACION } from '../nucleo/bienestar.js';
@@ -22,6 +22,7 @@ import { redDePeso } from '../nucleo/red-peso.js';
 import { sesionViva, aplicarViva } from '../nucleo/sesion-viva.js';
 import { restanAceptar, contarSegundo, huellaAjuste, ajusteVigente } from '../nucleo/cuenta-viva.js';
 import { alternativas } from '../nucleo/checkin.js';
+import { lugarDeSesion, puedeElegirLugar, elegirLugar, sinEquipoEn } from '../nucleo/lugar-sesion.js';
 import { filasTrasAjuste, ajustarTiempo, hechasDelDia, duracionReal, minutosRestantes, resumenSesion, recorteGrande, rechazosDeTiempo, RECHAZOS_PARA_CALLAR } from '../nucleo/tiempo-sesion.js';
 import { factorRitmo, minutosDe as minutosARitmo, textoRitmo, accesoriosHoy, topeSeriesHoy } from './ritmo.js';
 import { descansosDeSesion, paraGuardar as descansosParaGuardar } from '../nucleo/descansos.js';
@@ -57,6 +58,7 @@ import { descansoHtml, sesionCompletaHtml } from './estados-visuales.js';
 import { repintarConservando, celebrar, sinMovimiento, entrarPaso, selectorDe } from './movimiento.js';
 import { activarTecladoSeries } from './teclado-series.js';
 import { mandarAlCoach } from './coach-ui.js';
+import { mensajeNotaEjercicio, respuestaDeNota } from '../nucleo/nota-al-coach.js';
 import { mensajeSesionCoach } from './resumen.js';
 import { notasDeSesionTexto, huellaNotas } from '../nucleo/revision-semanal.js';
 import { msActivos, msPausa, minutosAlGuardar, alternarPausa } from '../nucleo/duracion-sesion.js';
@@ -305,7 +307,56 @@ function materializar(f, e, k) {
 }
 const fijarFilas = (f, id, n) => { ((E.filas ||= {})[f] ||= {})[id] = n; };
 // Con la forma de anotar las mancuernas (Más, Unidades): con "El par", el escalón de las de dos mancuernas es 4.
-const lugarDe = dia => { const l = lugaresDe(R()); return l.find(x => x.nombre === dia?.lugar) || l.find(x => x.principal) || l[0]; };
+const lugarDe = dia => lugarDeSesion(lugaresDe(R()), dia, E.lugarSesion);
+/**
+ * Con más de un lugar en el perfil, decir a mano dónde se hace esta sesión. No cambia el plan: cambia con qué se
+ * comparan las máquinas, el escalón de peso y el lugar con que se guarda. Si algún ejercicio pide un equipo que ese
+ * lugar no tiene, se avisa cuáles son para cambiarlos desde su menú.
+ */
+function elegirLugarDeHoy(dia, volver, alCambiar) {
+  const lugares = lugaresDe(R()).filter(x => x.nombre), actual = lugarDe(dia)?.nombre;
+  abrirHoja({
+    titulo: '¿Dónde entrenas hoy?', volver,
+    nota: 'En las máquinas y poleas, los pesos se comparan con lo que hiciste en ese mismo lugar.',
+    opciones: lugares.map(l => ({ valor: l.nombre, icono: icono(l.nombre === actual ? 'visto' : 'casa'), nombre: l.nombre })),
+    alElegir: nombre => {
+      if (nombre === actual) return;
+      E.lugarSesion = elegirLugar(E.lugarSesion, dia.fecha, nombre, lugarDeSesion(lugaresDe(R()), dia, null)?.nombre);
+      redGuardada.clear();
+      guardar();
+      const faltan = sinEquipoEn(lugarDe(dia), dia.ejercicios.map(e => indice.porId.get(e.ejercicio_id)));
+      alCambiar();
+      avisar(faltan.length
+        ? `Hoy en ${nombre}. Ahí no tienes el equipo para ${lista(faltan.map(ej => ej.nombre))}: cámbialos desde su menú.`
+        : `Hoy en ${nombre}.`, faltan.length ? 'ojo' : 'neutro');
+    },
+  });
+}
+/** Bajo la nota de un ejercicio, lo que pasó con la que se envió al coach: en cola, pensando o su respuesta. */
+function respuestaNotaHtml(f, id) {
+  const r = respuestaDeNota(E.chat || [], { fecha: f, id }), quien = esc(nombreAsistente());
+  if (r.estado === 'sin') return '';
+  const enviada = `<p class="nota-enviada">Enviaste: ${esc(r.nota || '')}</p>`;
+  if (r.estado === 'cola') return `${enviada}<p class="nota-estado">${!nube.usuarioId() ? `En cola: ${quien} responde cuando entres a tu cuenta.` : `En cola: sale sola cuando haya señal y ${quien} responde aquí.`}</p>`;
+  if (r.estado === 'pensando') return `${enviada}<p class="nota-estado">${quien} está respondiendo…</p>`;
+  return `${enviada}<p class="nota-coach"><strong>${quien}:</strong> ${esc(r.texto).replace(/\n+/g, '<br>')}</p>${r.conPropuesta ? `<button type="button" class="enlace" data-nota-ver-coach>Ver su propuesta en el Coach</button>` : ''}`;
+}
+// Mientras alguna nota espera respuesta, se mira el chat y se actualiza solo ese recuadro (sin repintar la sesión,
+// para no cortar lo que se está escribiendo).
+let vigiaNotas = null;
+function vigilarNotas(f) {
+  clearInterval(vigiaNotas);
+  const esperando = () => (E.chat || []).some(m => m.rol === 'persona' && m.notaEj?.fecha === f && ['cola', 'pensando'].includes(respuestaDeNota(E.chat, m.notaEj).estado));
+  if (!esperando()) return;
+  vigiaNotas = setInterval(() => {
+    const cajas = document.querySelectorAll('#vista-hoy [data-respuesta-nota]');
+    if (!cajas.length) return clearInterval(vigiaNotas);
+    cajas.forEach(c => { const h = respuestaNotaHtml(f, c.dataset.respuestaNota); if (c.innerHTML !== h) c.innerHTML = h; });
+    if (!esperando()) clearInterval(vigiaNotas);
+  }, 1200);
+}
+/** El primer ejercicio de la sesión con series de trabajo por hacer: ahí va la frase del récord al alcance. */
+const esElQueSigue = (dia, f, k) => dia.ejercicios.findIndex((x, j) => filasDe(f, x, j).some(y => !y.hecho && deTrabajo(tipoDe(y)))) === k;
 /** Las series anotadas que sirven para este ejercicio en el lugar de hoy (nucleo/motor-plan.js: delMismoLugar). */
 const seriesAqui = (id, dia, registro = E.registro) => delMismoLugar(seriesAnotadas(E.sesiones, registro), indice.porId.get(id), lugarDe(dia)?.nombre);
 const deTrabajoFila = x => ['normal', 'fallo'].includes(tipoDe(x));
@@ -400,7 +451,7 @@ function aproximacionesHoy(dia, e, lista, f) {
   const plan = aproximacionesDelPlan(dia, e);
   if (plan.length) return plan;
   const ej = indice.porId.get(e.ejercicio_id);
-  const ant = e.ejercicio_id ? anterior(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f) : null;
+  const ant = e.ejercicio_id ? anterior(seriesAqui(e.ejercicio_id, dia), e.ejercicio_id, f) : null;
   const prev = anteriorSirve(ej, ant?.fecha, f) ? ant?.series[0] : null;
   const kgTrabajo = (lista || []).find(x => deTrabajoFila(x) && x.kg != null)?.kg ?? cargaPlanDe(e, dia, f) ?? prev?.carga_kg ?? null;
   // Con el cuerpo (dominadas, fondos) o con ayuda no hay "la mitad del peso": repeticiones fáciles (calentamientoCorporal).
@@ -450,10 +501,12 @@ const descansoVuelta = (ejs, g) => { const u = ejs[g.miembros.at(-1)]; return E.
 const nombreDe = e => e.nombre || indice.porId.get(e.ejercicio_id)?.nombre || '';
 /** Lo de la vez anterior, como "Previous Workout Values" de Hevy: de la misma sesión del plan (por defecto, así Torso A
  *  se compara con Torso A) o de cualquiera. Sin una igual antes, cualquiera. */
-function anteriorEj(id, f, foco) {
-  const todas = seriesAnotadas(E.sesiones, E.registro);
+function anteriorEj(id, f, foco, dia = null) {
+  // En una máquina, la vez anterior es la del mismo lugar (nucleo/motor-plan.js: delMismoLugar).
+  const aqui = series => delMismoLugar(series, indice.porId.get(id), lugarDe(dia)?.nombre);
+  const todas = aqui(seriesAnotadas(E.sesiones, E.registro));
   if (ajuste('anterior') !== 'rutina' || !foco) return anterior(todas, id, f);
-  return anterior(seriesAnotadas(E.sesiones.filter(s => (s.titulo || '') === foco), {}), id, f) || anterior(todas, id, f);
+  return anterior(aqui(seriesAnotadas(E.sesiones.filter(s => (s.titulo || '') === foco), {})), id, f) || anterior(todas, id, f);
 }
 const mmss = seg => (seg ? `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')}` : 'sin descanso');
 /** 150 → "2 min 30 s", como la línea de descanso de Hevy. */
@@ -654,7 +707,7 @@ function siguienteSerieHtml(dia, f) {
   const { ejercicioIndice: k, filaIndice: i, etiqueta } = siguiente;
   const e = dia.ejercicios[k], id = idDe(e, k), filas = filasDe(f, e, k), r = filas[i];
   const tipo = tipoDe(r), posicion = filas.slice(0, i).filter(x => deTrabajo(tipoDe(x))).length;
-  const previo = anterior(seriesAnotadas(E.sesiones, E.registro), e.ejercicio_id, f)?.series[posicion];
+  const previo = anterior(seriesAqui(e.ejercicio_id, dia), e.ejercicio_id, f)?.series[posicion];
   const aproximacion = r.aprox != null ? aproximacionesHoy(dia, e, filas, f)[r.aprox] : null;
   const anteriorHoy = [...filas.slice(0, i)].reverse().find(x => deTrabajo(tipoDe(x)) && x.kg != null);
   const kg = r.kg ?? (deTrabajo(tipo) ? anteriorHoy?.kg ?? cargaPlanDe(e, dia, f) ?? previo?.carga_kg : aproximacion?.kg);
@@ -952,7 +1005,7 @@ function sesionHoy(dia) {
   ${vivaHtml(vivaActual, 'tiempo')}
   ${filaPasosHtml(dia, f, 'cal')}
   ${dia.ejercicios.length ? '' : `<div class="sesion-vacia-estado">${icono('pesa')}<h2>Comienza</h2><p class="suave">Agrega un ejercicio para empezar tu sesión</p></div>`}
-  <ol class="ejercicios-hoy">${dia.ejercicios.map((e, k) => ejercicioHoy(e, k, f, e.ejercicio_id ? anteriorEj(e.ejercicio_id, f, dia.foco) : null, notas[idDe(e, k)] || {}, dia)).join('')}</ol>
+  <ol class="ejercicios-hoy">${dia.ejercicios.map((e, k) => ejercicioHoy(e, k, f, e.ejercicio_id ? anteriorEj(e.ejercicio_id, f, dia.foco, dia) : null, notas[idDe(e, k)] || {}, dia)).join('')}</ol>
   ${vivaHtml(vivaActual, null)}
   ${cardioHtml(dia.cardio)}
   ${filaPasosHtml(dia, f, 'est')}
@@ -1090,6 +1143,16 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
     if (trabajo && r.hecho && r.consejo?.kg != null) kgHoy = r.consejo.kg; // el peso que sugirió el consejo pasa al gris
     if (trabajo && r.hecho && ajusteKg && (r.t || 0) > ajusteKg.t) ajusteKg = null; // ya se hizo una serie después del ajuste
     const repsGris = seg ? e.reps_min : trabajo && repsHoy != null ? repsHoy : dist ? e.reps_max : trabajo ? repsObjetivoDe(e, kgGris, f, dia) : sug?.reps ?? null;
+    // El récord al alcance, para buscarlo cuando conviene: solo en la serie que sigue de toda la sesión (una frase a la
+    // vez en pantalla), con la sesión empezada, y si queda a dos repeticiones o menos de las pedidas.
+    let alcance = '';
+    if (trabajo && !r.hecho && !siguiente && t !== 'fallo' && !seg && !dist && e.ejercicio_id && enCurso(f) && esElQueSigue(dia, f, k)) {
+      const comoSerie = x => ({ carga_kg: x.kg ?? null, reps: x.reps ?? null });
+      const antes = [...seriesAqui(e.ejercicio_id, dia, {}).filter(x => x.ejercicio_id === e.ejercicio_id && x.fecha <= f),
+        ...filas.slice(0, i).filter(x => x?.hecho && deTrabajo(tipoDe(x))).map(comoSerie)];
+      alcance = textoRecordAlAlcance(recordAlAlcance(antes, { carga_kg: r.kg ?? kgGris, reps: r.reps ?? repsGris },
+        { asistido: esAsistido(ejCat), descarga: dia.semana != null && dia.semana === E.plan?.semana_descarga }));
+    }
     if (trabajo && !r.hecho && !siguiente) siguiente = { etiqueta: etiq[i], reps: repsGris };
     if (trabajo && r.hecho) repsHoy = repsTrasSerie(r);
     const antes = prev ? (seg ? ((prev.duracion_seg ?? prev.reps) != null ? `${prev.duracion_seg ?? prev.reps} s` : '')
@@ -1110,7 +1173,8 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
       <input type="text" inputmode="numeric" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="reps"${seg ? ' data-tiempo' : ''} value="${esc(seg ? relojTexto(r.reps) : r.reps ?? '')}" placeholder="${esc(seg ? relojTexto(repsGris) : repsGris ?? '')}" aria-label="${seg ? 'Tiempo, en minutos y segundos' : dist ? 'Metros' : 'Repeticiones'}, serie ${etiq[i]}">
       ${seg ? (r.hecho || !ajuste('cronoFila') ? '<span aria-hidden="true"></span>' : `<button type="button" class="crono-serie" data-crono="${id}" data-i="${i}" aria-label="Contar los segundos de la serie ${etiq[i]}">${icono('reloj', 'icono')}</button>`) : dist || !conEsfuerzo ? '' : trabajo ? cajaEsfuerzo(id, i, r, e, etiq[i]) : '<span aria-hidden="true"></span>'}
       <button type="button" class="check" data-hecho="${id}" data-i="${i}" aria-pressed="${Boolean(r.hecho)}" aria-label="Serie ${etiq[i]} hecha">${r.hecho ? icono('visto', 'visto-serie') : ''}</button>
-      ${r.consejo?.texto && trabajo && i === ultimaHecha ? `<p class="consejo ${r.consejo?.tipo || 'bien'}">${esc(r.consejo.texto)}</p>` : ''}</div></div>`;
+      ${r.consejo?.texto && trabajo && i === ultimaHecha ? `<p class="consejo ${r.consejo?.tipo || 'bien'}">${esc(r.consejo.texto)}</p>` : ''}
+      ${alcance ? `<p class="consejo record-alcance">${icono('trofeo')}<span>${esc(alcance)}</span></p>` : ''}</div></div>`;
   }).join('');
   // En una superserie, el descanso va al terminar la vuelta (se elige en el último ejercicio).
   const desc = g ? descansoVuelta(dia.ejercicios, g) : descansoDe(e, k);
@@ -1129,6 +1193,8 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
       <button type="button" class="boton-icono menu-ej" data-mas="${id}" aria-label="Más opciones de ${esc(nombre)}">${icono('puntos')}</button>
     </div>
     <textarea class="nota-ej" rows="1" data-nota="${id}" data-p="nota" data-visible placeholder="Nota para tu entrenador" aria-label="Nota para tu entrenador sobre ${esc(nombre)}">${esc(nota.nota || '')}</textarea>
+    <div class="nota-acciones"><button type="button" class="nota-accion" data-nota-enviar="${id}" aria-label="${esc(`Enviar la nota de ${nombre} a ${nombreAsistente()} y recibir su respuesta ahora`)}">${icono('enviar')}<span>Enviar a ${esc(nombreAsistente())}</span></button>${ej ? `<button type="button" class="nota-accion" data-nota-para-mi="${id}" aria-label="${esc(`Guardar como nota para mí: aparece cada vez que haga ${nombre}`)}">${icono('lapiz')}<span>Guardar para mí</span></button>` : ''}</div>
+    <div class="nota-respuesta" data-respuesta-nota="${id}" aria-live="polite">${respuestaNotaHtml(f, id)}</div>
     ${vivaHtml(vivaActual, e.ejercicio_id)}
     ${cargaHoy.red && !filas.some(x => x.hecho && deTrabajo(tipoDe(x))) ? `<p class="consejo bajar" data-red-peso>${esc(textoRed(cargaHoy.red))}</p>` : ''}
     ${cargaHoy.fatiga && !filas.some(x => x.hecho && deTrabajo(tipoDe(x))) ? `<p class="consejo bajar">${esc(textoFatiga(cargaHoy))}</p>` : ''}
@@ -1261,6 +1327,7 @@ function enlazar(ir, dia) {
         { valor: 'ajustar', icono: icono('ajustes'), nombre: 'Ajustar hoy' },
         ...(dia.ejercicios.length ? [{ valor: 'tiempo', icono: icono('reloj'), nombre: 'Ajustar el tiempo' }] : []),
         { valor: 'detalles', icono: icono('info'), nombre: 'Detalles de la sesión' },
+        ...(puedeElegirLugar(lugaresDe(R())) ? [{ valor: 'lugar', icono: icono('casa'), nombre: `Lugar: ${lugarDe(dia)?.nombre || ''}` }] : []),
         ...(dia.ejercicios.length > 1 ? [{ valor: 'ordenar', icono: icono('cambiar'), nombre: 'Ordenar ejercicios' }] : []),
         { valor: 'ajustes', icono: icono('ajustes'), nombre: 'Ajustes de la sesión' },
         ...(corriendo ? [{ valor: 'pausa', icono: icono('reloj'), nombre: enPausa(f) ? 'Reanudar la sesión' : 'Pausar la sesión' }] : []),
@@ -1270,6 +1337,7 @@ function enlazar(ir, dia) {
         if (v === 'pausa') { cambiarPausa(f); return repintar(); }
         if (v === 'ordenar') return ordenarSesion({ volver: b, alCambiar: repintar });
         if (v === 'tiempo') return abrirTiempo({ volver: b, alCambiar: repintar });
+        if (v === 'lugar') return elegirLugarDeHoy(dia, b, repintar);
         const boton = { ajustar: 'ajustar-hoy', detalles: 'ver-detalles-sesion', ajustes: 'ajustes-sesion', descartar: 'descartar-sesion' }[v];
         if (boton) $(boton)?.click();
       },
@@ -1711,7 +1779,7 @@ function enlazar(ir, dia) {
   // vez anterior en esa misma serie.
   function sugerencia(e, lista, i) {
     const posicion = lista.slice(0, i).filter(x => deTrabajo(tipoDe(x))).length;
-    const ant = e.ejercicio_id ? anteriorEj(e.ejercicio_id, f, dia.foco) : null, prev = ant?.series[posicion] ?? null;
+    const ant = e.ejercicio_id ? anteriorEj(e.ejercicio_id, f, dia.foco, dia) : null, prev = ant?.series[posicion] ?? null;
     const hoyAntes = [...lista.slice(0, i)].reverse().find(x => deTrabajo(tipoDe(x)) && x.kg != null);
     // Si el consejo de la serie anterior sugirió otro peso, ese es el que va (lo que se ve en gris).
     const delAnterior = anteriorSirve(indice.porId.get(e.ejercicio_id), ant?.fecha, f) ? prev?.carga_kg : null;
@@ -1879,7 +1947,7 @@ function enlazar(ir, dia) {
         { valor: 'quitar-hoy', icono: icono('basurero'), nombre: 'Quitar de esta sesión', peligro: true },
         ...(ej ? [{ valor: 'ficha', icono: icono('libro'), nombre: 'Cómo se hace y por qué' }] : []),
         { valor: 'calentar', icono: icono('fuego'), clase: 'tipo-calentamiento', nombre: 'Agregar series de calentamiento' },
-        ...(ej ? [{ valor: 'nota-fija', icono: icono('lapiz'), nombre: E.notasFijas?.[e.ejercicio_id] ? 'Editar la nota fija' : 'Nota fija (aparece siempre)' }] : []),
+        ...(ej ? [{ valor: 'nota-fija', icono: icono('lapiz'), nombre: E.notasFijas?.[e.ejercicio_id] ? 'Editar mi nota (aparece siempre)' : 'Nota para mí (aparece siempre)' }] : []),
         { valor: 'descanso', icono: icono('reloj'), nombre: `Descanso: ${mmss(desc)}${g ? ' (al terminar la vuelta)' : ''}` },
         ...(ej && ajuste('discos') && ej.equipamiento.some(q => q === 'barra_rack' || q === 'smith') ? [{ valor: 'discos', icono: icono('pesa'), nombre: 'Calculadora de discos' }] : []),
         { valor: 'como', icono: icono('lapiz'), nombre: 'Cómo te fue' },
@@ -1934,7 +2002,7 @@ function enlazar(ir, dia) {
     const actual = E.notasFijas?.[e.ejercicio_id] || '';
     let texto = actual;
     abrirHoja({
-      titulo: `Nota fija: ${nombreDe(e)}`, volver,
+      titulo: `Nota para mí: ${nombreDe(e)}`, volver,
       nota: 'Aparece cada vez que haces este ejercicio. Por ejemplo, la altura del asiento o el agarre.',
       contenido: `<textarea id="texto-nota-fija" class="campo-nota-fija" rows="3" maxlength="200" aria-label="Nota fija" placeholder="Asiento en 4, agarre ancho">${esc(actual)}</textarea>`,
       opciones: [{ valor: 'guardar', icono: icono('visto'), clase: 'confirmar', nombre: 'Guardar' },
@@ -1951,6 +2019,35 @@ function enlazar(ir, dia) {
     campo.focus();
   }
   raiz.querySelectorAll('[data-nota-fija]').forEach(b => b.onclick = () => editarNotaFija(ejercicioDe(b.dataset.notaFija).e, b));
+  // Los dos botones bajo la nota. No le quitan el foco al campo al tocarlos (en iOS hay que frenar también mousedown):
+  // salir del campo repinta la sesión y el toque se perdería.
+  raiz.querySelectorAll('.nota-accion').forEach(b => { for (const tipo of ['pointerdown', 'mousedown']) b.addEventListener(tipo, ev => ev.preventDefault()); });
+  const campoNota = id => raiz.querySelector(`textarea.nota-ej[data-nota="${CSS.escape(id)}"]`);
+  // Enviar: la nota sale por la cola del chat (sin señal o sin cuenta queda por enviar) y la respuesta llega aquí mismo.
+  raiz.querySelectorAll('[data-nota-enviar]').forEach(b => b.onclick = () => {
+    const id = b.dataset.notaEnviar, { e, k } = ejercicioDe(id), campo = campoNota(id);
+    const m = e && mensajeNotaEjercicio({ nombre: nombreDe(e), foco: dia.foco, nota: campo?.value, e, hechas: filasDe(f, e, k).filter(x => x.hecho).map(x => ({ kg: x.kg ?? null, reps: x.reps ?? null, rir: x.rir ?? (x.rpe != null ? 10 - x.rpe : null), tipo: tipoDe(x) })) });
+    if (!m) return;
+    if (respuestaDeNota(E.chat || [], { fecha: f, id }).nota === campo.value.trim() && respuestaDeNota(E.chat, { fecha: f, id }).estado !== 'respondida') return avisar('Esa nota ya está enviada.', 'neutro');
+    guardarNota(id, 'nota', campo.value);
+    mandarAlCoach({ texto: m.texto, paraIA: m.paraIA, modo: 'nota', tipo: 'nota_ejercicio', notaEj: { fecha: f, id, nota: campo.value.trim() } });
+    campo.blur();
+    repintar();
+  });
+  // Guardar para mí: pasa a ser la nota que aparece cada vez que sale este ejercicio, y no va al entrenador.
+  raiz.querySelectorAll('[data-nota-para-mi]').forEach(b => b.onclick = () => {
+    const id = b.dataset.notaParaMi, { e } = ejercicioDe(id), campo = campoNota(id), texto = campo?.value.trim().slice(0, 200);
+    if (!e?.ejercicio_id || !texto) return;
+    const antes = E.notasFijas?.[e.ejercicio_id];
+    (E.notasFijas ||= {})[e.ejercicio_id] = texto;
+    datoCambiado('notas_fijas');
+    const nota = (E.notas[f] ||= {})[id] ||= {};
+    nota.nota = ''; delete nota.para_entrenador;
+    guardar(); campo.blur(); repintar();
+    avisar(`Guardada para ti: aparece cada vez que hagas ${nombreDe(e)}.${antes && antes !== texto ? ' Reemplazó la que tenías.' : ''}`, 'bien');
+  });
+  raiz.querySelectorAll('[data-nota-ver-coach]').forEach(b => b.onclick = () => ir('coach'));
+  vigilarNotas(f);
 
   // Calculadora de discos, como Hevy: para la próxima serie sin marcar (lo escrito o lo que está en gris), cuánto va a
   // cada lado de la barra. La barra se elige y queda guardada para ese ejercicio.

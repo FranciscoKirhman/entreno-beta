@@ -6,12 +6,17 @@ import { aplicarOpcion } from '../nucleo/coach.js';
 import { abrirHoja } from './hoja.js';
 import { datoCambiado } from './datos-nube.js';
 import * as nube from './nube.js';
+import { comparacionMes, nombreMes } from '../nucleo/medidas-mes.js';
+import { desempenoEjercicio, textoSeries, textoReserva, textoTendencia } from '../nucleo/desempeno-ejercicio.js';
+import { esAsistido } from '../nucleo/catalogo.js';
+import { elegirSeccionProgreso } from './progreso-hevy.js';
+import { unidadPeso, enUnidad } from './comun.js';
 
 const estados = new WeakMap();
 function estado() { if (!estados.has(E)) estados.set(E, { historial: false, verTodo: false, revisiones: new Map() }); return estados.get(E); }
 const contexto = () => ({ ...ctxNucleo(), marcas: E.marcasPlan || {}, enCurso: Object.keys(E.inicioSesion || {}).filter(f => !E.sesiones.some(s => s.fecha === f && !s.origen)) });
 export const modeloFeed = () => armarFeed({ ...E, descansos: E.descansosMedidos || {}, indice, hoy: hoy(), marcas: E.marcasPlan || {} });
-const etiqueta = t => ({ pregunta: 'Tu coach pregunta', avance: 'Tu avance', cambio: 'Cambios del plan', falta: 'Lo que falta', respondida: 'Ya respondiste' })[t];
+const etiqueta = t => ({ pregunta: 'Tu coach pregunta', avance: 'Tu avance', cambio: 'Cambios del plan', falta: 'Lo que falta', respondida: 'Ya respondiste', medidas: 'Solo para ti' })[t];
 function grafico(puntos) {
   const valores = puntos.map(p => p.valor), min = Math.min(...valores), max = Math.max(...valores);
   const xy = puntos.map((p, i) => `${8 + i * 284 / (puntos.length - 1)},${64 - (p.valor - min) * 52 / (max - min || 1)}`).join(' ');
@@ -28,18 +33,41 @@ function revisionHtml(t) {
   if (!r) return `<button class="boton" data-feed-revisar="${esc(t.id)}">Revisar la sesión</button>`;
   return `<div class="feed-revision"><p>${esc(r.texto)}</p>${r.calendario ? calendario(r.calendario, t.id) : ''}${r.semana ? `<ul>${r.semana.map(d => `<li>${esc(`${fechaCorta(d.fecha)}: ${d.foco || ''} ${d.cambio || ''}`)}</li>`).join('')}</ul>` : ''}${(r.opciones || []).map((o, i) => `<button class="boton" data-feed-opcion="${i}" data-feed-id="${esc(t.id)}">${esc(`${o.letra ? o.letra + ': ' : ''}${o.etiqueta}`)}</button>${o.nota ? `<p class="pequeno suave">${esc(o.nota)}</p>` : ''}`).join('')}</div>`;
 }
+/** Para decidir con datos: cuando el coach pregunta por un ejercicio, sus últimas veces serie por serie, la reserva
+ *  contra la pedida y hacia dónde va su máximo estimado. Se calcula al dibujar; la tarjeta guardada no lo lleva. */
+function desempenoHtml(t) {
+  if (!t.ejercicio_id || t.pregunta?.salud) return '';
+  const d = desempenoEjercicio(E.sesiones || [], t.ejercicio_id, { plan: E.plan, hoy: hoy(), asistido: esAsistido(indice.porId.get(t.ejercicio_id)) });
+  if (!d.filas.length) return '';
+  const u = unidadPeso(), bajo = f => f.reserva != null && f.pedido?.rir != null && f.reserva < Number(f.pedido.rir);
+  return `<div class="feed-desempeno"><p class="feed-sub">Tus últimas veces</p>
+    <ul>${d.filas.map(f => `<li><time datetime="${esc(f.fecha)}">${esc(fechaCorta(f.fecha))}</time><b>${esc(textoSeries(f.series, u, enUnidad))}</b>${textoReserva(f) ? `<small class="${bajo(f) ? 'feed-bajo' : ''}">${esc(textoReserva(f))}</small>` : ''}</li>`).join('')}</ul>
+    ${d.puntos.length >= 3 ? grafico(d.puntos) : ''}${d.tendencia ? `<p class="pequeno suave">${esc(textoTendencia(d.tendencia, u, enUnidad))}.</p>` : ''}
+    <button type="button" class="enlace" data-feed-ficha="${esc(t.ejercicio_id)}">Ver todo su historial</button></div>`;
+}
+/** Las cifras de la tarjeta mensual se calculan aquí, en el teléfono: la tarjeta guardada no lleva ninguna. */
+function medidasDelMesHtml(t) {
+  if (!t.medidas || !E.consentimientos?.medidas_cuerpo) return '';
+  const c = comparacionMes(E.medidas || [], t.mes), n = x => String(Math.round(x * 10) / 10).replace('.', ',');
+  if (c.falta) return '<p class="pequeno suave">Todavía no anotas medidas este mes.</p>';
+  const valor = f => (f.campo === 'peso_kg' ? `${n(enUnidad(f.ahora))} ${unidadPeso()}` : `${n(f.ahora)} ${f.unidad}`);
+  const cambio = f => { const d = f.campo === 'peso_kg' ? Math.round((enUnidad(f.ahora) - enUnidad(f.antes)) * 10) / 10 : f.cambio; return f.antes == null ? 'sin dato del mes anterior' : d === 0 ? `igual que en ${nombreMes(c.anterior)}` : `${n(Math.abs(d))} ${d < 0 ? 'menos' : 'más'} que en ${nombreMes(c.anterior)}`; };
+  return `<ul class="feed-records feed-medidas">${c.filas.map(f => `<li><b>${esc(f.nombre)}</b><span>${esc(valor(f))} <small class="suave">${esc(cambio(f))}</small></span></li>`).join('')}</ul>`;
+}
 function tarjetaHtml(t, historial) {
   const serie = t.serie;
   return `<article class="tarjeta feed-tarjeta feed-${t.tipo}" data-tarjeta-id="${esc(t.id)}" tabindex="-1">
     <div class="feed-meta"><span>${etiqueta(t.tipo)}</span><time datetime="${esc(t.fecha)}">${esc(fechaCorta(t.fecha))}</time></div>
-    <h3>${esc(t.titulo)}</h3><p>${esc(t.texto)}</p>
+    <h3>${esc(t.titulo)}</h3><p>${esc(t.tipo === 'medidas' && t.medidas && E.consentimientos?.medidas_cuerpo && !comparacionMes(E.medidas || [], t.mes).falta ? 'Así vas este mes. Solo tú lo ves.' : t.texto)}</p>
     ${serie ? `<p class="feed-cifra">${esc(`${serie.carga_kg != null ? peso(serie.carga_kg) + ' × ' : ''}${serie.reps || (serie.duracion_seg ? serie.duracion_seg + ' s' : '')}`)}</p>` : ''}
     ${t.records?.length ? `<ul class="feed-records">${t.records.map(r => `<li><b>${esc(r.nombre)}</b><span>${esc(`${r.serie?.carga_kg != null ? peso(r.serie.carga_kg) + ' × ' : ''}${r.serie?.reps ?? (r.serie?.duracion_seg ? r.serie.duracion_seg + ' s' : '')}`)}</span></li>`).join('')}</ul>` : ''}
     ${t.puntos ? `${grafico(t.puntos)}<p class="pequeno">${esc(peso(t.antes))} a ${esc(peso(t.ahora))} estimados</p>` : ''}
     ${t.tipo === 'cambio' && t.antes ? `<p class="pequeno">Antes: ${esc(t.antes)}<br>Ahora: ${esc(t.ahora)}</p>` : ''}
     ${t.cambios?.length ? `<details><summary>Ver antes, después y por qué</summary>${t.cambios.map(c => `<p><b>${esc(c.nombre)}</b>: ${esc(c.motivo)}<br>Antes: ${esc(dosis(c.antes))}<br>Ahora: ${esc(dosis(c.despues))}</p>`).join('')}</details>` : ''}
+    ${t.tipo === 'medidas' ? medidasDelMesHtml(t) : ''}
+    ${t.tipo === 'pregunta' && !historial ? desempenoHtml(t) : ''}
     ${t.respuesta ? `<p class="pequeno suave">Respuesta guardada: ${esc(t.respuesta)}</p>` : ''}
-    ${historial ? '' : t.tipo === 'pregunta' ? `<div class="feed-respuestas">${t.pregunta.opciones.map(o => `<button class="boton" data-feed-responder="${esc(o.id)}" data-feed-id="${esc(t.id)}">${esc(o.etiqueta)}</button>`).join('')}</div>` : `<div class="feed-acciones">${t.tipo === 'falta' ? revisionHtml(t) : t.ejercicio_id ? `<button class="boton" data-feed-ejercicio="${esc(t.id)}">Ver ejercicio</button>` : t.accion === 'progreso' ? `<button class="boton" data-feed-progreso="${esc(t.id)}">Ver progreso</button>` : ''}<button class="enlace" data-feed-vista="${esc(t.id)}">${t.tipo === 'falta' ? 'Dejar en el historial' : 'Listo'}</button></div>`}
+    ${historial ? '' : t.tipo === 'pregunta' ? `<div class="feed-respuestas">${t.pregunta.opciones.map(o => `<button class="boton" data-feed-responder="${esc(o.id)}" data-feed-id="${esc(t.id)}">${esc(o.etiqueta)}</button>`).join('')}</div>` : `<div class="feed-acciones">${t.tipo === 'falta' ? revisionHtml(t) : t.ejercicio_id ? `<button class="boton" data-feed-ejercicio="${esc(t.id)}">Ver ejercicio</button>` : t.accion === 'progreso' ? `<button class="boton" data-feed-progreso="${esc(t.id)}">Ver progreso</button>` : t.tipo === 'medidas' ? `<button class="boton" data-feed-medidas>${t.medidas && t.fotos ? 'Anotar medidas o foto' : t.medidas ? 'Anotar medidas' : 'Agregar foto'}</button>` : ''}<button class="enlace" data-feed-vista="${esc(t.id)}">${t.tipo === 'falta' ? 'Dejar en el historial' : 'Listo'}</button></div>`}
   </article>`;
 }
 const dosis = e => e ? `${e.carga_kg != null ? peso(e.carga_kg) + ' × ' : ''}${e.reps_min} a ${e.reps_max}` : '';
@@ -99,6 +127,9 @@ export function enlazarFeed(raiz, ir, repintar, feed) {
   raiz.querySelectorAll('[data-feed-vista]').forEach(b => b.onclick = () => { const terminar = trasRetirar(b); vista(tarjetas.get(b.dataset.feedVista)); terminar(); });
   raiz.querySelectorAll('[data-feed-ejercicio]').forEach(b => b.onclick = () => { const t = tarjetas.get(b.dataset.feedEjercicio); vista(t); ir('ficha', { id: t.ejercicio_id, desde: 'entrenar' }); });
   raiz.querySelectorAll('[data-feed-progreso]').forEach(b => b.onclick = () => { vista(tarjetas.get(b.dataset.feedProgreso)); ir('progreso'); });
+  raiz.querySelectorAll('[data-feed-ficha]').forEach(b => b.onclick = () => ir('ficha', { id: b.dataset.feedFicha, desde: 'entrenar' }));
+  // Anotar no archiva la tarjeta: al volver muestra la comparación; queda hasta tocar Listo.
+  raiz.querySelectorAll('[data-feed-medidas]').forEach(b => b.onclick = () => { elegirSeccionProgreso('medidas'); ir('progreso'); });
   raiz.querySelectorAll('[data-feed-responder]').forEach(b => b.onclick = () => responder(tarjetas.get(b.dataset.feedId), b.dataset.feedResponder, b, trasRetirar(b), ir));
   const poner = (t, r) => { estado().revisiones.set(t.id, { r, firma: JSON.stringify([E.plan, E.sesiones, E.marcasPlan]) }); repintar(); };
   raiz.querySelectorAll('[data-feed-revisar]').forEach(b => b.onclick = () => {

@@ -5,6 +5,7 @@ import { esAsistido } from './catalogo.js';
 import { sesionesPorRevisar } from './sin-registro.js';
 import { preguntasCoach } from './preguntas-coach.js';
 import { sumarDias, diaSemana } from './agenda.js';
+import { tarjetaMedidasMes } from './medidas-mes.js';
 
 const fechaNumero = f => Date.parse(f.length === 10 ? `${f}T12:00:00Z` : f) || 0;
 const ordenar = (a, b) => (b.cuando || fechaNumero(b.fecha)) - (a.cuando || fechaNumero(a.fecha)) || a.id.localeCompare(b.id);
@@ -16,7 +17,7 @@ const lista = xs => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', '
 const accionable = t => (t.tipo === 'pregunta' || t.tipo === 'falta' ? 0 : 1);
 
 /** Una identidad por hecho; las vistas pasan al historial. Las preguntas respondidas nunca vuelven al feed. */
-export function armarFeed({ sesiones = [], plan = null, indice, hoy, progresionSesion = {}, vivaHecho = {}, feedVistas = {}, respuestas = {}, marcas = {}, descansos = {}, notas = {}, saludFeed = {} }) {
+export function armarFeed({ sesiones = [], plan = null, indice, hoy, progresionSesion = {}, vivaHecho = {}, feedVistas = {}, respuestas = {}, marcas = {}, descansos = {}, notas = {}, saludFeed = {}, consentimientos = {} }) {
   const tarjetas = [], asistidos = new Set(indice.ejercicios.filter(esAsistido).map(e => e.id));
   const ss = [...sesiones].filter(s => s.fecha <= hoy).sort((a, b) => a.fecha.localeCompare(b.fecha) || (a.hora || '').localeCompare(b.hora || ''));
   const records = recordsPorSesion(ss, { asistidos });
@@ -66,6 +67,9 @@ export function armarFeed({ sesiones = [], plan = null, indice, hoy, progresionS
   for (const d of sesionesPorRevisar(plan, ss, { hoy, marcas })) tarjetas.push({ id: `falta:${d.fecha}`, tipo: 'falta', fecha: d.fecha, titulo: `${d.foco} quedó sin registro`, texto: 'Revisa si la hiciste o elige cómo recuperarla.', accion: 'revisar' });
   const preguntas = preguntasCoach({ plan, sesiones: ss, respuestas, descansos, notas, saludFeed, indice, hoy });
   tarjetas.push(...preguntas.map(p => ({ ...p, tipo: 'pregunta', pregunta: p })));
+  // La tarjeta mensual privada de medidas y fotos, solo con permiso y sin valores adentro (nucleo/medidas-mes.js).
+  const delMes = tarjetaMedidasMes({ consentimientos, hoy });
+  if (delMes) tarjetas.push(delMes);
   const unicas = [...new Map(tarjetas.map(t => [t.id, t])).values()].sort(ordenar);
   let abiertas = 0;
   const nuevas = unicas.filter(t => !feedVistas[t.id] && (t.tipo !== 'pregunta' || ++abiertas <= 2)).sort((a, b) => accionable(a) - accionable(b) || ordenar(a, b));

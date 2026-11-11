@@ -31,7 +31,6 @@ import { ajuste } from './ajustes-sesion.js';
 import { abrirPorId } from './historias.js';
 import { comprobaciones, punteria } from '../nucleo/comprobacion-rir.js';
 import { graficoSemanasHtml, tableroProgresoHtml, enlazarProgresoHevy, esfuerzoHtml, enlazarEsfuerzo, anioHtml, enlazarAnio, musculosMapaHtml, enlazarMusculosMapa, seccionProgreso, elegirSeccionProgreso, TITULO_SECCION } from './progreso-hevy.js';
-import { botonFuturo, avisoFuturo, enlazarFuturos } from './funciones-futuras.js';
 
 const nombreEj = id => indice.porId.get(id)?.nombre || id;
 let verTodo = false;
@@ -160,7 +159,6 @@ function resumenPeriodoHtml() {
       <ol class="pequeno">${a.ejercicios.map(e => `<li>${esc(e.nombre)}: ${e.sesiones} ${e.sesiones === 1 ? 'sesión' : 'sesiones'}</li>`).join('')}</ol>
     </details>
     <button type="button" class="boton fila-boton" data-historia="${tipo === 'año' ? `año|${r.periodo.desde.slice(0, 4)}` : `mes|${r.periodo.desde.slice(0, 7)}`}">${icono('reproducir')} Ver como historia</button>` : `<p class="pequeno">Sin sesiones en ${esc(nombreP(r.periodo.desde))} todavía.</p>`}
-    ${botonFuturo('entrenarConAmigos', { simbolo: 'personas' })}${avisoFuturo('entrenarConAmigos')}
   </section>`;
 }
 
@@ -438,7 +436,6 @@ export async function vistaProgreso(ir) {
   document.querySelectorAll('[data-ficha]').forEach(b => b.onclick = () => { ir('ejercicio', { id: b.dataset.ficha, desde: 'progreso' }); scrollTo(0, 0); });
   document.querySelectorAll('[data-periodo-resumen]').forEach(b => b.onclick = () => { periodoElegido = b.dataset.periodoResumen; const y = scrollY; vistaProgreso(ir); scrollTo(0, y); });
   document.querySelectorAll('#vista-progreso [data-historia]').forEach(b => b.onclick = () => abrirPorId(b.dataset.historia, { volver: b }));
-  enlazarFuturos($('vista-progreso'));
   $('todos-ejercicios')?.addEventListener('click', () => { todosEjercicios = !todosEjercicios; const y = scrollY; vistaProgreso(ir); scrollTo(0, y); });
   // Medidas del cuerpo
   const repintarMedidas = () => { const y = scrollY; vistaProgreso(ir); scrollTo(0, y); };

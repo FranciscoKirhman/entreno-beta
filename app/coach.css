@@ -155,7 +155,6 @@ body.escribiendo-coach .coach-hola{padding-top:4px}
 .grupo-herramientas h4{margin:0 0 8px;font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-muted)}
 .rejilla-herramientas{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 6px}
 .herramienta{display:grid;justify-items:center;align-content:start;gap:6px;border:0;background:none;color:var(--ink);font:500 12.5px/1.2 var(--f-texto);text-align:center;padding:4px 0;min-height:44px;cursor:pointer}
-.herramienta.apagada{opacity:.45}
 .ic-herramienta{width:52px;height:52px;border-radius:15px;display:grid;place-items:center;color:#fff}
 .ic-herramienta .icono{width:26px;height:26px;stroke:#fff}
 .ic-herramienta.naranja{background:#E8682C}

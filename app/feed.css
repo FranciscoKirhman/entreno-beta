@@ -4,3 +4,15 @@
 .feed-records{list-style:none;margin:10px 0;padding:0;display:grid;gap:6px}.feed-records li{display:flex;justify-content:space-between;gap:12px;min-width:0}.feed-records b{font-weight:600;min-width:0}.feed-records span{white-space:nowrap;font-variant-numeric:tabular-nums}
 
 .feed-tarjeta:focus-visible,.feed-cab h2:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.feed-medidas li{align-items:baseline}.feed-medidas span{text-align:right}.feed-medidas small{display:block;font-size:12px}
+/* Cuando el coach pregunta por un ejercicio: sus últimas veces y su tendencia, para decidir con datos. */
+.feed-desempeno{margin:12px 0;padding:12px;border-radius:14px;background:var(--fill)}
+.feed-sub{margin:0 0 8px;font-size:12px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--ink-muted)}
+.feed-desempeno ul{list-style:none;margin:0 0 8px;padding:0;display:grid;gap:8px}
+.feed-desempeno li{display:grid;grid-template-columns:84px minmax(0,1fr);column-gap:10px;align-items:baseline}
+.feed-desempeno time{font-size:13px;color:var(--ink-muted);white-space:nowrap}
+.feed-desempeno b{font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.feed-desempeno small{grid-column:2;font-size:12.5px;color:var(--ink-muted)}
+.feed-desempeno small.feed-bajo{color:var(--warning)}
+.feed-desempeno .feed-grafico{margin:4px 0}
+.feed-desempeno .enlace{display:inline-flex;align-items:center;min-height:44px;padding:0}

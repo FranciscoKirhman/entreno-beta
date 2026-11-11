@@ -468,8 +468,9 @@ export function marcarNovedadCoach() {
   document.querySelector('#nav [data-ir="coach"]')?.classList.toggle('con-novedad', Boolean(E.chatSinLeer));
 }
 /** Deja el mensaje a la vista en el chat y lo manda en cuanto se pueda (con señal y el permiso de la IA). */
-export function mandarAlCoach({ texto, paraIA, modo, tipo, sesionId }) {
-  E.chat.push({ rol: 'persona', texto, tipo, modo, ...(paraIA && paraIA !== texto ? { paraIA } : {}), ...(sesionId ? { sesionId } : {}), porEnviar: true });
+export function mandarAlCoach({ texto, paraIA, modo, tipo, sesionId, notaEj }) {
+  // notaEj: la nota de un ejercicio enviada en plena sesión; con eso Hoy muestra la respuesta bajo la nota (nucleo/nota-al-coach.js).
+  E.chat.push({ rol: 'persona', texto, tipo, modo, ...(paraIA && paraIA !== texto ? { paraIA } : {}), ...(sesionId ? { sesionId } : {}), ...(notaEj ? { notaEj } : {}), porEnviar: true });
   guardar(); avisoChat();
   pintarChat();
   procesarColaCoach();
