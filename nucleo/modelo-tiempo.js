@@ -1,4 +1,5 @@
 import { grupos } from './superseries.js';
+import { modoCardio } from './unidades.js';
 
 // El dato medido ajusta la prescripción, sin igualar descansos de ejercicios ni fases distintas.
 export const ESCALA_DESCANSO = { min: 0.5, max: 3, segundosMax: 480 };
@@ -10,13 +11,12 @@ export function descansoEstimado(e, ritmo = null) {
   return Math.min(ESCALA_DESCANSO.segundosMax, pedido * factor);
 }
 
-// Los ejercicios de cardio del catálogo (escaladora, trotadora, bicicleta puestos como ejercicio de la sesión): sus
-// "repeticiones" son minutos, salvo que vengan en segundos. Los anota crearIndice (nucleo/catalogo.js). Antes una
+// El cardio por tiempo puesto como ejercicio de la sesión (escaladora, trotadora, caminata, trote: los que se anotan
+// en pisos o km y tiempo, nucleo/unidades.js): sus "repeticiones" son minutos, salvo que vengan en segundos. Antes una
 // escaladora de 10 a 20 minutos contaba como 15 repeticiones, un minuto: el tiempo de la sesión y su ajuste no la
-// veían (Francisco, 11 de noviembre de 2026).
-const CARDIO = new Set();
-export function anotarCardio(ids = []) { for (const id of ids) CARDIO.add(id); }
-export const esCardio = e => CARDIO.has(e?.ejercicio_id);
+// veían (Francisco, 11 de noviembre de 2026). Los saltos de tijera y el patinador son de cardio pero van por
+// repeticiones: se cuentan como cualquier ejercicio.
+export const esCardio = e => Boolean(modoCardio(e));
 /** Segundos de un ejercicio de cardio: sus minutos (o segundos) por sus series, sin descansos. */
 export const segundosCardio = e => (Number(e.series) || 1) * ((Number(e.reps_min) + Number(e.reps_max)) / 2) * (e.unidad === 'seg' ? 1 : 60);
 

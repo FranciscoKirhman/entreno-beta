@@ -32,17 +32,23 @@ export function leerNota(texto) {
   const t = sinTildes(texto);
   if (!t.trim()) return null;
   if (/ocupad|no hay (la |una )?maquina|no esta la maquina|sin maquina/.test(t)) return 'ocupada';
-  // Lo negado no cuenta: "ya no me duele", "sin dolor", "nada pesado", "no me costó" no cambian nada. "No está fácil"
-  // tampoco sube el peso. Antes "ya no me duele el hombro" bajaba el peso un 10% (revisión del 11 de noviembre de 2026).
+  // Lo negado no cuenta, y lo demás de la frase sí: "ya no me duele" no cambia nada, pero "sin dolor, pero muy pesado"
+  // y "no fue fácil, me costó" son pesado (revisiones del 11 y 12 de noviembre de 2026).
+  // El dolor nunca se pierde: solo lo niegan las formas explícitas ("no me duele", "ya no molesta", "sin dolor", "nada
+  // de dolor", "ningún dolor", "no siento dolor"). "No aguanto el dolor" y "no soporto el dolor" son dolor, y fuerte.
+  const sinDolorNegado = t
+    .replace(/\b(ya )?no (me |te |le |se )?(duele|dolio|molesta|molesto|pincha|tira)\w*/g, ' ')
+    .replace(/\b(sin|nada de|ningun|ninguna|cero) (dolor(es)?|molestias?|tiron(es)?|pinchazos?)\b/g, ' ')
+    .replace(/\b(ya )?no (tengo|tuve|siento|senti|hay|hubo|queda|quedo) (ningun |ninguna |nada de |mas )?(dolor(es)?|molestias?)\b/g, ' ');
+  if (/(duele|dolio|dolor|molest|pincha|tiron)/.test(sinDolorNegado)) {
+    const fuerte = /(mucho|fuerte|no puedo|no pude|para[rd]|grave|no aguanto|no soporto|insoportable)/.test(sinDolorNegado)
+      && !/\b(no (es |fue |me duele |duele )?(mucho|tanto|fuerte|grave)|un poco|poquito|leve|apenas)\b/.test(sinDolorNegado);
+    return fuerte ? 'dolor_fuerte' : 'molestia';
+  }
   const NEGADO = /\b(no|ya no|nada|sin|ningun|ninguna|tampoco)\b(\s+\w+){0,2}\s+$/;
-  const negado = re => { const m = t.match(re); return Boolean(m) && NEGADO.test(`${t.slice(0, m.index)} `); };
-  const DOLOR = /(duele|dolor|molest|pincha|tiron)/, FACIL = /(facil|liviano|me sobr|podia mas|podria mas|suave|quedo corto)/, PESADO = /(pesad|me costo|muy duro|dificil|no pude|no llegue|no alcance|reventad|muerto|agotad)/;
-  if (DOLOR.test(t) && negado(DOLOR)) return null;
-  if (!DOLOR.test(t) && FACIL.test(t) && negado(FACIL)) return null;
-  if (!DOLOR.test(t) && !FACIL.test(t) && /(pesad|me costo|muy duro|dificil)/.test(t) && negado(/(pesad|me costo|muy duro|dificil)/)) return null;
-  if (/(duele|dolor|molest|pincha|tirón|tiron)/.test(t)) return /(mucho|fuerte|no puedo|no pude|para[rd]|grave)/.test(t) ? 'dolor_fuerte' : 'molestia';
-  if (/(facil|liviano|me sobr|podia mas|podria mas|suave|quedo corto)/.test(t)) return 'facil';
-  if (/(pesad|me costo|muy duro|dificil|no pude|no llegue|no alcance|reventad|muerto|agotad)/.test(t)) return 'pesado';
+  const afirma = re => [...t.matchAll(new RegExp(re.source, 'g'))].some(m => !NEGADO.test(`${t.slice(0, m.index)} `));
+  if (afirma(/(facil|liviano|me sobr|podia mas|podria mas|suave|quedo corto)/)) return 'facil';
+  if (afirma(/(pesad|me costo|muy duro|dificil|reventad|muerto|agotad)/) || /(no pude|no llegue|no alcance)/.test(t)) return 'pesado';
   return null;
 }
 

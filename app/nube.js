@@ -303,7 +303,9 @@ export async function guardarCheckin({ semana, plan_inicio, respuestas = {}, ban
     resumen_automatico: { series, sesiones }, banderas_rojas: banderas, cambios_aplicados: cambios }));
 }
 // consulta: id de la consulta (lo genera el teléfono). Si se corta, la respuesta se pide con respuestaChat.
-export const chat = (mensaje, historial, archivo, modo = 'chat', consulta = null) => funcion('coach', { cuerpo: { mensaje, historial, ...(archivo ? { archivo } : {}), ...(modo !== 'chat' ? { modo } : {}), ...(consulta ? { consulta } : {}) } });
+// sesionEnCurso va en su propio campo: el servidor la agrega solo al mensaje para la IA, nunca al texto que leen la
+// alarma y las reglas (nucleo/sesion-en-curso.js).
+export const chat = (mensaje, historial, archivo, modo = 'chat', consulta = null, sesionEnCurso = '') => funcion('coach', { cuerpo: { mensaje, historial, ...(archivo ? { archivo } : {}), ...(modo !== 'chat' ? { modo } : {}), ...(consulta ? { consulta } : {}), ...(sesionEnCurso ? { sesion_en_curso: sesionEnCurso } : {}) } });
 export const respuestaChat = consulta => funcion(`coach?consulta=${encodeURIComponent(consulta)}`, { metodo: 'GET' });
 export const estadoChat = () => funcion('coach', { metodo: 'GET' });
 export async function cargarSuplementos() {

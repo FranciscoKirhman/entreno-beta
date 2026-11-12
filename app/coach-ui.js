@@ -27,6 +27,9 @@ import { semanaAMedias } from '../nucleo/semana-a-medias.js';
 import { ofertaDeTiempo } from '../nucleo/tiempo-sesion.js';
 import { esAsistido } from '../nucleo/catalogo.js';
 import { historiasDeHoy, idHistoria } from '../nucleo/historias.js';
+import { resumenSesionEnCurso } from '../nucleo/sesion-en-curso.js';
+import { sesionEnCurso } from './pantalla.js';
+import { fechaSesionActiva } from '../nucleo/sesion-activa.js';
 
 const borradores = new WeakMap(), decisiones = new WeakSet();
 let consultaActual = null, limpiarRedaccion = () => {}, irActual = null, estadoChatTexto = null, pidiendoIdeas = null;
@@ -930,6 +933,17 @@ async function aceptarConTexto({ msg, op }, texto, ir, borrador) {
   } finally { decisiones.delete(msg); if (E === estado && $('vista-coach')?.isConnected) actualizarChat(ir, { respuesta: true, seguir: true }); }
 }
 
+/** Con una sesión empezada, la sesión como está en este teléfono, para mandarla junto al mensaje del chat: el servidor
+ *  solo conoce el plan guardado y no ve lo que se cambió ni lo que ya se hizo (nucleo/sesion-en-curso.js). Va en un
+ *  campo aparte del mensaje. Solo en el chat normal; '' si no hay sesión. */
+function sesionParaChat(modo) {
+  try {
+    if (modo !== 'chat' || !sesionEnCurso()) return '';
+    const f = fechaSesionActiva(E, hoy()), dia = sesionDe(E.plan, f);
+    const inicio = E.inicioSesion?.[f], minutos = inicio ? (Date.now() - new Date(inicio).getTime()) / 6e4 : null;
+    return resumenSesionEnCurso(dia, E.registro[f] || {}, { nombreDe: e => e.nombre || indice.porId.get(e.ejercicio_id)?.nombre || 'Ejercicio', minutos: minutos > 0 && minutos < 600 ? minutos : null });
+  } catch { return ''; }
+}
 /** existente: un mensaje que ya está en el chat esperando salir (nota de sesión o revisión semanal). */
 async function enviar(texto, ir, archivo = null, { existente = null } = {}) {
   recuperarConsultaInterrumpida();
@@ -968,7 +982,7 @@ async function enviar(texto, ir, archivo = null, { existente = null } = {}) {
     if (enVista()) actualizarChat(ir);
     try {
       const historial = historialParaIA(E.chat.slice(0, E.chat.indexOf(persona)));
-      const ia = await nube.chat(persona.paraIA || texto, historial, archivo ? { tipo: archivo.tipo, texto: archivo.texto } : null, modo, persona.consulta);
+      const ia = await nube.chat(persona.paraIA || texto, historial, archivo ? { tipo: archivo.tipo, texto: archivo.texto } : null, modo, persona.consulta, sesionParaChat(modo));
       if (E !== estado || usuario !== nube.usuarioId()) return false;
       if (ia.estado === 'pensando') { consultaActual = null; esperarRespuesta(mensaje); return false; } // ya la estaba respondiendo
       E.chat = E.chat.filter(m => m !== mensaje);

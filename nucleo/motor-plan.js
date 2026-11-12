@@ -1,3 +1,4 @@
+import { modoCardio } from './unidades.js';
 import { duracionEstimada, pesasReales } from './modelo-tiempo.js';
 export { duracionEstimada } from './modelo-tiempo.js';
 // Motor de reglas: arma un plan de 4 semanas sin IA. Es el plan del plan Gratis y la base que el coach
@@ -270,8 +271,12 @@ export function prescripcion(ej, prioridad, d) {
   if (suave && !compuesto) series = 2;
   const rir = Math.max(compuesto ? d.rir_objetivo.compuestos : d.rir_objetivo.aislamiento, d.rir_minimo);
   const descanso = ej.tipo === 'core' ? 60 : !compuesto ? 75 : prioridad === 1 ? (fuerza ? 180 : 150) : 120;
-  // Cardio agregado a la sesión (escaladora, trotadora): una serie de 10 a 20 minutos, sin descanso después.
-  if (ej.tipo === 'cardio') return { series: 1, reps_min: 10, reps_max: 20, unidad: 'reps', rir: Math.min(5, rir), descanso_seg: 0 };
+  // Cardio agregado a la sesión. El que se anota en pisos o km y tiempo (escaladora, trotadora, caminata, trote): una
+  // serie de 10 a 20 minutos. Los demás (saltos de tijera, patinador) van por segundos: 2 a 3 minutos, como al
+  // agregarlos desde el banco (nucleo/editar-sesion.js). Sin descanso después.
+  if (ej.tipo === 'cardio') return modoCardio({ ejercicio_id: ej.id })
+    ? { series: 1, reps_min: 10, reps_max: 20, unidad: 'reps', rir: Math.min(5, rir), descanso_seg: 0 }
+    : { series: 1, reps_min: 120, reps_max: 180, unidad: 'seg', rir: Math.min(5, rir), descanso_seg: 0 };
   // Transporte con peso (caminata del granjero): se mide en metros, con descanso de accesorio.
   if (ej.patron === 'transporte') return { series: suave ? 2 : 3, reps_min: 20, reps_max: 40, unidad: 'm', rir: Math.min(5, rir), descanso_seg: 90 };
   return { series, reps_min: reps[0], reps_max: reps[1], unidad: porTiempo ? 'seg' : 'reps', rir: Math.min(5, rir), descanso_seg: descanso };

@@ -2,7 +2,7 @@
 // vienen con la misma plantilla). Prepara una copia, no toca lo demás y valida antes de guardar.
 import { modoCardio } from './unidades.js';
 import { normalizar, tieneEquipo, nivelAlcanza, articulacionesBloqueadas, cargaZonaBloqueada, esAsistido } from './catalogo.js';
-import { prescripcion, comoDescarga, duracionSesion, incrementoPara, lugaresDe } from './motor-plan.js';
+import { prescripcion, comoDescarga, duracionSesion, incrementoPara, lugaresDe, cargaSugerida, registrosParaCarga, delMismoLugar } from './motor-plan.js';
 import { cargasAlReordenar } from './fatiga-sesion.js';
 import { validarCambio } from './validador.js';
 import { grupos, ordenSinPartirSuperseries } from './superseries.js';
@@ -72,7 +72,15 @@ export function editarSesion(accion, ctx) {
       if (cardio) Object.assign(p, { series: 1, reps_min: 10, reps_max: 20, unidad: 'reps', descanso_seg: 0 });
       else if (ej.tipo === 'cardio') Object.assign(p, { series: 1, reps_min: 120, reps_max: 180, unidad: 'seg', descanso_seg: 0 });
       if (ej.tipo === 'movilidad') Object.assign(p, { series: 1, reps_min: 30, reps_max: 45, unidad: 'seg', descanso_seg: 0 });
-      const nuevoE = { ejercicio_id: ej.id, nombre: ej.nombre, ...p, prioridad: 2, orden: x.ejercicios.length, carga_kg: null,
+      // Con historial, parte con el peso que da lo último que levantó (el mismo cálculo que el gris de la sesión): así
+      // el plan guardado, y el coach que lo lee, saben con cuánto va. Sin historial queda sin peso y la persona lo elige.
+      let carga = null;
+      try {
+        const lugares = lugaresDe(ctx.respuestas || {}), lugar = lugares.find(l => l.nombre === x.lugar) || lugares.find(l => l.principal) || lugares[0];
+        const series = delMismoLugar(ctx.historial || [], ej, lugar?.nombre);
+        if ((p.unidad || 'reps') === 'reps' && !cardio) carga = cargaSugerida({ e: p, ej, lugar, registros: registrosParaCarga(series, ej.id, hoy) });
+      } catch { carga = null; }
+      const nuevoE = { ejercicio_id: ej.id, nombre: ej.nombre, ...p, prioridad: 2, orden: x.ejercicios.length, carga_kg: carga ?? null,
         nota: cardio ? `Agregado por ti. Anota ${cardio === 'pisos' ? 'los pisos' : 'los km'} y el tiempo.` : p.unidad === 'seg' ? 'Agregado por ti. Registra los segundos de cada serie.' : p.unidad === 'm' ? 'Agregado por ti. Anota el peso y los metros de cada serie.' : 'Agregado por ti. Elige un peso con la reserva indicada.' };
       return descarga ? comoDescarga(nuevoE) : nuevoE;
     };
