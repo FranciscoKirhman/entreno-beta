@@ -27,7 +27,10 @@ export function mensajeNotaEjercicio({ nombre, foco, nota, e = {}, hechas = [] }
 
 /**
  * En qué va la nota enviada de un ejercicio en una fecha, mirando el chat: la última enviada manda.
- * @returns {{estado: 'sin' | 'cola' | 'pensando' | 'respondida', texto?: string, conPropuesta?: boolean, nota?: string}}
+ * indice es la respuesta del coach en el chat; seguimiento, la última respuesta a un botón tocado bajo esa nota
+ * (lo que agrega decidir con deNota), para mostrar su vista previa y sus botones ahí mismo.
+ * @returns {{estado: 'sin' | 'cola' | 'pensando' | 'respondida', texto?: string, conPropuesta?: boolean, nota?: string,
+ *   indice?: number, seguimiento?: number}}
  */
 export function respuestaDeNota(chat = [], { fecha, id }) {
   let i = -1;
@@ -38,5 +41,22 @@ export function respuestaDeNota(chat = [], { fecha, id }) {
   const r = chat[i + 1];
   if (!r || r.rol !== 'coach') return { estado: 'pensando', nota };
   if (r.pendiente) return { estado: 'pensando', nota };
-  return { estado: 'respondida', nota, texto: r.texto || '', conPropuesta: Boolean(r.propuesta || r.opciones?.length) };
+  let seguimiento = -1;
+  for (let k = i + 2; k < chat.length; k++) if (chat[k].rol === 'coach' && chat[k].deNota?.fecha === fecha && chat[k].deNota?.id === id) seguimiento = k;
+  return { estado: 'respondida', nota, texto: r.texto || '', conPropuesta: Boolean(r.propuesta || r.opciones?.length), indice: i + 1,
+    ...(seguimiento > 0 ? { seguimiento } : {}) };
+}
+
+/**
+ * Bajo qué ejercicio se ve una nota enviada: el suyo y, si un ajuste en vivo lo puso en lugar de otro
+ * (nucleo/sesion-viva.js: "la máquina está ocupada" lo reemplaza), también el que reemplazó. Sin esto, la nota enviada y
+ * la respuesta del coach desaparecían de la sesión justo cuando la nota provocaba el cambio. El texto de la nota no se
+ * mueve: en el ejercicio nuevo, "ocupada" volvería a reemplazarlo.
+ * @param vivaHecho los ajustes en vivo aceptados de la fecha, por su id (`nota-ocupada:<ejercicio de antes>:<firma>`)
+ */
+export function idsConNota(id, vivaHecho = {}) {
+  const desde = Object.entries(vivaHecho || {})
+    .filter(([, h]) => h?.tipo === 'reemplazar' && h.ejercicio_id === id)
+    .map(([clave]) => clave.split(':')[1]).filter(x => x && x !== id);
+  return [id, ...desde];
 }

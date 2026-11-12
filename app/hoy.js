@@ -57,8 +57,8 @@ import * as nube from './nube.js';
 import { descansoHtml, sesionCompletaHtml } from './estados-visuales.js';
 import { repintarConservando, celebrar, sinMovimiento, entrarPaso, selectorDe } from './movimiento.js';
 import { activarTecladoSeries } from './teclado-series.js';
-import { mandarAlCoach } from './coach-ui.js';
-import { mensajeNotaEjercicio, respuestaDeNota } from '../nucleo/nota-al-coach.js';
+import { mandarAlCoach, respuestaCoachHtml, elegirOpcionNota } from './coach-ui.js';
+import { mensajeNotaEjercicio, respuestaDeNota, idsConNota } from '../nucleo/nota-al-coach.js';
 import { mensajeSesionCoach } from './resumen.js';
 import { notasDeSesionTexto, huellaNotas } from '../nucleo/revision-semanal.js';
 import { msActivos, msPausa, minutosAlGuardar, alternarPausa } from '../nucleo/duracion-sesion.js';
@@ -332,14 +332,20 @@ function elegirLugarDeHoy(dia, volver, alCambiar) {
     },
   });
 }
+/** La nota enviada que se muestra bajo un ejercicio: la suya o la del que reemplazó un ajuste en vivo. */
+const idNotaDe = (f, id) => idsConNota(id, E.vivaHecho?.[f]).find(x => respuestaDeNota(E.chat || [], { fecha: f, id: x }).estado !== 'sin') ?? id;
 /** Bajo la nota de un ejercicio, lo que pasó con la que se envió al coach: en cola, pensando o su respuesta. */
-function respuestaNotaHtml(f, id) {
-  const r = respuestaDeNota(E.chat || [], { fecha: f, id }), quien = esc(nombreAsistente());
+function respuestaNotaHtml(f, idEj) {
+  const id = idNotaDe(f, idEj), r = respuestaDeNota(E.chat || [], { fecha: f, id }), quien = esc(nombreAsistente());
   if (r.estado === 'sin') return '';
   const enviada = `<p class="nota-enviada">Enviaste: ${esc(r.nota || '')}</p>`;
   if (r.estado === 'cola') return `${enviada}<p class="nota-estado">${!nube.usuarioId() ? `En cola: ${quien} responde cuando entres a tu cuenta.` : `En cola: sale sola cuando haya señal y ${quien} responde aquí.`}</p>`;
-  if (r.estado === 'pensando') return `${enviada}<p class="nota-estado">${quien} está respondiendo…</p>`;
-  return `${enviada}<p class="nota-coach"><strong>${quien}:</strong> ${esc(r.texto).replace(/\n+/g, '<br>')}</p>${r.conPropuesta ? `<button type="button" class="enlace" data-nota-ver-coach>Ver su propuesta en el Coach</button>` : ''}`;
+  // Mientras espera: los puntos del chat y que se puede seguir entrenando (la respuesta tarda unos segundos).
+  if (r.estado === 'pensando') return `${enviada}<p class="nota-estado" role="status"><span class="escribiendo" aria-hidden="true"><i></i><i></i><i></i></span>${quien} está respondiendo. Sigue con tu serie: la respuesta queda aquí.</p>`;
+  // La respuesta con el formato del chat y sus mismos botones (app/coach-ui.js). Un botón tocado aquí deja su vista
+  // previa o su resultado debajo, con los botones que siguen, sin ir al Coach.
+  const s = r.seguimiento, eleccion = s != null && E.chat[s - 1]?.deNota ? E.chat[s - 1].texto : '';
+  return `${enviada}<div class="nota-coach"><p class="nota-quien">${quien}</p>${respuestaCoachHtml(r.indice, { sugerencias: s == null })}${s != null ? `<div class="nota-seguimiento">${eleccion ? `<p class="nota-enviada">Elegiste: ${esc(eleccion)}</p>` : ''}${respuestaCoachHtml(s)}</div>` : ''}</div>`;
 }
 // Mientras alguna nota espera respuesta, se mira el chat y se actualiza solo ese recuadro (sin repintar la sesión,
 // para no cortar lo que se está escribiendo).
@@ -2058,7 +2064,22 @@ function enlazar(ir, dia) {
     guardar(); campo.blur(); repintar();
     avisar(`Guardada para ti: aparece cada vez que hagas ${nombreDe(e)}.${antes && antes !== texto ? ' Reemplazó la que tenías.' : ''}`, 'bien');
   });
-  raiz.querySelectorAll('[data-nota-ver-coach]').forEach(b => b.onclick = () => ir('coach'));
+  // Bajo la nota: los botones de la respuesta del coach, los mismos del chat (app/coach-ui.js: elegirOpcionNota), y sus
+  // respuestas rápidas, que siguen la conversación ahí mismo.
+  raiz.querySelectorAll('[data-respuesta-nota]').forEach(caja => {
+    caja.onpointerdown = caja.onmousedown = ev => { if (ev.target.closest('button')) ev.preventDefault(); };
+    caja.onclick = async ev => {
+      const id = idNotaDe(f, caja.dataset.respuestaNota), b = ev.target.closest('button');
+      if (!b || b.disabled) return;
+      if (b.dataset.notaSugerencia) {
+        mandarAlCoach({ texto: b.dataset.notaSugerencia, modo: 'chat', tipo: 'nota_ejercicio', notaEj: { fecha: f, id, nota: b.dataset.notaSugerencia } });
+        return repintar();
+      }
+      if (b.dataset.opcion == null) return;
+      caja.querySelectorAll('.opciones-chat button').forEach(x => { x.disabled = true; });
+      if (await elegirOpcionNota(Number(b.dataset.msg), Number(b.dataset.opcion), ir, { fecha: f, id })) repintar();
+    };
+  });
   vigilarNotas(f);
 
   // Calculadora de discos, como Hevy: para la próxima serie sin marcar (lo escrito o lo que está en gris), cuánto va a

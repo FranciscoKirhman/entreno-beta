@@ -773,6 +773,19 @@ body.escribiendo-coach #nav{display:none!important}
 #vista-hoy .nota-respuesta p{margin:0 0 4px}
 #vista-hoy .nota-enviada,#vista-hoy .nota-estado{color:var(--ink-muted);font-size:13px}
 #vista-hoy .nota-coach{padding:10px 12px;border-radius:14px;background:var(--fill);color:var(--ink)}
+/* La respuesta del coach bajo la nota, con el formato y los botones del chat. */
+#vista-hoy .nota-coach .nota-quien{margin:0 0 4px;font-size:13px;font-weight:600;color:var(--ink-muted)}
+#vista-hoy .nota-coach .texto-chat p{margin:0 0 6px}
+#vista-hoy .nota-coach .texto-chat p:last-child{margin-bottom:0}
+#vista-hoy .nota-coach .texto-chat ul{margin:4px 0 6px;padding-left:18px}
+#vista-hoy .nota-coach .texto-chat li{margin:2px 0}
+#vista-hoy .nota-coach .propuesta-chat{margin-top:8px}
+#vista-hoy .nota-coach .opciones-chat{display:flex;flex-direction:column;align-items:stretch;gap:6px;margin-top:10px}
+#vista-hoy .nota-coach .opciones-chat .boton{min-height:44px;white-space:normal}
+#vista-hoy .nota-coach .respuestas-rapidas{margin-top:8px}
+#vista-hoy .nota-seguimiento{margin-top:10px;padding-top:8px;border-top:1px solid var(--line)}
+#vista-hoy .nota-estado .escribiendo{height:14px;margin-right:8px;vertical-align:middle}
+#vista-hoy .nota-estado .escribiendo i{width:6px;height:6px}
 #vista-hoy.reordenando .nota-acciones,#vista-hoy.reordenando .nota-respuesta{display:none}
 /* El gris de las repeticiones con el rango del plan ("10 a 15"): más chico para que quepa en el campo. */
 #vista-hoy .serie input.con-rango::placeholder{font-size:13px;letter-spacing:-.02em}

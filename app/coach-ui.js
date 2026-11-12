@@ -251,15 +251,9 @@ export function vistaCoach(ir, mensajeInicial) {
       delete persona.consulta;
       return enviar(persona.texto, ir, null, { existente: persona });
     }
-    decisiones.add(msg);
     b.closest('.opciones-chat')?.querySelectorAll('button').forEach(x => { x.disabled = true; });
-    try {
-      const aceptada = await decidir(op.accion, op.etiqueta, ir);
-      if (E !== estadoVista || nube.usuarioId() !== usuarioVista) return;
-      if (aceptada) { msg.opciones = null; msg.estadoPropuesta = op.accion.tipo === 'confirmar_ia' ? 'aplicada' : op.accion.tipo === 'descartar_ia' ? 'descartada' : null; }
-      else if (op.accion.id && E.chatPorTraer?.id === op.accion.id) msg.estadoPropuesta = 'por_comprobar';
-      guardar();
-    } finally { decisiones.delete(msg); if (vigente()) actualizarChat(ir, { respuesta: true, seguir: true, enfocar: true }); }
+    try { await ejecutarOpcion(msg, op, ir); }
+    finally { if (vigente()) actualizarChat(ir, { respuesta: true, seguir: true, enfocar: true }); }
   });
   // La pregunta por las sesiones sin registro (abajo, como mensaje del coach): cada respuesta se ve en el chat, como si
   // se hubiera escrito. Con dos o más, en el calendario se tocan las que se hicieron y "Guardar" las anota todas.
@@ -655,8 +649,44 @@ function mostrarUltimaRespuesta(estado, usuario, enfocar) {
   });
 }
 
+/** Una opción de un mensaje del coach, tocada en el chat o bajo la nota de un ejercicio: la misma vista previa, la
+ *  misma confirmación y el mismo registro en el chat. deNota marca lo que se agrega al chat para mostrarlo bajo esa nota. */
+async function ejecutarOpcion(msg, op, ir, { deNota } = {}) {
+  const estado = E, uid = nube.usuarioId();
+  decisiones.add(msg);
+  try {
+    const aceptada = await decidir(op.accion, op.etiqueta, ir, { deNota });
+    if (E !== estado || nube.usuarioId() !== uid) return;
+    if (aceptada) { msg.opciones = null; msg.estadoPropuesta = op.accion.tipo === 'confirmar_ia' ? 'aplicada' : op.accion.tipo === 'descartar_ia' ? 'descartada' : null; }
+    else if (op.accion.id && E.chatPorTraer?.id === op.accion.id) msg.estadoPropuesta = 'por_comprobar';
+    guardar();
+  } finally { decisiones.delete(msg); if (deNota) pintarChat(); } // en el chat, quien llama repinta
+}
+/**
+ * Bajo la nota de un ejercicio (app/hoy.js): la respuesta del coach con su formato, su propuesta y sus botones, los
+ * mismos del chat (Francisco, 12 de noviembre de 2026: "la respuesta sirve, pero podría tener botones"). Los botones
+ * llevan data-msg y data-opcion, como en el chat; elegirOpcionNota los ejecuta.
+ * @param i índice del mensaje del coach en E.chat
+ */
+export function respuestaCoachHtml(i, { sugerencias = false } = {}) {
+  const m = E.chat[i];
+  if (!m) return '';
+  const opciones = opcionesMensaje(m), ocupada = decisiones.has(m);
+  return `<div class="texto-chat">${textoRico(m.texto)}</div>${m.propuesta ? propuestaChatHtml({ ...m.propuesta, estado: m.estadoPropuesta || m.propuesta.estado }) : ''}${opciones?.length ? opcionesHtml(opciones, i, ocupada) : ''}${sugerencias && m.sugerencias?.length && !opciones?.length ? `<div class="chips respuestas-rapidas" role="group" aria-label="Respuestas rápidas">${m.sugerencias.map(x => `<button type="button" class="sugerencia" data-nota-sugerencia="${esc(x)}">${esc(x)}</button>`).join('')}</div>` : ''}`;
+}
+/** Un botón tocado bajo la nota: "ir" navega; reintentar y activar el permiso viven en el chat; lo demás, como en el chat.
+ *  Devuelve true si se quedó en la sesión. */
+export async function elegirOpcionNota(i, k, ir, deNota) {
+  const msg = E.chat[i], op = msg && opcionesMensaje(msg)?.[k];
+  if (!op || decisiones.has(msg)) return;
+  if (op.accion.tipo === 'ir') { ir(op.accion.vista); return false; }
+  if (['reintentar', 'activar_chat'].includes(op.accion.tipo)) { ir('coach'); return false; }
+  await ejecutarOpcion(msg, op, ir, { deNota });
+  return true; // sigue en la sesión: hay que repintarla (el plan pudo cambiar)
+}
+
 /** Ejecuta una opción (del chat o de la revisión): la deja escrita como respuesta de la persona y aplica su resultado. */
-async function decidir(accion, etiqueta, ir) {
+async function decidir(accion, etiqueta, ir, { deNota } = {}) {
   const estado = E, uid = nube.usuarioId();
   const vigente = () => E === estado && uid === nube.usuarioId();
   if (accion.tipo === 'anotar_pasado') {
@@ -667,7 +697,8 @@ async function decidir(accion, etiqueta, ir) {
     guardar();
     ir('pasado'); return true;
   }
-  E.chat.push({ rol: 'persona', texto: etiqueta });
+  const marca = deNota ? { deNota } : {};
+  E.chat.push({ rol: 'persona', texto: etiqueta, ...marca });
   let r, aceptada = true;
   if (accion.tipo === 'confirmar_ia' || accion.tipo === 'descartar_ia') {
     try {
@@ -706,7 +737,7 @@ async function decidir(accion, etiqueta, ir) {
   // Mover o intercambiar con un toque, sin otra pregunta: se puede deshacer ahí mismo.
   const conDeshacer = r.plan && !aviso && ['intercambiar', 'mover'].includes(accion.accion?.tipo) && E.cambiosPlan?.[0]?.cuando;
   if (conDeshacer) for (const m of E.chat) delete m.deshacer;
-  E.chat.push({ rol: 'coach', app: true, texto: aviso || r.texto, opciones: r.opciones || (cambio ? irA(r.ir) : null), semana: r.semana || null, calendario: r.calendario || null, ...(conDeshacer ? { deshacer: conDeshacer } : {}) });
+  E.chat.push({ rol: 'coach', app: true, texto: aviso || r.texto, opciones: r.opciones || (cambio ? irA(r.ir) : null), semana: r.semana || null, calendario: r.calendario || null, ...(conDeshacer ? { deshacer: conDeshacer } : {}), ...marca });
   guardar();
   return aceptada;
 }
@@ -844,6 +875,9 @@ function opcionesMensaje(m) {
     ? [{ etiqueta: 'Completar mi perfil', accion: { tipo: 'ir', vista: 'perfil' } }] : null;
 }
 
+/** Los botones de un mensaje del coach (en el chat y bajo la nota de un ejercicio). */
+const opcionesHtml = (opciones, i, ocupada) => `<div class="opciones-chat" ${ocupada ? 'aria-busy="true"' : ''}>${opciones.map((o, k) => `<button type="button" ${ocupada ? 'disabled' : ''} class="boton${['confirmar', 'confirmar_ia', 'aceptar_alternativa'].includes(o.accion?.tipo) && k === 0 ? ' primario' : ''}" data-msg="${i}" data-opcion="${k}"${o.letra ? ` aria-label="${esc(`Opción ${o.letra}: ${o.etiqueta}`)}"` : ''}>${o.letra ? `<b class="letra-opcion" aria-hidden="true">${esc(o.letra)}</b>` : ''}${esc(o.etiqueta)}</button>${o.nota ? `<span class="pequeno suave nota-opcion">${esc(o.nota)}</span>` : ''}${o.avisos?.length ? `<span class="pequeno suave">${esc(o.avisos.join(' '))}</span>` : ''}`).join('')}</div>`;
+
 /** El texto de la IA con formato simple y seguro: párrafos, **negrita** y listas con "- ". Todo se escapa antes. */
 export function textoRico(t) {
   const linea = x => esc(x).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -894,7 +928,7 @@ function burbuja(m, i) {
   const cabeza = etiqueta ? `<span class="tipo-mensaje">${icono(m.tipo === 'revision' || m.tipo === 'descarga' || m.tipo === 'semana_a_medias' ? 'calendario' : m.tipo === 'sesion' ? 'pesa' : 'lapiz', 'icono icono-chico')} ${etiqueta}${m.porEnviar ? ` · ${esperaTexto()}` : ''}</span>` : '';
   // Lo escrito sin señal: el mensaje queda a la vista, más tenue, con "En espera" debajo.
   const espera = m.porEnviar && !etiqueta ? `<span class="estado-envio">En espera · ${esperaTexto()}</span>` : '';
-  return `<div id="mensaje-chat-${i}" tabindex="-1" class="burbuja ${m.rol}${etiqueta ? ' automatico' : ''}${espera ? ' en-espera' : ''}${m.propuesta ? ' con-propuesta' : ''}">${cabeza}<div class="texto-chat">${m.rol === 'coach' || etiqueta ? textoRico(m.texto) : esc(m.texto)}${m.enlace ? ` <a class="enlace" href="${esc(m.enlace)}" target="_blank" rel="noopener">Ver videos</a>` : ''}</div>${calendario}${semana}${m.propuesta ? propuestaChatHtml({ ...m.propuesta, estado: m.estadoPropuesta || m.propuesta.estado }) : ''}${opciones?.length ? `<div class="opciones-chat" ${ocupada ? 'aria-busy="true"' : ''}>${opciones.map((o, k) => `<button type="button" ${ocupada ? 'disabled' : ''} class="boton${['confirmar', 'confirmar_ia', 'aceptar_alternativa'].includes(o.accion?.tipo) && k === 0 ? ' primario' : ''}" data-msg="${i}" data-opcion="${k}"${o.letra ? ` aria-label="${esc(`Opción ${o.letra}: ${o.etiqueta}`)}"` : ''}>${o.letra ? `<b class="letra-opcion" aria-hidden="true">${esc(o.letra)}</b>` : ''}${esc(o.etiqueta)}</button>${o.nota ? `<span class="pequeno suave nota-opcion">${esc(o.nota)}</span>` : ''}${o.avisos?.length ? `<span class="pequeno suave">${esc(o.avisos.join(' '))}</span>` : ''}`).join('')}</div>` : ''}${m.deshacer ? '<button type="button" class="enlace deshacer-chat" data-deshacer>Deshacer</button>' : ''}${m.sugerencias?.length && i === E.chat.length - 1 ? `<div class="chips respuestas-rapidas" role="group" aria-label="Respuestas rápidas">${m.sugerencias.map(x => `<button type="button" class="sugerencia">${esc(x)}</button>`).join('')}</div>` : ''}</div>${espera}`;
+  return `<div id="mensaje-chat-${i}" tabindex="-1" class="burbuja ${m.rol}${etiqueta ? ' automatico' : ''}${espera ? ' en-espera' : ''}${m.propuesta ? ' con-propuesta' : ''}">${cabeza}<div class="texto-chat">${m.rol === 'coach' || etiqueta ? textoRico(m.texto) : esc(m.texto)}${m.enlace ? ` <a class="enlace" href="${esc(m.enlace)}" target="_blank" rel="noopener">Ver videos</a>` : ''}</div>${calendario}${semana}${m.propuesta ? propuestaChatHtml({ ...m.propuesta, estado: m.estadoPropuesta || m.propuesta.estado }) : ''}${opciones?.length ? opcionesHtml(opciones, i, ocupada) : ''}${m.deshacer ? '<button type="button" class="enlace deshacer-chat" data-deshacer>Deshacer</button>' : ''}${m.sugerencias?.length && i === E.chat.length - 1 ? `<div class="chips respuestas-rapidas" role="group" aria-label="Respuestas rápidas">${m.sugerencias.map(x => `<button type="button" class="sugerencia">${esc(x)}</button>`).join('')}</div>` : ''}</div>${espera}`;
 }
 
 /**
