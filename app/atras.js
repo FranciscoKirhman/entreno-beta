@@ -9,7 +9,7 @@ import { sinMovimiento } from './movimiento.js';
 import { unaVueltaPorGesto } from '../nucleo/una-vuelta.js';
 
 // Pantallas sin botón propio de volver, y a dónde vuelven.
-const PADRE = { perfil: 'mas', seccion: 'perfil', plan: 'miplan', checkin: 'semana', pasado: 'progreso', progreso: 'miplan', 'tablero-original': 'mas', resumen: 'entrenar', banco: 'hoy', hoy: 'entrenar', semana: 'miplan', rutina: 'entrenar' };
+const PADRE = { perfil: 'mas', seccion: 'perfil', plan: 'miplan', checkin: 'semana', pasado: 'progreso', progreso: 'miplan', resumen: 'entrenar', banco: 'hoy', hoy: 'entrenar', semana: 'miplan', rutina: 'entrenar' };
 // Basta un deslizamiento corto desde el borde (Francisco, 3 de octubre): empezar pegado al borde ya evita los accidentes.
 const BORDE = 28, UMBRAL = 44; // px: dónde empieza el gesto y cuánto hay que arrastrar
 
@@ -73,8 +73,6 @@ function armarCapa(foto) {
   contenido.className = 'pantalla-anterior-contenido';
   const barra = document.querySelector('body > .barra');
   contenido.style.paddingTop = `${barra && getComputedStyle(barra).display !== 'none' ? barra.offsetHeight : 0}px`;
-  const perfiles = document.getElementById('perfiles-prueba');
-  if (perfiles && !perfiles.hidden) { const c = perfiles.cloneNode(true); c.removeAttribute('id'); contenido.append(c); }
   const main = document.createElement('main');
   main.append(...foto.nodos);
   const sombra = document.createElement('div');
@@ -93,7 +91,7 @@ function instalarGesto(obtenerAccion) {
   const instalada = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   if (ios && !instalada) return; // en Safari, su propio gesto de atrás ya pasa por el historial
   const app = document.getElementById('app');
-  const moviles = () => [document.getElementById('perfiles-prueba'), app].filter(el => el && !el.hidden);
+  const moviles = () => [app].filter(el => el && !el.hidden);
   let inicio = null, activo = false, listo = false, burbuja = null, cuadro = 0, ultimo = null, capa = null;
   const SUAVE = 'cubic-bezier(.2,.7,.3,1)';
   const desfase = dx => -(1 - Math.min(1, dx / innerWidth)) * innerWidth * 0.3; // la de abajo entra más lento

@@ -774,3 +774,5 @@ body.escribiendo-coach #nav{display:none!important}
 #vista-hoy .nota-enviada,#vista-hoy .nota-estado{color:var(--ink-muted);font-size:13px}
 #vista-hoy .nota-coach{padding:10px 12px;border-radius:14px;background:var(--fill);color:var(--ink)}
 #vista-hoy.reordenando .nota-acciones,#vista-hoy.reordenando .nota-respuesta{display:none}
+/* El gris de las repeticiones con el rango del plan ("10 a 15"): más chico para que quepa en el campo. */
+#vista-hoy .serie input.con-rango::placeholder{font-size:13px;letter-spacing:-.02em}

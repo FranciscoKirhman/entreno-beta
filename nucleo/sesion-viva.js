@@ -32,6 +32,14 @@ export function leerNota(texto) {
   const t = sinTildes(texto);
   if (!t.trim()) return null;
   if (/ocupad|no hay (la |una )?maquina|no esta la maquina|sin maquina/.test(t)) return 'ocupada';
+  // Lo negado no cuenta: "ya no me duele", "sin dolor", "nada pesado", "no me costó" no cambian nada. "No está fácil"
+  // tampoco sube el peso. Antes "ya no me duele el hombro" bajaba el peso un 10% (revisión del 11 de noviembre de 2026).
+  const NEGADO = /\b(no|ya no|nada|sin|ningun|ninguna|tampoco)\b(\s+\w+){0,2}\s+$/;
+  const negado = re => { const m = t.match(re); return Boolean(m) && NEGADO.test(`${t.slice(0, m.index)} `); };
+  const DOLOR = /(duele|dolor|molest|pincha|tiron)/, FACIL = /(facil|liviano|me sobr|podia mas|podria mas|suave|quedo corto)/, PESADO = /(pesad|me costo|muy duro|dificil|no pude|no llegue|no alcance|reventad|muerto|agotad)/;
+  if (DOLOR.test(t) && negado(DOLOR)) return null;
+  if (!DOLOR.test(t) && FACIL.test(t) && negado(FACIL)) return null;
+  if (!DOLOR.test(t) && !FACIL.test(t) && /(pesad|me costo|muy duro|dificil)/.test(t) && negado(/(pesad|me costo|muy duro|dificil)/)) return null;
   if (/(duele|dolor|molest|pincha|tirón|tiron)/.test(t)) return /(mucho|fuerte|no puedo|no pude|para[rd]|grave)/.test(t) ? 'dolor_fuerte' : 'molestia';
   if (/(facil|liviano|me sobr|podia mas|podria mas|suave|quedo corto)/.test(t)) return 'facil';
   if (/(pesad|me costo|muy duro|dificil|no pude|no llegue|no alcance|reventad|muerto|agotad)/.test(t)) return 'pesado';
@@ -48,10 +56,11 @@ export function leerNota(texto) {
  * @param o.candidato (musculo, excluir) => ejercicio del catálogo para agregar
  * @param o.alternativa (ejercicio_id, excluir) => ejercicio parecido para una máquina ocupada
  * @param o.incrementoDe (ej) => escalón en kg
+ * @param o.restoMin minutos que todavía faltan de lo que no son pesas (cardio y core por hacer): no son tiempo libre
  * @returns {{propuestas: object[], hechas: {[musculo]: number}}}
  *   propuesta: {id, tipo, ejercicio_id, nombre, accion (lo que va a hacer), hecho (lo que hizo), motivo, cambio}
  */
-export function sesionViva(dia, registro = {}, { notas = {}, porId, minutos = null, disponibles = null, prioridad = [], candidato = null, alternativa = null, incrementoDe = () => 2.5 } = {}) {
+export function sesionViva(dia, registro = {}, { notas = {}, porId, minutos = null, disponibles = null, prioridad = [], candidato = null, alternativa = null, incrementoDe = () => 2.5, restoMin = 0 } = {}) {
   const ejs = dia?.ejercicios || [];
   const filas = e => registro[e.ejercicio_id] || [];
   const hechasDe = e => filas(e).filter(s => s?.hecho && deTrabajo(s));
@@ -108,6 +117,13 @@ export function sesionViva(dia, registro = {}, { notas = {}, porId, minutos = nu
     const ult = h.slice(-2);
     const bajo = ult.length === 2 && ult.every(s => Number(s.reps) < (e.reps_min || 0));
     const alFallo = ult.length === 2 && ult.every(s => e.rir >= 1 && reservaDe(s) != null && reservaDe(s) <= 0);
+    // Bajo el rango pero sin llegar al fallo, y con dos o más series por hacer: el peso quedó alto. Se baja cerca de
+    // un 10% y se sigue, en vez de perder las series que quedan (revisión del 11 de noviembre de 2026).
+    if (quedan >= 2 && bajo && !alFallo && e.carga_kg && bajarA(Number(e.carga_kg), 0.9, inc) < Number(e.carga_kg)) {
+      const nuevo = bajarA(Number(e.carga_kg), 0.9, inc);
+      return poner({ ...base, id: `bajar-peso:${e.ejercicio_id}`, tipo: 'ajustar', carga_kg: nuevo, accion: `bajar a ${kgTexto(nuevo)} lo que queda`, hecho: `Bajé a ${kgTexto(nuevo)} lo que queda`,
+        motivo: `las dos últimas quedaron bajo ${e.reps_min} sin llegar al fallo: con menos peso entras al rango` });
+    }
     if (quedan && (bajo || alFallo)) {
       return poner({ ...base, id: `quitar-series:${e.ejercicio_id}`, tipo: 'quitar_series', series: h.length,
         accion: quedan === 1 ? 'quitar la serie que queda' : `quitar las ${quedan} que quedan`, hecho: quedan === 1 ? 'Quité la serie que quedaba' : `Quité las ${quedan} que quedaban`,
@@ -143,7 +159,9 @@ export function sesionViva(dia, registro = {}, { notas = {}, porId, minutos = nu
 
   // Todo lo de pesas hecho, con tiempo de sobra y un músculo del día corto: un ejercicio más para él.
   const pendientes = ejs.filter(e => cuenta(porId.get(e.ejercicio_id)) && faltan(e) > 0);
-  const sobra = disponibles == null ? 20 : disponibles - (minutos ?? 0);
+  // El cardio y el core que faltan también ocupan tiempo: antes se ofrecía un ejercicio más "porque quedan 20
+  // minutos" con 20 minutos de escaladora por hacer (Francisco, 11 de noviembre de 2026).
+  const sobra = disponibles == null ? 20 : disponibles - (minutos ?? 0) - (Number(restoMin) || 0);
   if (!pendientes.length && candidato && sobra >= 12 && flojos < 2) {
     const delDia = [...new Set(ejs.flatMap(e => (cuenta(porId.get(e.ejercicio_id)) ? porId.get(e.ejercicio_id).musculos_primarios : [])))];
     const m = [...prioridad, ...delDia].find(x => delDia.includes(x) && (hechas[x] || 0) < MUCHO - 2);

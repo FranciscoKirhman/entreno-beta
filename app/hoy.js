@@ -951,7 +951,11 @@ function vivaDe(dia, f) {
   const g = E.tiempoHoy?.[f];
   const disponibles = g && g.minutos === null ? null : Number(g?.minutos ?? R().duracion_min) || null;
   const notas = Object.fromEntries(Object.entries(E.notas[f] || {}).map(([id, n]) => [id, n?.nota || '']));
-  const v = sesionViva(dia, E.registro[f] || {}, { notas, porId: indice.porId, minutos: avance(dia).cifras.minutos, disponibles,
+  // Lo que falta y no son pesas (cardio como ejercicio o al final, core): también ocupa el tiempo que queda.
+  const noPesas = e => ['cardio', 'core', 'movilidad'].includes(indice.porId.get(e.ejercicio_id)?.tipo);
+  const marcaCardio = E.cardioHecho?.[f];
+  const restoMin = minutosRestantes({ ejercicios: dia.ejercicios.filter(noPesas), cardio: dia.cardio }, hechasDelDia(E.registro[f] || {}), Boolean(marcaCardio?.hecho && marcaCardio.texto === dia.cardio), factorRitmo());
+  const v = sesionViva(dia, E.registro[f] || {}, { notas, porId: indice.porId, minutos: avance(dia).cifras.minutos, disponibles, restoMin,
     prioridad: R().musculos_prioridad || [], candidato, alternativa, incrementoDe: ej => incrementoPara(ej, lugar) });
   const ya = { ...(E.vivaNo?.[f] || {}), ...(E.vivaHecho?.[f] || {}) };
   // Un ajuste de tiempo que espera a verse no pisa lo que cambió mientras tanto: se calcula de nuevo con lo de ahora.
@@ -1116,6 +1120,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
   let iTrabajo = 0; // posición entre las series de trabajo, para mostrar lo de la vez anterior
   let kgHoy = null; // el último peso escrito hoy en una serie de trabajo: pasa a ser el gris de las siguientes
   let repsHoy = null; // las repeticiones que sugirió el consejo de la última serie hecha
+  let repsAconsejadas = null; // solo si el consejo pidió un número distinto: ahí el gris muestra ese y no el rango
   let siguiente = null; // la primera serie de trabajo por hacer, con sus repeticiones en gris (para "Para aquí")
   // Un ajuste en vivo que cambió el peso (nota "pesado", "fácil"…): manda en las filas que quedan.
   let ajusteKg = Object.values(E.vivaHecho?.[f] || {}).filter(h => h.ejercicio_id === e.ejercicio_id && h.carga_kg != null).sort((a, b) => b.t - a.t)[0] || null;
@@ -1153,8 +1158,13 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
       alcance = textoRecordAlAlcance(recordAlAlcance(antes, { carga_kg: r.kg ?? kgGris, reps: r.reps ?? repsGris },
         { asistido: esAsistido(ejCat), descarga: dia.semana != null && dia.semana === E.plan?.semana_descarga }));
     }
+    // Lo que se ve en gris: el rango del plan ("6 a 8"), no un solo número (Francisco, 11 de noviembre de 2026). Si
+    // el consejo de la serie anterior ya pidió un número para esta, se ve ese. Al marcar sin escribir se sigue
+    // guardando el número calculado (repsGris), que queda a la vista en el campo.
+    const conRango = trabajo && !seg && !dist && repsAconsejadas == null && e.reps_min != null && e.reps_max != null && Number(e.reps_max) > Number(e.reps_min);
+    const repsVista = conRango ? `${e.reps_min} a ${e.reps_max}` : seg ? relojTexto(repsGris) : repsGris ?? '';
     if (trabajo && !r.hecho && !siguiente) siguiente = { etiqueta: etiq[i], reps: repsGris };
-    if (trabajo && r.hecho) repsHoy = repsTrasSerie(r);
+    if (trabajo && r.hecho) { repsHoy = repsTrasSerie(r); repsAconsejadas = r.consejo?.reps ?? null; }
     const antes = prev ? (seg ? ((prev.duracion_seg ?? prev.reps) != null ? `${prev.duracion_seg ?? prev.reps} s` : '')
       : dist ? `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.distancia_m != null ? `${prev.distancia_m} m` : ''}`
       : `${prev.carga_kg != null ? `${coma(enUnidad(prev.carga_kg))} × ` : ''}${prev.reps ?? ''}`) : '';
@@ -1170,7 +1180,7 @@ function ejercicioHoy(e, k, f, previas, nota, dia) {
       <button type="button" class="tipo-serie" data-tipo-serie="${id}" data-i="${i}" aria-label="Serie ${etiq[i]}, ${TIPOS_SERIE[t].nombre.toLowerCase()}${r.record?.length && r.hecho ? ', récord' : ''}. Cambiar el tipo">${etiq[i]}${r.record?.length && r.hecho ? icono('trofeo', 'icono trofeo-serie') : ''}</button>
       ${copiar ? `<button type="button" class="antes num"${copiar} aria-label="${esc(`La vez anterior: ${antes} ${esfPrev}. Copiar a la serie ${etiq[i]}`)}">${antesHtml}</button>` : `<span class="antes num">${antesHtml}</span>`}
       ${seg ? '' : `<input type="text" inputmode="decimal" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="kg" value="${esc(coma(enUnidad(r.kg)))}" placeholder="${esc(coma(enUnidad(kgGris)))}" aria-label="${nombreKg}, serie ${etiq[i]}">`}
-      <input type="text" inputmode="numeric" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="reps"${seg ? ' data-tiempo' : ''} value="${esc(seg ? relojTexto(r.reps) : r.reps ?? '')}" placeholder="${esc(seg ? relojTexto(repsGris) : repsGris ?? '')}" aria-label="${seg ? 'Tiempo, en minutos y segundos' : dist ? 'Metros' : 'Repeticiones'}, serie ${etiq[i]}">
+      <input type="text" inputmode="numeric" autocomplete="off" data-ej="${id}" data-i="${i}" data-c="reps"${seg ? ' data-tiempo' : ''}${conRango ? ' class="con-rango"' : ''} value="${esc(seg ? relojTexto(r.reps) : r.reps ?? '')}" placeholder="${esc(repsVista)}" aria-label="${seg ? 'Tiempo, en minutos y segundos' : dist ? 'Metros' : 'Repeticiones'}, serie ${etiq[i]}">
       ${seg ? (r.hecho || !ajuste('cronoFila') ? '<span aria-hidden="true"></span>' : `<button type="button" class="crono-serie" data-crono="${id}" data-i="${i}" aria-label="Contar los segundos de la serie ${etiq[i]}">${icono('reloj', 'icono')}</button>`) : dist || !conEsfuerzo ? '' : trabajo ? cajaEsfuerzo(id, i, r, e, etiq[i]) : '<span aria-hidden="true"></span>'}
       <button type="button" class="check" data-hecho="${id}" data-i="${i}" aria-pressed="${Boolean(r.hecho)}" aria-label="Serie ${etiq[i]} hecha">${r.hecho ? icono('visto', 'visto-serie') : ''}</button>
       ${r.consejo?.texto && trabajo && i === ultimaHecha ? `<p class="consejo ${r.consejo?.tipo || 'bien'}">${esc(r.consejo.texto)}</p>` : ''}
@@ -2030,7 +2040,9 @@ function enlazar(ir, dia) {
     if (!m) return;
     if (respuestaDeNota(E.chat || [], { fecha: f, id }).nota === campo.value.trim() && respuestaDeNota(E.chat, { fecha: f, id }).estado !== 'respondida') return avisar('Esa nota ya está enviada.', 'neutro');
     guardarNota(id, 'nota', campo.value);
-    mandarAlCoach({ texto: m.texto, paraIA: m.paraIA, modo: 'nota', tipo: 'nota_ejercicio', notaEj: { fecha: f, id, nota: campo.value.trim() } });
+    // En modo chat, no en modo nota: ese es para la sesión ya guardada (habla de "acabas de guardar" y propone desde
+    // mañana, con más vueltas y más lento). Aquí la persona sigue entrenando y necesita la respuesta en segundos.
+    mandarAlCoach({ texto: m.texto, paraIA: m.paraIA, modo: 'chat', tipo: 'nota_ejercicio', notaEj: { fecha: f, id, nota: campo.value.trim() } });
     campo.blur();
     repintar();
   });

@@ -5,7 +5,7 @@ import { normalizar, tieneEquipo, nivelAlcanza, articulacionesBloqueadas, cargaZ
 import { prescripcion, comoDescarga, duracionSesion, incrementoPara, lugaresDe } from './motor-plan.js';
 import { cargasAlReordenar } from './fatiga-sesion.js';
 import { validarCambio } from './validador.js';
-import { grupos } from './superseries.js';
+import { grupos, ordenSinPartirSuperseries } from './superseries.js';
 import { seriesRetiradas } from './series-retiradas.js';
 import { calentamientoDeSesion } from './calentamiento-sesion.js';
 
@@ -94,7 +94,6 @@ export function editarSesion(accion, ctx) {
   } else if (accion.tipo === 'ordenar') {
     // El orden nuevo, por id. Lo que no venga en la lista queda al final, en su orden de antes.
     if (!dia?.ejercicios.length) return { error: 'Hoy no hay ejercicios para ordenar.' };
-    const pos = id => { const i = (accion.orden || []).indexOf(id); return i < 0 ? Infinity : i; };
     const lugares = lugaresDe(ctx.respuestas);
     const lugarDe = x => lugares.find(l => l.nombre === x.lugar) || lugares.find(l => l.principal) || lugares[0];
     // Cada carga va a su lugar nuevo (nucleo/fatiga-sesion.js: cargasAlReordenar): cuenta lo que queda antes del mismo
@@ -102,7 +101,9 @@ export function editarSesion(accion, ctx) {
     const empezado = e => (ctx.registro?.[hoy]?.[e.ejercicio_id] || []).some(x => x?.hecho || x?.kg != null || x?.reps != null);
     const ordenar = (x, tocar) => {
       const antes = [...x.ejercicios];
-      x.ejercicios = x.ejercicios.map((e, i) => [e, i]).sort(([a, i], [b, j]) => pos(a.ejercicio_id || `i${i}`) - pos(b.ejercicio_id || `i${j}`) || i - j).map(([e]) => e);
+      // Una superserie se mueve entera: mover uno de sus ejercicios lleva a los demás (nucleo/superseries.js).
+      const clave = (e, i) => e.ejercicio_id || `i${i}`, porClave = new Map(x.ejercicios.map((e, i) => [clave(e, i), e]));
+      x.ejercicios = ordenSinPartirSuperseries(x.ejercicios, accion.orden || [], clave).map(k => porClave.get(k));
       sinSuperseriesSueltas(x);
       x.ejercicios = cargasAlReordenar(antes, x.ejercicios, indice.porId, ej => incrementoPara(ej, lugarDe(x)), esAsistido, tocar);
     };

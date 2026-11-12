@@ -18,7 +18,7 @@ export function mensajeNotaEjercicio({ nombre, foco, nota, e = {}, hechas = [] }
   const hecho = hechas.filter(x => x && (x.reps != null || x.kg != null)).map(x => `${x.kg != null ? `${n(x.kg)} kg × ` : ''}${x.reps ?? '?'}${x.rir != null ? ` (${n(x.rir)} en reserva)` : ''}${x.tipo && x.tipo !== 'normal' ? ` [${x.tipo}]` : ''}`);
   return {
     texto: `${nombre}: ${limpia}`,
-    paraIA: [`Estoy entrenando ahora${foco ? ` (${foco})` : ''}. Nota en ${nombre}: "${limpia}".`,
+    paraIA: [`Estoy entrenando ahora${foco ? ` (${foco})` : ''} y todavía no termino la sesión. Nota en ${nombre}: "${limpia}".`,
       pide ? `El plan pide ${pide}.` : '',
       hecho.length ? `Hoy llevo en este ejercicio: ${hecho.join('; ')}.` : 'Todavía no hago ninguna serie de este ejercicio hoy.',
       'Respóndeme ahora, en dos o tres frases, para leer entre series: qué hago con lo que queda de este ejercicio.'].filter(Boolean).join(' '),

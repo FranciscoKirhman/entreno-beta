@@ -23,7 +23,7 @@ const TITULOS = {
   ajustes: 'Ajustes'
 };
 // Como Hevy, los ajustes van detrás del engranaje: estos paneles vuelven a Ajustes y no al perfil.
-const EN_AJUSTES = new Set(['recordatorios', 'pantalla', 'cuenta', 'conexiones', 'respaldo', 'ia', 'importar', 'instalar', 'prueba', 'datos', 'tablero']);
+const EN_AJUSTES = new Set(['recordatorios', 'pantalla', 'cuenta', 'conexiones', 'respaldo', 'ia', 'importar', 'instalar', 'prueba', 'datos']);
 const POR_ID = { cuenta: 'cuenta', recordatorios: 'recordatorios', pantalla: 'pantalla', conexiones: 'conexiones', 'tu-ia': 'ia', 'conectar-ia': 'ia' };
 
 function recogerBorradores(raiz, estado) {
@@ -81,7 +81,7 @@ export function organizarMas({ estado: anterior = null, ir = null, repintar = nu
   paneles.className = 'mas-paneles';
   const grupos = new Map();
   for (const seccion of secciones) {
-    const clave = seccion.dataset.masPanel || POR_ID[seccion.id] || (seccion.querySelector('#ver-tablero-original') ? 'tablero' : null);
+    const clave = seccion.dataset.masPanel || POR_ID[seccion.id];
     if (!clave) continue;
     if (!grupos.has(clave)) {
       const panel = document.createElement('div');
@@ -105,8 +105,7 @@ export function organizarMas({ estado: anterior = null, ir = null, repintar = nu
     grupo('Datos y conexiones', fila('cuenta', 'Cuenta', 'persona') + fila('respaldo', 'Mis datos', 'bajar', 'Respaldo y restaurar') + fila('conexiones', 'Conexiones', 'cadena') + fila('ia', 'Tu IA', 'chat')) +
     grupo('Herramientas', fila('importar', 'Importar un plan', 'calendario') +
       (grupos.has('instalar') ? fila('instalar', 'Instalar en el teléfono', 'casa') : '') +
-      (grupos.has('prueba') ? fila('prueba', 'Versión de prueba', 'ajustes') : '') +
-      (grupos.has('tablero') ? '<button type="button" class="mas-fila" data-mas-tablero>' + icono('grafico') + '<span class="mas-texto">Tu tablero original</span>' + icono('flecha', 'icono mas-flecha') + '</button>' : '')) +
+      (grupos.has('prueba') ? fila('prueba', 'Versión de prueba', 'ajustes') : '')) +
     '<div class="mas-datos-locales">' + fila('datos', 'Datos de este teléfono', 'ajustes') + '</div>';
   grupos.set('ajustes', ajustes); paneles.append(ajustes);
 
@@ -118,7 +117,6 @@ export function organizarMas({ estado: anterior = null, ir = null, repintar = nu
     '<span class="mas-texto"><strong>' + esc(R()?.apodo || 'Tu perfil') + '</strong>' + cifrasPerfil() + '<small>Foto, equipo y preferencias</small></span>' + icono('flecha', 'icono mas-flecha') + '</button>' +
     (ir ? '<div class="mas-progreso">' + graficoSemanasHtml() + '<button type="button" class="mas-fila mas-ver-progreso" id="mas-ver-progreso">' + icono('grafico') + '<span class="mas-texto">Ver mi progreso</span>' + icono('flecha', 'icono mas-flecha') + '</button></div>' : '');
   resumen.querySelector('#mas-perfil').onclick = () => perfil?.click();
-  ajustes.querySelector('[data-mas-tablero]')?.addEventListener('click', () => raiz.querySelector('#ver-tablero-original')?.click());
   const cabecera = document.createElement('header');
   cabecera.className = 'mas-cabecera';
   cabecera.innerHTML = '<button type="button" class="mas-volver" id="mas-volver" data-atras hidden>' + icono('flecha') + '<span>Perfil</span></button>' +

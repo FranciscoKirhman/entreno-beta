@@ -53,7 +53,6 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel = null }) {
   $('app').innerHTML = `<div id="vista-mas">
     <h1>Perfil</h1>
     ${CONFIG.modoPrueba ? pruebaHtml() : ''}
-    ${E.tableroOrigen?.datos ? '<section class="tarjeta"><h3>Tu tablero original</h3><p class="pequeno suave">Consulta el calendario, las series y las indicaciones de tu copia del tablero.</p><button type="button" class="boton" id="ver-tablero-original">Abrir tablero original</button></section>' : ''}
     <section class="tarjeta" id="cuenta">${cuentaHtml()}</section>
     ${instalada() ? '' : `<section class="tarjeta" data-mas-panel="instalar"><h3>Instalarla en el teléfono</h3>
       <p class="pequeno"><strong>iPhone:</strong> en Safari, botón Compartir y "Agregar a pantalla de inicio".<br><strong>Android:</strong> en Chrome, menú ⋮ e "Instalar app".<br>Queda con su ícono y abre sin señal en el gimnasio.</p></section>`}
@@ -113,7 +112,6 @@ export function vistaMas(ir, { armarPlan, sincronizarAlEntrar, panel = null }) {
   </div>`;
   completarMedicion();
   enlazarCuenta(ir, sincronizarAlEntrar);
-  $('ver-tablero-original')?.addEventListener('click', () => ir('tablero-original'));
   $('prueba-de-nuevo')?.addEventListener('click', () => { empezarDeNuevo(); ir('cuestionario'); });
   $('prueba-ejemplo')?.addEventListener('click', () => {
     if (!modoEjemplo) return;

@@ -121,3 +121,36 @@ export const descansoDeGrupo = (ejercicios, g, descansoDe = e => e.descanso_seg 
 
 /** Nombre corto para mostrar: "A1", "A2"… */
 export const etiquetaSuperserie = g => (g ? `${g.letra}${g.pos}` : '');
+
+/**
+ * El orden nuevo de una sesión sin partir sus superseries: al mover un ejercicio de una superserie, sus compañeros
+ * van con él (Francisco, 11 de noviembre de 2026: antes quedaba separada y se hacía como series normales). Y un
+ * ejercicio suelto que cae en medio de una superserie queda justo después de ella.
+ * @param ejercicios la sesión como está (con su `superserie`)
+ * @param orden      el orden pedido, por clave (clave(e, i))
+ * @param clave      cómo se nombra cada ejercicio en `orden`
+ * @returns las claves en el orden final
+ */
+export function ordenSinPartirSuperseries(ejercicios, orden = [], clave = (e, i) => e.ejercicio_id || `i${i}`) {
+  const claves = ejercicios.map(clave), g = grupos(ejercicios);
+  const lugar = k => { const i = orden.indexOf(k); return i < 0 ? Infinity : i; };
+  const pedido = claves.map((k, i) => [k, i]).sort(([a, i], [b, j]) => lugar(a) - lugar(b) || i - j).map(([k]) => k);
+  if (!g.some(Boolean)) return pedido;
+  const grupoDe = new Map(claves.map((k, i) => [k, g[i] ? g[i].miembros.map(m => claves[m]) : null]));
+  // El que se movió: sin él, el resto quedó en el mismo orden relativo. Con varios cambios a la vez no hay uno solo.
+  const movido = claves.find(k => claves.filter(x => x !== k).join('\u0001') === pedido.filter(x => x !== k).join('\u0001') && claves.indexOf(k) !== pedido.indexOf(k)) ?? null;
+  // Dónde va cada superserie: donde quedó el miembro movido o, si no fue uno de ellos, donde quedó su primer miembro.
+  const ancla = new Map();
+  for (const miembros of new Set([...grupoDe.values()].filter(Boolean))) {
+    ancla.set(miembros, miembros.includes(movido) ? movido : miembros.reduce((a, k) => (pedido.indexOf(k) < pedido.indexOf(a) ? k : a)));
+  }
+  const out = [], puestos = new Set();
+  for (const k of pedido) {
+    if (puestos.has(k)) continue;
+    const miembros = grupoDe.get(k);
+    if (!miembros) { out.push(k); puestos.add(k); continue; }
+    if (ancla.get(miembros) !== k) continue; // entra con su superserie, cuando llegue el ancla
+    for (const m of miembros) { out.push(m); puestos.add(m); }
+  }
+  return out;
+}

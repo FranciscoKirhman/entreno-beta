@@ -1,7 +1,7 @@
 import { fechaSesionActiva } from './sesion-activa.js';
 
 // Solo navegación de esta copia del perfil, sin credenciales ni cambios del plan.
-const VISTAS = new Set(['inicio', 'cuestionario', 'hoy', 'semana', 'coach', 'progreso', 'mas', 'checkin', 'plan', 'perfil', 'seccion', 'tablero-original', 'ejercicio', 'banco', 'pasado', 'resumen']);
+const VISTAS = new Set(['inicio', 'cuestionario', 'hoy', 'semana', 'coach', 'progreso', 'mas', 'checkin', 'plan', 'perfil', 'seccion', 'ejercicio', 'banco', 'pasado', 'resumen']);
 export function pantallaGuardada(vista, extra, y, fecha) {
   if (!VISTAS.has(vista)) return null;
   const datos = {};

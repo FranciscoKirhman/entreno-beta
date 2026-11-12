@@ -10,9 +10,25 @@ export function descansoEstimado(e, ritmo = null) {
   return Math.min(ESCALA_DESCANSO.segundosMax, pedido * factor);
 }
 
+// Los ejercicios de cardio del catálogo (escaladora, trotadora, bicicleta puestos como ejercicio de la sesión): sus
+// "repeticiones" son minutos, salvo que vengan en segundos. Los anota crearIndice (nucleo/catalogo.js). Antes una
+// escaladora de 10 a 20 minutos contaba como 15 repeticiones, un minuto: el tiempo de la sesión y su ajuste no la
+// veían (Francisco, 11 de noviembre de 2026).
+const CARDIO = new Set();
+export function anotarCardio(ids = []) { for (const id of ids) CARDIO.add(id); }
+export const esCardio = e => CARDIO.has(e?.ejercicio_id);
+/** Segundos de un ejercicio de cardio: sus minutos (o segundos) por sus series, sin descansos. */
+export const segundosCardio = e => (Number(e.series) || 1) * ((Number(e.reps_min) + Number(e.reps_max)) / 2) * (e.unidad === 'seg' ? 1 : 60);
+
 /** Modelo compartido por la sesión y el generador. Sin mediciones conserva el cálculo original. */
 export function duracionEstimada(ejercicios, calentamientoMin = 8, ritmo = null) {
-  let seg = calentamientoMin * 60;
+  return Math.round((calentamientoMin * 60 + segundosPesas(ejercicios, ritmo) + ejercicios.filter(esCardio).reduce((a, e) => a + segundosCardio(e) + 60, 0)) / 60);
+}
+
+/** Los segundos de las pesas (sin el cardio puesto como ejercicio, que no depende del ritmo personal). */
+function segundosPesas(todos, ritmo = null) {
+  const ejercicios = todos.filter(e => !esCardio(e));
+  let seg = 0;
   const g = grupos(ejercicios), medidos = ritmo?.descansos;
   const descanso = e => descansoEstimado(e, ritmo);
   ejercicios.forEach((e, i) => {
@@ -27,11 +43,13 @@ export function duracionEstimada(ejercicios, calentamientoMin = 8, ritmo = null)
       seg += medidos.cambios.real - anterior;
     } else seg += 60;
   });
-  return Math.round(seg / 60);
+  return seg;
 }
 
 export const factorDeRitmo = ritmo => {
   const n = Number(typeof ritmo === 'object' ? ritmo?.factor : ritmo);
   return n > 0 ? Math.max(0.9, Math.min(1.7, n)) : 1;
 };
-export const pesasReales = (ejercicios, ritmo = 1) => Math.round(duracionEstimada(ejercicios, 0, ritmo) * factorDeRitmo(ritmo));
+// El ritmo personal alarga las pesas (descansos, cambios), no el cardio: 15 minutos de escaladora son 15 minutos.
+export const pesasReales = (ejercicios, ritmo = 1) => Math.round(Math.round(segundosPesas(ejercicios, ritmo) / 60) * factorDeRitmo(ritmo))
+  + Math.round(ejercicios.filter(esCardio).reduce((a, e) => a + segundosCardio(e) + 60, 0) / 60);

@@ -1,5 +1,7 @@
-// Los perfiles de una prueba se cargan desde un archivo privado. Este módulo solo guarda datos en el
-// almacenamiento que recibe; no contiene personas, credenciales ni acceso al servidor.
+// Perfiles temporales de la primera beta. Ya no se pueden cargar ni elegir desde la app (11 de noviembre de 2026): se
+// quitaron los botones, el enlace y el tablero original. Esto se conserva solo por continuidad: un teléfono que quedó
+// con un perfil activo guarda sus datos y su sesión de cuenta con las claves de ese perfil, y sin este módulo los
+// perdería de vista. instalarPerfilesPrueba queda para las pruebas de esa continuidad.
 import { validarRespaldo } from './respaldo.js';
 
 export const CLAVE_PERFILES_PRUEBA = 'entreno-perfiles-prueba-v1';
@@ -10,7 +12,7 @@ const objeto = x => x !== null && typeof x === 'object' && !Array.isArray(x);
 const idValido = id => typeof id === 'string' && /^[a-z][a-z0-9_]{0,31}$/.test(id);
 const nombreValido = nombre => typeof nombre === 'string' && nombre.length >= 1 && nombre.length <= 40
   && nombre.trim().length > 0 && !/[\p{Cc}\p{Cf}\u2028\u2029]/u.test(nombre);
-// La versión publicada de cada perfil (herramientas/cifrar-perfiles.mjs): sirve para avisar cuando hay una revisada.
+// La versión con que se publicó cada perfil: quedó en el registro de los teléfonos que ya los tenían.
 const versionValida = v => typeof v === 'string' && /^[a-f0-9]{8,64}$/.test(v);
 const fechaIso = creado => typeof creado === 'string'
   && /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,9})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(creado)
@@ -122,41 +124,6 @@ export function instalarPerfilesPrueba(paquete, storage, ids = null, versiones =
   cambios.push([CLAVE_PERFILES_PRUEBA, JSON.stringify(registro)]);
   escribirVerificado(storage, cambios);
   return registro;
-}
-
-const vacio = x => x == null || (Array.isArray(x) ? x.length === 0 : objeto(x) && Object.keys(x).length === 0);
-
-/** La versión revisada de un perfil sobre la copia del teléfono. De la revisada vienen el perfil (respuestas), la
- *  importación y el historial publicado; lo demás es del teléfono: el plan (solo cambia con vista previa y
- *  confirmación), las sesiones que se registraron ahí y todo lo anotado en la app. */
-export function unirVersionRevisada(local, revisado) {
-  const r = structuredClone(local);
-  r.respuestas = { ...(objeto(local.respuestas) ? local.respuestas : {}), ...structuredClone(revisado.respuestas) };
-  for (const k of ['importacionTablero', 'tableroOrigen']) if (k in revisado) r[k] = structuredClone(revisado[k]);
-  const publicadas = Array.isArray(revisado.sesiones) ? structuredClone(revisado.sesiones) : [];
-  const ids = new Set(publicadas.map(s => s?.id));
-  r.sesiones = [...publicadas, ...(Array.isArray(local.sesiones) ? local.sesiones : []).filter(s => !ids.has(s?.id))];
-  for (const [k, v] of Object.entries(revisado)) if (!(k in r) || (vacio(r[k]) && !vacio(v))) r[k] = structuredClone(v);
-  return r;
-}
-
-/** Cambia un perfil instalado por su versión revisada (paquete de un perfil), con unirVersionRevisada. */
-export function actualizarPerfilPrueba(paquete, storage, ids = null, version = null) {
-  validarPaquetePerfilesPrueba(paquete, ids);
-  exigir(paquete.perfiles.length === 1, 'La versión revisada trae un perfil a la vez.');
-  exigir(version === null || versionValida(version), 'La versión publicada no es válida.');
-  const [p] = paquete.perfiles;
-  const registro = leerPerfilesPrueba(storage);
-  const i = registro.perfiles.findIndex(x => x.id === p.id);
-  exigir(i >= 0, 'Ese perfil no está en este teléfono.');
-  let local = null;
-  try { local = JSON.parse(storage.getItem(clavePerfilPrueba(p.id))); } catch { /* se informa abajo */ }
-  exigir(objeto(local), 'No pude leer la copia de este perfil. Respáldalo antes de continuar.');
-  // Lo publicado ya se validó arriba; lo del teléfono es lo que la app misma guardó.
-  const unido = unirVersionRevisada(local, p.respaldo.estado);
-  registro.perfiles[i] = etiqueta({ id: p.id, nombre: p.nombre, version });
-  escribirVerificado(storage, [[clavePerfilPrueba(p.id), JSON.stringify(unido)], [CLAVE_PERFILES_PRUEBA, JSON.stringify(registro)]]);
-  return registro.perfiles[i];
 }
 
 /** El llamador guarda su estado actual antes de elegir y recarga la app después. null vuelve al perfil normal. */

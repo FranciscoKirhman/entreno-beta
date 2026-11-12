@@ -1,5 +1,6 @@
 // Búsqueda en el catálogo de ejercicios (contenido/ejercicios.json).
 // La usan la importación desde Hevy, el motor de planes, el validador y las herramientas para la IA.
+import { anotarCardio } from './modelo-tiempo.js';
 
 /** "Bench Press — Barbell", "bench press (barbell)" y "Bench Press (Barbell)" quedan iguales. */
 export function normalizar(nombre) {
@@ -27,6 +28,7 @@ export function crearIndice(catalogo) {
       porNombre.set(clave, e);
     }
   }
+  anotarCardio(ejercicios.filter(e => e.tipo === 'cardio').map(e => e.id)); // para el modelo de tiempo
   return { ejercicios, porId, porNombre };
 }
 
