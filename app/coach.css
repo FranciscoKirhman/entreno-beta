@@ -198,3 +198,9 @@ body.escribiendo-coach .coach-hola{padding-top:4px}
 #vista-coach .cal-opciones .tachada span{text-decoration:line-through}
 #vista-coach .cal-leyenda-chat{margin:2px 0 10px;line-height:1.35}
 #vista-coach .letra-opcion{display:inline-grid;place-items:center;flex:none;min-width:22px;height:22px;margin-right:8px;border-radius:7px;background:#ffddb7;color:#753700;font-size:12.5px;font-weight:700}
+/* Los ejercicios que nombra el coach, con su imagen: en el chat, bajo la nota de un ejercicio y en el resumen. */
+.ejs-mencionados{display:flex;flex-direction:column;gap:6px;margin:8px 0 2px}
+.ej-mencionado{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:4px 10px 4px 4px;border:0;border-radius:12px;background:color-mix(in srgb,var(--ink) 7%,transparent);color:var(--ink);font:inherit;font-size:14px;font-weight:600;line-height:1.25;text-align:left;cursor:pointer}
+.ej-mencionado span{flex:1;min-width:0;overflow-wrap:anywhere}
+.ej-mencionado::after{content:'›';flex:none;color:var(--ink-muted);font-size:18px}
+.ej-mencionado:active{background:color-mix(in srgb,var(--ink) 13%,transparent)}

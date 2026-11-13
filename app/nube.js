@@ -383,11 +383,16 @@ export const descargarDatos = () => funcion('cuenta', { metodo: 'GET' });
 // ── Lo que antes quedaba solo en el teléfono (migración 20261013000000) ─────
 // Ejercicios propios, medidas del cuerpo y notas fijas: un documento por tipo. Fechas de la regla: ciclo_registros.
 export const cargarDatosTelefono = async () => ok(await supa.from('datos_telefono').select('clave, valor, actualizado'));
-export async function guardarDatoTelefono(clave, valor) {
-  ok(await supa.from('datos_telefono').upsert({ user_id: uid(), clave, valor, actualizado: new Date().toISOString() }));
+// signal: para cortar una petición que quedó colgada (app/sesion-nube.js la usa con plazo).
+export async function guardarDatoTelefono(clave, valor, { signal } = {}) {
+  const consulta = supa.from('datos_telefono').upsert({ user_id: uid(), clave, valor, actualizado: new Date().toISOString() });
+  ok(await (signal ? consulta.abortSignal(signal) : consulta));
 }
 /** Una sola clave de datos_telefono ({valor, actualizado} o null), sin traer las demás. */
-export const cargarDatoTelefono = async clave => ok(await supa.from('datos_telefono').select('valor, actualizado').eq('clave', clave).maybeSingle());
+export async function cargarDatoTelefono(clave, { signal } = {}) {
+  const consulta = supa.from('datos_telefono').select('valor, actualizado').eq('clave', clave);
+  return ok(await (signal ? consulta.abortSignal(signal) : consulta).maybeSingle());
+}
 export async function borrarDatoTelefono(clave) { ok(await supa.from('datos_telefono').delete().eq('clave', clave)); }
 export const cargarIniciosRegla = async () => ok(await supa.from('ciclo_registros').select('inicio_regla')).map(x => x.inicio_regla);
 /** Deja en la cuenta exactamente estas fechas de inicio de la regla. */

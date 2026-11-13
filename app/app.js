@@ -255,7 +255,7 @@ function vistaInicio() {
 const VISTAS_CON_PLAN = ['hoy', 'entrenar', 'rutina', 'semana', 'progreso', 'checkin', 'plan', 'resumen', 'eleccion', 'miplan'];
 // Cuatro pestañas: Entrenar (la sesión de hoy y el plan como rutinas, como Hevy), Coach, Mi plan (con Progreso, Semana y
 // el siguiente ciclo adentro) y Perfil (Más).
-const PESTANA = { eleccion: 'entrenar', hoy: 'entrenar', rutina: 'entrenar', semana: 'miplan', banco: 'miplan', checkin: 'entrenar', plan: 'miplan', perfil: 'mas', seccion: 'mas', progreso: 'miplan', pasado: 'miplan', datos: 'mas', };
+const PESTANA = { eleccion: 'entrenar', hoy: 'entrenar', resumen: 'entrenar', rutina: 'entrenar', semana: 'miplan', banco: 'miplan', checkin: 'entrenar', plan: 'miplan', perfil: 'mas', seccion: 'mas', progreso: 'miplan', pasado: 'miplan', datos: 'mas', };
 let antesDeFicha = null, finEntrada = null, extraActual = null, primeraVista = true, retornoInicial = null;
 let planConImagenes;
 function ir(vista, extra) {
@@ -394,10 +394,10 @@ document.addEventListener('click', () => { if (repintadoPendiente) setTimeout(re
 const guardarPantalla = () => { E.pantallaGuardada = pantallaGuardada(E.vista, extraActual, scrollY, E.vista === 'hoy' ? fechaSesionActiva(E, hoy()) : hoy()); };
 alOcultar(guardarPantalla);
 
+// Lo que se ve en pantalla, sin lo que cambia en cada sincronización aunque no cambie nada visible.
+const volatiles = new Set(['guardadoEn', 'avisosSinc', 'sincronizacionCuenta', 'sincSesiones', 'pantallaGuardada', 'firmaPreferenciasCuenta']);
+const firmaVisible = () => JSON.stringify(E, (k, v) => (volatiles.has(k) ? undefined : v));
 async function iniciarEnSegundoPlano() {
-  // Lo que se ve en pantalla, sin lo que cambia en cada sincronización aunque no cambie nada visible.
-  const volatiles = new Set(['guardadoEn', 'avisosSinc', 'sincronizacionCuenta', 'sincSesiones', 'pantallaGuardada', 'firmaPreferenciasCuenta']);
-  const firmaVisible = () => JSON.stringify(E, (k, v) => (volatiles.has(k) ? undefined : v));
   const alIniciar = E, usuarioAlIniciar = nube.usuarioId();
   const firmaAntes = firmaVisible(), extraAntes = extraActual;
   let iniciado;
@@ -437,4 +437,24 @@ async function iniciarEnSegundoPlano() {
 // Dejar que la copia llegue a la pantalla antes de cargar el cliente de cuentas o hacer consultas.
 configurarCampana({ sincronizar: () => sincronizarAlEntrar({ forzar: true }) });
 configurarMiPlan({ armarPlan });
-requestAnimationFrame(() => setTimeout(() => iniciarEnSegundoPlano().catch(e => console.warn('No pude iniciar la cuenta', e)), 0));
+requestAnimationFrame(() => setTimeout(() => iniciarEnSegundoPlano().catch(e => console.warn('No pude iniciar la cuenta', e)).finally(() => { ultimaSinc = Date.now(); }), 0));
+// Al volver a la app después de un rato se pone al día con la cuenta, como al abrir: otro dispositivo pudo guardar una
+// sesión, cambiar el plan o seguir el chat, y una app instalada puede pasar días sin cerrarse (antes lo de otro
+// dispositivo no aparecía hasta cerrarla y abrirla). No a media sesión: ahí manda este teléfono y lo anotado sube solo
+// (app/sesion-nube.js). La pantalla se redibuja solo si llegó algo distinto, y nunca mientras se escribe o hay una hoja
+// abierta (repintarSinMover).
+const RATO_SINC_MS = 3 * 60000;
+let ultimaSinc = 0, poniendoAlDia = false;
+async function ponerAlDiaAlVolver() {
+  if (document.visibilityState !== 'visible' || poniendoAlDia || !ultimaSinc || Date.now() - ultimaSinc < RATO_SINC_MS) return;
+  if (!nube.conectado() || navigator.onLine === false || sesionEnCurso()) return;
+  poniendoAlDia = true;
+  const estado = E, usuario = nube.usuarioId(), firmaAntes = firmaVisible();
+  try { await sincronizarAlEntrar(); }
+  catch { /* sin señal o la cuenta cambió: sigue la copia del teléfono y se intenta en la próxima vuelta */ }
+  finally { poniendoAlDia = false; ultimaSinc = Date.now(); }
+  if (E !== estado || nube.usuarioId() !== usuario) return;
+  if (firmaVisible() !== firmaAntes) repintarSinMover();
+  try { completarCierres(ir); } catch (e) { console.warn('No pude completar el cierre de la sesión', e); }
+}
+document.addEventListener('visibilitychange', () => { ponerAlDiaAlVolver().catch(e => console.warn('No pude poner la app al día', e)); });

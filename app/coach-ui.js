@@ -30,6 +30,8 @@ import { historiasDeHoy, idHistoria } from '../nucleo/historias.js';
 import { resumenSesionEnCurso } from '../nucleo/sesion-en-curso.js';
 import { sesionEnCurso } from './pantalla.js';
 import { fechaSesionActiva } from '../nucleo/sesion-activa.js';
+import { ejerciciosMencionados } from '../nucleo/ejercicios-mencionados.js';
+import { miniatura } from './imagenes.js';
 
 const borradores = new WeakMap(), decisiones = new WeakSet();
 let consultaActual = null, limpiarRedaccion = () => {}, irActual = null, estadoChatTexto = null, pidiendoIdeas = null;
@@ -215,6 +217,8 @@ export function vistaCoach(ir, mensajeInicial) {
   $('vista-coach').addEventListener('click', ev => {
     const b = ev.target.closest('[data-coach-ir]');
     if (b) return ir(b.dataset.coachIr);
+    const ej = ev.target.closest('[data-ver-ejercicio]');
+    if (ej) return ir('ejercicio', { id: ej.dataset.verEjercicio, desde: 'coach' });
     if (ev.target.closest('[data-deshacer]')) deshacerCambio(ir);
   });
   chat.addEventListener('click', async ev => {
@@ -672,7 +676,7 @@ export function respuestaCoachHtml(i, { sugerencias = false } = {}) {
   const m = E.chat[i];
   if (!m) return '';
   const opciones = opcionesMensaje(m), ocupada = decisiones.has(m);
-  return `<div class="texto-chat">${textoRico(m.texto)}</div>${m.propuesta ? propuestaChatHtml({ ...m.propuesta, estado: m.estadoPropuesta || m.propuesta.estado }) : ''}${opciones?.length ? opcionesHtml(opciones, i, ocupada) : ''}${sugerencias && m.sugerencias?.length && !opciones?.length ? `<div class="chips respuestas-rapidas" role="group" aria-label="Respuestas rápidas">${m.sugerencias.map(x => `<button type="button" class="sugerencia" data-nota-sugerencia="${esc(x)}">${esc(x)}</button>`).join('')}</div>` : ''}`;
+  return `<div class="texto-chat">${textoRico(m.texto)}</div>${mencionadosHtml(m.texto)}${m.propuesta ? propuestaChatHtml({ ...m.propuesta, estado: m.estadoPropuesta || m.propuesta.estado }) : ''}${opciones?.length ? opcionesHtml(opciones, i, ocupada) : ''}${sugerencias && m.sugerencias?.length && !opciones?.length ? `<div class="chips respuestas-rapidas" role="group" aria-label="Respuestas rápidas">${m.sugerencias.map(x => `<button type="button" class="sugerencia" data-nota-sugerencia="${esc(x)}">${esc(x)}</button>`).join('')}</div>` : ''}`;
 }
 /** Un botón tocado bajo la nota: "ir" navega; reintentar y activar el permiso viven en el chat; lo demás, como en el chat.
  *  Devuelve true si se quedó en la sesión. */
@@ -878,6 +882,15 @@ function opcionesMensaje(m) {
 /** Los botones de un mensaje del coach (en el chat y bajo la nota de un ejercicio). */
 const opcionesHtml = (opciones, i, ocupada) => `<div class="opciones-chat" ${ocupada ? 'aria-busy="true"' : ''}>${opciones.map((o, k) => `<button type="button" ${ocupada ? 'disabled' : ''} class="boton${['confirmar', 'confirmar_ia', 'aceptar_alternativa'].includes(o.accion?.tipo) && k === 0 ? ' primario' : ''}" data-msg="${i}" data-opcion="${k}"${o.letra ? ` aria-label="${esc(`Opción ${o.letra}: ${o.etiqueta}`)}"` : ''}>${o.letra ? `<b class="letra-opcion" aria-hidden="true">${esc(o.letra)}</b>` : ''}${esc(o.etiqueta)}</button>${o.nota ? `<span class="pequeno suave nota-opcion">${esc(o.nota)}</span>` : ''}${o.avisos?.length ? `<span class="pequeno suave">${esc(o.avisos.join(' '))}</span>` : ''}`).join('')}</div>`;
 
+/**
+ * Los ejercicios que nombra el coach, con su imagen (nucleo/ejercicios-mencionados.js): se tocan para abrir la ficha.
+ * Va bajo el texto en el chat, bajo la nota de un ejercicio y en el comentario del resumen.
+ */
+export function mencionadosHtml(texto) {
+  const ids = ejerciciosMencionados(texto, indice);
+  return ids.length ? `<div class="ejs-mencionados" role="group" aria-label="Ejercicios nombrados">${ids.map(id => `<button type="button" class="ej-mencionado" data-ver-ejercicio="${esc(id)}" aria-label="${esc(`Ver ${indice.porId.get(id).nombre}`)}">${miniatura(id, 'miniatura chica')}<span>${esc(indice.porId.get(id).nombre)}</span></button>`).join('')}</div>` : '';
+}
+
 /** El texto de la IA con formato simple y seguro: párrafos, **negrita** y listas con "- ". Todo se escapa antes. */
 export function textoRico(t) {
   const linea = x => esc(x).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -928,7 +941,7 @@ function burbuja(m, i) {
   const cabeza = etiqueta ? `<span class="tipo-mensaje">${icono(m.tipo === 'revision' || m.tipo === 'descarga' || m.tipo === 'semana_a_medias' ? 'calendario' : m.tipo === 'sesion' ? 'pesa' : 'lapiz', 'icono icono-chico')} ${etiqueta}${m.porEnviar ? ` · ${esperaTexto()}` : ''}</span>` : '';
   // Lo escrito sin señal: el mensaje queda a la vista, más tenue, con "En espera" debajo.
   const espera = m.porEnviar && !etiqueta ? `<span class="estado-envio">En espera · ${esperaTexto()}</span>` : '';
-  return `<div id="mensaje-chat-${i}" tabindex="-1" class="burbuja ${m.rol}${etiqueta ? ' automatico' : ''}${espera ? ' en-espera' : ''}${m.propuesta ? ' con-propuesta' : ''}">${cabeza}<div class="texto-chat">${m.rol === 'coach' || etiqueta ? textoRico(m.texto) : esc(m.texto)}${m.enlace ? ` <a class="enlace" href="${esc(m.enlace)}" target="_blank" rel="noopener">Ver videos</a>` : ''}</div>${calendario}${semana}${m.propuesta ? propuestaChatHtml({ ...m.propuesta, estado: m.estadoPropuesta || m.propuesta.estado }) : ''}${opciones?.length ? opcionesHtml(opciones, i, ocupada) : ''}${m.deshacer ? '<button type="button" class="enlace deshacer-chat" data-deshacer>Deshacer</button>' : ''}${m.sugerencias?.length && i === E.chat.length - 1 ? `<div class="chips respuestas-rapidas" role="group" aria-label="Respuestas rápidas">${m.sugerencias.map(x => `<button type="button" class="sugerencia">${esc(x)}</button>`).join('')}</div>` : ''}</div>${espera}`;
+  return `<div id="mensaje-chat-${i}" tabindex="-1" class="burbuja ${m.rol}${etiqueta ? ' automatico' : ''}${espera ? ' en-espera' : ''}${m.propuesta ? ' con-propuesta' : ''}">${cabeza}<div class="texto-chat">${m.rol === 'coach' || etiqueta ? textoRico(m.texto) : esc(m.texto)}${m.enlace ? ` <a class="enlace" href="${esc(m.enlace)}" target="_blank" rel="noopener">Ver videos</a>` : ''}</div>${m.rol === 'coach' ? mencionadosHtml(m.texto) : ''}${calendario}${semana}${m.propuesta ? propuestaChatHtml({ ...m.propuesta, estado: m.estadoPropuesta || m.propuesta.estado }) : ''}${opciones?.length ? opcionesHtml(opciones, i, ocupada) : ''}${m.deshacer ? '<button type="button" class="enlace deshacer-chat" data-deshacer>Deshacer</button>' : ''}${m.sugerencias?.length && i === E.chat.length - 1 ? `<div class="chips respuestas-rapidas" role="group" aria-label="Respuestas rápidas">${m.sugerencias.map(x => `<button type="button" class="sugerencia">${esc(x)}</button>`).join('')}</div>` : ''}</div>${espera}`;
 }
 
 /**

@@ -166,7 +166,7 @@ function enElPlan(id) {
   return dia ? { dia, e: dia.ejercicios.find(x => x.ejercicio_id === id), esHoy: dia.fecha === f } : null;
 }
 
-export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
+export function vistaFicha(ir, { id, desde = 'hoy', antes = null, vuelta = undefined } = {}) {
   const ej = indice.porId.get(id);
   if (!ej) return ir(desde);
   const f = hoy();
@@ -259,7 +259,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null } = {}) {
   if (anim) montarAnimacion($('ficha-animacion'), anim, { nombre: ej.nombre });
   // Banco ampliado: las instrucciones en español se cargan aparte, solo al abrir una de sus fichas.
   if (ej.extra) tecnicaExtra().then(t => { const ol = $('ficha-pasos'); if (ol && t[id]) ol.innerHTML = t[id].map(x => `<li>${esc(x)}</li>`).join(''); }).catch(() => {});
-  const atras = () => (antes ? vistaFicha(ir, antes) : ir(desde, desde === 'hoy' ? { ej: id } : undefined));
+  const atras = () => (antes ? vistaFicha(ir, antes) : ir(desde, vuelta ?? (desde === 'hoy' ? { ej: id } : undefined)));
   $('volver').onclick = atras;
   $('anotar-ajustes')?.addEventListener('click', ev => {
     const actual = E.notasFijas?.[id] || '';

@@ -51,7 +51,7 @@ import { NOMBRE_MUSCULO, lista, mayuscula, imagenesMusculos } from './musculos.j
 import { seguir, abrirAjustarHoy } from './cambios-ui.js';
 import { abrirTiempo, etiquetaTiempo, firmaDe, volverAlPlan } from './tiempo-ui.js';
 import { aplicarOpcion } from '../nucleo/coach.js';
-import { nombreAsistente, asistenteActual } from './cuestionario.js';
+import { nombreAsistente, asistenteActual, imagenAsistente } from './cuestionario.js';
 import { capasAsistente } from '../nucleo/asistente-capas.js';
 import * as nube from './nube.js';
 import { descansoHtml, sesionCompletaHtml } from './estados-visuales.js';
@@ -338,14 +338,16 @@ const idNotaDe = (f, id) => idsConNota(id, E.vivaHecho?.[f]).find(x => respuesta
 function respuestaNotaHtml(f, idEj) {
   const id = idNotaDe(f, idEj), r = respuestaDeNota(E.chat || [], { fecha: f, id }), quien = esc(nombreAsistente());
   if (r.estado === 'sin') return '';
-  const enviada = `<p class="nota-enviada">Enviaste: ${esc(r.nota || '')}</p>`;
+  // Como una conversación: lo enviado a la derecha y la respuesta con la cara del coach, igual que en el chat.
+  const cara = pose => `<span class="coach-avatar" aria-hidden="true">${imagenAsistente(pose, 'asistente-mini')}</span>`;
+  const enviada = `<p class="nota-enviada"><span class="sr-only">Enviaste: </span>${esc(r.nota || '')}</p>`;
   if (r.estado === 'cola') return `${enviada}<p class="nota-estado">${!nube.usuarioId() ? `En cola: ${quien} responde cuando entres a tu cuenta.` : `En cola: sale sola cuando haya señal y ${quien} responde aquí.`}</p>`;
   // Mientras espera: los puntos del chat y que se puede seguir entrenando (la respuesta tarda unos segundos).
-  if (r.estado === 'pensando') return `${enviada}<p class="nota-estado" role="status"><span class="escribiendo" aria-hidden="true"><i></i><i></i><i></i></span>${quien} está respondiendo. Sigue con tu serie: la respuesta queda aquí.</p>`;
+  if (r.estado === 'pensando') return `${enviada}<div class="nota-coach esperando" role="status">${cara('pensando')}<div class="nota-globo"><span class="escribiendo" aria-hidden="true"><i></i><i></i><i></i></span><p class="nota-estado">${quien} está respondiendo. Sigue con tu serie: la respuesta queda aquí.</p></div></div>`;
   // La respuesta con el formato del chat y sus mismos botones (app/coach-ui.js). Un botón tocado aquí deja su vista
   // previa o su resultado debajo, con los botones que siguen, sin ir al Coach.
   const s = r.seguimiento, eleccion = s != null && E.chat[s - 1]?.deNota ? E.chat[s - 1].texto : '';
-  return `${enviada}<div class="nota-coach"><p class="nota-quien">${quien}</p>${respuestaCoachHtml(r.indice, { sugerencias: s == null })}${s != null ? `<div class="nota-seguimiento">${eleccion ? `<p class="nota-enviada">Elegiste: ${esc(eleccion)}</p>` : ''}${respuestaCoachHtml(s)}</div>` : ''}</div>`;
+  return `${enviada}<div class="nota-coach">${cara('explica')}<div class="nota-globo"><p class="nota-quien">${quien}</p>${respuestaCoachHtml(r.indice, { sugerencias: s == null })}${s != null ? `<div class="nota-seguimiento">${eleccion ? `<p class="nota-enviada"><span class="sr-only">Elegiste: </span>${esc(eleccion)}</p>` : ''}${respuestaCoachHtml(s)}</div>` : ''}</div></div>`;
 }
 // Mientras alguna nota espera respuesta, se mira el chat y se actualiza solo ese recuadro (sin repintar la sesión,
 // para no cortar lo que se está escribiendo).
@@ -357,7 +359,7 @@ function vigilarNotas(f) {
   vigiaNotas = setInterval(() => {
     const cajas = document.querySelectorAll('#vista-hoy [data-respuesta-nota]');
     if (!cajas.length) return clearInterval(vigiaNotas);
-    cajas.forEach(c => { const h = respuestaNotaHtml(f, c.dataset.respuestaNota); if (c.innerHTML !== h) c.innerHTML = h; });
+    cajas.forEach(c => { const h = respuestaNotaHtml(f, c.dataset.respuestaNota); if (c.innerHTML !== h) { c.innerHTML = h; c.classList.add('recien'); } });
     if (!esperando()) clearInterval(vigiaNotas);
   }, 1200);
 }
@@ -2071,6 +2073,7 @@ function enlazar(ir, dia) {
     caja.onclick = async ev => {
       const id = idNotaDe(f, caja.dataset.respuestaNota), b = ev.target.closest('button');
       if (!b || b.disabled) return;
+      if (b.dataset.verEjercicio) return ir('ejercicio', { id: b.dataset.verEjercicio, desde: 'hoy' });
       if (b.dataset.notaSugerencia) {
         mandarAlCoach({ texto: b.dataset.notaSugerencia, modo: 'chat', tipo: 'nota_ejercicio', notaEj: { fecha: f, id, nota: b.dataset.notaSugerencia } });
         return repintar();

@@ -649,6 +649,24 @@ details.pasos > summary{font-weight:600}
 .lista-resumen.record li::before{display:none}
 .lista-resumen .insignia{width:40px;height:40px;vertical-align:middle;margin-right:4px}
 .medalla-completa{display:block;width:64px;height:64px;margin:8px auto 0}
+/* Cada ejercicio del resumen, con su imagen y cómo le fue. */
+.ejs-resumen{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column}
+.ejs-resumen li + li{border-top:1px solid var(--line)}
+.ej-resumen{display:grid;grid-template-columns:48px minmax(0,1fr);gap:12px;align-items:start;width:100%;padding:10px 0;border:0;background:none;color:var(--ink);font:inherit;text-align:left}
+button.ej-resumen{cursor:pointer}
+.ej-resumen-texto{display:flex;flex-direction:column;gap:2px;min-width:0;font-size:14px;line-height:1.35;overflow-wrap:anywhere}
+.ej-resumen-texto strong{font-size:15px}
+.ej-resumen-texto small{font-size:13px}
+.marca-ej{align-self:flex-start;margin-top:4px;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:700;line-height:1.6;background:var(--fill);color:var(--ink-muted)}
+.marca-ej.sube,.marca-ej.record{background:var(--good-soft);color:var(--good)}
+@media (prefers-reduced-motion:no-preference){
+  #vista-resumen .cifras-resumen .cifra,#vista-resumen .ejs-resumen li{animation:entrar-resumen .35s cubic-bezier(.2,.7,.3,1) both}
+  #vista-resumen .cifras-resumen .cifra:nth-child(2),#vista-resumen .ejs-resumen li:nth-child(2){animation-delay:.05s}
+  #vista-resumen .cifras-resumen .cifra:nth-child(3),#vista-resumen .ejs-resumen li:nth-child(3){animation-delay:.1s}
+  #vista-resumen .cifras-resumen .cifra:nth-child(4),#vista-resumen .ejs-resumen li:nth-child(4){animation-delay:.15s}
+  #vista-resumen .ejs-resumen li:nth-child(n+5){animation-delay:.2s}
+  @keyframes entrar-resumen{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+}
 .chip-record{display:inline-block;font:700 11px/1.6 var(--f-texto);letter-spacing:.02em;padding:0 7px;border-radius:999px;background:var(--good-soft);color:var(--good);vertical-align:1px}
 .agregar-serie{width:100%;min-height:38px;margin-top:8px;font-size:15px;color:var(--ink)}
 .fila-agregar .agregar-serie{flex:1 1 0;margin-top:0}

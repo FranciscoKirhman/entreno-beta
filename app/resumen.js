@@ -8,7 +8,8 @@ import { sesionDe } from '../nucleo/agenda.js';
 import { estadoDelPlan } from '../nucleo/registrado.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
 import { dice, nombreAsistente, imagenAsistente } from './cuestionario.js';
-import { textoRico, pedirComentarioSesion } from './coach-ui.js';
+import { textoRico, pedirComentarioSesion, mencionadosHtml } from './coach-ui.js';
+import { miniatura } from './imagenes.js';
 import * as nube from './nube.js';
 import { esAsistido } from '../nucleo/catalogo.js';
 import { imagenSesion } from './imagen-sesion.js';
@@ -108,13 +109,34 @@ function comentarioCoachHtml(sesion) {
   const respuesta = E.chat.findLast(m => m.rol === 'coach' && m.sesionId === sesion.id && !m.pendiente);
   const quien = nombreAsistente();
   const cara = pose => `<span class="coach-avatar">${imagenAsistente(pose, 'asistente-mini')}</span>`;
-  if (respuesta) return `<div class="coach-dice">${cara('explica')}<div><h3>${esc(quien)} dice</h3><div class="texto-coach">${textoRico(respuesta.texto)}</div>
+  if (respuesta) return `<div class="coach-dice">${cara('explica')}<div><h3>${esc(quien)} dice</h3><div class="texto-coach">${textoRico(respuesta.texto)}</div>${mencionadosHtml(respuesta.texto)}
     <button type="button" class="enlace seguir" data-seguir-coach>Seguir en el Coach&nbsp;›</button></div></div>`;
   const linea = (pose, texto, boton = '') => `<div class="coach-dice">${cara(pose)}<div><h3>${esc(quien)}</h3><p class="pequeno suave">${texto}</p>${boton}</div></div>`;
   if (pregunta?.porEnviar) return linea('sin_senal', 'Te comento la sesión cuando vuelva la señal.');
   if (pregunta) return linea('pensando', '<span class="escribiendo" aria-label="Revisando tu sesión"><i></i><i></i><i></i></span>');
   if (!nube.hay() || !nube.usuarioId()) return linea('saludo', `Con tu cuenta, ${esc(quien)} comenta cada sesión: qué salió bien y qué cuidar la próxima.`);
   return linea('pregunta', 'Esta sesión todavía no tiene comentario.', '<button type="button" class="boton" data-pedir-comentario>Pedir comentario</button>');
+}
+
+/**
+ * Cada ejercicio de la sesión con su imagen: lo hecho, la vez anterior y una marca de cómo le fue (récord, más o menos
+ * que la vez anterior, rango completo). Se toca para abrir su ficha. Las marcas salen de nucleo/resumen-sesion.js.
+ */
+function cadaEjercicioHtml(r) {
+  const marca = g => {
+    const de = (lista, tipo) => lista.some(x => x.tipo === tipo && x.ejercicio_id === g.ejercicio_id);
+    if (!g.ejercicio_id) return '';
+    if (r.records.some(x => x.ejercicio_id === g.ejercicio_id)) return '<span class="marca-ej record">Récord</span>';
+    if (de(r.bien, 'mejor_que_antes')) return '<span class="marca-ej sube">▲ Más que la vez anterior</span>';
+    if (de(r.mal, 'menos_que_antes')) return '<span class="marca-ej baja">▼ Menos que la vez anterior</span>';
+    if (de(r.bien, 'rango_completo')) return '<span class="marca-ej sube">Rango completo</span>';
+    return '';
+  };
+  const fila = g => {
+    const cuerpo = `${miniatura(g.ejercicio_id)}<span class="ej-resumen-texto"><strong>${esc(nombreEj(g.ejercicio_id, g.nombre))}</strong><span>${esc(textoSeries(g.series))}</span>${g.anterior.length ? `<small class="suave">La vez anterior: ${esc(textoSeries(g.anterior))}</small>` : ''}${marca(g)}</span>`;
+    return `<li>${indice.porId.has(g.ejercicio_id) ? `<button type="button" class="ej-resumen" data-ver-ejercicio="${esc(g.ejercicio_id)}">${cuerpo}</button>` : `<div class="ej-resumen">${cuerpo}</div>`}</li>`;
+  };
+  return `<ul class="ejs-resumen">${r.porEjercicio.map(fila).join('')}</ul>`;
 }
 
 /** La sesión comparada con su día del plan y con la vez anterior. */
@@ -188,7 +210,7 @@ export function vistaResumen(ir, { id, desde = null } = {}) {
     ${n ? `<section class="tarjeta"><h3>Récords</h3><ul class="lista-resumen record">${r.records.map(x => `<li>${insignia(x.tipo)} ${esc(nombreEj(x.ejercicio_id))}: ${esc(textoRecord(x))}</li>`).join('')}</ul></section>` : ''}
     <section class="tarjeta" id="coach-dice" aria-live="polite">${comentarioCoachHtml(sesion)}</section>
     ${(() => { const html = ajustesHtml(sesion); return html ? `<section class="tarjeta" id="ajustes-proxima" aria-live="polite">${html}</section>` : ''; })()}
-    <section class="tarjeta"><h3>Cada ejercicio</h3><ul class="pequeno detalle-h">${r.porEjercicio.map(g => `<li><strong>${esc(nombreEj(g.ejercicio_id, g.nombre))}</strong>: ${esc(textoSeries(g.series))}${g.anterior.length ? `<br><span class="suave">La vez anterior: ${esc(textoSeries(g.anterior))}</span>` : ''}</li>`).join('')}</ul></section>
+    <section class="tarjeta" id="cada-ejercicio"><h3>Cada ejercicio</h3>${cadaEjercicioHtml(r)}</section>
     <button type="button" class="boton fila-boton guardar-rutina" id="guardar-como-rutina">Guardar como rutina</button>
     <details class="extra" id="resumen-ia"><summary>Preguntarle a tu IA por esta sesión</summary>
       <p class="pequeno">Copia la sesión (ejercicios, series, lo que pedía el plan y los récords; sin tu nombre ni datos de salud) y pégala en ChatGPT, Claude o Gemini para que te diga qué ajustar.</p>
@@ -202,6 +224,11 @@ export function vistaResumen(ir, { id, desde = null } = {}) {
     <div class="fila-botones"><button type="button" class="boton primario" id="volver-hoy">Listo</button></div>
   </div>`;
   $('volver-hoy').onclick = () => ir('hoy');
+  // Un ejercicio tocado (en la lista o entre los que nombra el coach) abre su ficha, y Atrás vuelve a este resumen.
+  $('vista-resumen').addEventListener('click', ev => {
+    const b = ev.target.closest('[data-ver-ejercicio]');
+    if (b) ir('ejercicio', { id: b.dataset.verEjercicio, desde: 'resumen', vuelta: { id: sesion.id, desde } });
+  });
   enlazarAjustes($('ajustes-proxima'), sesion);
   // El comentario llega cuando responde la IA: se repinta solo esa tarjeta mientras el resumen está abierto.
   const caja = $('coach-dice');

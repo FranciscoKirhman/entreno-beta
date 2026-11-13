@@ -8,7 +8,7 @@ import { E, hoy, alGuardar, modoEjemplo, ambitoDatos } from './comun.js';
 import { borradorSesion, reponerBorrador } from '../nucleo/sesion-borrador.js';
 import * as nube from './nube.js';
 
-const CLAVE = 'sesion_en_curso', ESPERA_MS = 4000;
+const CLAVE = 'sesion_en_curso', ESPERA_MS = 4000, PLAZO_MS = 12000, REINTENTO_MS = 20000;
 let revisada = null;  // usuario cuya cuenta ya se miró
 let sinSoporte = false;
 let enCuenta = null;  // { usuario, texto }: lo último que quedó en la cuenta
@@ -24,13 +24,26 @@ const firma = v => JSON.stringify(ordenar(v || {}));
 const rechazada = e => e?.code === '23514' || /datos_telefono_clave_check/.test(e?.message || '');
 
 /**
+ * Una consulta a la cuenta con plazo. Al bloquear el teléfono a media subida, la petición puede quedar colgada para
+ * siempre y, con ella, la fila de subidas: desde ahí nada más llegaba a la cuenta hasta cerrar y abrir la app (el 12 de
+ * noviembre de 2026 una sesión entera no subió mientras estaba en curso). Pasado el plazo se corta y se reintenta.
+ */
+async function conPlazo(hacer) {
+  const corte = typeof AbortController === 'function' ? new AbortController() : null;
+  let aviso;
+  const plazo = new Promise((_, rechazar) => { aviso = setTimeout(() => { corte?.abort(); rechazar(new Error('La cuenta no respondió a tiempo.')); }, PLAZO_MS); });
+  try { return await Promise.race([hacer(corte?.signal), plazo]); }
+  finally { clearTimeout(aviso); }
+}
+
+/**
  * Mira la sesión de la cuenta y la repone si sirve (lo de este teléfono manda). Al entrar, app/app.js la llama con las
  * sesiones de la cuenta ya en el teléfono, para no revivir una que otro teléfono guardó. Devuelve si la puso.
  */
 export async function revisarSesionEnCuenta() {
   if (!enLinea()) return false;
   const estado = E, usuario = nube.usuarioId();
-  const fila = await nube.cargarDatoTelefono(CLAVE);
+  const fila = await conPlazo(signal => nube.cargarDatoTelefono(CLAVE, { signal }));
   if (E !== estado || nube.usuarioId() !== usuario) return false;
   const puesta = reponerBorrador(E, fila?.valor, hoy());
   enCuenta = { usuario, texto: firma(fila?.valor) };
@@ -44,16 +57,16 @@ async function subir() {
   const estado = E, usuario = nube.usuarioId();
   if (revisada !== usuario) {
     let puesta;
-    try { puesta = await revisarSesionEnCuenta(); } catch { return; } // sin señal: al próximo cambio
+    try { puesta = await revisarSesionEnCuenta(); } catch { reintentar(); return; } // sin señal: se reintenta sola
     if (puesta) { for (const fn of alReponerSesion) fn(); return; }
     if (revisada !== usuario || E !== estado) return;
   }
   const valor = borradorSesion(E, hoy()) || {}, texto = firma(valor);
   if (enCuenta?.usuario === usuario && enCuenta.texto === texto) return;
   try {
-    await nube.guardarDatoTelefono(CLAVE, valor);
+    await conPlazo(signal => nube.guardarDatoTelefono(CLAVE, valor, { signal }));
     if (nube.usuarioId() === usuario) enCuenta = { usuario, texto };
-  } catch (e) { if (rechazada(e)) sinSoporte = true; }
+  } catch (e) { if (rechazada(e)) sinSoporte = true; else reintentar(); }
 }
 
 /** Sube lo que haya a los pocos segundos, sin correr el plazo con cada cambio: así llega aunque se siga anotando. */
@@ -63,9 +76,17 @@ function programar() {
   reloj = setTimeout(() => { reloj = 0; encolar(); }, ESPERA_MS);
 }
 
+/** Si una subida falla (sin señal, plazo cumplido), se reintenta sola: antes esperaba al próximo cambio, y lo último
+ *  anotado de la sesión podía no llegar a la cuenta. */
+function reintentar() {
+  if (reloj || sinSoporte || !enLinea()) return;
+  reloj = setTimeout(() => { reloj = 0; encolar(); }, REINTENTO_MS);
+}
+
 alGuardar.add(programar);
 // Al pasar al fondo (bloquear el teléfono entre series) sube lo pendiente sin esperar el plazo.
 document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') return programar(); // al volver: lo que no alcanzó a subir
   if (document.visibilityState !== 'hidden' || !reloj) return;
   clearTimeout(reloj); reloj = 0;
   encolar();

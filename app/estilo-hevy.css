@@ -771,21 +771,33 @@ body.escribiendo-coach #nav{display:none!important}
 #vista-hoy .nota-respuesta{margin:0 0 6px;font-size:var(--hoy15,15px);line-height:1.4}
 #vista-hoy .nota-respuesta:empty{display:none}
 #vista-hoy .nota-respuesta p{margin:0 0 4px}
-#vista-hoy .nota-enviada,#vista-hoy .nota-estado{color:var(--ink-muted);font-size:13px}
-#vista-hoy .nota-coach{padding:10px 12px;border-radius:14px;background:var(--fill);color:var(--ink)}
-/* La respuesta del coach bajo la nota, con el formato y los botones del chat. */
+#vista-hoy .nota-estado{color:var(--ink-muted);font-size:13px}
+/* La nota enviada y la respuesta del coach, como una conversación: lo tuyo a la derecha, la respuesta con su cara,
+   el formato y los botones del chat. */
+#vista-hoy .nota-enviada{width:fit-content;max-width:86%;margin:0 0 8px auto;padding:8px 12px;border-radius:18px 18px 4px 18px;background:var(--accent);color:var(--accent-ink);font-size:14px;line-height:1.35;overflow-wrap:anywhere}
+#vista-hoy .nota-coach{display:grid;grid-template-columns:32px minmax(0,1fr);gap:8px;align-items:start;color:var(--ink)}
+#vista-hoy .nota-coach .coach-avatar{width:32px;height:32px}
+#vista-hoy .nota-globo{min-width:0;padding:10px 12px;border-radius:4px 18px 18px 18px;background:var(--fill)}
+#vista-hoy .nota-coach.esperando .nota-globo{display:flex;flex-direction:column;gap:4px}
+#vista-hoy .nota-coach.esperando .nota-estado{margin:0}
 #vista-hoy .nota-coach .nota-quien{margin:0 0 4px;font-size:13px;font-weight:600;color:var(--ink-muted)}
 #vista-hoy .nota-coach .texto-chat p{margin:0 0 6px}
 #vista-hoy .nota-coach .texto-chat p:last-child{margin-bottom:0}
 #vista-hoy .nota-coach .texto-chat ul{margin:4px 0 6px;padding-left:18px}
 #vista-hoy .nota-coach .texto-chat li{margin:2px 0}
-#vista-hoy .nota-coach .propuesta-chat{margin-top:8px}
+#vista-hoy .nota-coach .propuesta-chat{margin-top:10px;padding:8px 10px;border-radius:12px;background:var(--surface);border-left:3px solid var(--accent)}
+#vista-hoy .nota-coach .propuesta-chat p{margin:0 0 2px;font-size:13px;color:var(--accent)}
+#vista-hoy .nota-coach .propuesta-chat ul{margin:0;padding-left:18px;font-size:14px}
 #vista-hoy .nota-coach .opciones-chat{display:flex;flex-direction:column;align-items:stretch;gap:6px;margin-top:10px}
 #vista-hoy .nota-coach .opciones-chat .boton{min-height:44px;white-space:normal}
 #vista-hoy .nota-coach .respuestas-rapidas{margin-top:8px}
-#vista-hoy .nota-seguimiento{margin-top:10px;padding-top:8px;border-top:1px solid var(--line)}
-#vista-hoy .nota-estado .escribiendo{height:14px;margin-right:8px;vertical-align:middle}
-#vista-hoy .nota-estado .escribiendo i{width:6px;height:6px}
+#vista-hoy .nota-seguimiento{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+#vista-hoy .nota-seguimiento .nota-enviada{font-size:13px}
+@media (prefers-reduced-motion:no-preference){
+  /* Solo cuando llega la respuesta (app/hoy.js: vigilarNotas), no en cada repintado de la sesión. */
+  #vista-hoy .nota-respuesta.recien .nota-coach{animation:entrar-nota .32s cubic-bezier(.2,.7,.3,1) both}
+  @keyframes entrar-nota{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+}
 #vista-hoy.reordenando .nota-acciones,#vista-hoy.reordenando .nota-respuesta{display:none}
 /* El gris de las repeticiones con el rango del plan ("10 a 15"): más chico para que quepa en el campo. */
 #vista-hoy .serie input.con-rango::placeholder{font-size:13px;letter-spacing:-.02em}
