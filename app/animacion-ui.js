@@ -1,11 +1,16 @@
-// Animaciones de ejercicios dentro de la app: la figura de app/figura.js con el movimiento de nucleo/animaciones.js.
+// Animaciones de ejercicios dentro de la app, con el movimiento de nucleo/animaciones.js. En la ficha de un ejercicio
+// (cuando se entregan sus músculos) la figura es la anatómica de app/figura-anatomica.js, con los músculos del catálogo
+// en rojo y el ritmo de nucleo/ritmo-animacion.js. Los que se ven de frente y los pasos de calentamiento y estiramiento
+// siguen con la figura ilustrada (app/figura.js y app/figura-frente.js).
 // La figura es de hombre o de mujer según el sexo del perfil, se encuadra sola y se mueve únicamente mientras está a la
 // vista (un solo reloj para todas). Si el teléfono pide reducir movimiento, queda quieta y se puede ver con un toque.
 import { R, esc } from './comun.js';
 import { crearFigura, varianteDe, VARIANTES } from './figura.js';
 import { crearFiguraFrente } from './figura-frente.js';
+import { crearFiguraAnatomica } from './figura-anatomica.js';
 import { proyectarPose } from '../nucleo/animaciones-frente.js';
 import { medidas, enElTiempo } from '../nucleo/animacion-ejercicios.js';
+import { enElTiempo as conRitmo } from '../nucleo/ritmo-animacion.js';
 import { encuadre } from '../nucleo/animaciones.js';
 import { sinMovimiento } from './movimiento.js';
 
@@ -16,9 +21,9 @@ const mirar = typeof IntersectionObserver === 'function'
   : null;
 
 function pintar(a, segundos) {
-  const { s, fase, enFase } = a.corre ? enElTiempo(a.anim, segundos + a.t0) : { s: 1, fase: a.anim.fases[0], enFase: 0 };
+  const { s, fase, enFase, aire = 0 } = a.corre ? a.tiempo(a.anim, segundos + a.t0) : { s: 1, fase: a.anim.fases[0], enFase: 0 };
   const p = a.anim.pose(s, a.m, fase, enFase);
-  a.figura.dibujar({ ...(a.anim.vista === 'frente' ? proyectarPose(p, a.anim.camara) : p), radioCabeza: a.m.cabeza });
+  a.figura.dibujar({ ...(a.anim.vista === 'frente' ? proyectarPose(p, a.anim.camara) : p), radioCabeza: a.m.cabeza }, { aire });
 }
 function seguir() {
   activas = activas.filter(a => a.caja.isConnected);
@@ -33,15 +38,22 @@ function seguir() {
   cuadro = requestAnimationFrame(paso);
 }
 
-/** Pone la animación dentro de "caja". nombre: para el lector de pantalla. */
-export function montarAnimacion(caja, anim, { nombre = '' } = {}) {
+/**
+ * Pone la animación dentro de "caja". nombre: para el lector de pantalla. musculos: { primarios, secundarios } del
+ * catálogo; si vienen (la ficha), se dibuja la figura anatómica con esos músculos en rojo y el ritmo nuevo.
+ */
+export function montarAnimacion(caja, anim, { nombre = '', musculos = null } = {}) {
   if (!caja || !anim) return;
   const variante = varianteDe(R()), m = medidas(VARIANTES[variante].estatura), e = encuadre(anim, m);
   const x = e.x * K, y = -(e.y + e.lado) * K, lado = e.lado * K;
   caja.innerHTML = `<svg viewBox="${x.toFixed(1)} ${y.toFixed(1)} ${lado.toFixed(1)} ${lado.toFixed(1)}" role="img" aria-label="${esc(`Cómo se mueve: ${nombre}`)}">
     ${anim.suelo === false ? '' : `<line x1="${(x - 10).toFixed(1)}" y1="0" x2="${(x + lado + 10).toFixed(1)}" y2="0" stroke="var(--line)" stroke-width="1.5"/>`}<g></g></svg>`;
-  const crear = anim.vista === 'frente' ? crearFiguraFrente : crearFigura; // de frente: los que giran o van hacia el costado
-  const a = { caja, anim, m, figura: crear(caja.querySelector('g'), { escala: K, variante }), visible: !mirar, corre: !sinMovimiento(), t0: Math.random() * 2 };
+  // De frente (los que giran o van hacia el costado) sigue la figura ilustrada: la anatómica solo existe de lado.
+  const anatomica = !!musculos && anim.vista !== 'frente';
+  const crear = anim.vista === 'frente' ? crearFiguraFrente : anatomica ? crearFiguraAnatomica : crearFigura;
+  caja.classList.toggle('figura-anatomica', anatomica);
+  const figura = crear(caja.querySelector('g'), { escala: K, variante, musculos: musculos || {}, sombra: anim.suelo !== false });
+  const a = { caja, anim, m, figura, tiempo: musculos ? conRitmo : enElTiempo, visible: !mirar, corre: !sinMovimiento(), t0: Math.random() * 2 };
   if (!a.corre) {
     // Con reducir movimiento queda quieta; un toque la pone en movimiento.
     const b = document.createElement('button');

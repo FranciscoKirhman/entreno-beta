@@ -912,6 +912,33 @@ body.con-descanso .medalla-record{bottom:calc(env(safe-area-inset-bottom,0px) + 
 .ficha-animacion svg,.paso-animacion svg{display:block;width:100%;height:100%}
 .paso-animacion{width:min(100%,240px);aspect-ratio:1;margin:8px 0;background:var(--bg)}
 .paso-animacion{--fig-borde:var(--bg)}
+/* Figura anatómica de la ficha (app/figura-anatomica.js): cuerpo gris con los músculos a la vista. En rojo, los
+   músculos principales del ejercicio según el catálogo, y en rojo claro los secundarios. No mide activación. */
+:root{
+  --an-cuerpo:#CBCFD8; --an-cuerpo-lejos:#A7ACB8; --an-musculo:#B7BCC7; --an-musculo-lejos:#969BA7; --an-pelo:#6B707C;
+  --an-rojo:#DE3327; --an-rojo-lejos:#AE251B; --an-rojo-suave:#F1A69C; --an-rojo-suave-lejos:#CB877E; --an-sombra:rgba(20,22,30,.16);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-tema="claro"]){
+    --an-cuerpo:#9499A6; --an-cuerpo-lejos:#666B77; --an-musculo:#828794; --an-musculo-lejos:#585D69; --an-pelo:#4A4E58;
+    --an-rojo:#FF4B3E; --an-rojo-lejos:#B9352B; --an-rojo-suave:#D9958D; --an-rojo-suave-lejos:#96645E; --an-sombra:rgba(0,0,0,.5);
+  }
+}
+:root[data-tema="oscuro"]{
+    --an-cuerpo:#9499A6; --an-cuerpo-lejos:#666B77; --an-musculo:#828794; --an-musculo-lejos:#585D69; --an-pelo:#4A4E58;
+    --an-rojo:#FF4B3E; --an-rojo-lejos:#B9352B; --an-rojo-suave:#D9958D; --an-rojo-suave-lejos:#96645E; --an-sombra:rgba(0,0,0,.5);
+}
+.an-cuerpo{fill:var(--an-cuerpo)}
+.an-cuerpo.lejos{fill:var(--an-cuerpo-lejos)}
+.an-cuerpo.cerca.brazo,.an-cuerpo.cerca.antebrazo,.an-cuerpo.cerca.mano,.an-cuerpo.cerca.cabeza{stroke:var(--fig-borde,var(--surface));stroke-width:1.8;paint-order:stroke;stroke-linejoin:round}
+.an-musculo{fill:var(--an-musculo);stroke:var(--an-cuerpo);stroke-width:1.5;stroke-linejoin:round}
+.an-musculo.lejos{fill:var(--an-musculo-lejos);stroke:var(--an-cuerpo-lejos)}
+.an-musculo.principal{fill:var(--an-rojo)} .an-musculo.principal.lejos{fill:var(--an-rojo-lejos)}
+.an-musculo.secundario{fill:var(--an-rojo-suave)} .an-musculo.secundario.lejos{fill:var(--an-rojo-suave-lejos)}
+.an-pelo{fill:var(--an-pelo)}
+.an-sombra{fill:var(--an-sombra)}
+.marca-musculo{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;background:var(--an-rojo)}
+.marca-musculo.secundario{background:var(--an-rojo-suave)}
 .ver-movimiento{position:absolute;right:8px;bottom:8px;min-height:36px;padding:0 12px;border:0;border-radius:999px;background:var(--accent);color:var(--accent-ink);font:inherit;font-size:14px;font-weight:600}
 .ficha-ilustracion img{display:block;width:100%;height:auto;margin-top:8px;border-radius:12px}
 /* Gesto de volver: la burbuja con la flecha sigue al dedo desde el borde izquierdo y se llena al pasar el umbral. */

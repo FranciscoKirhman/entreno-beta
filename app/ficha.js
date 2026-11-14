@@ -177,6 +177,8 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null, vuelta = undef
   const lugar = (R().lugares || []).find(l => l.principal) || (R().lugares || [])[0] || { equipamiento: [] };
   const alts = alternativas(id, { indice, equipamiento: lugar.equipamiento || [], bloqueadas: articulacionesBloqueadas(R().lesiones || [], f), nivel: D().nivel });
   const dibujo = dibujoEjercicio(id), anim = animacionDe(id);
+  // Leyenda de la figura anatómica: el color de cada músculo según el catálogo (no es una medición de activación).
+  const marca = tono => (anim && anim.vista !== 'frente' ? `<i class="marca-musculo ${tono}" aria-hidden="true"></i>` : '');
   const maq = maquinaDe(ej);
   const u = unidadPeso();
   const kg = x => `${coma(enUnidad(x))} ${u}`;
@@ -190,7 +192,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null, vuelta = undef
     ${anim ? '<div class="ficha-animacion" id="ficha-animacion"></div>' : dibujo ? `<img class="ficha-dibujo" src="${dibujo}" alt="Cómo se hace: ${esc(ej.nombre)}" width="960" height="640">` : ''}
     ${anim && dibujo ? `<details class="extra ficha-ilustracion"><summary>Ver la ilustración de las dos posiciones</summary><img class="ficha-dibujo" src="${dibujo}" alt="Cómo se hace: ${esc(ej.nombre)}" width="960" height="640" loading="lazy"></details>` : ''}
     <h1>${esc(ej.nombre)}</h1>
-    <p class="ficha-musculos-texto suave">Principal: ${esc(mayuscula(musculos(ej.musculos_primarios)))}${ej.musculos_secundarios.length ? `<br>Secundarios: ${esc(mayuscula(musculos(ej.musculos_secundarios)))}` : ''}</p>
+    <p class="ficha-musculos-texto suave">${marca('principal')}Principal: ${esc(mayuscula(musculos(ej.musculos_primarios)))}${ej.musculos_secundarios.length ? `<br>${marca('secundario')}Secundarios: ${esc(mayuscula(musculos(ej.musculos_secundarios)))}` : ''}</p>
     ${ej.extra ? '<p><span class="chip chip-sin-revision">Banco ampliado · sin revisión profesional</span></p>' : ''}
     <p class="ficha-sub suave">${esc(ej.propio ? ['Creado por ti', ...ej.equipamiento.map(q => EQUIPO[q]).filter(Boolean).slice(0, 2)].join(' · ') : [...ej.equipamiento.map(q => EQUIPO[q]).filter(Boolean).slice(0, 2), ej.extra ? null : NIVEL[ej.nivel_minimo]].filter(Boolean).join(' · '))}</p>
     ${E.notasFijas?.[id] ? `<p class="nota-fija">${icono('lapiz', 'icono icono-chico')}<span>Tu nota fija: ${esc(E.notasFijas[id])}</span></p>` : ''}
@@ -256,7 +258,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null, vuelta = undef
     </div>
   </div>`;
 
-  if (anim) montarAnimacion($('ficha-animacion'), anim, { nombre: ej.nombre });
+  if (anim) montarAnimacion($('ficha-animacion'), anim, { nombre: ej.nombre, musculos: { primarios: ej.musculos_primarios, secundarios: ej.musculos_secundarios } });
   // Banco ampliado: las instrucciones en español se cargan aparte, solo al abrir una de sus fichas.
   if (ej.extra) tecnicaExtra().then(t => { const ol = $('ficha-pasos'); if (ol && t[id]) ol.innerHTML = t[id].map(x => `<li>${esc(x)}</li>`).join(''); }).catch(() => {});
   const atras = () => (antes ? vistaFicha(ir, antes) : ir(desde, vuelta ?? (desde === 'hoy' ? { ej: id } : undefined)));
