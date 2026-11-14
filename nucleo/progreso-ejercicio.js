@@ -59,6 +59,12 @@ export function desdePeriodo(periodo, hoy, filas) {
   return p[2] ? sumarDias(hoy, -p[2] + 1) : (primera < hoy ? primera : sumarDias(hoy, -6));
 }
 
+/** Los períodos con al menos una sesión que tenga esa medida (para apagar los botones que mostrarían un gráfico vacío). */
+export function periodosConDatos(filas, hoy, medida) {
+  const con = filas.filter(f => f[medida] != null);
+  return new Set(PERIODOS.map(([id]) => id).filter(id => con.some(f => f.fecha >= desdePeriodo(id, hoy, filas) && f.fecha <= hoy)));
+}
+
 /**
  * Ritmo de progreso: la recta que mejor pasa por la medida de cada sesión en las últimas semanas (mínimos cuadrados),
  * para que una sesión mala o muy buena no lo cambie todo.

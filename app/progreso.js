@@ -183,14 +183,13 @@ function medidasHtml() {
       const puntos = lista.filter(m => m[c] != null).map(m => ({ fecha: m.fecha, valor: valor(c, m[c]), texto: `${n(valor(c, m[c]))} ${unidad(c)}` }));
       // Meta de peso, como OpenGym: una línea en el gráfico y el cambio en verde si te acerca, en rojo si te aleja.
       const meta = c === 'peso_kg' && E.metaPeso ? enUnidad(E.metaPeso) : null;
-      const vs = [...puntos.map(p => p.valor), ...(meta != null ? [meta] : [])], lo = Math.min(...vs), hi = Math.max(...vs), margen = Math.max(1, (hi - lo) * 0.2);
       const desde = puntos[0].fecha < sumar(hoy(), -6) ? puntos[0].fecha : sumar(hoy(), -6);
       const cambio = cambioMedida(lista, c, hoy());
       const diferencia = cambio ? valor(c, cambio.hasta) - valor(c, cambio.desde) : 0;
       const rumbo = meta != null && cambio ? direccionMeta(cambio.desde, cambio.hasta, E.metaPeso) : null;
       grafico = `${campos.length > 1 ? `<div class="chips-botones chips-medida" role="group" aria-label="Qué medida">${campos.map(x => `<button type="button" class="chip-opcion" data-medida-cuerpo="${x}" aria-pressed="${x === c}">${esc(campo(x)[1])}</button>`).join('')}</div>` : ''}
         <div class="cifra-grafico"><span>${esc(campo(c)[1])}</span><strong class="num">${esc(`${n(puntos.at(-1).valor)} ${unidad(c)}`)}${cambio ? ` <span class="pequeno ${rumbo ? `rumbo-${rumbo}` : 'suave'}">(${diferencia > 0 ? '+' : diferencia < 0 ? '−' : ''}${n(Math.abs(diferencia))} en el último mes${rumbo === 'hacia' ? ', hacia tu meta' : rumbo === 'lejos' ? ', lejos de tu meta' : ''})</span>` : ''}</strong></div>
-        ${lineaHevy({ puntos, desde, hasta: hoy(), min: Math.max(0, lo - margen), max: hi + margen, marcas: [{ valor: lo, texto: n(lo) }, { valor: hi, texto: n(hi) }, ...(meta != null ? [{ valor: meta, texto: `Meta ${n(meta)}` }] : [])], titulo: `${campo(c)[1]}, ${puntos.length} ${puntos.length === 1 ? 'medición' : 'mediciones'}`, unir: 400, izquierda: 44 , cambio: d => `${d > 0 ? '+' : d < 0 ? '−' : ''}${n(Math.abs(d))} ${unidad(c)}`, ritmo: d => `${d > 0 ? '+' : d < 0 ? '−' : ''}${n(Math.abs(d))} ${unidad(c)}`, neutro: true})}
+        ${lineaHevy({ puntos, desde, hasta: hoy(), nombre: campo(c)[1], meta: meta != null ? { valor: meta, texto: `Meta ${n(meta)} ${unidad(c)}` } : null, titulo: `${campo(c)[1]}, ${puntos.length} ${puntos.length === 1 ? 'medición' : 'mediciones'}`, cambio: d => `${d > 0 ? '+' : d < 0 ? '−' : ''}${n(Math.abs(d))} ${unidad(c)}`, neutro: true, nota: 'Con la próxima medición vas a ver la línea.' })}
         ${c === 'peso_kg' ? `<form id="form-meta-peso" class="meta-peso"><label class="pequeno">Meta de peso (${u}) <input type="text" inputmode="decimal" id="meta-peso" value="${meta != null ? esc(n(meta)) : ''}" placeholder="Sin meta" autocomplete="off"></label><button type="submit" class="boton chico">Guardar meta</button></form>` : ''}`;
     }
     const imagen = x => { const src = `img/medidas/${x.replace(/_(kg|pct|cm)$/, '')}.webp`; return IMAGENES.has(src) ? `<img class="img-medida" src="${src}" alt="" width="40" height="40" decoding="async">` : ''; };

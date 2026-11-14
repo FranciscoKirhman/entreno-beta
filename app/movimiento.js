@@ -103,9 +103,33 @@ export function repintarConservando(pintar, tocado = null) {
 
 /**
  * Gráficos que se dibujan al llegar a una pantalla: las líneas se trazan de izquierda a derecha en 600 ms (sus puntos
- * aparecen cuando la línea pasa) y las barras crecen desde la izquierda. Cada gráfico se dibuja la primera vez que
- * queda a la vista; las barras se recortan, no se estiran, así sus bordes redondeados no se deforman.
+ * aparecen cuando la línea pasa, y el área bajo la línea del progreso aparece detrás) y las barras crecen desde la
+ * izquierda. Cada gráfico se dibuja la primera vez que queda a la vista; las barras se recortan, no se estiran, así sus
+ * bordes redondeados no se deforman.
  */
+const LINEA = 600;
+/** Traza un gráfico ahora (también al cambiar de medida o de período). Devuelve sus animaciones. */
+export function trazarGrafico(g) {
+  if (!g?.animate || sinMovimiento()) return [];
+  const anims = [];
+  const svg = g.querySelector('svg');
+  const ancho = svg?.viewBox?.baseVal?.width || 1;
+  g.querySelectorAll('.g-linea, .gh-linea:not(.en-curso)').forEach(l => {
+    const largo = l.getTotalLength?.() || 0;
+    const caja = largo ? l.getBBox?.() : null;
+    if (!largo || !caja) return;
+    const x0 = caja.x / ancho, x1 = (caja.x + caja.width) / ancho;
+    anims.push(l.animate([{ strokeDasharray: `${largo} ${largo}`, strokeDashoffset: largo }, { strokeDasharray: `${largo} ${largo}`, strokeDashoffset: 0 }],
+      { duration: Math.max(120, (x1 - x0) * LINEA), delay: x0 * LINEA, easing: 'linear', fill: 'backwards' }));
+  });
+  g.querySelectorAll('.g-punto, .gh-punto').forEach(p => anims.push(animar(p, [{ opacity: 0 }, { opacity: 1 }],
+    { duration: 160, delay: (p.cx.baseVal.value / ancho) * LINEA, fill: 'backwards' })));
+  g.querySelectorAll('.gh-area, .gh-linea.en-curso').forEach(a => anims.push(animar(a, [{ opacity: 0 }, { opacity: 1 }], { duration: 300, delay: LINEA * 0.6, fill: 'backwards' })));
+  g.querySelectorAll('.pista i, .pista-franja i').forEach((b, i) => anims.push(animar(b, [{ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0 0 0)' }],
+    { duration: 420, delay: Math.min(i, 8) * 40, fill: 'backwards' })));
+  return anims.filter(Boolean);
+}
+
 let observador = null, enEspera = [];
 export function dibujarGraficos(raiz) {
   observador?.disconnect();
@@ -113,27 +137,9 @@ export function dibujarGraficos(raiz) {
   enEspera.forEach(a => a.finish()); // los que nunca llegaron a la vista quedan dibujados (por si se vuelve a verlos)
   enEspera = [];
   if (!raiz || sinMovimiento() || !raiz.animate || typeof IntersectionObserver !== 'function') return;
-  const grupos = [...raiz.querySelectorAll('.grafico, .barras-semana, .franja-musculos')];
+  const grupos = [...raiz.querySelectorAll('.grafico, .grafico-hevy, .barras-semana, .franja-musculos')];
   if (!grupos.length) return;
-  const LINEA = 600;
-  const dibujar = g => {
-    const anims = [];
-    const svg = g.querySelector('svg');
-    const ancho = svg?.viewBox?.baseVal?.width || 1;
-    g.querySelectorAll('.g-linea').forEach(l => {
-      const largo = l.getTotalLength?.() || 0;
-      const xs = (l.getAttribute('points') || '').trim().split(/\s+/).map(par => parseFloat(par)).filter(Number.isFinite);
-      if (!largo || !xs.length) return;
-      const x0 = Math.min(...xs) / ancho, x1 = Math.max(...xs) / ancho;
-      anims.push(l.animate([{ strokeDasharray: `${largo} ${largo}`, strokeDashoffset: largo }, { strokeDasharray: `${largo} ${largo}`, strokeDashoffset: 0 }],
-        { duration: Math.max(120, (x1 - x0) * LINEA), delay: x0 * LINEA, easing: 'linear', fill: 'backwards' }));
-    });
-    g.querySelectorAll('.g-punto').forEach(p => anims.push(animar(p, [{ opacity: 0 }, { opacity: 1 }],
-      { duration: 160, delay: (p.cx.baseVal.value / ancho) * LINEA, fill: 'backwards' })));
-    g.querySelectorAll('.pista i, .pista-franja i').forEach((b, i) => anims.push(animar(b, [{ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0 0 0)' }],
-      { duration: 420, delay: Math.min(i, 8) * 40, fill: 'backwards' })));
-    return anims.filter(Boolean);
-  };
+  const dibujar = trazarGrafico;
   // Los que ya se ven se dibujan de inmediato; los de más abajo esperan, sin dibujar, hasta asomarse.
   const esperando = new Map();
   observador = new IntersectionObserver(es => es.forEach(e => {

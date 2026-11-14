@@ -5,9 +5,10 @@ import { E, esc, $, hoy, fechaCorta, coma, enUnidad, unidadPeso, peso, volumenTe
 import { icono } from './iconos.js';
 import { nombreAsistente } from './cuestionario.js';
 import { seriesAnotadas } from '../nucleo/semanal.js';
-import { porSesion, medidasCon, desdePeriodo, ritmo, PERIODOS, periodoInicial } from '../nucleo/progreso-ejercicio.js';
+import { porSesion, medidasCon, desdePeriodo, ritmo, PERIODOS, periodoInicial, periodosConDatos } from '../nucleo/progreso-ejercicio.js';
 import { recordsPorRepeticiones } from '../nucleo/records.js';
 import { lineaHevy } from './grafico.js';
+import { trazarGrafico, selectorDe } from './movimiento.js';
 import { relojTexto, modoCardio, textoCardio } from '../nucleo/unidades.js';
 
 const NOMBRE = { peso: 'Carga más alta', e1rm: 'Máximo estimado', serie: 'Mejor serie', volumen: 'Volumen de la sesión', reps: 'Repeticiones', duracion: 'Tiempo', distancia: 'Distancia' };
@@ -49,7 +50,7 @@ function textoPunto(f, medida, id) {
   if (cardio && medida === 'distancia') return `${coma(Math.round(f.distancia / 10) / 100)} km`;
   switch (medida) {
     case 'peso': { const s = f.series.find(x => Number(x.carga_kg) === f.peso); return `${peso(f.peso)}${s?.reps ? ` × ${s.reps}` : ''}`; }
-    case 'e1rm': return `${peso(f.e1rm)} estimado`;
+    case 'e1rm': return peso(f.e1rm); // "Máximo estimado" ya va bajo el valor
     case 'volumen': return volumenTexto(f.volumen);
     case 'serie': { const s = f.series.find(x => Math.round(Number(x.carga_kg) * Number(x.reps)) === f.serie); return s ? `${peso(s.carga_kg)} × ${s.reps}` : volumenTexto(f.serie); }
     case 'reps': return `${f.reps} repeticiones`;
@@ -58,21 +59,20 @@ function textoPunto(f, medida, id) {
   }
 }
 
-/** Escala con márgenes y tres líneas de grilla redondeadas. */
-function escala(valores, medida) {
-  const u = unidadPeso();
-  let lo = Math.min(...valores), hi = Math.max(...valores);
-  if (lo === hi) { lo -= Math.max(1, lo * 0.1); hi += Math.max(1, hi * 0.1); }
-  const margen = (hi - lo) * 0.12;
-  lo = Math.max(0, lo - margen); hi += margen;
-  const etiqueta = v => (medida === 'reps' ? `${Math.round(v)}` : medida === 'duracion' ? relojTexto(Math.round(v)) : medida === 'distancia' ? `${Math.round(v)} m` : ['volumen', 'serie'].includes(medida) ? Math.round(v).toLocaleString('es-CL') : `${coma(Math.round(v * 10) / 10)} ${u}`);
-  // Líneas en números redondos (1, 2, 2,5 o 5 por una potencia de 10), unas tres en la altura del gráfico.
-  const bruto = (hi - lo) / 3, base = 10 ** Math.floor(Math.log10(bruto));
-  let paso = [1, 2, 2.5, 5, 10].map(k => k * base).find(k => k >= bruto);
-  if (['reps', 'duracion', 'distancia'].includes(medida)) paso = Math.max(1, Math.round(paso)); // sin medias repeticiones
-  const marcas = [];
-  for (let v = Math.ceil(lo / paso) * paso; v <= hi + 1e-9; v += paso) marcas.push({ valor: v, texto: etiqueta(v) });
-  return { min: lo, max: hi, marcas };
+/** El valor con su unidad, para las etiquetas del gráfico (récord y mínimo). */
+function etiquetaCorta(v, medida, id) {
+  if (medida === 'reps') return `${Math.round(v)} ${modoCardio({ ejercicio_id: id }) === 'pisos' ? 'pisos' : 'reps'}`;
+  if (medida === 'duracion') return relojTexto(Math.round(v));
+  if (medida === 'distancia') return modoCardio({ ejercicio_id: id }) ? `${coma(Math.round(v / 10) / 100)} km` : `${Math.round(v)} m`;
+  if (['volumen', 'serie'].includes(medida)) return `${Math.round(v).toLocaleString('es-CL')} ${unidadPeso()}`;
+  return `${num(v)} ${unidadPeso()}`;
+}
+
+// Los botones de período, cortos como en Hevy; el nombre completo queda para los lectores de pantalla.
+const CORTO = { '1m': '1M', '3m': '3M', '6m': '6M', '1a': '1A', todo: 'Todo' };
+function botonesPeriodo(filas, medida, periodo) {
+  const con = periodosConDatos(filas, hoy(), medida);
+  return `<div class="gh-periodos" role="group" aria-label="Período">${PERIODOS.map(([v, t]) => `<button type="button" data-periodo="${v}" aria-pressed="${v === periodo}"${con.has(v) || v === periodo ? '' : ' disabled'}><span aria-hidden="true">${CORTO[v]}</span><span class="sr-only">${t}</span></button>`).join('')}</div>`;
 }
 
 /** 'en_curso' si es la sesión de hoy todavía sin guardar; 'descarga' si cayó en la semana de descarga del plan. */
@@ -83,24 +83,27 @@ function marcaDe(f, id) {
   return dia && E.plan.semana_descarga && dia.semana === E.plan.semana_descarga ? 'descarga' : null;
 }
 
-function graficoHtml(id, filas, medida, periodo, asistidoActual = false) {
+function graficoHtml(id, filas, medida, periodo, asistidoActual = false, nombreMedida = '') {
   const hasta = hoy(), desde = desdePeriodo(periodo, hasta, filas);
   const enRango = filas.filter(f => f.fecha >= desde && f[medida] != null);
-  if (!enRango.length) return `<p class="pequeno suave">Sin sesiones en este período. Prueba con "Todo".</p>`;
+  const botones = botonesPeriodo(filas, medida, periodo);
+  if (!enRango.length) return `<p class="pequeno suave gh-vacio">Sin sesiones en este período. Prueba con uno más largo.</p>${botones}`;
   const convertir = v => (['peso', 'e1rm', 'volumen', 'serie'].includes(medida) ? enUnidad(v) : v);
   // Las series de ese día y la sesión, para el detalle bajo el gráfico al tocar un punto.
   const detalle = f => (modoCardio({ ejercicio_id: id }) ? f.series.map(s => textoCardio({ ...s, ejercicio_id: id })).filter(Boolean).join(', ')
     : f.series.some(s => Number(s.carga_kg) > 0) ? seriesTexto(f.series) : f.series.map(s => (s.duracion_seg ? relojTexto(s.duracion_seg) : `${s.reps ?? '?'}`)).join(', '));
   const sesionDe = fecha => E.sesiones.find(s => s.fecha === fecha && (s.series || []).some(x => x.ejercicio_id === id))?.id || null;
-  const puntos = enRango.map(f => ({ fecha: f.fecha, valor: convertir(f[medida]), marca: marcaDe(f, id), texto: textoPunto(f, medida, id), detalle: `${f.series.length} ${f.series.length === 1 ? 'serie' : 'series'}: ${detalle(f)}`, sesion: sesionDe(f.fecha) }));
-  const { min, max, marcas } = escala(puntos.map(p => p.valor), medida);
+  const puntos = enRango.map(f => ({ fecha: f.fecha, valor: convertir(f[medida]), marca: marcaDe(f, id), texto: textoPunto(f, medida, id), corto: etiquetaCorta(convertir(f[medida]), medida, id), detalle: `${f.series.length} ${f.series.length === 1 ? 'serie' : 'series'}: ${detalle(f)}`, sesion: sesionDe(f.fecha) }));
   // Cambios y tendencia en la unidad de la medida (los valores ya vienen en kg o lb).
   const u = unidadPeso(), pisos = modoCardio({ ejercicio_id: id }) === 'pisos';
   const abs = (d, txt) => `${d > 0 ? '+' : d < 0 ? '−' : ''}${txt(Math.abs(d))}`;
   const cambio = d => abs(d, v => (['peso', 'e1rm'].includes(medida) ? `${num(v)} ${u}` : medida === 'volumen' ? `${Math.round(v).toLocaleString('es-CL')} ${u}` : medida === 'serie' ? `${Math.round(v).toLocaleString('es-CL')} ${u} de volumen`
     : medida === 'reps' ? `${num(v)} ${pisos ? 'pisos' : 'reps'}` : medida === 'duracion' ? relojTexto(Math.round(v)) : `${Math.round(v)} m`));
-  return lineaHevy({ puntos, desde, hasta, min, max, marcas, titulo: `${medida === 'serie' ? 'Mejor serie (peso × repeticiones)' : NOMBRE[medida]}, ${puntos.length} ${puntos.length === 1 ? 'sesión' : 'sesiones'}`,
-    izquierda: ['volumen', 'serie'].includes(medida) ? 54 : 52, cambio, ritmo: cambio, mejorBaja: asistidoActual && medida === 'peso' });
+  const unaSola = filas.filter(f => f[medida] != null).length === 1;
+  return lineaHevy({ puntos, desde, hasta, nombre: nombreMedida, periodo: PERIODOS.find(x => x[0] === periodo)?.[1] || '', bajo: botones,
+    titulo: `${medida === 'serie' ? 'Mejor serie (peso × repeticiones)' : NOMBRE[medida]}, ${puntos.length} ${puntos.length === 1 ? 'sesión' : 'sesiones'}`,
+    cambio, mejorBaja: asistidoActual && medida === 'peso',
+    nota: unaSola ? 'Tu primera marca. Desde la próxima sesión vas a ver aquí cómo cambia.' : 'Una sola sesión en este período. Elige uno más largo para ver la línea.' });
 }
 
 export function progresoEjercicioHtml(id, { asistido = false, conHistorial = false } = {}) {
@@ -121,10 +124,9 @@ export function progresoEjercicioHtml(id, { asistido = false, conHistorial = fal
   const textoSesion = f => (cardio ? f.series.map(s => textoCardio({ ...s, ejercicio_id: id }) || '').filter(Boolean).join(', ')
     : f.series.some(s => s.distancia_m != null) ? f.series.map(s => `${s.carga_kg ? `${peso(s.carga_kg)} × ` : ''}${s.distancia_m ?? '?'} m`).join(', ') : f.series.some(s => Number(s.carga_kg) > 0) ? seriesTexto(f.series) : f.series.map(s => (s.duracion_seg ? `${s.duracion_seg} s` : s.reps ?? '?')).join(', '));
   return `<section class="tarjeta" id="progreso-ejercicio">
-    <div class="gh-titulo"><h2>Tu progreso</h2>
-      <label class="gh-periodo"><span class="sr-only">Período</span><select data-periodo-sel>${PERIODOS.map(([v, t]) => `<option value="${v}"${v === sel.periodo ? ' selected' : ''}>${t}</option>`).join('')}</select></label></div>
-    <div id="grafico-ejercicio">${graficoHtml(id, filas, sel.medida, sel.periodo, asistido)}</div>
-    ${medidas.length > 1 ? `<div class="chips-medida-hevy" role="group" aria-label="Qué medir">${medidas.map(m => `<button type="button" class="chip-opcion" data-medida="${m}" aria-pressed="${m === sel.medida}">${esc(nombre(m))}</button>`).join('')}</div>` : `<p class="sobretitulo">${esc(nombre(medidas[0]))}</p>`}
+    <h2>Tu progreso</h2>
+    ${medidas.length > 1 ? `<div class="chips-medida-hevy" role="group" aria-label="Qué medir">${medidas.map(m => `<button type="button" class="chip-opcion" data-medida="${m}" aria-pressed="${m === sel.medida}">${esc(nombre(m))}</button>`).join('')}</div>` : ''}
+    <div id="grafico-ejercicio">${graficoHtml(id, filas, sel.medida, sel.periodo, asistido, nombre(sel.medida))}</div>
  <p class="pequeno suave gh-ritmo">${esc((cardio === 'pisos' ? textoRitmo(r, { asistido })?.replace(/repeticiones|repetición/g, 'pisos') : textoRitmo(r, { asistido })) || 'Con 3 sesiones en al menos 2 semanas vas a ver aquí tu ritmo de progreso.')}</p>
     ${r && r.tendencia !== 'sube' && !asistido && !cardio ? `<button type="button" class="boton fila-boton preguntar-coach" data-preguntar-coach>${icono('chat', 'icono icono-chico')} ¿Por qué no subo? Pregúntale a ${esc(nombreAsistente())}</button>` : ''}
     ${porReps.length ? `<details class="extra"><summary>Récords por repeticiones</summary>
@@ -136,25 +138,33 @@ export function progresoEjercicioHtml(id, { asistido = false, conHistorial = fal
   </section>`;
 }
 
-export function enlazarProgresoEjercicio(id, { asistido = false, ir = null } = {}) {
+export function enlazarProgresoEjercicio(id, { asistido = false, ir = null, conHistorial = false } = {}) {
   const caja = $('progreso-ejercicio');
   if (!caja) return;
   // "Ver la sesión" del detalle de un punto abre su resumen.
   caja.addEventListener('click', ev => { const b = ev.target.closest('[data-ver-sesion]'); if (b && ir) ir('resumen', { id: b.dataset.verSesion }); });
   // Estancado o bajando: la pregunta va al Coach con el nombre del ejercicio (la IA lee el historial).
   caja.addEventListener('click', ev => { if (ev.target.closest('[data-preguntar-coach]') && ir) ir('coach', `¿Por qué no subo en ${indice.porId.get(id)?.nombre || 'este ejercicio'}? Revisa mis últimas semanas y dime qué cambiar.`); });
-  const repintar = () => {
-    const y = scrollY, abiertos = [...caja.querySelectorAll('details')].map(d => d.open);
-    caja.outerHTML = progresoEjercicioHtml(id, { asistido });
-    $('progreso-ejercicio').querySelectorAll('details').forEach((d, i) => { if (abiertos[i]) d.open = true; });
-    enlazarProgresoEjercicio(id, { asistido, ir });
+  // Al cambiar de medida o de período la línea se vuelve a trazar, y el foco queda en el botón tocado.
+  const repintar = (tocado = null) => {
+    const y = scrollY, abiertos = [...caja.querySelectorAll('details')].map(d => d.open), selector = selectorDe(tocado);
+    caja.outerHTML = progresoEjercicioHtml(id, { asistido, conHistorial });
+    const nueva = $('progreso-ejercicio');
+    nueva.querySelectorAll('details').forEach((d, i) => { if (abiertos[i]) d.open = true; });
+    enlazarProgresoEjercicio(id, { asistido, ir, conHistorial });
     scrollTo(0, y);
+    if (selector) nueva.querySelector(selector)?.focus({ preventScroll: true });
+    trazarGrafico(nueva.querySelector('.grafico-hevy'));
   };
-  const actual = () => ({ medida: caja.querySelector('[data-medida][aria-pressed="true"]')?.dataset.medida, periodo: caja.querySelector('[data-periodo-sel]')?.value });
-  caja.querySelectorAll('[data-medida]').forEach(b => b.onclick = () => { elegido.set(id, { ...actual(), medida: b.dataset.medida }); repintar(); });
-  caja.querySelector('[data-periodo-sel]')?.addEventListener('change', ev => { elegido.set(id, { ...actual(), periodo: ev.target.value }); repintar(); });
+  const actual = () => ({ medida: caja.querySelector('[data-medida][aria-pressed="true"]')?.dataset.medida, periodo: caja.querySelector('[data-periodo][aria-pressed="true"]')?.dataset.periodo });
+  caja.querySelectorAll('[data-medida]').forEach(b => b.onclick = () => { elegido.set(id, { ...actual(), medida: b.dataset.medida }); repintar(b); });
+  caja.querySelectorAll('[data-periodo]').forEach(b => b.onclick = () => { elegido.set(id, { ...actual(), periodo: b.dataset.periodo }); repintar(b); });
   // La medida elegida queda a la vista en la fila que se desliza.
   const fila = caja.querySelector('.chips-medida-hevy'), chip = fila?.querySelector('[aria-pressed="true"]');
-  if (fila && chip) fila.scrollLeft = Math.max(0, chip.offsetLeft - fila.offsetLeft - 16);
+  // Solo se desliza si la elegida no se ve entera (antes se corría siempre y la dejaba cortada).
+  if (fila && chip) {
+    const f = fila.getBoundingClientRect(), c = chip.getBoundingClientRect();
+    if (c.left < f.left + 16 || c.right > f.right - 16) fila.scrollLeft += c.left - f.left - 16;
+  }
   $('historial-ejercicio-todo')?.addEventListener('click', () => { historialCompleto = !historialCompleto; repintar(); });
 }
