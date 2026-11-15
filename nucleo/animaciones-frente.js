@@ -177,8 +177,9 @@ const RITMOS = {
   bajaSube: [F('Baja', 1.6, 0, 1), F('Abajo', 0.3, 1, 1), F('Sube', 1.2, 1, 0), F('Arriba', 0.6, 0, 0)],
   mantiene: [F('Entra', 1.2, 0, 1), F('Mantén', 3.6, 1, 1, { respira: true }), F('Sale', 1, 1, 0), F('Descansa', 0.5, 0, 0)],
   // A un lado y al otro: s = 0,25 es un lado y s = 0,75 el otro (lado = sin(2πs)).
-  lados: [F('A un lado', 1.1, 0, 0.25), F('Mantén', 0.3, 0.25, 0.25), F('Al otro', 1.8, 0.25, 0.75), F('Mantén', 0.3, 0.75, 0.75), F('Vuelve', 1, 0.75, 1)],
-  cambia: [F('Cambia', 1.4, 0, 0.5), F('Mantén', 0.6, 0.5, 0.5), F('Cambia', 1.4, 0.5, 1), F('Mantén', 0.6, 1, 1)],
+  // Movilidad: se mueve parejo, sin el arranque fuerte de un esfuerzo.
+  lados: [F('A un lado', 1.1, 0, 0.25, { esfuerzo: false }), F('Mantén', 0.3, 0.25, 0.25), F('Al otro', 1.8, 0.25, 0.75, { esfuerzo: false }), F('Mantén', 0.3, 0.75, 0.75), F('Vuelve', 1, 0.75, 1)],
+  cambia: [F('Cambia', 1.4, 0, 0.5, { esfuerzo: false }), F('Mantén', 0.6, 0.5, 0.5), F('Cambia', 1.4, 0.5, 1, { esfuerzo: false }), F('Mantén', 0.6, 1, 1)],
   salta: [F('Salta', 1, 0, 1, { lineal: true })],
   patina: [F('Salta', 1.7, 0, 1, { lineal: true })],
   pasos: [F('Pasos', 3.6, 0, 1, { lineal: true })],
@@ -661,6 +662,23 @@ export function jalonUnBrazo() {
 
 // ── Calentamiento y estiramientos ─────────────────────────────────────────────────────────────────────────────────
 export const PASOS_FRENTE = {
+  /**
+   * Deslizamiento en pared: la espalda, los codos y el dorso de las manos apoyados en la pared, que queda detrás. Los
+   * brazos suben de W (codos a la altura de los hombros y a 90°) a Y, hasta donde se mantiene el contacto.
+   */
+  deslizamientoPared: () => ({
+    vista: 'frente', camara: { inclinacion: 4 }, fases: RITMOS.sube,
+    pose(s, m) {
+      const c = dePie(m, { abiertas: 0.05, flexion: 0.01 }), atras = -0.05; // las manos y los codos, en el plano de la espalda
+      const brazos = [0, 1].map(i => {
+        const l = i ? 1 : -1, h = c.hombros[i];
+        const w = v3(h.x + l * (m.brazo * 0.98), h.y - 0.03 + m.antebrazo * 0.92, atras), y = v3(h.x + l * 0.3, h.y + (m.brazo + m.antebrazo) * 0.82, atras);
+        return brazo(m, h, mezcla(w, y, s), v3(l, -0.6, -0.4));
+      });
+      const pared = placa(v3(0, 1.15, -0.17), v3(0.75, 0, 0), v3(0, 1.15, 0), 'pared', { profundidad: -2, siempreAtras: true, encuadra: false, pared: true, opacidad: 0.45 }); // tenue: de frente ocupa todo el fondo
+      return pose(c, brazos, { equipo: [pared] });
+    },
+  }),
   /** Movilidad torácica sentado: manos en la nuca y el pecho gira a cada lado con la cadera quieta. */
   toracica: () => ({
     vista: 'frente', camara: { inclinacion: 24, z0: 0.42 }, fases: RITMOS.lados,
@@ -711,7 +729,7 @@ export const PASOS_FRENTE = {
   }),
   /** Cuello y trapecio: sentado, la cabeza se inclina hacia un hombro con la mano encima, y luego al otro lado. */
   cuelloTrapecio: () => ({
-    vista: 'frente', camara: { inclinacion: 24, z0: 0.42 }, fases: RITMOS.lados,
+    vista: 'frente', camara: { inclinacion: 24, z0: 0.42 }, fases: RITMOS.lados.map(f => ({ ...f, seg: f.seg * 1.6 })), // más lento: la mano sube por el costado hasta la cabeza
     pose(s, m) {
       const inc = 26 * lado(s);
       const c = sentado(m, { alto: 0.45, separa: 0.1, opciones: { cabezaInclina: inc } });
@@ -719,7 +737,10 @@ export const PASOS_FRENTE = {
         const l = i ? 1 : -1, h = c.hombros[i], activa = Math.max(0, l * lado(s));
         const enMuslo = sum(c.piernas[i].rodilla, v3(0, 0.07, -0.1));
         const sobreCabeza = sum(c.cabeza, v3(-l * 0.02, m.cabeza * 0.85, 0.02));
-        return brazo(m, h, mezcla(enMuslo, sobreCabeza, Math.min(1, activa * 1.4)), v3(l, -0.2 + activa, -0.2));
+        // La mano sube por el costado (no cruzando el pecho) hasta apoyarse sobre la cabeza; el codo queda afuera.
+        const u = suave(Math.min(1, activa)), costado = sum(h, v3(l * 0.45, 0, 0.15));
+        const mano = sum(por(enMuslo, (1 - u) ** 2), por(costado, 2 * u * (1 - u)), por(sobreCabeza, u * u));
+        return brazo(m, h, mano, v3(l, -0.2 + 0.35 * activa, -0.2));
       });
       return pose(c, brazos, { equipo: [placa(v3(0, 0.45, 0.06), v3(0.22, 0, 0), v3(0, 0, 0.18), 'tapiz', { profundidad: -0.5 }), poste(0, 0.06, 0.42, { profundidad: -0.6 })] });
     },

@@ -51,6 +51,10 @@ export function dosSegmentos(origen, objetivo, l1, l2, lado = 1) {
 /** Busca el valor de x en [a, b] que deja f(x) en cero (f creciente o decreciente, sin saltos). */
 export function raiz(f, a, b, pasos = 48) {
   let fa = f(a);
+  // Sin cambio de signo no hay raíz en el tramo: se queda con el extremo más cercano a cero, en vez de devolver uno
+  // cualquiera (antes la sentadilla con los brazos al frente partía con el tronco doblado a 75° y saltaba a recto).
+  const fb = f(b);
+  if ((fa <= 0) === (fb <= 0)) return Math.abs(fa) <= Math.abs(fb) ? a : b;
   for (let i = 0; i < pasos; i++) {
     const m = (a + b) / 2, fm = f(m);
     if ((fa <= 0) === (fm <= 0)) { a = m; fa = fm; } else b = m;

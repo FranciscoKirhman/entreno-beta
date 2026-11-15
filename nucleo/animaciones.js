@@ -19,6 +19,7 @@ const mas = (p, x, y) => ({ x: p.x + x, y: p.y + y });
 const angulo = (a, b) => (Math.atan2(b.x - a.x, b.y - a.y) * 180) / Math.PI;
 const distancia = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
 const largoBrazo = m => m.brazo + m.antebrazo;
+const GLUTEO_ATRAS = 0.15; // cuánto sobresale el glúteo detrás de la articulación de la cadera, con el tronco inclinado
 
 // ── Fases (ritmo de cada repetición) ──────────────────────────────────────────────────────────────────────────
 const F = (nombre, seg, de, a, extra = {}) => ({ nombre, seg, de, a, ...extra });
@@ -73,6 +74,13 @@ function ik(a, objetivo, l1, l2, pref) {
   return puntaje(c1) >= puntaje(c2) ? c1 : c2;
 }
 const brazoIK = (m, hombro, mano, pref = { x: 0, y: -1 }, kb = 1, ka = 1) => ({ codo: ik(hombro, mano, m.brazo * kb, m.antebrazo * ka, pref), mano });
+/**
+ * Brazo con el codo siempre del mismo lado de la línea del hombro a la mano (lado: 1 o -1, el de dosSegmentos). Sirve
+ * cuando la mano da vueltas alrededor del hombro y elegir el codo "hacia un punto fijo" lo haría saltar de un lado al otro.
+ */
+const brazoLado = (m, hombro, mano, lado, kb = 1, ka = 1) => ({ codo: dosSegmentos(hombro, mano, m.brazo * kb, m.antebrazo * ka, lado), mano });
+/** Una dirección en el sistema del tronco (t hacia la cabeza, f hacia el pecho), para elegir el codo según el cuerpo y no el mundo. */
+const enDireccionTronco = (cadera, hombro, t, f) => { const L = distancia(cadera, hombro) || 1, u = { x: (hombro.x - cadera.x) / L, y: (hombro.y - cadera.y) / L }; return { x: u.x * t + u.y * f, y: u.y * t - u.x * f }; };
 const brazoFK = (m, hombro, a1, a2 = a1, kb = 1, ka = 1) => { const codo = D(hombro, m.brazo * kb, a1); return { codo, mano: D(codo, m.antebrazo * ka, a2) }; };
 const piernaIK = (m, cadera, tobillo, pref = { x: 1, y: 0.2 }) => ik(cadera, tobillo, m.muslo, m.pierna, pref);
 /** Cabeza sobre los hombros, con su eje en "ang" grados. */
@@ -240,14 +248,17 @@ export function rumano({ carga = 'barra', rodillas = 10, hasta = 0.4, smith = fa
   return {
     fases: RITMOS.bajaSube,
     pose(s, m) {
-      const base = pie(m, { x: 0, y: m.tobillo }), mitad = pasoMitad(base), rodilla = D(base.tobillo, m.pierna, mix(3, rodillas, s));
-      const L = largoBrazo(m), arriba = m.tobillo + m.pierna + m.muslo + m.tronco - L * 0.99;
-      const manoY = mix(arriba, hasta, s), objetivo = { x: mitad + 0.02, y: manoY + L * 0.98 };
-      const cadera = ik(rodilla, objetivo, m.muslo, m.tronco, { x: -1, y: 0.2 }), hombro = D(cadera, m.tronco, angulo(cadera, objetivo));
+      const base = pie(m, { x: 0, y: m.tobillo }), mitad = pasoMitad(base), L = largoBrazo(m), arriba = m.tobillo + m.pierna + m.muslo + m.tronco - L * 0.99;
+      const caderaEn = t => {
+        const rodilla = D(base.tobillo, m.pierna, mix(3, rodillas, t)), objetivo = { x: mitad + 0.02, y: mix(arriba, hasta, t) + L * 0.98 };
+        return { rodilla, objetivo, cadera: ik(rodilla, objetivo, m.muslo, m.tronco, { x: -1, y: 0.2 }) };
+      };
+      const { rodilla, objetivo, cadera } = caderaEn(s), hombro = D(cadera, m.tronco, angulo(cadera, objetivo));
       const brazos = carga === 'manos' ? brazoIK(m, hombro, enTronco(cadera, hombro, 0.05, 0.13), { x: -0.5, y: -1 }) : brazoFK(m, hombro, 180, 180, 0.98, 0.98);
       const equipo = carga === 'barra' ? barraCon(brazos.mano) : carga === 'mancuernas' ? mancuernas(brazos.mano) : [];
       if (smith) equipo.unshift({ tipo: 'rieles', x: brazos.mano.x, capa: 'fondo' });
-      if (pared) equipo.unshift({ tipo: 'pared', x: -0.62, capa: 'fondo' });
+      // Bisagra hacia la pared: el glúteo la toca justo al final del recorrido (la pared se dibuja de x a x + 0,08).
+      if (pared) equipo.unshift({ tipo: 'pared', x: caderaEn(1).cadera.x - GLUTEO_ATRAS - 0.08, capa: 'fondo', pared: true });
       const tronco = angulo(cadera, hombro);
       return { ...base, rodilla, cadera, hombro, ...brazos, equipo, ...cabeza(m, hombro, tronco * 0.85) };
     },
@@ -279,7 +290,7 @@ export function buenosDias() {
       const con = phi => { const cadera = D(rodilla, m.muslo, -phi), hombro = D(cadera, m.tronco, tau); return { cadera, hombro, barra: enTronco(cadera, hombro, m.tronco + 0.03, -0.04) }; };
       // El equilibrio va por el centro de masa: la cadera va atrás con las piernas casi rectas.
       const { cadera, hombro, barra } = con(raiz(phi => { const c = con(phi); return c.cadera.x * 0.55 + c.hombro.x * 0.45 - mitad; }, -10, 60));
-      return { ...base, rodilla, cadera, hombro, ...brazoIK(m, hombro, mas(barra, 0.01, 0), { x: 0, y: -1 }, 0.6, 0.85), equipo: barraCon(barra, 0.225, 'medio'), ...cabeza(m, hombro, tau * 0.8) };
+      return { ...base, rodilla, cadera, hombro, ...brazoIK(m, hombro, mas(barra, 0.01, 0), enDireccionTronco(cadera, hombro, -1, -0.2), 0.6, 0.85), equipo: barraCon(barra, 0.225, 'medio'), ...cabeza(m, hombro, tau * 0.8) }; // los codos hacia la cadera, sigan al tronco al inclinarse
     },
   };
 }
@@ -497,9 +508,11 @@ export function jalon() {
     fases: RITMOS.tira,
     pose(s, m) {
       const tau = mix(-6, -18, s), cuerpo = sentado(m, { tronco: tau, muslo: 88 }), { cadera, hombro } = cuerpo, L = largoBrazo(m);
-      const mano = mixP(mas(hombro, 0.13, L * 0.94), mas(hombro, 0.15, 0.06), s);
+      const mano = mixP(mas(hombro, 0.13, L * 0.94), mas(hombro, 0.16, -0.05), s); // la barra baja hasta la parte alta del pecho (ExRx)
       const polea = { x: mas(hombro, 0.13, L * 0.94).x + 0.04, y: 2.35 };
-      return armar(m, { ...cuerpo, ...brazoIK(m, hombro, mano, { x: -0.3, y: -1 }), equipo: [...asiento(cadera, 0, m), { tipo: 'rodillo', centro: mas(cuerpo.rodilla, -0.06, 0.1), capa: 'frente' }, ...cable(polea, mano), { tipo: 'barra', centro: mano, r: 0.02, capa: 'frente' }] }, 10 * s);
+      // El codo baja hasta quedar junto a las costillas, siempre del mismo lado (antes saltaba de atrás hacia adelante). Con
+      // agarre ancho el brazo va hacia el costado: de perfil se ve más corto, como en la sentadilla con barra.
+      return armar(m, { ...cuerpo, ...brazoLado(m, hombro, mano, -1, 0.75), equipo: [...asiento(cadera, 0, m), { tipo: 'rodillo', centro: mas(cuerpo.rodilla, -0.06, 0.1), capa: 'frente' }, ...cable(polea, mano), { tipo: 'barra', centro: mano, r: 0.02, capa: 'frente' }] }, 10 * s);
     },
   };
 }
@@ -599,13 +612,17 @@ export function remoInvertido({ suspension = false } = {}) {
     fases: RITMOS.tira,
     pose(s, m) {
       const barra = { x: 0, y: 1.0 }, L = largoBrazo(m), largo = m.pierna + m.muslo + m.tronco;
-      const p = pieDesdeTalon(m, { x: 1.36, y: 0 }, 82), apoyo = p.tobillo;
-      const alcance = h => Math.asin(Math.min(1, (h - apoyo.y) / largo));
+      // Los talones van donde, al subir, el pecho llega a la barra: los hombros quedan un poco más allá de ella (antes la
+      // barra terminaba sobre el cuello).
+      const p0 = pieDesdeTalon(m, { x: 0, y: 0 }, 82), alcance = h => Math.asin(Math.min(1, (h - p0.tobillo.y) / largo));
+      const talon = barra.x - 0.12 + Math.cos(alcance(barra.y - 0.14)) * largo - p0.tobillo.x;
+      const p = pieDesdeTalon(m, { x: talon, y: 0 }, 82), apoyo = p.tobillo;
       const th = mix(alcance(barra.y - L * 0.96), alcance(barra.y - 0.14), s), dir = { x: -Math.cos(th), y: Math.sin(th) };
       const punto = d => ({ x: apoyo.x + dir.x * d, y: apoyo.y + dir.y * d }), hombro = punto(largo);
       const mano = { x: barra.x, y: barra.y - 0.02 };
       const equipo = suspension ? [{ tipo: 'banda', puntos: [{ x: barra.x, y: 2.4 }, mano], capa: 'fondo' }, { tipo: 'mango', centro: mano, capa: 'frente' }] : [{ tipo: 'barra', centro: barra, r: 0.022, capa: 'frente' }, { tipo: 'rieles', x: barra.x, capa: 'fondo' }];
-      return { ...p, rodilla: punto(m.pierna), cadera: punto(m.pierna + m.muslo), hombro, ...brazoIK(m, hombro, mano, { x: 0, y: -1 }), equipo, ...cabeza(m, hombro, angulo(punto(0), hombro) + 6) };
+      // Los codos van hacia la cadera, como en todo remo (antes apuntaban hacia la cabeza casi todo el recorrido).
+      return { ...p, rodilla: punto(m.pierna), cadera: punto(m.pierna + m.muslo), hombro, ...brazoLado(m, hombro, mano, -1), equipo, ...cabeza(m, hombro, angulo(punto(0), hombro) + 6) };
     },
   };
 }
@@ -807,7 +824,7 @@ export function extensionLumbar() {
     fases: RITMOS.extiende,
     pose(s, m) {
       const cuerpo = sentado(m, { tronco: mix(38, -8, s) }), { cadera, hombro } = cuerpo;
-      return armar(m, { ...cuerpo, ...brazoIK(m, hombro, enTronco(cadera, hombro, m.tronco * 0.8, 0.14), { x: 0.3, y: -1 }), equipo: [...asiento(cadera, 0, m), { tipo: 'rodillo', centro: enTronco(cadera, hombro, m.tronco * 0.75, -0.13), capa: 'fondo' }] }, mix(30, 0, s));
+      return armar(m, { ...cuerpo, ...brazoIK(m, hombro, enTronco(cadera, hombro, m.tronco * 0.8, 0.14), enDireccionTronco(cadera, hombro, -1, 0.4)), equipo: [...asiento(cadera, 0, m), { tipo: 'rodillo', centro: enTronco(cadera, hombro, m.tronco * 0.75, -0.13), capa: 'fondo' }] }, mix(30, 0, s));
     },
   };
 }
@@ -1072,7 +1089,9 @@ export const ESTIRAMIENTOS = {
   /** Bíceps y antebrazo en la pared: el brazo estirado atrás con la palma apoyada. */
   biceps: () => sostener((s, m, f, e) => {
     const cuerpo = dePie(m, { pierna: 1, tronco: mix(0, 4, s) }), { hombro } = cuerpo, brazos = brazoFK(m, hombro, mix(200, 258, s) + respira(f, e), mix(200, 260, s));
-    return armar(m, { ...cuerpo, ...brazos, equipo: [{ tipo: 'pared', x: brazos.mano.x - 0.1, capa: 'fondo' }] }, 0);
+    // La pared no se mueve: la palma llega a ella al final y ahí se queda.
+    const final = brazoFK(m, dePie(m, { pierna: 1, tronco: 4 }).hombro, 258, 260);
+    return armar(m, { ...cuerpo, ...brazos, equipo: [{ tipo: 'pared', x: final.mano.x - 0.1, capa: 'fondo', pared: true }] }, 0);
   }),
   /** Tríceps sobre la cabeza: el codo arriba, la mano detrás de la nuca y la otra mano empuja el codo. */
   triceps: () => sostener((s, m, f, e) => {
@@ -1086,11 +1105,15 @@ export const CALENTAMIENTOS = {
   /** Círculos de hombro: los brazos estirados dan vueltas grandes y lentas. */
   circulosHombro: () => ({ fases: RITMOS.circulos, pose(s, m) { const c = dePie(m, { pierna: 1 }), a = 180 + 360 * s; return armar(m, { ...c, ...brazoFK(m, c.hombro, a, a - 4), lejos: { ...c, ...brazoFK(m, c.hombro, a, a - 4) } }, 0); } }),
   /** Deslizamiento en pared: la espalda y los brazos apoyados, los brazos suben de W a Y. */
-  deslizamientoPared: () => ({ fases: RITMOS.sube, pose(s, m) { const c = dePie(m, { pierna: 2 }), b = brazoFK(m, c.hombro, mix(120, 14, s), mix(20, 6, s), 0.7, 0.9); return armar(m, { ...c, ...b, equipo: [{ tipo: 'pared', x: c.cadera.x - 0.22, capa: 'fondo' }] }, 0); } }),
+  deslizamientoPared: () => PASOS_FRENTE.deslizamientoPared(), // los brazos van pegados a la pared: se entiende de frente
   /** Empuje de omóplatos en pared: apoyado con los brazos estirados, el pecho se aleja de la pared. */
   serrato: () => ({ fases: RITMOS.extiende, pose(s, m) {
-    const c = dePie(m, { pierna: 8, tronco: 12, x: -0.1 }), hombro = mas(c.hombro, 0.03 * s, 0), mano = { x: c.hombro.x + largoBrazo(m) * 0.97, y: c.hombro.y + 0.02 };
-    return armar(m, { ...c, hombro, ...brazoIK(m, hombro, mano, { x: 0, y: -1 }), equipo: [{ tipo: 'pared', x: mano.x + 0.04, capa: 'fondo' }] }, 6);
+    // Las manos quedan fijas en la pared y los brazos estirados: al separar los omóplatos el tronco se aleja de la pared
+    // unos centímetros (el cuerpo gira apenas sobre los tobillos) y el hombro queda donde estaba.
+    const c0 = dePie(m, { pierna: 8, tronco: 12, x: -0.1 }), L = largoBrazo(m) * 0.97, mano = { x: c0.hombro.x + L, y: c0.hombro.y + 0.02 };
+    const c = dePie(m, { pierna: mix(8, 4.5, s), tronco: 12, x: -0.1 }), hacia = { x: c.hombro.x - mano.x, y: c.hombro.y - mano.y }, d = Math.hypot(hacia.x, hacia.y);
+    const hombro = { x: mano.x + (hacia.x / d) * L, y: mano.y + (hacia.y / d) * L };
+    return armar(m, { ...c, hombro, ...brazoIK(m, hombro, mano, { x: 0, y: -1 }), equipo: [{ tipo: 'pared', x: mano.x + 0.04, capa: 'fondo', pared: true }] }, 6);
   } }),
   facePull: () => facePull({ banda: true }),
   /** Círculos de cadera de pie: la rodilla sube y dibuja un círculo hacia afuera. */
@@ -1113,7 +1136,7 @@ export const CALENTAMIENTOS = {
     return armar(m, { ...c, ...b, equipo: [{ tipo: 'banda', puntos: [b.mano, ancla], capa: 'fondo' }, { tipo: 'poste', x: ancla.x + 0.03, y2: 2.1, capa: 'fondo' }] }, 6);
   } }),
   /** Paso de banda sobre la cabeza: los brazos estirados pasan desde adelante hasta atrás por arriba. */
-  pasoBanda: () => ({ fases: RITMOS.extiende, pose(s, m) {
+  pasoBanda: () => ({ fases: [F('Pasa', 2.2, 0, 1, { esfuerzo: false }), F('Atrás', 0.4, 1, 1), F('Vuelve', 2.2, 1, 0), F('Adelante', 0.4, 0, 0)], pose(s, m) { // movilidad: ida y vuelta al mismo ritmo
     const c = dePie(m, { pierna: 1 }), a = mix(168, -168, s), b = brazoFK(m, c.hombro, a, a);
     return armar(m, { ...c, ...b, equipo: [{ tipo: 'banda', puntos: [b.mano, mas(b.mano, 0.01, 0.01)], capa: 'frente' }] }, 0);
   } }),
@@ -1149,7 +1172,7 @@ export function patadaGluteo({ tipo = 'polea' } = {}) {
     pose(s, m) {
       if (tipo === 'suelo') {
         const rodilla = { x: 0, y: 0.05 }, cadera = D(rodilla, m.muslo, 0), hombro = D(cadera, m.tronco, 90), tobillo = mas(rodilla, -m.pierna * 0.98, 0.04);
-        const sube = Math.sqrt(s), rodC = D(cadera, m.muslo, mix(180, 262, sube)), tobC = D(rodC, m.pierna, mix(268, 262, sube)); // la rodilla se despega rápido del suelo
+        const sube = 1 - (1 - s) ** 2, rodC = D(cadera, m.muslo, mix(180, 262, sube)), tobC = D(rodC, m.pierna, mix(268, 262, sube)); // la rodilla se despega rápido del suelo
         const tobAhora = s < 0.2 ? mixP(tobillo, tobC, s / 0.2) : tobC;
         return { ...(s < 0.35 ? pie(m, tobAhora, 175) : pieDeLaPierna(m, rodC, tobAhora, -45)), rodilla: rodC, cadera, hombro, ...brazoFK(m, hombro, 180, 180), lejos: { rodilla, ...pie(m, tobillo, 175) }, equipo: [{ tipo: 'colchoneta', x1: -0.7, x2: 0.9, capa: 'fondo' }], ...cabeza(m, hombro, 96) };
       }
@@ -1171,7 +1194,7 @@ export function hiperextension() {
       const abajo = { x: 0.075, y: -0.075 }; // el apoyo va bajo los muslos, del lado del cuádriceps
       const apoyo = { tipo: 'banco', a: mas(D(rodilla, 0.05, dir), abajo.x, abajo.y), b: mas(D(cadera, 0.05, dir), abajo.x, abajo.y), patas: false, capa: 'fondo' };
       const centro = mixP(apoyo.a, apoyo.b, 0.5);
-      return armar(m, { ...pie(m, tobillo, dir - 90), rodilla, cadera, hombro, ...brazoIK(m, hombro, enTronco(cadera, hombro, m.tronco * 0.8, 0.14), { x: 0, y: 1 }), equipo: [{ tipo: 'poste', x: centro.x, y2: centro.y, capa: 'fondo' }, apoyo, { tipo: 'plataforma', a: mas(tobillo, -0.05, -0.1), b: mas(tobillo, 0.16, -0.1), capa: 'fondo' }, { tipo: 'poste', x: tobillo.x + 0.05, y2: tobillo.y - 0.1, capa: 'fondo' }] }, angulo(cadera, hombro) * 0.9);
+      return armar(m, { ...pie(m, tobillo, dir - 90), rodilla, cadera, hombro, ...brazoIK(m, hombro, enTronco(cadera, hombro, m.tronco * 0.8, 0.14), enDireccionTronco(cadera, hombro, -0.3, 1)), equipo: [{ tipo: 'poste', x: centro.x, y2: centro.y, capa: 'fondo' }, apoyo, { tipo: 'plataforma', a: mas(tobillo, -0.05, -0.1), b: mas(tobillo, 0.16, -0.1), capa: 'fondo' }, { tipo: 'poste', x: tobillo.x + 0.05, y2: tobillo.y - 0.1, capa: 'fondo' }] }, angulo(cadera, hombro) * 0.9);
     },
   };
 }
@@ -1300,7 +1323,10 @@ export function animacionDe(id) {
 export const idsConAnimacion = () => Object.keys(MAPA);
 
 // Pasos de calentamiento y estiramientos, por su nombre (vienen del plan, del tablero o del calentamiento de la sesión).
+// Estos se reconocen por el nombre aunque vengan como ensayo de un ejercicio: su movimiento es otro.
+const PASOS_PRIMERO = [[/dominadas escapulares/i, () => dominada({ escapular: true })]];
 const PASOS = [
+  [/dead bug/i, () => bichoMuerto()], [/cardio suave/i, () => CALENTAMIENTOS.marcha()],
   [/c[ií]rculos de hombro/i, () => CALENTAMIENTOS.circulosHombro()], [/deslizamiento en pared/i, () => CALENTAMIENTOS.deslizamientoPared()],
   [/om[oó]platos|serrato/i, () => CALENTAMIENTOS.serrato()], [/face pull/i, () => CALENTAMIENTOS.facePull()], [/c[ií]rculos de cadera/i, () => CALENTAMIENTOS.circulosCadera()],
   [/tobillo/i, () => CALENTAMIENTOS.tobillo()], [/bisagra/i, () => CALENTAMIENTOS.bisagra()], [/flexi[oó]n y extensi[oó]n de codo/i, () => CALENTAMIENTOS.flexionCodo()],
@@ -1319,6 +1345,8 @@ const cachePasos = new Map();
 export function animacionDePaso(paso) {
   const nombre = typeof paso === 'string' ? paso : paso?.name || '';
   const ej = typeof paso === 'object' && (paso.agregar_id || String(paso.clave || '').replace(/^(ensayo|aprox):/, ''));
+  const primero = PASOS_PRIMERO.findIndex(([re]) => re.test(nombre));
+  if (primero >= 0) { const k = `primero:${primero}`; if (!cachePasos.has(k)) cachePasos.set(k, PASOS_PRIMERO[primero][1]()); return cachePasos.get(k); }
   if (ej && MAPA[ej]) return animacionDe(ej);
   if (!nombre) return null;
   const [, crear] = PASOS.find(([re]) => re.test(nombre)) || [];
@@ -1332,6 +1360,7 @@ export function animacionDePaso(paso) {
 // estiran; en los calentamientos, los que se mueven o activan. No están en el catálogo de ejercicios: es lo que dice cada
 // paso, pensado para que un kinesiólogo lo revise (docs/55-revision-animaciones.md). Mismo orden de búsqueda que PASOS.
 const MUSCULOS_PASOS = [
+  [/dominadas escapulares/i, ['espalda'], ['trapecio', 'antebrazo']], [/dead bug/i, ['core'], ['erectores']], [/cardio suave/i, [], ['cuadriceps', 'gluteo', 'pantorrilla']],
   [/c[ií]rculos de hombro/i, ['hombro'], ['trapecio']], [/deslizamiento en pared/i, ['trapecio'], ['hombro']],
   [/om[oó]platos|serrato/i, [], ['hombro', 'trapecio', 'pecho']], [/face pull/i, ['hombro'], ['trapecio']],
   [/c[ií]rculos de cadera/i, ['gluteo'], ['aductor_abductor']], [/tobillo/i, ['pantorrilla'], []], [/bisagra/i, ['femoral', 'gluteo'], ['erectores']],
@@ -1360,7 +1389,7 @@ export const zonaCadera = ej => (ej?.patron === 'abduccion' || ej?.patron === 'c
 export function musculosDePaso(paso, ejercicio = () => null) {
   const nombre = typeof paso === 'string' ? paso : paso?.name || '';
   const id = typeof paso === 'object' && (paso.agregar_id || String(paso.clave || '').replace(/^(ensayo|aprox):/, ''));
-  const ej = id && MAPA[id] ? ejercicio(id) : null;
+  const ej = id && MAPA[id] && !PASOS_PRIMERO.some(([re]) => re.test(nombre)) ? ejercicio(id) : null;
   if (ej) return { primarios: ej.musculos_primarios || [], secundarios: ej.musculos_secundarios || [], cadera: zonaCadera(ej) };
   const fila = MUSCULOS_PASOS.find(([re]) => re.test(nombre));
   return { primarios: fila?.[1] || [], secundarios: fila?.[2] || [], ...(/aductor|mariposa/i.test(nombre) ? { cadera: 'aductor' } : {}) };
