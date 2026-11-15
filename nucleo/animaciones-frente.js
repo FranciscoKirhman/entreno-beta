@@ -1,6 +1,6 @@
 // Ejercicios vistos de frente (o desde arriba, si se hacen acostados): los que van hacia el costado o giran, que de
 // lado no se entienden. Cada pose se arma en tres dimensiones con las mismas proporciones de la vista de lado y se
-// proyecta según la cámara del ejercicio; la figura de app/figura-frente.js la dibuja.
+// proyecta según la cámara del ejercicio; la figura de app/figura-anatomica-frente.js la dibuja en la app.
 //
 // Convenciones: metros; x hacia la derecha de quien mira, y hacia arriba, z hacia quien mira; suelo en y = 0. Mirando
 // a la cámara, el lado 0 de cada par (hombros, caderas, brazos, piernas) es el que queda a la izquierda de la pantalla
@@ -190,7 +190,9 @@ const lado = s => Math.sin(2 * Math.PI * s);
 // ── Hombros ───────────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * Elevación lateral: los brazos suben por el costado hasta la altura de los hombros, con los codos un poco doblados y
- * un poco por delante del cuerpo. carga: 'mancuernas' o 'polea' (un brazo, con el cable cruzando desde abajo).
+ * un poco por delante del cuerpo. carga: 'mancuernas' o 'polea'. Con polea y los dos brazos, cada mano toma el cable de la
+ * polea baja del otro lado y los cables se cruzan por delante (ExRx, Cable Lateral Raise); con polea y un brazo, de lado a
+ * la polea, el cable cruza por delante del cuerpo y la otra mano se afirma (ExRx, Cable One Arm Lateral Raise).
  * sentado: en un banco. unBrazo: solo el brazo derecho de la pantalla, la otra mano afirmada.
  */
 export function elevacionLateral({ carga = 'mancuernas', sentadoEnBanco = false, unBrazo = false } = {}) {
@@ -204,21 +206,45 @@ export function elevacionLateral({ carga = 'mancuernas', sentadoEnBanco = false,
         const dir = unit(v3(l * Math.sin(R(ang)), -Math.cos(R(ang)), 0.3 * Math.sin(R(ang)) + 0.06));
         return brazo(m, h, sum(h, por(dir, (m.brazo + m.antebrazo) * 0.965)), v3(0, 0.25 + 0.4 * s, -1));
       };
-      const activo = unBrazo || carga === 'polea' ? [1] : [0, 1];
-      const brazos = [0, 1].map(i => activo.includes(i) ? brazoEn(i) : unBrazo || carga === 'polea'
-        ? brazo(m, c.hombros[i], sum(c.hombros[i], v3(-0.16, -0.08, 0.38)), v3(-1, -0.6, 0))
-        : brazoEn(i));
+      const activo = unBrazo ? [1] : [0, 1];
+      const brazos = [0, 1].map(i => brazoEn(i));
       const equipo = [];
       if (sentadoEnBanco) equipo.push(placa(v3(0, 0.45, 0.06), v3(0.2, 0, 0), v3(0, 0, 0.16), 'tapiz', { profundidad: -0.5 }), poste(0, 0.06, 0.42, { profundidad: -0.6 }));
+      if (unBrazo) brazos[0] = brazo(m, c.hombros[0], v3(-0.58, c.hombros[0].y - 0.1, -0.06), v3(0, -1, -0.3)); // la otra mano, afirmada en el poste
       if (carga === 'polea') {
-        const polea = v3(-0.55, 0.12, -0.05);
-        equipo.push(poste(-0.62, -0.08, 2.0, { profundidad: -0.8 }), ...cableA(polea, brazos[1].mano));
-        brazos[0] = brazo(m, c.hombros[0], v3(-0.62 + 0.04, c.hombros[0].y - 0.12, -0.04), v3(0, -1, -0.3));
+        // La polea baja del lado contrario a la mano que tira: el cable cruza por delante del cuerpo.
+        for (const i of activo) {
+          const x = i ? -0.62 : 0.62;
+          equipo.push(poste(x * 1.03, -0.08, 2.0, { profundidad: -0.8 }), ...cableA(v3(x * 0.9, 0.12, -0.05), brazos[i].mano));
+        }
       } else {
         for (const i of activo) equipo.push(mancuerna(sum(brazos[i].mano, v3(0, 0, 0.02)), { profundidad: brazos[i].mano.z + 0.05 }));
         if (unBrazo) equipo.push(poste(-0.62, -0.08, 1.9, { profundidad: -0.8 }));
-        if (unBrazo) brazos[0] = brazo(m, c.hombros[0], v3(-0.58, c.hombros[0].y - 0.1, -0.06), v3(0, -1, -0.3));
       }
+      return pose(c, brazos, { equipo });
+    },
+  };
+}
+
+/**
+ * Cruce de poleas, de pie entre las dos poleas con el tronco apenas inclinado: los codos un poco doblados y fijos, las
+ * manos se juntan por delante como abrazando (ExRx, Cable Standing Fly). Desde las poleas altas, las manos bajan y se
+ * juntan frente a la parte baja del pecho; desde las bajas (bajo), suben y se juntan frente a la parte alta del pecho
+ * (ExRx, Cable Low Fly). Cada mano toma el cable de su lado.
+ */
+export function cruce({ bajo = false } = {}) {
+  return {
+    vista: 'frente', camara: { inclinacion: 4 }, fases: RITMOS.tira,
+    pose(s, m) {
+      const c = dePie(m, { abiertas: 0.1, flexion: 0.02, opciones: { arriba: v3(0, 1, bajo ? 0.04 : 0.22) } });
+      // Abierto: los brazos a los lados, más arriba (polea alta) o más abajo (polea baja) que el hombro.
+      const phi = mix(96, 2, s), alto = bajo ? mix(-0.42, -0.06, s) : mix(0.14, -0.34, s);
+      const brazos = [0, 1].map(i => {
+        const l = i ? 1 : -1, h = c.hombros[i], r = Math.sqrt(Math.max(0.05, ((m.brazo + m.antebrazo) * 0.9) ** 2 - alto ** 2));
+        return brazo(m, h, sum(h, v3(l * r * Math.sin(R(phi)) - l * 0.02, alto, r * Math.cos(R(phi)) + 0.04)), v3(l * 0.3, -0.6, -0.5));
+      });
+      const equipo = [];
+      for (const [i, x] of [[0, -0.85], [1, 0.85]]) equipo.push(poste(x * 1.05, -0.1, 2.05, { profundidad: -0.9 }), ...cableA(v3(x, bajo ? 0.15 : 1.95, -0.05), brazos[i].mano));
       return pose(c, brazos, { equipo });
     },
   };
@@ -332,7 +358,7 @@ function piernaDir(m, cadera, dirMuslo, dirPierna, dirPie, abajo = v3(0, -1, 0))
  */
 export function abductora({ aductora = false } = {}) {
   return {
-    vista: 'frente', camara: { inclinacion: 28, z0: 0.42 }, fases: aductora ? RITMOS.tira : RITMOS.abre,
+    vista: 'frente', camara: { inclinacion: 40, z0: 0.42 }, fases: aductora ? RITMOS.tira : RITMOS.abre, // desde un poco más arriba se ven los muslos
     pose(s, m) {
       const ang = aductora ? mix(40, 6, s) : mix(6, 40, s); // cada muslo hacia afuera, desde el frente
       const c = sentado(m, { alto: 0.5, separa: 0.05, opciones: { arriba: v3(0, 1, -0.16) } });
@@ -712,7 +738,8 @@ export const PASOS_FRENTE = {
 /** Los ejercicios del catálogo que se ven de frente. */
 export const FRENTE = {
   elevaciones_laterales: () => elevacionLateral(), elevaciones_laterales_sentado: () => elevacionLateral({ sentadoEnBanco: true }),
-  elevaciones_laterales_polea: () => elevacionLateral({ carga: 'polea' }), elevacion_lateral_un_brazo: () => elevacionLateral({ unBrazo: true }),
+  elevaciones_laterales_polea: () => elevacionLateral({ carga: 'polea' }), elevacion_lateral_un_brazo: () => elevacionLateral({ carga: 'polea', unBrazo: true }),
+  cruce_poleas: () => cruce(), cruce_poleas_bajo: () => cruce({ bajo: true }),
   aperturas_maquina: () => aperturas(), aperturas_mancuernas: () => aperturas({ tipo: 'mancuernas' }),
   posterior_maquina: () => aperturas({ inversa: true }), posterior_polea: () => aperturas({ tipo: 'polea', inversa: true }),
   separacion_banda: () => separacionBanda(), abductora: () => abductora(), aductora: () => abductora({ aductora: true }),

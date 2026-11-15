@@ -912,7 +912,7 @@ body.con-descanso .medalla-record{bottom:calc(env(safe-area-inset-bottom,0px) + 
 .ficha-animacion svg,.paso-animacion svg{display:block;width:100%;height:100%}
 .paso-animacion{width:min(100%,240px);aspect-ratio:1;margin:8px 0;background:var(--bg)}
 .paso-animacion{--fig-borde:var(--bg)}
-/* Figura anatómica de la ficha (app/figura-anatomica.js): cuerpo gris con los músculos a la vista. En rojo, los
+/* Figura anatómica (app/figura-anatomica.js de lado y app/figura-anatomica-frente.js de frente): cuerpo gris con los músculos a la vista. En rojo, los
    músculos principales del ejercicio según el catálogo, y en rojo claro los secundarios. No mide activación. */
 :root{
   --an-cuerpo:#CBCFD8; --an-cuerpo-lejos:#A7ACB8; --an-musculo:#B7BCC7; --an-musculo-lejos:#969BA7; --an-pelo:#6B707C;
@@ -930,7 +930,7 @@ body.con-descanso .medalla-record{bottom:calc(env(safe-area-inset-bottom,0px) + 
 }
 .an-cuerpo{fill:var(--an-cuerpo)}
 .an-cuerpo.lejos{fill:var(--an-cuerpo-lejos)}
-.an-cuerpo.cerca.brazo,.an-cuerpo.cerca.antebrazo,.an-cuerpo.cerca.mano,.an-cuerpo.cerca.cabeza{stroke:var(--fig-borde,var(--surface));stroke-width:1.8;paint-order:stroke;stroke-linejoin:round}
+.an-cuerpo.cerca.brazo,.an-cuerpo.cerca.antebrazo,.an-cuerpo.cerca.mano,.an-cuerpo.cerca.cabeza,.an-cuerpo.borde{stroke:var(--fig-borde,var(--surface));stroke-width:1.8;paint-order:stroke;stroke-linejoin:round}
 .an-musculo{fill:var(--an-musculo);stroke:var(--an-cuerpo);stroke-width:1.5;stroke-linejoin:round}
 .an-musculo.lejos{fill:var(--an-musculo-lejos);stroke:var(--an-cuerpo-lejos)}
 .an-musculo.principal{fill:var(--an-rojo)} .an-musculo.principal.lejos{fill:var(--an-rojo-lejos)}

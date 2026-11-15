@@ -112,8 +112,22 @@ function mancuernasPerfil(codo, mano) {
 }
 const banco = (a, b, extra = {}) => ({ tipo: 'banco', a, b, capa: 'fondo', ...extra });
 const cable = (desde, hasta) => [{ tipo: 'cable', desde, hasta, capa: 'fondo' }, { tipo: 'mango', centro: hasta, capa: 'frente' }];
-const asiento = (cadera, tronco, m, alto = 0.45) => [banco({ x: cadera.x - 0.2, y: alto }, { x: cadera.x + 0.25, y: alto })]
+/** Asiento (y respaldo si el tronco va reclinado). frente: dónde termina el asiento; en las máquinas de rodilla, justo detrás de la rodilla. */
+const asiento = (cadera, tronco, m, alto = 0.45, frente = cadera.x + 0.25) => [banco({ x: cadera.x - 0.2, y: alto }, { x: frente, y: alto })]
   .concat(tronco < -1 ? [banco(enTronco(cadera, D(cadera, m.tronco, tronco), 0.02, -0.12), enTronco(cadera, D(cadera, m.tronco, tronco), m.tronco + 0.1, -0.12), { patas: false })] : []);
+
+/**
+ * Palanca de una máquina: un brazo rígido que gira sobre su eje (la rodilla en la extensión y el curl femoral, el codo en
+ * el tríceps) y lleva la almohadilla. Se dibuja delgada y por delante, como el brazo de la máquina que queda de este
+ * lado: así se ve que el eje coincide con la articulación.
+ */
+const palanca = (eje, almohadilla, r = 0.055) => [
+  { tipo: 'capsula', a: eje, b: almohadilla, ancho: 0.024, color: 'estructura', capa: 'frente', palanca: true },
+  { tipo: 'mango', centro: eje, r: 0.022, capa: 'frente', eje: true },
+  { tipo: 'rodillo', centro: almohadilla, r, capa: 'frente', almohadilla: true },
+];
+/** Un punto a "t" del hueso de a a b, corrido "d" metros hacia el lado "ang" (grados, como D). */
+const sobreHueso = (a, b, t, d, ang) => D(mixP(a, b, t), d, ang);
 
 /** Arma la pose completa: agrega la cabeza si falta. */
 function armar(m, p, cabezaAng) {
@@ -160,34 +174,53 @@ export function sentadilla({ carga = 'espalda', profundidad = 100, tobillo = 30,
   };
 }
 
-/** Prensa: sentado en el carro, los pies empujan la plataforma por el riel. pantorrilla: piernas estiradas, solo tobillos. */
+/**
+ * Prensa: la espalda y la pelvis en el respaldo, los pies en la plataforma, que corre por su riel (45° o horizontal). Baja
+ * hasta justo antes de que la pelvis se despegue, sin que los talones se levanten (ExRx, Sled 45° Leg Press y Lever Seated
+ * Leg Press). pantorrilla: las piernas quedan estiradas y la planta en el borde de abajo de la plataforma, con los talones
+ * libres; solo se mueven los tobillos y la plataforma corre por el riel sin girar (ExRx, Sled 45° Calf Press).
+ */
 export function prensa({ angulo: riel = 45, pantorrilla = false } = {}) {
   return {
     fases: pantorrilla ? RITMOS.sube : RITMOS.empuja,
     pose(s, m) {
-      const cadera = { x: 0, y: 0.5 }, hombro = D(cadera, m.tronco, riel === 45 ? -55 : -22);
+      const tronco = riel === 45 ? -55 : -22, cadera = { x: 0, y: 0.5 }, hombro = D(cadera, m.tronco, tronco);
       const d = { x: Math.cos(R(riel)), y: Math.sin(R(riel)) }, perp = { x: -d.y, y: d.x }, largo = (m.muslo + m.pierna) * 0.96;
-      const flex = pantorrilla ? 0 : s;
-      const tobillo = { x: cadera.x + d.x * (largo - 0.42 * flex), y: cadera.y + d.y * (largo - 0.42 * flex) };
+      const tobillo = { x: cadera.x + d.x * (largo - (pantorrilla ? 0.02 : 0.42 * s)), y: cadera.y + d.y * (largo - (pantorrilla ? 0.02 : 0.42 * s)) };
       const rodilla = piernaIK(m, cadera, tobillo, perp);
-      const p = pie(m, tobillo, riel + 90 - (pantorrilla ? 28 * s : 0));
-      const plataforma = { tipo: 'plataforma', a: mas(p.talon, d.x * 0.04 - (p.punta.x - p.talon.x) * 0.2, d.y * 0.04 - (p.punta.y - p.talon.y) * 0.2), b: mas(p.punta, d.x * 0.04 + (p.punta.x - p.talon.x) * 0.25, d.y * 0.04 + (p.punta.y - p.talon.y) * 0.25), capa: 'frente' };
+      // La plataforma es perpendicular al riel; el pie apoya entero, o solo la planta si trabaja la pantorrilla.
+      const p = pie(m, tobillo, riel + 90 - (pantorrilla ? mix(-16, 24, s) : 0));
+      const largoPie = { x: p.punta.x - p.talon.x, y: p.punta.y - p.talon.y }, planta = mas(p.talon, largoPie.x * 0.75, largoPie.y * 0.75);
+      const sobre = pantorrilla ? planta : p.talon, hondo = (sobre.x - cadera.x) * d.x + (sobre.y - cadera.y) * d.y; // dónde está la plataforma en el riel
+      const base = mas(cadera, d.x * (hondo + 0.025), d.y * (hondo + 0.025));
+      const plataforma = { tipo: 'plataforma', a: mas(base, perp.x * (pantorrilla ? -0.01 : -0.06), perp.y * (pantorrilla ? -0.01 : -0.06)), b: mas(base, perp.x * 0.42, perp.y * 0.42), capa: 'frente', plataforma: true };
+      // El riel: por donde corre la plataforma, desde atrás del asiento.
+      const rielA = mas(base, d.x * 0.06 + perp.x * 0.2, d.y * 0.06 + perp.y * 0.2), rielB = mas(cadera, d.x * 0.3 + perp.x * 0.2, d.y * 0.3 + perp.y * 0.2);
       const mano = mas(cadera, 0.12, -0.02);
-      return armar(m, { ...p, rodilla, cadera, hombro, ...brazoIK(m, hombro, mano, { x: 0, y: -1 }), equipo: [...asiento(cadera, riel === 45 ? -55 : -22, m, 0.42), plataforma] }, angulo(cadera, hombro) * 0.8);
+      return armar(m, { ...p, rodilla, cadera, hombro, ...brazoIK(m, hombro, mano, { x: 0, y: -1 }), equipo: [{ tipo: 'capsula', a: rielB, b: rielA, ancho: 0.04, color: 'estructura', capa: 'fondo' }, ...asiento(cadera, tronco, m, 0.42), plataforma] }, angulo(cadera, hombro) * 0.8);
     },
   };
 }
 
-/** Sentadilla hack: espalda en el respaldo inclinado; la cadera baja por el riel. */
+/**
+ * Sentadilla hack: la espalda en el respaldo inclinado y los hombros bajo las almohadillas; los pies, un poco adelante en
+ * la plataforma. El respaldo corre por su riel: caderas y hombros bajan en esa línea, sin que la espalda se despegue
+ * (ExRx, Sled Hack Squat).
+ */
 export function hack() {
   return {
     fases: RITMOS.bajaSube,
     pose(s, m) {
-      const tau = -22, t = { x: Math.sin(R(tau)), y: Math.cos(R(tau)) };
-      const arriba = { x: -0.06, y: 0.9 }, cadera = mas(arriba, -t.x * 0.42 * s, -t.y * 0.42 * s);
-      const p = pie(m, { x: 0.24, y: m.tobillo }), rodilla = piernaIK(m, cadera, p.tobillo, { x: 1, y: 0.3 }), hombro = D(cadera, m.tronco, tau);
+      const tau = -38, t = { x: Math.sin(R(tau)), y: Math.cos(R(tau)) }, recorrido = 0.38;
+      const plataforma = { x: 0.3, y: 0.12 }, inclinaPie = 18; // la plataforma levanta la punta
+      const p = pieDesdeTalon(m, plataforma, inclinaPie);
+      const arriba = mas(p.tobillo, -0.34, 0.78), cadera = mas(arriba, -t.x * recorrido * s, -t.y * recorrido * s);
+      const rodilla = piernaIK(m, cadera, p.tobillo, { x: 1, y: 0.3 }), hombro = D(cadera, m.tronco, tau);
       const respaldo = banco(enTronco(cadera, hombro, -0.05, -0.13), enTronco(cadera, hombro, m.tronco + 0.12, -0.13), { patas: false });
-      return armar(m, { ...p, rodilla, cadera, hombro, ...brazoIK(m, hombro, mas(hombro, 0.06, 0.08), { x: 0, y: -1 }), equipo: [respaldo, { tipo: 'rodillo', centro: mas(hombro, -0.02, 0.07), capa: 'frente' }] }, 0);
+      const rielArriba = enTronco(mas(arriba, 0, 0), D(arriba, m.tronco, tau), m.tronco + 0.25, -0.22), rielAbajo = mas(rielArriba, -t.x * 1.5, -t.y * 1.5);
+      const base = { tipo: 'plataforma', a: mas(p.talon, -0.05 * Math.cos(R(inclinaPie)), -0.05 * Math.sin(R(inclinaPie)) - 0.03), b: mas(p.punta, 0.06 * Math.cos(R(inclinaPie)), 0.06 * Math.sin(R(inclinaPie)) - 0.03), capa: 'fondo' };
+      // Las manos toman las manillas junto a las almohadillas de los hombros, con los codos hacia abajo.
+      return armar(m, { ...p, rodilla, cadera, hombro, ...brazoIK(m, hombro, enTronco(cadera, hombro, m.tronco - 0.08, 0.14), { x: -t.x, y: -t.y }), equipo: [{ tipo: 'capsula', a: rielAbajo, b: rielArriba, ancho: 0.04, color: 'estructura', capa: 'fondo' }, base, respaldo, { tipo: 'rodillo', centro: mas(hombro, -0.02, 0.07), capa: 'frente' }] }, 0);
     },
   };
 }
@@ -218,7 +251,7 @@ export function pesoMuerto({ smith = false } = {}) {
     pose(s, m) {
       const base = pie(m, { x: 0, y: m.tobillo }), mitad = pasoMitad(base), rodilla = D(base.tobillo, m.pierna, mix(2, 22, s));
       const L = largoBrazo(m), arriba = m.tobillo + m.pierna + m.muslo + m.tronco - L * 0.99;
-      const manoY = mix(arriba, 0.225, s), objetivo = { x: mitad + 0.03 + 0.04 * s, y: manoY + L * 0.98 };
+      const manoY = mix(arriba, 0.225, s), objetivo = { x: mitad + 0.03 + (smith ? 0 : 0.04 * s), y: manoY + L * 0.98 }; // en el Smith la barra no se corre
       const cadera = ik(rodilla, objetivo, m.muslo, m.tronco, { x: -1, y: 0.2 }), hombro = D(cadera, m.tronco, angulo(cadera, objetivo));
       const brazos = brazoFK(m, hombro, 180, 180, 0.98, 0.98), equipo = barraCon(brazos.mano);
       if (smith) equipo.unshift({ tipo: 'rieles', x: brazos.mano.x, capa: 'fondo' });
@@ -265,9 +298,11 @@ export function hipThrust({ suelo = false, carga = 'barra', smith = false, march
     pose(s, m) {
       const hombro = suelo ? { x: -0.7, y: 0.12 } : { x: -0.72, y: 0.44 };
       const th = marcha ? (suelo ? 26 : 2) : mix(suelo ? 4 : -30, suelo ? 26 : 2, s);
+      // En el Smith la barra sube vertical: la cadera sube derecho y la espalda se corre un poco sobre el banco.
+      if (smith) hombro.x += m.tronco * (Math.cos(R(2)) - Math.cos(R(th)));
       const cadera = { x: hombro.x + m.tronco * Math.cos(R(th)), y: hombro.y + m.tronco * Math.sin(R(th)) };
       const base = pie(m, { x: suelo ? 0.02 : 0.04, y: m.tobillo }), rodilla = piernaIK(m, cadera, base.tobillo, { x: 0.2, y: 1 });
-      const barra = enTronco(cadera, hombro, -0.02, 0.15);
+      const barra = smith ? mas(cadera, 0.02, 0.15) : enTronco(cadera, hombro, -0.02, 0.15);
       const brazos = carga === 'barra' || smith ? brazoIK(m, hombro, mas(barra, -0.04, 0.02), { x: 0, y: -1 }) : brazoFK(m, hombro, suelo ? 92 : 150, suelo ? 92 : 150);
       const equipo = [];
       if (!suelo) equipo.push(banco({ x: -1.15, y: 0.4 }, { x: -0.6, y: 0.4 }));
@@ -293,7 +328,7 @@ export function estocada({ trasero = 'suelo', carga = 'ninguna', smith = false }
       const atras = trasero === 'banco' ? pie(m, { x: -0.78, y: 0.52 }, 196) : pieDesdePunta(m, { x: -0.72, y: 0 }, -mix(38, 52, s));
       const cadera = { x: trasero === 'banco' ? -0.22 : -0.3, y: mix(trasero === 'banco' ? 0.86 : 0.84, trasero === 'banco' ? 0.5 : 0.52, s) };
       const rodilla = piernaIK(m, cadera, delante.tobillo, { x: 1, y: 0.3 }), rodillaAtras = piernaIK(m, cadera, atras.tobillo, { x: 0.2, y: -1 });
-      const hombro = D(cadera, m.tronco, trasero === 'banco' ? mix(5, 14, s) : 4);
+      const hombro = D(cadera, m.tronco, smith ? 6 : trasero === 'banco' ? mix(5, 14, s) : 4); // en el Smith la barra baja vertical: el tronco no se inclina
       const brazos = carga === 'mancuernas' ? brazoFK(m, hombro, 182, 182) : carga === 'barra' ? brazoIK(m, hombro, enTronco(cadera, hombro, m.tronco + 0.04, -0.03), { x: 0, y: -1 }, 0.6, 0.85) : brazoIK(m, hombro, enTronco(cadera, hombro, 0.06, 0.1), { x: -1, y: 0 });
       const equipo = carga === 'mancuernas' ? mancuernas(brazos.mano) : carga === 'barra' ? barraCon(enTronco(cadera, hombro, m.tronco + 0.03, -0.04), 0.225, 'medio') : [];
       if (trasero === 'banco') equipo.unshift(banco({ x: -1.25, y: 0.45 }, { x: -0.7, y: 0.45 }));
@@ -427,7 +462,8 @@ export function pressVertical({ sentado: enAsiento = false, carga = 'barra', smi
       const cuerpo = enAsiento ? sentado(m, { tronco: -3 }) : dePie(m, { pierna: 2, tronco: -2 });
       const { cadera, hombro } = cuerpo, L = largoBrazo(m);
       const abajo = carga === 'mancuernas' ? mas(hombro, 0.05, 0.06) : carga === 'maquina' ? mas(hombro, 0.03, 0.08) : mas(hombro, 0.1, 0.07);
-      const mano = mixP(mas(hombro, -0.01, L * 0.96), abajo, s);
+      // En el Smith la barra sube y baja vertical, por delante de la cara (ExRx, Smith Shoulder Press).
+      const mano = smith ? { x: hombro.x + 0.08, y: mix(hombro.y + Math.sqrt((L * 0.96) ** 2 - 0.08 ** 2), hombro.y + 0.06, s) } : mixP(mas(hombro, -0.01, L * 0.96), abajo, s);
       const equipo = carga === 'barra' ? barraCon(mano) : carga === 'mancuernas' ? mancuernas(mano) : [{ tipo: 'mango', centro: mano, capa: 'frente' }, { tipo: 'poste', x: hombro.x - 0.32, y2: 1.9, capa: 'fondo' }];
       if (enAsiento) equipo.unshift(...asiento(cadera, -3, m), banco(enTronco(cadera, hombro, 0, -0.12), enTronco(cadera, hombro, m.tronco + 0.05, -0.12), { patas: false }));
       if (smith) equipo.unshift({ tipo: 'rieles', x: mano.x, capa: 'fondo' });
@@ -457,9 +493,10 @@ export function dominada({ asistida = false, banda = false, lastre = false, esca
     pose(s, m) {
       const barra = { x: 0, y: 2.3 }, mano = mas(barra, 0, -0.02), L = largoBrazo(m);
       const abajo = { x: -0.04, y: mano.y - L * 0.97 }, hombro = mixP(abajo, escapular ? mas(abajo, 0, 0.05) : { x: -0.07, y: mano.y - 0.14 }, s);
-      const cadera = D(hombro, m.tronco, 172), rodilla = D(cadera, m.muslo, 176), tobillo = D(rodilla, m.pierna, 210);
+      // En la máquina asistida se va de rodillas sobre la almohadilla, que empuja hacia arriba: las piernas dobladas.
+      const cadera = D(hombro, m.tronco, 172), rodilla = D(cadera, m.muslo, asistida ? 172 : 176), tobillo = D(rodilla, m.pierna, asistida ? 262 : 210);
       const equipo = [{ tipo: 'barraFija', centro: barra, capa: 'frente' }];
-      if (asistida) equipo.push({ tipo: 'rodillo', centro: mas(rodilla, 0.02, -0.07), r: 0.05, capa: 'fondo' }, { tipo: 'poste', x: rodilla.x + 0.02, y2: rodilla.y - 0.07, capa: 'fondo' });
+      if (asistida) equipo.push(banco(mas(rodilla, 0.05, -0.05), mas(rodilla, -0.32, -0.08), { patas: false }), { tipo: 'poste', x: rodilla.x - 0.12, y2: rodilla.y - 0.09, capa: 'fondo' });
       if (banda) equipo.push({ tipo: 'banda', puntos: [mano, mas(rodilla, 0.04, -0.03), mas(mano, 0.06, 0)], capa: 'fondo' });
       if (lastre) equipo.push({ tipo: 'disco', centro: mas(cadera, 0.04, -0.32), r: 0.13, capa: 'frente' });
       return { ...pieDeLaPierna(m, rodilla, tobillo, 35), rodilla, cadera, hombro, ...brazoIK(m, hombro, mano, { x: 0.6, y: -1 }), equipo, ...cabeza(m, hombro, 4) };
@@ -476,7 +513,10 @@ export function remoInclinado({ carga = 'barra', tronco = 50, rodillas = 16, smi
       const con = phi => { const cadera = D(rodilla, m.muslo, -phi); return { cadera, hombro: D(cadera, m.tronco, tronco) }; };
       // El centro de masa (cuerpo y barra) queda sobre la mitad del pie: la cadera atrás y la barra un poco adelante.
       const { cadera, hombro } = con(raiz(phi => { const c = con(phi); return c.cadera.x * 0.5 + c.hombro.x * 0.5 - mitad; }, -10, 120));
-      const L = largoBrazo(m), mano = mixP(mas(hombro, 0, -L * 0.97), enTronco(cadera, hombro, m.tronco * 0.28, 0.16), s);
+      const L = largoBrazo(m), t = { x: (hombro.x - cadera.x) / m.tronco, y: (hombro.y - cadera.y) / m.tronco };
+      // En el Smith la barra sube vertical bajo los hombros hasta tocar el tronco; libre, va hacia el abdomen.
+      const toca = smith ? enTronco(cadera, hombro, m.tronco - (t.y * 0.16) / t.x, 0.16) : enTronco(cadera, hombro, m.tronco * 0.28, 0.16);
+      const mano = mixP(mas(hombro, 0, -L * 0.97), toca, s);
       const brazos = brazoIK(m, hombro, mano, { x: -0.6, y: 1 });
       const equipo = carga === 'barra' ? barraCon(mano) : mancuernas(mano);
       if (smith) equipo.unshift({ tipo: 'rieles', x: mano.x, capa: 'fondo' });
@@ -586,9 +626,11 @@ export function triceps({ tipo = 'polea', carga = 'polea' } = {}) {
         return { ...base, rodilla: piernaIK(m, cadera, base.tobillo, { x: 0.3, y: 1 }), cadera, hombro, ...brazos, equipo: [banco({ x: -1.05, y: 0.45 }, { x: 0.14, y: 0.45 }), ...discosChicos(brazos.mano)], ...cabeza(m, hombro, angulo(cadera, hombro) + 8) };
       }
       if (tipo === 'maquina') {
-        const cuerpo = sentado(m, { tronco: -4 }), { cadera, hombro } = cuerpo;
-        const mano = mixP(mas(hombro, 0.12, -0.08), mas(hombro, 0.1, -0.5), s);
-        return armar(m, { ...cuerpo, ...brazoIK(m, hombro, mano, { x: -1, y: 0 }), equipo: [...asiento(cadera, -4, m), { tipo: 'mango', centro: mano, capa: 'frente' }] }, 0);
+        // Sentado, la parte de atrás de los brazos sobre la almohadilla inclinada, con los codos quietos en el eje de la
+        // palanca; el antebrazo baja desde tocar el brazo hasta estirarlo (ExRx, Lever Triceps Extension).
+        const cuerpo = sentado(m, { tronco: -4 }), { cadera, hombro } = cuerpo, a1 = 138, a2 = mix(8, 138, s), brazos = brazoFK(m, hombro, a1, a2);
+        const apoyo = banco(sobreHueso(hombro, brazos.codo, 0.3, 0.06, a1 + 90), sobreHueso(hombro, brazos.codo, 1.08, 0.06, a1 + 90), { patas: false });
+        return armar(m, { ...cuerpo, ...brazos, equipo: [...asiento(cadera, -4, m), apoyo, { tipo: 'poste', x: brazos.codo.x - 0.05, y2: brazos.codo.y - 0.1, capa: 'fondo' }, ...palanca(brazos.codo, brazos.mano, 0.03)] }, 0);
       }
       if (tipo === 'sobreCabeza') {
         const cuerpo = dePie(m, { pierna: 3, tronco: carga === 'polea' ? 12 : 0 }), { hombro } = cuerpo;
@@ -665,49 +707,73 @@ export function muneca({ extension = false } = {}) {
 }
 
 // ── Piernas en máquina ────────────────────────────────────────────────────────────────────────────────────────
-/** Extensión de cuádriceps: sentado, la pierna sube hasta quedar estirada. */
+/**
+ * Extensión de cuádriceps: sentado con la espalda en el respaldo y la parte de atrás de la rodilla en el borde del
+ * asiento; la rodilla queda en el eje de la palanca y la almohadilla va sobre el frente de la pierna, justo arriba del
+ * tobillo (ExRx, Lever Leg Extension). La pierna sube hasta quedar estirada.
+ */
 export function extensionCuadriceps() {
   return {
     fases: RITMOS.extiende,
     pose(s, m) {
       // El asiento es alto: con la rodilla doblada los pies quedan en el aire.
-      const cadera = { x: 0, y: 0.64 }, hombro = D(cadera, m.tronco, -8), rodilla = D(cadera, m.muslo, 92), tobillo = D(rodilla, m.pierna, mix(186, 96, s));
-      return armar(m, { ...pieDeLaPierna(m, rodilla, tobillo, 10), rodilla, cadera, hombro, ...brazoIK(m, hombro, mas(cadera, 0.1, -0.03)), equipo: [...asiento(cadera, -8, m, 0.59), { tipo: 'rodillo', centro: D(tobillo, 0.07, mix(96, 6, s) + 90), capa: 'frente' }] }, 0);
+      const cadera = { x: 0, y: 0.64 }, hombro = D(cadera, m.tronco, -10), rodilla = D(cadera, m.muslo, 92), a = mix(186, 96, s), tobillo = D(rodilla, m.pierna, a);
+      const almohadilla = sobreHueso(rodilla, tobillo, 0.84, 0.09, a - 90); // adelante de la tibia
+      return armar(m, { ...pieDeLaPierna(m, rodilla, tobillo, 10), rodilla, cadera, hombro, ...brazoIK(m, hombro, mas(cadera, 0.1, -0.03)), equipo: [...asiento(cadera, -10, m, 0.57, rodilla.x - 0.06), ...palanca(rodilla, almohadilla)] }, 0);
     },
   };
 }
 
-/** Curl femoral acostado, sentado o de pie: la rodilla se dobla contra el rodillo. */
+/**
+ * Curl femoral acostado, sentado o de pie: la rodilla se dobla contra la almohadilla, que va detrás de la pierna justo
+ * arriba del tobillo, y la rodilla queda en el eje de la palanca (ExRx, Lever Lying, Seated y Standing Leg Curl).
+ * Acostado: boca abajo, las rodillas justo pasado el borde del banco. Sentado: la espalda en el respaldo y una
+ * almohadilla sobre los muslos, arriba de las rodillas. De pie: otra almohadilla delante del muslo y el peso en la otra pierna.
+ */
 export function curlFemoral({ tipo = 'acostado' } = {}) {
   return {
     fases: RITMOS.extiende,
     pose(s, m) {
       if (tipo === 'acostado') {
-        const cadera = { x: 0.42, y: 0.66 }, hombro = D(cadera, m.tronco, 90), rodilla = D(cadera, m.muslo, 268), tobillo = D(rodilla, m.pierna, mix(270, 372, s));
-        return { ...pieDeLaPierna(m, rodilla, tobillo, 20), rodilla, cadera, hombro, ...brazoIK(m, hombro, mas(hombro, 0.26, -0.12), { x: 0, y: -1 }), equipo: [banco({ x: -0.02, y: 0.58 }, { x: 1.2, y: 0.58 }), { tipo: 'rodillo', centro: D(tobillo, 0.07, mix(270, 372, s) + 90), capa: 'frente' }], ...cabeza(m, hombro, 96) };
+        const cadera = { x: 0.42, y: 0.66 }, hombro = D(cadera, m.tronco, 90), rodilla = D(cadera, m.muslo, 268), a = mix(270, 372, s), tobillo = D(rodilla, m.pierna, a);
+        const almohadilla = sobreHueso(rodilla, tobillo, 0.88, 0.085, a + 90); // detrás de la pierna (arriba, boca abajo)
+        return { ...pieDeLaPierna(m, rodilla, tobillo, 20), rodilla, cadera, hombro, ...brazoIK(m, hombro, mas(hombro, 0.26, -0.12), { x: 0, y: -1 }), equipo: [banco({ x: rodilla.x + 0.04, y: 0.58 }, { x: 1.2, y: 0.58 }), ...palanca(rodilla, almohadilla)], ...cabeza(m, hombro, 96) };
       }
       if (tipo === 'sentado') {
-        const cadera = { x: 0, y: 0.66 }, hombro = D(cadera, m.tronco, -10), rodilla = D(cadera, m.muslo, 90), tobillo = D(rodilla, m.pierna, mix(96, 196, s));
-        return armar(m, { ...pieDeLaPierna(m, rodilla, tobillo, 10), rodilla, cadera, hombro, ...brazoIK(m, hombro, mas(cadera, 0.12, -0.02)), equipo: [...asiento(cadera, -10, m, 0.61), { tipo: 'rodillo', centro: D(tobillo, 0.07, mix(96, 196, s) - 90), capa: 'frente' }, { tipo: 'rodillo', centro: mas(rodilla, -0.12, 0.1), capa: 'frente' }] }, 0);
+        const cadera = { x: 0, y: 0.66 }, hombro = D(cadera, m.tronco, -12), rodilla = D(cadera, m.muslo, 90), a = mix(96, 200, s), tobillo = D(rodilla, m.pierna, a);
+        const almohadilla = sobreHueso(rodilla, tobillo, 0.88, 0.085, a + 90); // detrás de la pierna
+        const muslo = sobreHueso(cadera, rodilla, 0.8, 0.13, 0); // la almohadilla de arriba sujeta los muslos
+        return armar(m, { ...pieDeLaPierna(m, rodilla, tobillo, 10), rodilla, cadera, hombro, ...brazoIK(m, hombro, mas(muslo, -0.04, 0.03)), equipo: [...asiento(cadera, -12, m, 0.59, rodilla.x - 0.06), ...palanca(rodilla, almohadilla), { tipo: 'rodillo', centro: muslo, r: 0.05, capa: 'frente' }] }, 0);
       }
-      const cuerpo = dePie(m, { pierna: 2, tronco: 8 }), { cadera, hombro } = cuerpo;
-      const rodilla = D(cadera, m.muslo, 176), tobillo = D(rodilla, m.pierna, mix(194, 285, s)); // el pie que trabaja no apoya
-      return armar(m, { ...cuerpo, ...brazoIK(m, hombro, mas(hombro, 0.3, -0.2)), lejos: { ...cuerpo }, rodilla, ...pieDeLaPierna(m, rodilla, tobillo, -10), equipo: [{ tipo: 'rodillo', centro: D(tobillo, 0.07, mix(194, 285, s) - 90), capa: 'frente' }, { tipo: 'poste', x: hombro.x + 0.35, y2: 1.3, capa: 'fondo' }] }, 0);
+      const cuerpo = dePie(m, { pierna: 2, tronco: 14 }), { cadera, hombro } = cuerpo;
+      const rodilla = D(cadera, m.muslo, 176), a = mix(194, 292, s), tobillo = D(rodilla, m.pierna, a); // el pie que trabaja no apoya: parte apenas despegado del suelo
+      const almohadilla = sobreHueso(rodilla, tobillo, 0.88, 0.085, a + 90), muslo = sobreHueso(cadera, rodilla, 0.78, 0.13, 86);
+      return armar(m, { ...cuerpo, ...brazoIK(m, hombro, mas(hombro, 0.3, -0.24)), lejos: { ...cuerpo }, rodilla, ...pieDeLaPierna(m, rodilla, tobillo, -10), equipo: [{ tipo: 'poste', x: hombro.x + 0.38, y2: 1.3, capa: 'fondo' }, ...palanca(rodilla, almohadilla), { tipo: 'rodillo', centro: muslo, r: 0.05, capa: 'frente' }] }, 0);
     },
   };
 }
 
-/** Pantorrillas de pie o en máquina: el talón sube girando sobre la punta del pie. */
+/**
+ * Pantorrillas de pie o en máquina: la punta del pie en el borde de un escalón o bloque, con el talón libre; el talón baja
+ * hasta estirar la pantorrilla y sube lo más alto posible, girando sobre la planta (ExRx, Lever Standing Calf Raise). En
+ * máquina, los hombros van bajo la almohadilla. Las rodillas quedan rectas.
+ */
 export function pantorrilla({ maquina = false } = {}) {
   return {
     fases: RITMOS.sube,
     pose(s, m) {
-      const ang = mix(0, 28, s), alto = maquina ? 0.08 : 0, p = pieDesdePunta(m, { x: 0.2, y: alto }, -ang);
+      const alto = maquina ? 0.13 : 0.15, borde = { x: 0.16, y: alto }, p = pieSobreBorde(m, borde, mix(-18, 26, s));
       const rodilla = D(p.tobillo, m.pierna, 2), cadera = D(rodilla, m.muslo, 0), hombro = D(cadera, m.tronco, 0);
-      const equipo = maquina ? [{ tipo: 'cajon', x1: 0.02, x2: 0.36, alto, capa: 'fondo' }, { tipo: 'rodillo', centro: mas(hombro, -0.02, 0.07), capa: 'frente' }, { tipo: 'poste', x: hombro.x - 0.3, y2: 2, capa: 'fondo' }] : [];
+      const equipo = [{ tipo: 'cajon', x1: borde.x, x2: borde.x + 0.32, alto, capa: 'fondo' }];
+      if (maquina) equipo.push({ tipo: 'rodillo', centro: mas(hombro, -0.02, 0.07), capa: 'frente' }, { tipo: 'poste', x: hombro.x - 0.3, y2: 2, capa: 'fondo' });
       return armar(m, { ...p, rodilla, cadera, hombro, ...(maquina ? brazoIK(m, hombro, mas(hombro, 0.05, 0.1)) : brazoFK(m, hombro, 180, 180)), equipo }, 0);
     },
   };
+}
+/** La planta (bajo la base de los dedos) apoyada en "borde"; sube: grados que el talón está sobre la horizontal (negativo, bajo el borde). */
+function pieSobreBorde(m, borde, sube) {
+  const d = { x: Math.cos(R(-sube)), y: Math.sin(R(-sube)) }, suela = { x: d.y, y: -d.x };
+  return pie(m, { x: borde.x - d.x * 0.41 * m.pie - suela.x * m.tobillo, y: borde.y - d.y * 0.41 * m.pie - suela.y * m.tobillo }, -sube);
 }
 
 /** Extensión lumbar en máquina: sentado, el tronco vuelve desde inclinado hasta quedar recto. */
@@ -1102,12 +1168,40 @@ export function elevacionPiernasSuelo({ rodillas = false } = {}) {
   };
 }
 
+// ── Un solo lado ──────────────────────────────────────────────────────────────────────────────────────────────
+/**
+ * La versión a un brazo de una animación: el brazo de este lado hace el movimiento y el del otro lado descansa. donde:
+ * 'costado' (cuelga junto al cuerpo o se apoya en la cadera), 'muslo' (la mano sobre el muslo, sentado) o 'apoyo' (en el
+ * mismo apoyo que el otro brazo, como el cojín del predicador).
+ */
+function aUnBrazo(anim, donde = 'costado') {
+  return {
+    ...anim,
+    pose(s, m, fase, enFase) {
+      const p = anim.pose(s, m, fase, enFase), base = anim.pose(0, m, fase, 0);
+      const mano = donde === 'muslo' ? mixP(p.cadera, p.rodilla, 0.7) : donde === 'apoyo' ? base.mano : null;
+      const brazo = mano ? brazoIK(m, p.hombro, mas(mano, 0, donde === 'muslo' ? 0.08 : 0), { x: 0.3, y: -1 }) : brazoIK(m, p.hombro, enTronco(p.cadera, p.hombro, 0.02, 0.05), { x: -0.2, y: -1 });
+      return { ...p, lejos: { ...(p.lejos || {}), ...brazo } };
+    },
+  };
+}
+/** La prensa a una pierna: la otra descansa doblada, con el pie fuera de la plataforma. */
+function aUnaPierna(anim) {
+  return {
+    ...anim,
+    pose(s, m, fase, enFase) {
+      const p = anim.pose(s, m, fase, enFase), rodilla = D(p.cadera, m.muslo, 58), tobillo = D(rodilla, m.pierna, 168);
+      return { ...p, lejos: { ...(p.lejos || {}), rodilla, ...pieDeLaPierna(m, rodilla, tobillo, 20) } };
+    },
+  };
+}
+
 // ── Qué animación tiene cada ejercicio del catálogo ──────────────────────────────────────────────────────────
 const MAPA = {
   sentadilla_barra: () => sentadilla(), sentadilla_smith: () => sentadilla({ smith: true }), sentadilla_mancuernas: () => sentadilla({ carga: 'lados' }),
   sentadilla_corporal: () => sentadilla({ carga: 'libre' }), sentadilla_cajon_barra: () => sentadilla({ cajon: true, profundidad: 88 }), sentadilla_goblet: () => sentadilla({ carga: 'frente' }),
   sentadilla_sumo_kb: () => sentadilla({ carga: 'kettlebell', tobillo: 22, abierta: true }), sentadilla_zercher: () => sentadilla({ carga: 'zercher' }), sentadilla_hack: () => hack(),
-  prensa: () => prensa(), prensa_horizontal: () => prensa({ angulo: 0 }), prensa_unilateral: () => prensa(),
+  prensa: () => prensa(), prensa_horizontal: () => prensa({ angulo: 0 }), prensa_unilateral: () => aUnaPierna(prensa()),
   bulgara_mancuernas: () => estocada({ trasero: 'banco', carga: 'mancuernas' }), bulgara: () => estocada({ trasero: 'banco' }), bulgara_smith: () => estocada({ trasero: 'banco', carga: 'barra', smith: true }),
   step_up: () => stepUp(), step_up_mancuernas: () => stepUp({ carga: 'mancuernas' }),
   zancadas_caminando: () => estocada({ carga: 'mancuernas' }), zancadas_corporal: () => estocada(),
@@ -1126,11 +1220,10 @@ const MAPA = {
   flexiones: () => flexion(), flexiones_inclinadas: () => flexion({ manos: 0.45 }),
   fondos: () => fondos(), fondos_asistidos: () => fondos({ asistido: true }), fondos_lastre: () => fondos({ lastre: true }), fondos_triceps: () => fondos({ inclinacion: 4 }),
   fondos_banco: () => fondoBanco(),
-  triceps_polea: () => triceps(), triceps_polea_unilateral: () => triceps(), triceps_cuerda: () => triceps(),
-  triceps_sobre_cabeza: () => triceps({ tipo: 'sobreCabeza' }), triceps_sobre_cabeza_unilateral: () => triceps({ tipo: 'sobreCabeza' }),
-  triceps_mancuerna: () => triceps({ tipo: 'sobreCabeza', carga: 'mancuerna' }), triceps_mancuerna_unilateral: () => triceps({ tipo: 'sobreCabeza', carga: 'mancuerna' }),
+  triceps_polea: () => triceps(), triceps_polea_unilateral: () => aUnBrazo(triceps()), triceps_cuerda: () => triceps(),
+  triceps_sobre_cabeza: () => triceps({ tipo: 'sobreCabeza' }), triceps_sobre_cabeza_unilateral: () => aUnBrazo(triceps({ tipo: 'sobreCabeza' })),
+  triceps_mancuerna: () => triceps({ tipo: 'sobreCabeza', carga: 'mancuerna' }), triceps_mancuerna_unilateral: () => aUnBrazo(triceps({ tipo: 'sobreCabeza', carga: 'mancuerna' })),
   triceps_maquina: () => triceps({ tipo: 'maquina' }), rompecraneos: () => triceps({ tipo: 'rompecraneos' }),
-  cruce_poleas: () => cruce(), cruce_poleas_bajo: () => cruce({ bajo: true }),
   press_militar_barra: () => pressVertical(), press_militar_sentado_barra: () => pressVertical({ sentado: true }),
   press_hombro_smith: () => pressVertical({ sentado: true, smith: true }), press_hombro_sentado_smith: () => pressVertical({ sentado: true, smith: true }), press_hombro_de_pie_smith: () => pressVertical({ smith: true }),
   press_hombro_mancuernas: () => pressVertical({ sentado: true, carga: 'mancuernas' }), press_hombro_sentado_mancuernas: () => pressVertical({ sentado: true, carga: 'mancuernas' }),
@@ -1139,14 +1232,14 @@ const MAPA = {
   jalon_polea: () => jalon(), jalon_maquina: () => jalon(), jalon_agarre_cerrado: () => jalon(),
   dominadas: () => dominada(), dominadas_asistidas: () => dominada({ asistida: true }), dominadas_banda: () => dominada({ banda: true }), dominadas_lastre: () => dominada({ lastre: true }),
   dominadas_supinas: () => dominada(), dominadas_supinas_lastre: () => dominada({ lastre: true }), dominadas_supinas_asistidas: () => dominada({ asistida: true }), dominadas_escapulares: () => dominada({ escapular: true }),
-  remo_maquina: () => remoSentado({ maquina: true }), remo_maquina_cable: () => remoSentado({ maquina: true }), remo_polea: () => remoSentado(), remo_polea_un_brazo: () => remoSentado(),
+  remo_maquina: () => remoSentado({ maquina: true }), remo_maquina_cable: () => remoSentado({ maquina: true }), remo_polea: () => remoSentado(), remo_polea_un_brazo: () => aUnBrazo(remoSentado(), 'muslo'),
   remo_isolateral: () => remoSentado({ maquina: true }), remo_isolateral_discos: () => remoSentado({ maquina: true }), remo_isolateral_bajo: () => remoSentado({ maquina: true, bajo: true }),
   remo_barra: () => remoInclinado(), remo_pendlay: () => remoInclinado({ tronco: 78, rodillas: 22 }), remo_smith: () => remoInclinado({ smith: true }), remo_banda: () => remoSentado({ banda: true }),
   remo_mancuerna: () => remoUnBrazo(), remo_landmine: () => remoInclinado({ tronco: 45 }), remo_invertido: () => remoInvertido(), remo_suspension: () => remoInvertido({ suspension: true }),
   encogimientos: () => encogimiento(),
   curl_mancuernas: () => curl({ carga: 'mancuernas' }), curl_barra: () => curl(), curl_barra_ez: () => curl(), curl_polea: () => curl({ carga: 'polea' }), curl_maquina: () => curl({ tipo: 'predicador', carga: 'maquina' }),
   curl_martillo: () => curl({ carga: 'mancuernas', agarre: 'neutro' }), curl_predicador_barra: () => curl({ tipo: 'predicador' }), curl_predicador_ez: () => curl({ tipo: 'predicador' }),
-  curl_predicador_mancuerna: () => curl({ tipo: 'predicador', carga: 'mancuernas' }), curl_predicador_maquina: () => curl({ tipo: 'predicador', carga: 'maquina' }), curl_predicador_maquina_unilateral: () => curl({ tipo: 'predicador', carga: 'maquina' }),
+  curl_predicador_mancuerna: () => curl({ tipo: 'predicador', carga: 'mancuernas' }), curl_predicador_maquina: () => curl({ tipo: 'predicador', carga: 'maquina' }), curl_predicador_maquina_unilateral: () => aUnBrazo(curl({ tipo: 'predicador', carga: 'maquina' }), 'apoyo'),
   curl_inclinado: () => curl({ tipo: 'inclinado', carga: 'mancuernas' }), curl_tras_espalda: () => curl({ tipo: 'tras', carga: 'polea' }),
   curl_muneca: () => muneca(), extension_muneca_barra: () => muneca({ extension: true }),
   caminata_granjero: () => marcha({ granjero: true }), colgarse: () => colgado(),
@@ -1201,6 +1294,44 @@ export function animacionDePaso(paso) {
   const clave = PASOS.findIndex(([re]) => re.test(nombre));
   if (!cachePasos.has(clave)) cachePasos.set(clave, crear());
   return cachePasos.get(clave);
+}
+
+// Músculos de cada paso de calentamiento o estiramiento, para la figura anatómica: en los estiramientos, los que se
+// estiran; en los calentamientos, los que se mueven o activan. No están en el catálogo de ejercicios: es lo que dice cada
+// paso, pensado para que un kinesiólogo lo revise (docs/55-revision-animaciones.md). Mismo orden de búsqueda que PASOS.
+const MUSCULOS_PASOS = [
+  [/c[ií]rculos de hombro/i, ['hombro'], ['trapecio']], [/deslizamiento en pared/i, ['trapecio'], ['hombro']],
+  [/om[oó]platos|serrato/i, [], ['hombro', 'trapecio', 'pecho']], [/face pull/i, ['hombro'], ['trapecio']],
+  [/c[ií]rculos de cadera/i, ['gluteo'], ['aductor_abductor']], [/tobillo/i, ['pantorrilla'], []], [/bisagra/i, ['femoral', 'gluteo'], ['erectores']],
+  [/flexi[oó]n y extensi[oó]n de codo/i, ['biceps', 'triceps'], []], [/activaci[oó]n de dorsal/i, ['espalda'], ['triceps']],
+  [/paso de banda/i, ['hombro'], ['pecho']], [/terminal de rodilla/i, ['cuadriceps'], []], [/movilidad de cuello/i, ['trapecio'], []],
+  [/marcha|bicicleta o caminata|caminata suave/i, [], ['cuadriceps', 'gluteo', 'pantorrilla']], [/puente de gl[uú]teo/i, ['gluteo'], ['femoral']],
+  [/colgarse|colgado/i, ['antebrazo'], ['espalda']],
+  [/pectoral/i, ['pecho'], ['hombro']], [/flexor de cadera/i, [], ['cuadriceps']], [/gl[uú]teo.*figura|figura.?4/i, ['gluteo'], []],
+  [/isquiotibiales/i, ['femoral'], []], [/aductor|mariposa/i, ['aductor_abductor'], []], [/cu[aá]driceps/i, ['cuadriceps'], []],
+  [/pantorrilla/i, ['pantorrilla'], []], [/b[ií]ceps y antebrazo/i, ['biceps', 'antebrazo'], []], [/tr[ií]ceps sobre la cabeza/i, ['triceps'], []],
+  [/tor[aá]cica/i, [], ['espalda', 'core']], [/90\s*\/\s*90 de cadera/i, ['gluteo'], ['aductor_abductor']], [/rotaci[oó]n externa/i, ['hombro'], []],
+  [/cuello y trapecio/i, ['trapecio'], []], [/mu[ñn]eca/i, ['antebrazo'], []],
+];
+/**
+ * El catálogo junta aductores y abductores en "aductor_abductor". Para pintar el que corresponde: 'abductor' en los que
+ * separan la pierna (abductora, caminata lateral, plancha lateral) y 'aductor' en el resto (aductora, sentadillas, prensa,
+ * donde trabaja el aductor mayor).
+ */
+export const zonaCadera = ej => (ej?.patron === 'abduccion' || ej?.patron === 'core_estabilidad' ? 'abductor' : 'aductor');
+
+/**
+ * Los músculos que se pintan en la animación de un paso: { primarios, secundarios }. Si el paso es un ejercicio del
+ * catálogo (un ensayo, una aproximación o uno agregado), los del ejercicio, con "ejercicio(id)"; si no, los del paso.
+ * Un paso sin músculos conocidos queda sin rojo.
+ */
+export function musculosDePaso(paso, ejercicio = () => null) {
+  const nombre = typeof paso === 'string' ? paso : paso?.name || '';
+  const id = typeof paso === 'object' && (paso.agregar_id || String(paso.clave || '').replace(/^(ensayo|aprox):/, ''));
+  const ej = id && MAPA[id] ? ejercicio(id) : null;
+  if (ej) return { primarios: ej.musculos_primarios || [], secundarios: ej.musculos_secundarios || [], cadera: zonaCadera(ej) };
+  const fila = MUSCULOS_PASOS.find(([re]) => re.test(nombre));
+  return { primarios: fila?.[1] || [], secundarios: fila?.[2] || [], ...(/aductor|mariposa/i.test(nombre) ? { cadera: 'aductor' } : {}) };
 }
 
 /** El cuadro que ocupa una animación en todas sus fases (metros), para encuadrarla sin cortar el cuerpo ni el equipo. */

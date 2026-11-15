@@ -20,7 +20,7 @@ import { proponer } from './cambios-ui.js';
 import { sufijo } from '../nucleo/unidades.js';
 import { progresoEjercicioHtml, enlazarProgresoEjercicio } from './progreso-ejercicio.js';
 import { montarAnimacion } from './animacion-ui.js';
-import { animacionDe } from '../nucleo/animaciones.js';
+import { animacionDe, zonaCadera } from '../nucleo/animaciones.js';
 import { cuerpoHtml } from './cuerpo.js';
 
 const VOLVER = { hoy: 'Hoy', semana: 'Semana', plan: 'Tu plan', progreso: 'Progreso', miplan: 'Mi plan', banco: 'Banco de ejercicios', ejercicio: 'Atrás' };
@@ -258,7 +258,7 @@ export function vistaFicha(ir, { id, desde = 'hoy', antes = null, vuelta = undef
     </div>
   </div>`;
 
-  if (anim) montarAnimacion($('ficha-animacion'), anim, { nombre: ej.nombre, musculos: { primarios: ej.musculos_primarios, secundarios: ej.musculos_secundarios } });
+  if (anim) montarAnimacion($('ficha-animacion'), anim, { nombre: ej.nombre, musculos: { primarios: ej.musculos_primarios, secundarios: ej.musculos_secundarios, cadera: zonaCadera(ej) } });
   // Banco ampliado: las instrucciones en español se cargan aparte, solo al abrir una de sus fichas.
   if (ej.extra) tecnicaExtra().then(t => { const ol = $('ficha-pasos'); if (ol && t[id]) ol.innerHTML = t[id].map(x => `<li>${esc(x)}</li>`).join(''); }).catch(() => {});
   const atras = () => (antes ? vistaFicha(ir, antes) : ir(desde, vuelta ?? (desde === 'hoy' ? { ej: id } : undefined)));

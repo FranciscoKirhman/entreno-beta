@@ -629,7 +629,7 @@ function filaPasosHtml(dia, f, tipo) {
     <div class="pasos-tabla-cab" aria-hidden="true"><span>Movimiento y previsto</span><span>Tiempo</span><span>Hecho</span></div>
     ${pasos.map((p, i) => { const parte = partePaso(p.name), clave = p.clave || `${i}|${p.name}`;
       return `<div class="pasos-tabla-fila${s.hechos[i] ? ' completa' : ''}">
-        <div><strong>${esc(parte.nombre)}</strong><small>${esc(parte.dosis || p.name)}</small><details><summary>Cómo hacerlo</summary><p class="pequeno">${esc(p.how || 'Sigue la dosis indicada en el plan.')}</p></details></div>
+        <div><strong>${esc(parte.nombre)}</strong><small>${esc(parte.dosis || p.name)}</small><details><summary>Cómo hacerlo</summary>${animacionDePaso(p) ? `<div class="paso-animacion" data-animar="${esc(parte.nombre)}" data-paso-nombre="${esc(p.name)}" data-paso-clave="${esc(p.clave || '')}" data-paso-ej="${esc(p.agregar_id || '')}"></div>` : ''}<p class="pequeno">${esc(p.how || 'Sigue la dosis indicada en el plan.')}</p></details></div>
         ${relojPaso(p, parte.nombre)}
         <button type="button" class="boton-icono paso-tabla-hecho" data-paso-tabla="${tipo}" data-paso-indice="${i}" aria-pressed="${s.hechos[i]}" aria-label="${esc(`${parte.nombre} hecho`)}">${s.hechos[i] ? icono('visto') : E.pasosOmitidos?.[f]?.[tipo]?.[clave] ? '×' : '○'}</button>
       </div>`; }).join('')}
