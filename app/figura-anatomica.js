@@ -4,6 +4,7 @@
 // el sistema de su hueso, así acompaña cualquier postura. Los colores y las clases (.an-cuerpo, .an-musculo, .an-pelo,
 // .an-sombra) están en app/estilos.css. Estilo elegido por Francisco el 13 de noviembre de 2026.
 import { curva, contornoMiembro, PERFILES, VARIANTES, equipoSvg } from './figura.js';
+import { columna } from '../nucleo/animacion-ejercicios.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const crear = (padre, nombre, attrs = {}) => { const el = document.createElementNS(NS, nombre); for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v); padre.append(el); return el; };
@@ -150,9 +151,11 @@ export function crearFiguraAnatomica(grupo, { escala = 100, variante = 'hombre',
 
     extremidades(lejos, p.lejos ? { ...p, puno: null, ...p.lejos } : p, p.lejos ? { x: 0, y: 0 } : { x: 0.02, y: 0.004 });
     // Tronco: t en metros desde la cadera; el pecho se abre un poco al tomar aire.
-    const Lt = Math.hypot(p.hombro.x - p.cadera.x, p.hombro.y - p.cadera.y) || 1e-9, wt0 = marco(p.cadera, p.hombro, -1);
+    // Con p.columna (abdominales que enrollan el tronco) el tronco sigue un arco; si no, es recto de la cadera al hombro.
+    const Lt = Math.hypot(p.hombro.x - p.cadera.x, p.hombro.y - p.cadera.y) || 1e-9, recto = marco(p.cadera, p.hombro, -1);
+    const wt0 = p.columna ? columna(p.cadera, p.columna.angulo, p.columna.flexion, p.columna.largo) : (u, v) => recto(u / Lt, v);
     const pecho = u => 1 + 0.045 * aire * Math.max(0, Math.sin(Math.PI * Math.min(1, Math.max(0, (u - 0.18) / 0.36))));
-    const wt = (u, v) => wt0(u / Lt, v > 0 ? v * pecho(u) : v);
+    const wt = (u, v) => wt0(u, v > 0 ? v * pecho(u) : v);
     const siluetaTronco = V.tronco.map(([u, v]) => wt(u, v));
     tronco.poner(siluetaTronco, wt);
     cuello.setAttribute('d', d(contornoMiembro(wt(0.46, -0.01), p.cabeza, PERFILES.cuello, -1)));

@@ -16,6 +16,24 @@ export const entre = (a, b, t) => a + (b - a) * t;
 /** Un punto a cierta distancia de otro, con el ángulo medido desde la vertical (positivo hacia adelante). */
 export const desde = (o, largo, angulo) => ({ x: o.x + largo * Math.sin(angulo), y: o.y + largo * Math.cos(angulo) });
 /** Aceleración y frenado suaves, como un movimiento controlado. */
+/**
+ * La columna que se curva (abdominales que enrollan el tronco): un arco que sale de la cadera con dirección "angulo"
+ * (grados desde la vertical, positivo hacia adelante, como desde) y gira "flexion" grados hacia el pecho a lo largo de
+ * "largo" metros. Devuelve (u, v) => punto: u en metros desde la cadera por la columna (fuera del arco sigue recto) y v
+ * en metros hacia el pecho (negativo, hacia la espalda). Sin flexión es el tronco recto de siempre.
+ */
+export function columna(cadera, angulo, flexion, largo) {
+  const a0 = rad(angulo), th = rad(flexion), k = Math.abs(th) > 1e-6 ? th / largo : 0;
+  const giro = u => a0 + k * Math.min(largo, Math.max(0, u));
+  const enArco = u => {
+    const w = Math.min(largo, Math.max(0, u));
+    const q = k ? { x: cadera.x + (Math.cos(a0) - Math.cos(a0 + k * w)) / k, y: cadera.y + (Math.sin(a0 + k * w) - Math.sin(a0)) / k } : { x: cadera.x + w * Math.sin(a0), y: cadera.y + w * Math.cos(a0) };
+    const a = giro(u), resto = u - w; // fuera del arco, recto en la dirección del extremo
+    return { x: q.x + resto * Math.sin(a), y: q.y + resto * Math.cos(a) };
+  };
+  return (u, v = 0) => { const q = enArco(u), a = giro(u); return { x: q.x + v * Math.cos(a), y: q.y - v * Math.sin(a) }; };
+}
+
 export const suave = t => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
 /**
