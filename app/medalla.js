@@ -2,7 +2,7 @@
 // récord, en una píldora arriba (como Hevy). Entra bajando, da un salto corto y se va sola a los 2 s o al tocarla.
 import { esc, IMAGENES } from './comun.js';
 import { srcInsignia, textoRecord } from './resumen.js';
-import { sinMovimiento } from './movimiento.js';
+import { sinMovimiento, chispas } from './movimiento.js';
 
 let cierre = null;
 
@@ -34,6 +34,7 @@ export function mostrarMedalla(records, nombre) {
       [{ translate: '-22px 8px', rotate: '-26deg', scale: '.7' }, { translate: '-7px -12px', rotate: '-8deg', scale: '1.12', offset: 0.42 }, { translate: '0 0', rotate: '3deg', scale: '1', offset: 0.72 }, { translate: '0 -3px', rotate: '0deg', offset: 0.86 }, { translate: '0 0', rotate: '0deg' }],
       { duration: 560, delay: 60, easing: 'cubic-bezier(.2,.7,.3,1)' });
   });
+  setTimeout(() => chispas(el.querySelector('.medalla-img') || el), 260); // cuando la medalla llega a su lugar
   navigator.vibrate?.(15);
   cierre = setTimeout(() => quitar(el), 2200);
 }

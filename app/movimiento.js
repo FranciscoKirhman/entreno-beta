@@ -36,6 +36,32 @@ export function entrarEnOrden(elementos, { paso = 60, desde = 40 } = {}) {
     { duration: 240, delay: desde + i * paso, fill: 'backwards' }));
 }
 
+/**
+ * Chispas: un puñado de puntos que salen del centro de "el", suben abriéndose y caen (una sola vez, menos de 1 s).
+ * Para lo que se celebra: un récord o la sesión completa. No tapa nada ni recibe toques.
+ */
+export function chispas(el, { cuantas = 12, fuerza = 1 } = {}) {
+  if (!el?.isConnected || sinMovimiento() || typeof document === 'undefined' || !document.body.animate) return;
+  const r = el.getBoundingClientRect();
+  if (!r.width) return;
+  const x = r.left + r.width / 2, y = r.top + r.height / 2;
+  const colores = ['var(--accent)', 'var(--good)', '#F5B83D', 'var(--serie-1)'];
+  for (let i = 0; i < cuantas; i++) {
+    const p = document.createElement('i');
+    const lado = 5 + (i % 3) * 2;
+    p.setAttribute('aria-hidden', 'true');
+    p.style.cssText = `position:fixed;left:${x - lado / 2}px;top:${y - lado / 2}px;width:${lado}px;height:${lado}px;border-radius:${i % 2 ? '50%' : '2px'};background:${colores[i % colores.length]};pointer-events:none;z-index:40`;
+    document.body.append(p);
+    const angulo = (i / cuantas) * Math.PI * 2 + Math.random() * 0.5, lejos = (34 + Math.random() * 38) * fuerza;
+    const dx = Math.cos(angulo) * lejos, dy = Math.sin(angulo) * lejos - 18 * fuerza;
+    // Sube y se abre rápido, después cae y se apaga: dos tramos, como algo lanzado.
+    p.animate([{ translate: '0 0', scale: '.4', opacity: 1 }, { translate: `${dx.toFixed(1)}px ${dy.toFixed(1)}px`, scale: '1', opacity: 1, offset: 0.45, easing: 'cubic-bezier(.4,0,1,1)' },
+      { translate: `${(dx * 1.25).toFixed(1)}px ${(dy + 46 * fuerza).toFixed(1)}px`, scale: '.5', rotate: `${i % 2 ? 140 : -140}deg`, opacity: 0 }],
+      { duration: 700 + Math.random() * 200, easing: 'cubic-bezier(.1,.8,.3,1)', fill: 'forwards' });
+    setTimeout(() => p.remove(), 1000); // por reloj: con la app en segundo plano la animación no avanza y los puntos quedarían
+  }
+}
+
 /** Entrada breve de una pose del asistente (al aparecer o al cambiar de pose). */
 export const entrarPose = el => animar(el, [{ opacity: 0, translate: '0 4px' }, { opacity: 1, translate: '0 0' }], { duration: 200 });
 
@@ -50,6 +76,7 @@ export async function celebrar(tarjeta, personaje, capas = null) {
   animar(brazo?.parentElement || personaje, [{ translate: '0 0' }, { translate: '0 -10px', offset: 0.35 }, { translate: '0 0', offset: 0.7 }, { translate: '0 -4px', offset: 0.85 }, { translate: '0 0' }],
     { duration: 600, delay: brazo ? 0 : 60 }); // en total, menos de 700 ms
   if (brazo) animar(brazo, GOLPE_PUNO, { duration: 600, easing: 'linear' });
+  chispas(brazo?.parentElement || personaje, { cuantas: 16, fuerza: 1.3 });
 }
 
 /** Cambia la pose por sus capas (cuerpo y brazo) cuando las dos imágenes ya se pueden dibujar; si tardan, null. */

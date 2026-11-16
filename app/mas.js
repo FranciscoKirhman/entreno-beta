@@ -33,7 +33,9 @@ function temaElegido() {
 }
 function elegirTema(t) {
   try { if (t === 'auto') localStorage.removeItem('entreno-tema'); else localStorage.setItem('entreno-tema', t); } catch { /* sin almacenamiento: vale solo hasta cerrar */ }
-  if (t === 'auto') delete document.documentElement.dataset.tema; else document.documentElement.dataset.tema = t;
+  const poner = () => { if (t === 'auto') delete document.documentElement.dataset.tema; else document.documentElement.dataset.tema = t; };
+  // El cambio de claro a oscuro se funde en vez de saltar, donde el navegador lo permite.
+  if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) document.startViewTransition(poner); else poner();
 }
 
 /** Versión de prueba: volver a hacer el cuestionario y el historial de ejemplo. */

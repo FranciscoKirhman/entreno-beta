@@ -68,3 +68,29 @@
   .cargando{animation:late-carga 1.2s var(--e-entra-sale) infinite alternate}
   @keyframes late-carga{from{opacity:.45}to{opacity:1}}
 }
+
+/* ── Detalles (docs/56-principios-ux.md, segunda parte) ── */
+/* Las hojas no arrastran la página de atrás al llegar a su tope. */
+.hoja{overscroll-behavior:contain}
+/* Filas que se deslizan de lado se detienen en una pieza entera, no a medias. */
+.hist-fila,.semanas,#coach-redaccion .coach-ideas{scroll-snap-type:x proximity}
+:is(.hist-fila,.semanas,#coach-redaccion .coach-ideas)>*{scroll-snap-align:start}
+/* Párrafos sin una palabra sola en la última línea. */
+p,li{text-wrap:pretty}
+/* El campo de la serie en que se escribe se enciende. */
+#vista-hoy .serie-contenedor .serie input:focus{box-shadow:inset 0 0 0 2px var(--accent),0 0 0 4px color-mix(in srgb,var(--accent) 22%,transparent)}
+
+@media (prefers-reduced-motion:no-preference){
+  /* Lo que se despliega crece hasta su alto en vez de aparecer de golpe (donde el navegador sabe hacerlo). */
+  @supports (interpolate-size:allow-keywords){
+    :root{interpolate-size:allow-keywords}
+    details::details-content{block-size:0;overflow-y:clip;transition:block-size var(--t-medio) var(--e-entra-sale),content-visibility var(--t-medio) allow-discrete}
+    details[open]::details-content{block-size:auto}
+  }
+  /* La cabecera de la sesión gana sombra al desplazar: se nota que la lista pasa por debajo. */
+  @supports (animation-timeline:scroll()){
+    .cab-sesion{animation:sombra-cabecera linear both;animation-timeline:scroll();animation-range:0 60px}
+    @keyframes sombra-cabecera{to{box-shadow:0 6px 18px rgba(0,0,0,.18)}}
+  }
+  ::view-transition-old(root),::view-transition-new(root){animation-duration:var(--t-medio)}
+}

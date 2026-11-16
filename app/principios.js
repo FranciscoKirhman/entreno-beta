@@ -45,6 +45,7 @@ function alTocar(ev) {
 let cifrasAntes = null, pendiente = 0;
 function revisarSesion() {
   pendiente = 0;
+  contarResumen();
   const hoy = document.getElementById('vista-hoy');
   const filas = hoy?.querySelector('[data-terminar]') ? [...hoy.querySelectorAll('.serie-contenedor > .serie')] : [];
   let ultima = -1;
@@ -62,13 +63,60 @@ function revisarSesion() {
   cifrasAntes = hoy ? ahora : null;
 }
 
+// ── Toque que se siente ─────────────────────────────────────────────────────────────────────────────
+// El iPhone no deja vibrar a una página, pero un interruptor del sistema sí da su golpecito al cambiar: uno escondido,
+// accionado dentro del mismo toque, hace sentir la serie marcada. En Android vibra 8 ms. Donde no existe, no pasa nada.
+let golpe = null;
+function sentir() {
+  try {
+    if (navigator.vibrate) { navigator.vibrate(8); return; }
+    if (!golpe) {
+      golpe = document.createElement('label');
+      golpe.setAttribute('aria-hidden', 'true');
+      golpe.style.cssText = 'position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none';
+      golpe.innerHTML = '<input type="checkbox" switch tabindex="-1">';
+      document.body.append(golpe);
+    }
+    golpe.click();
+  } catch { /* sin golpecito */ }
+}
+const CON_GOLPE = '#vista-hoy .check, .interruptor, .segmentos button';
+
+// ── Las cifras del resumen se cuentan desde cero ────────────────────────────────────────────────────
+let contado = '';
+function contarResumen() {
+  const cifras = [...document.querySelectorAll('#vista-resumen .cifras-resumen strong.num')];
+  const firma = cifras.map(c => c.dataset.final || c.textContent).join('|');
+  if (!cifras.length) { contado = ''; return; }
+  if (firma === contado || sinMovimiento()) return;
+  contado = firma;
+  const partes = cifras.map(c => {
+    const final = c.textContent, m = final.match(/^(\D*)(\d[\d.]*)(,\d+)?(.*)$/);
+    c.dataset.final = final;
+    return m ? { c, final, antes: m[1], n: Number(m[2].replace(/\./g, '') + (m[3] || '').replace(',', '.')), dec: m[3] ? m[3].length - 1 : 0, despues: m[4] } : null;
+  }).filter(Boolean);
+  const t0 = performance.now(), dura = 700;
+  const paso = t => {
+    const k = Math.max(0, Math.min(1, (t - t0) / dura)), e = 1 - (1 - k) ** 3;
+    for (const p of partes) {
+      if (!p.c.isConnected) return;
+      p.c.textContent = k < 1 ? p.antes + (p.n * e).toLocaleString('es-CL', { minimumFractionDigits: p.dec, maximumFractionDigits: p.dec }) + p.despues : p.final;
+    }
+    if (k < 1) requestAnimationFrame(paso);
+  };
+  requestAnimationFrame(paso);
+}
+
 if (typeof document !== 'undefined') {
+  document.addEventListener('click', ev => { if (ev.target.closest?.(CON_GOLPE) && !ev.target.closest('label[aria-hidden]')) sentir(); }, true);
   document.addEventListener('pointerdown', alTocar, { passive: true });
   for (const fin of ['pointerup', 'pointercancel', 'dragstart']) document.addEventListener(fin, soltar, { passive: true });
   addEventListener('blur', soltar);
   const app = document.getElementById('app');
   if (app && typeof MutationObserver === 'function') {
-    new MutationObserver(() => { if (!pendiente) pendiente = requestAnimationFrame(revisarSesion); })
+    // Al próximo cuadro; y por reloj si la pantalla no está dibujando (pestaña en segundo plano), para no quedar pegado.
+    const revisar = () => { if (pendiente) revisarSesion(); };
+    new MutationObserver(() => { if (pendiente) return; pendiente = 1; requestAnimationFrame(revisar); setTimeout(revisar, 150); })
       .observe(app, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
   }
 }
