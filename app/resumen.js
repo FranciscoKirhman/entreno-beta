@@ -200,9 +200,9 @@ export function vistaResumen(ir, { id, desde = null } = {}) {
     ${dice('celebra', n ? `¡${n} ${n === 1 ? 'récord' : 'récords'} hoy! Mira abajo cuáles.` : dia ? '¡Sesión terminada! Hiciste lo que pedía el plan.' : '¡Sesión registrada! Abajo está cada ejercicio.')}
     ${dia && !r.mal.length && IMAGENES.has('img/resumen/completa.webp') ? '<img class="medalla-completa" src="img/resumen/completa.webp" alt="Sesión completa" width="64" height="64" decoding="async">' : ''}
     <div class="cifras-resumen">
-      <button type="button" class="cifra cifra-editable" id="editar-duracion" aria-label="Duración: ${r.minutos ?? 'sin dato'} minutos. Corregir la duración y la hora"><strong class="num">${r.minutos == null ? 'sin dato' : r.minutos < 1 ? 'menos de 1' : `${r.minutos}`}</strong><span class="pequeno suave">minutos ${icono('lapiz', 'icono icono-chico')}</span></button>
+      <button type="button" class="cifra cifra-editable" id="editar-duracion" aria-label="Duración: ${r.minutos ?? 'sin dato'} minutos. Corregir la duración y la hora"><strong class="num">${r.minutos == null ? 'sin dato' : r.minutos < 1 ? 'menos de 1' : `${r.minutos}`}</strong><span class="pequeno suave">${r.minutos === 1 ? 'minuto' : 'minutos'} ${icono('lapiz', 'icono icono-chico')}</span></button>
       ${cifra(esc(volumenTexto(r.volumen)), 'levantados en total')}
-      ${cifra(r.seriesTrabajo, 'series de trabajo')}
+      ${cifra(r.seriesTrabajo, r.seriesTrabajo === 1 ? 'serie de trabajo' : 'series de trabajo')}
       ${cifra(r.ejercicios, r.ejercicios === 1 ? 'ejercicio' : 'ejercicios')}
     </div>
     ${descansosHtml(sesion)}

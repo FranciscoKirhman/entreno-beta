@@ -415,12 +415,14 @@ export function vistaPerfil(ir, armarPlan) {
 function campo(p) {
   const v = R()[p.id];
   const id = `p-${p.id}`;
+  // El enunciado es el nombre del campo para el lector de pantalla (antes los campos de texto, número y fecha no tenían).
+  const nombre = `aria-labelledby="enun-${p.id}"`;
   switch (p.tipo) {
-    case 'texto': return `<input type="text" id="${id}" data-p="${p.id}" value="${esc(v)}" autocomplete="off">`;
-    case 'texto_largo': return `<textarea id="${id}" data-p="${p.id}">${esc(v)}</textarea>`;
-    case 'numero': return `<input type="text" id="${id}" data-p="${p.id}" data-num value="${esc(coma(v))}" inputmode="decimal" autocomplete="off"> <span class="suave pequeno">${esc(p.unidad || '')}</span>`;
-    case 'fecha': return `<input type="date" id="${id}" data-p="${p.id}" value="${esc(v)}">`;
-    case 'una': return `<div class="opciones" role="radiogroup">${p.opciones.map(([val, t]) => `<label><input type="radio" name="${p.id}" data-p="${p.id}" value="${esc(val)}"${chk(v === val)}>${esc(t)}</label>`).join('')}</div>`;
+    case 'texto': return `<input type="text" id="${id}" ${nombre} data-p="${p.id}" value="${esc(v)}" autocomplete="off">`;
+    case 'texto_largo': return `<textarea id="${id}" ${nombre} data-p="${p.id}">${esc(v)}</textarea>`;
+    case 'numero': return `<input type="text" id="${id}" ${nombre} data-p="${p.id}" data-num value="${esc(coma(v))}" inputmode="decimal" autocomplete="off"> <span class="suave pequeno">${esc(p.unidad || '')}</span>`;
+    case 'fecha': return `<input type="date" id="${id}" ${nombre} data-p="${p.id}" value="${esc(v)}">`;
+    case 'una': return `<div class="opciones" role="radiogroup" ${nombre}>${p.opciones.map(([val, t]) => `<label><input type="radio" name="${p.id}" data-p="${p.id}" value="${esc(val)}"${chk(v === val)}>${esc(t)}</label>`).join('')}</div>`;
     case 'varias': return `<div class="chips">${p.opciones.map(([val, t]) => `<label><input type="checkbox" data-p="${p.id}" data-varias value="${esc(val)}"${chk((v || []).includes(val))}>${esc(t)}</label>`).join('')}</div>`;
     case 'si_no': return `<div class="opciones">${[[true, 'Sí'], [false, 'No']].map(([val, t]) => `<label><input type="radio" name="${p.id}" data-p="${p.id}" data-bool value="${val}"${chk(v === val)}>${t}</label>`).join('')}</div>`;
     case 'consentimiento': return `<div class="opciones"><label><input type="checkbox" data-p="${p.id}" data-consent${chk(v === true)}>${esc(p.texto)}</label></div>`;
@@ -582,7 +584,7 @@ export function vistaSeccion(ir) {
     <form id="seccion" novalidate>
       ${s.id === 'sobre_ti' ? `<section class="tarjeta"><h3>Tu foto de perfil</h3>${elegirAvatares()}</section>` : ''}
       ${ps.map(p => `<div class="pregunta" id="q-${p.id}">
-        ${p.tipo === 'consentimiento' ? '' : `<div class="enunciado">${esc(p.texto)}</div>`}
+        ${p.tipo === 'consentimiento' ? '' : `<div class="enunciado" id="enun-${p.id}">${esc(p.texto)}</div>`}
         ${p.ayuda ? `<p class="ayuda">${esc(p.ayuda)}</p>` : ''}
         ${campo(p)}
         ${p.por_que ? `<details class="extra"><summary>¿Por qué preguntamos esto?</summary><p class="por-que">${esc(p.por_que)}</p></details>` : ''}

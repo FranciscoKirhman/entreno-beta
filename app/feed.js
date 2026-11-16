@@ -106,7 +106,7 @@ function responder(t, opcion, volver, repintar, ir) {
       }
       await guardarRespuesta(p, opcion, efecto, original);
       if (E !== original) return;
-      if (efecto.tecnica) ir('ficha', { id: efecto.tecnica, desde: 'entrenar' }); else repintar();
+      if (efecto.tecnica) ir('ejercicio', { id: efecto.tecnica, desde: 'entrenar' }); else repintar();
     },
   });
 }
@@ -125,9 +125,9 @@ export function enlazarFeed(raiz, ir, repintar, feed) {
   raiz.querySelector('[data-feed-mas]')?.addEventListener('click', () => { estado().verTodo = true; repintar(); });
   const tarjetas = new Map(feed.nuevas.map(t => [t.id, t]));
   raiz.querySelectorAll('[data-feed-vista]').forEach(b => b.onclick = () => { const terminar = trasRetirar(b); vista(tarjetas.get(b.dataset.feedVista)); terminar(); });
-  raiz.querySelectorAll('[data-feed-ejercicio]').forEach(b => b.onclick = () => { const t = tarjetas.get(b.dataset.feedEjercicio); vista(t); ir('ficha', { id: t.ejercicio_id, desde: 'entrenar' }); });
+  raiz.querySelectorAll('[data-feed-ejercicio]').forEach(b => b.onclick = () => { const t = tarjetas.get(b.dataset.feedEjercicio); vista(t); ir('ejercicio', { id: t.ejercicio_id, desde: 'entrenar' }); });
   raiz.querySelectorAll('[data-feed-progreso]').forEach(b => b.onclick = () => { vista(tarjetas.get(b.dataset.feedProgreso)); ir('progreso'); });
-  raiz.querySelectorAll('[data-feed-ficha]').forEach(b => b.onclick = () => ir('ficha', { id: b.dataset.feedFicha, desde: 'entrenar' }));
+  raiz.querySelectorAll('[data-feed-ficha]').forEach(b => b.onclick = () => ir('ejercicio', { id: b.dataset.feedFicha, desde: 'entrenar' }));
   // Anotar no archiva la tarjeta: al volver muestra la comparación; queda hasta tocar Listo.
   raiz.querySelectorAll('[data-feed-medidas]').forEach(b => b.onclick = () => { elegirSeccionProgreso('medidas'); ir('progreso'); });
   raiz.querySelectorAll('[data-feed-responder]').forEach(b => b.onclick = () => responder(tarjetas.get(b.dataset.feedId), b.dataset.feedResponder, b, trasRetirar(b), ir));

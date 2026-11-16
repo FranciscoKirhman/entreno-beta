@@ -21,6 +21,9 @@ import { CAMBIOS_SEMANA_A_MEDIAS, cambioSemanaAMedias, confirmarSemanaAMedias } 
 
 const DIAS = { domingo: 0, lunes: 1, martes: 2, miercoles: 3, jueves: 4, viernes: 5, sabado: 6 };
 const ZONAS = { hombro: 'hombro', hombros: 'hombro', codo: 'codo', codos: 'codo', rodilla: 'rodilla', rodillas: 'rodilla', espalda: 'lumbar', lumbar: 'lumbar', cintura: 'lumbar', muneca: 'muneca', munecas: 'muneca', cuello: 'cuello', tobillo: 'tobillo', cadera: 'cadera' };
+/** La zona como se dice: "la rodilla", "la zona lumbar" (antes salía "el rodilla", "el muneca", "el lumbar"). */
+const ZONA_DICHA = { hombro: 'el hombro', codo: 'el codo', rodilla: 'la rodilla', lumbar: 'la zona lumbar', muneca: 'la muñeca', cuello: 'el cuello', tobillo: 'el tobillo', cadera: 'la cadera' };
+export const zonaDicha = z => ZONA_DICHA[z] || `la zona de ${z}`;
 const FAMILIAS = [[/pierna|piernas|tren inferior|gluteo|cuadriceps/, 'pierna'], [/torso|tren superior|pecho|espalda|brazos?/, 'torso'], [/empuje/, 'empuje'], [/tiron/, 'tiron']];
 
 /** Fecha mencionada en el texto: hoy, mañana, ayer, o un día de la semana (pasado o futuro según el verbo). */
@@ -174,15 +177,15 @@ export function responder(texto, ctx) {
         return { texto: `${c.mensaje} ${c.aviso}`, cuidado: c };
       }
       if (!q.zona) return { texto: '¿Dónde te duele? Hombro, codo, rodilla, espalda baja, muñeca, tobillo, cadera o cuello.' };
-      if (q.intensidad == null) return { texto: `¿Cuánto te duele el ${q.zona}, de 0 a 10? Escríbelo con la zona, por ejemplo: "Me duele el ${q.zona} 4/10". Antes de darte ejercicios necesito conocer la intensidad.` };
+      if (q.intensidad == null) return { texto: `¿Cuánto te duele ${zonaDicha(q.zona)}, de 0 a 10? Escríbelo con la zona, por ejemplo: "Me duele ${zonaDicha(q.zona)} 4/10". Antes de darte ejercicios necesito conocer la intensidad.` };
       const consentido = ctx.consentimientos?.cuidado_lesiones === true;
       const c = planDeCuidado({ zona: q.zona, intensidad: q.intensidad, consentimiento: consentido, ...contexto });
       const zonaHoy = dia ? dia.ejercicios.filter(e => indice.porId.get(e.ejercicio_id)?.carga_articular.includes(q.zona)) : [];
-      const opciones = zonaHoy.length ? [{ etiqueta: `Sacar de hoy lo que carga ${q.zona}`, accion: { tipo: 'quitar_zona_hoy', fecha: hoy, zona: q.zona } }] : [];
+      const opciones = zonaHoy.length ? [{ etiqueta: `Sacar de hoy lo que carga ${zonaDicha(q.zona)}`, accion: { tipo: 'quitar_zona_hoy', fecha: hoy, zona: q.zona } }] : [];
       if (c.tipo === 'derivar') return { texto: `${c.mensaje} ${c.aviso}`, opciones, cuidado: c };
-      if (c.tipo === 'requiere_consentimiento') return { texto: `Puedo darte ejercicios de cuidado para el ${q.zona}. Antes necesito que aceptes esto: "${c.texto}"`, opciones: [{ etiqueta: 'Acepto', accion: { tipo: 'consentir_cuidado', zona: q.zona } }, ...opciones], cuidado: c };
+      if (c.tipo === 'requiere_consentimiento') return { texto: `Puedo darte ejercicios de cuidado para ${zonaDicha(q.zona)}. Antes necesito que aceptes esto: "${c.texto}"`, opciones: [{ etiqueta: 'Acepto', accion: { tipo: 'consentir_cuidado', zona: q.zona } }, ...opciones], cuidado: c };
       if (c.tipo === 'requiere_contexto' || c.tipo === 'indicacion') return { texto: `${c.mensaje} ${c.aviso}`, opciones, cuidado: c };
-      return { texto: `Ejercicios de cuidado para el ${q.zona} (fase "${c.fase?.nombre}"): ${(c.ejercicios || []).map(e => `${e.nombre} ${e.dosis}`).join('; ')}. ${c.fase?.regla || ''} ${c.aviso}`, opciones, cuidado: c };
+      return { texto: `Ejercicios de cuidado para ${zonaDicha(q.zona)} (fase "${c.fase?.nombre}"): ${(c.ejercicios || []).map(e => `${e.nombre} ${e.dosis}`).join('; ')}. ${c.fase?.regla || ''} ${c.aviso}`, opciones, cuidado: c };
     }
     case 'por_que': case 'tecnica': {
       const e = dia?.ejercicios.find(x => x.ejercicio_id === q.ejercicio) || plan?.dias.flatMap(d => d.ejercicios).find(x => x.ejercicio_id === q.ejercicio);
@@ -333,7 +336,7 @@ export function calcularCambio(accion, ctx) {
         const quedan = x.ejercicios.filter(e => !carga(e));
         if (quedan.length) x.ejercicios = quedan.map((e, i) => ({ ...e, orden: i }));
       }
-      return { plan: nuevo, ir: 'hoy', propone: `Saldría${salen.length === 1 ? '' : 'n'} de hoy ${salen.map(e => e.nombre).join(', ')}, porque carga${salen.length === 1 ? '' : 'n'} la zona del ${accion.zona}.`, hecho: toda ? 'Listo: saqué lo que carga esa zona hasta el domingo.' : 'Listo: saqué de hoy lo que carga esa zona.' };
+      return { plan: nuevo, ir: 'hoy', propone: `Saldría${salen.length === 1 ? '' : 'n'} de hoy ${salen.map(e => e.nombre).join(', ')}, porque carga${salen.length === 1 ? '' : 'n'} ${zonaDicha(accion.zona)}.`, hecho: toda ? 'Listo: saqué lo que carga esa zona hasta el domingo.' : 'Listo: saqué de hoy lo que carga esa zona.' };
     }
     case 'descarga_temprana': {
       // La propuesta a quien entrena más duro de lo pedido (nucleo/sobrecarga.js): la semana que viene pasa a ser la

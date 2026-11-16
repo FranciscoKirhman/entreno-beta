@@ -32,6 +32,7 @@ import { sesionEnCurso } from './pantalla.js';
 import { fechaSesionActiva } from '../nucleo/sesion-activa.js';
 import { ejerciciosMencionados } from '../nucleo/ejercicios-mencionados.js';
 import { miniatura } from './imagenes.js';
+import { sinGuiones } from '../nucleo/sin-guiones.js';
 
 const borradores = new WeakMap(), decisiones = new WeakSet();
 let consultaActual = null, limpiarRedaccion = () => {}, irActual = null, estadoChatTexto = null, pidiendoIdeas = null;
@@ -892,10 +893,11 @@ export function mencionadosHtml(texto) {
 }
 
 /** El texto de la IA con formato simple y seguro: párrafos, **negrita** y listas con "- ". Todo se escapa antes. */
-export function textoRico(t) {
+export function textoRico(t, { conservarGuiones = false } = {}) {
   const linea = x => esc(x).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   const bloques = [];
-  for (const l of String(t || '').split('\n')) {
+  // Lo que escribe el coach sale sin guiones (nucleo/sin-guiones.js); lo que escribió la persona no se toca.
+  for (const l of (conservarGuiones ? String(t || '') : sinGuiones(t)).split('\n')) {
     const item = l.match(/^\s*(?:[-•*]|\d+[.)])\s+(.*)$/), titulo = l.match(/^\s*#{1,4}\s+(.*)$/);
     if (item) { const u = bloques.at(-1); if (u?.tipo === 'ul') u.items.push(item[1]); else bloques.push({ tipo: 'ul', items: [item[1]] }); }
     else if (titulo) bloques.push({ tipo: 'h', texto: titulo[1] });
@@ -917,7 +919,7 @@ function calendarioChatHtml(cal, i, activo) {
   const celda = d => {
     const num = Number(d.fecha.slice(8));
     const clase = d.letra ? 'cal-naranjo' : d.tipo === 'faltada' ? 'cal-rojo' : d.tipo === 'hecha' ? 'cal-verde' : d.tipo === 'sesion' || d.tipo === 'saltada' ? 'cal-gris' : d.fecha === f0 ? 'cal-azul' : 'rev-libre';
-    const marca = d.letra || (d.tipo === 'faltada' ? '×' : d.tipo === 'hecha' ? '✓' : d.tipo === 'sesion' ? '•' : d.tipo === 'saltada' ? '×' : d.tipo === 'no_puedo' ? '–' : d.fecha === f0 ? 'Hoy' : '');
+    const marca = d.letra || (d.tipo === 'faltada' ? '×' : d.tipo === 'hecha' ? '✓' : d.tipo === 'sesion' ? '•' : d.tipo === 'saltada' ? '×' : d.tipo === 'no_puedo' ? '·' : d.fecha === f0 ? 'Hoy' : '');
     const que = d.tipo === 'faltada' ? `${d.foco}, la que no hiciste` : d.foco ? `${d.foco}${d.tipo === 'hecha' ? ', hecha' : d.tipo === 'saltada' ? ', saltada' : ''}` : d.tipo === 'no_puedo' ? 'no puedes entrenar' : 'libre';
     const nombre = `${mayus(diaCorto(d.fecha))}: ${d.letra ? `opción ${d.letra}, ` : ''}${que}`;
     if (activo && d.elegible) return `<button type="button" class="cal-dia cal-elegible${d.letra ? ' cal-naranjo' : d.fecha === f0 ? ' cal-azul' : ''}" data-cal-elegir="${d.fecha}" data-msg="${i}" aria-label="${esc(`Ponerla el ${diaCorto(d.fecha)}${d.letra ? ` (opción ${d.letra})` : ''}`)}"><span>${num}</span><small>${esc(d.letra || (d.fecha === f0 ? 'Hoy' : '+'))}</small></button>`;
@@ -941,7 +943,7 @@ function burbuja(m, i) {
   const cabeza = etiqueta ? `<span class="tipo-mensaje">${icono(m.tipo === 'revision' || m.tipo === 'descarga' || m.tipo === 'semana_a_medias' ? 'calendario' : m.tipo === 'sesion' ? 'pesa' : 'lapiz', 'icono icono-chico')} ${etiqueta}${m.porEnviar ? ` · ${esperaTexto()}` : ''}</span>` : '';
   // Lo escrito sin señal: el mensaje queda a la vista, más tenue, con "En espera" debajo.
   const espera = m.porEnviar && !etiqueta ? `<span class="estado-envio">En espera · ${esperaTexto()}</span>` : '';
-  return `<div id="mensaje-chat-${i}" tabindex="-1" class="burbuja ${m.rol}${etiqueta ? ' automatico' : ''}${espera ? ' en-espera' : ''}${m.propuesta ? ' con-propuesta' : ''}">${cabeza}<div class="texto-chat">${m.rol === 'coach' || etiqueta ? textoRico(m.texto) : esc(m.texto)}${m.enlace ? ` <a class="enlace" href="${esc(m.enlace)}" target="_blank" rel="noopener">Ver videos</a>` : ''}</div>${m.rol === 'coach' ? mencionadosHtml(m.texto) : ''}${calendario}${semana}${m.propuesta ? propuestaChatHtml({ ...m.propuesta, estado: m.estadoPropuesta || m.propuesta.estado }) : ''}${opciones?.length ? opcionesHtml(opciones, i, ocupada) : ''}${m.deshacer ? '<button type="button" class="enlace deshacer-chat" data-deshacer>Deshacer</button>' : ''}${m.sugerencias?.length && i === E.chat.length - 1 ? `<div class="chips respuestas-rapidas" role="group" aria-label="Respuestas rápidas">${m.sugerencias.map(x => `<button type="button" class="sugerencia">${esc(x)}</button>`).join('')}</div>` : ''}</div>${espera}`;
+  return `<div id="mensaje-chat-${i}" tabindex="-1" class="burbuja ${m.rol}${etiqueta ? ' automatico' : ''}${espera ? ' en-espera' : ''}${m.propuesta ? ' con-propuesta' : ''}">${cabeza}<div class="texto-chat">${m.rol === 'coach' || etiqueta ? textoRico(m.texto, { conservarGuiones: m.rol !== 'coach' }) : esc(m.texto)}${m.enlace ? ` <a class="enlace" href="${esc(m.enlace)}" target="_blank" rel="noopener">Ver videos</a>` : ''}</div>${m.rol === 'coach' ? mencionadosHtml(m.texto) : ''}${calendario}${semana}${m.propuesta ? propuestaChatHtml({ ...m.propuesta, estado: m.estadoPropuesta || m.propuesta.estado }) : ''}${opciones?.length ? opcionesHtml(opciones, i, ocupada) : ''}${m.deshacer ? '<button type="button" class="enlace deshacer-chat" data-deshacer>Deshacer</button>' : ''}${m.sugerencias?.length && i === E.chat.length - 1 ? `<div class="chips respuestas-rapidas" role="group" aria-label="Respuestas rápidas">${m.sugerencias.map(x => `<button type="button" class="sugerencia">${esc(x)}</button>`).join('')}</div>` : ''}</div>${espera}`;
 }
 
 /**
@@ -1068,7 +1070,10 @@ async function enviar(texto, ir, archivo = null, { existente = null } = {}) {
   } else {
     // Sin cuenta o sin señal: se dice qué falta y lo escrito queda en el borrador.
     completada = false;
-    E.chat.push({ rol: 'coach', app: true, texto: r.texto, ...(!nube.usuarioId() ? { opciones: [{ etiqueta: 'Entrar a mi cuenta', accion: { tipo: 'ir', vista: 'mas' } }] } : {}) });
+    // El mismo mensaje enviado otra vez (lo escrito sigue en el campo): no se repite el par, solo se avisa.
+    const antes = E.chat.at(-3), aviso = E.chat.at(-2);
+    if (aviso?.app && aviso.texto === r.texto && antes?.rol === 'persona' && antes.texto === texto) { E.chat.pop(); avisar(r.texto); }
+    else E.chat.push({ rol: 'coach', app: true, texto: r.texto, ...(!nube.usuarioId() ? { opciones: [{ etiqueta: 'Entrar a mi cuenta', accion: { tipo: 'ir', vista: 'mas' } }] } : {}) });
   }
   if (completada && !existente) {
     if (borrador.texto.trim() === texto.trim()) borrador.texto = E.borradorChat = '';
