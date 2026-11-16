@@ -8,6 +8,7 @@ import { lugaresDe, incrementoPara } from './motor-plan.js';
 import { describir } from './sesion-viva.js';
 import { deshacer } from './superseries.js';
 import { TOPE_SERIES_SESION } from './tiempo-sesion.js';
+import { RIR_MAXIMO_ESCALA } from './esfuerzo.js';
 const nombre = (indice, id) => indice.porId.get(id)?.nombre || 'Ejercicio';
 const ZONAS = new Set(['hombro', 'codo', 'muneca', 'lumbar', 'cadera', 'rodilla', 'tobillo', 'cuello', 'espalda', 'pecho']);
 const MUSCULOS = { gluteo: 'glúteos', cuadriceps: 'cuádriceps', femoral: 'femorales', aductor_abductor: 'aductores y abductores', espalda: 'espalda', pecho: 'pecho', hombro: 'hombros', biceps: 'bíceps', triceps: 'tríceps' };
@@ -99,7 +100,7 @@ export function efectoSeguimiento(p, o, ctx) {
     if (!ej?.carga_articular?.includes(p.zona)) continue;
     const antes = `${ej.nombre}: ${describir(e)}`;
     if (o.efecto === 'aliviar') {
-      e.series = Math.min(e.series, 2); e.rir = Math.min(5, (e.rir || 0) + 2);
+      e.series = Math.min(e.series, 2); e.rir = Math.min(RIR_MAXIMO_ESCALA, (e.rir || 0) + 2);
       const paso = incrementoPara(ej, lugar);
       if (paso && Number(e.carga_kg) > paso && !esAsistido(ej)) e.carga_kg = Math.max(paso, Math.floor(Number(e.carga_kg) * 0.9 / paso) * paso);
     } else {

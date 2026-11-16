@@ -1275,13 +1275,20 @@ function enlazar(ir, dia) {
       subirACuenta('bienestar', f, subir).catch(() => {});
     }
   }
-  $('aplicar-bienestar')?.addEventListener('click', async () => {
+  $('aplicar-bienestar')?.addEventListener('click', async ev => {
     const b = E.bienestar[f];
+    // Un toque, una vez: antes la pantalla esperaba al servidor sin mostrar nada ("el botón no funciona", Francisco, 16 de
+    // noviembre de 2026) y un segundo toque en esa espera sumaba la reserva dos veces.
+    if (!b || b.aviso_visto) return;
+    ev.currentTarget.disabled = true;
     b.aviso_visto = true;
     const nuevo = structuredClone(E.plan);
     sesionDe(nuevo, f).ejercicios = ajustarSesion(sesionDe(nuevo, f).ejercicios, b.recomendacion).map((e, i) => ({ ...e, orden: i }));
-    await cambiarPlan(nuevo, `Sesión de hoy ajustada: ${TEXTO_RECOMENDACION[b.recomendacion]}`, nube);
+    // El plan del teléfono cambia al tiro y la pantalla lo muestra sin esperar al servidor, que confirma después.
+    const guardado = cambiarPlan(nuevo, `Sesión de hoy ajustada: ${TEXTO_RECOMENDACION[b.recomendacion]}`, nube);
     vistaHoy(ir);
+    const aviso = await guardado;
+    if (aviso) avisar(aviso);
   });
   $('normal-igual')?.addEventListener('click', () => { E.bienestar[f].aviso_visto = true; guardar(); vistaHoyMantener(ir); });
   document.querySelectorAll('[data-toma]').forEach(b => b.onclick = () => {

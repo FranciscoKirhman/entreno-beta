@@ -3,6 +3,7 @@
 // a 3 o alargarlo a 5. El motor de planes arma cada bloque con los ajustes de su fase.
 import { tendencia } from './bienestar.js';
 import { TEXTO_DESCARGA, comoDescarga, duracionSesion } from './motor-plan.js';
+import { RIR_MAXIMO_ESCALA } from './esfuerzo.js';
 
 const FASES = {
   base: { nombre: 'Base', enfoque: 'Aprender y asentar los movimientos con volumen moderado.', series: 0.9, reps: 0, rir: 1 },
@@ -141,7 +142,7 @@ export function aplicarFase(plan, bloque, { minutos = null, ritmo = null } = {})
         e.reps_min = Math.max(3, e.reps_min + bloque.reps);
         e.reps_max = Math.max(e.reps_min + 1, e.reps_max + bloque.reps);
       }
-      e.rir = Math.min(5, e.rir + bloque.rir);
+      e.rir = Math.min(RIR_MAXIMO_ESCALA, e.rir + bloque.rir);
     }
     while (minutos && duracionSesion(d, ritmo) > minutos) {
       const e = d.ejercicios.filter(x => x.series > antes.get(x)).sort((a, b) => b.prioridad - a.prioridad || b.orden - a.orden)[0];

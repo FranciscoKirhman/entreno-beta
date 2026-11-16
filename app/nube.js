@@ -2,6 +2,7 @@
 // navegador y nube.hay() devuelve false.
 import { CONFIG } from './config.js';
 import { aIso } from '../nucleo/hevy-csv.js';
+import { rirEnEscala } from '../nucleo/esfuerzo.js';
 import { sesionDelServidor } from '../nucleo/sincronizacion.js';
 import { planSinPropios, sinIdPropio } from '../nucleo/propios.js';
 import { planParaCuenta } from '../nucleo/plan-cuenta.js';
@@ -200,7 +201,7 @@ export async function cargarPlan() {
       lugar: d.lugares?.nombre || null, racional: d.racional, calentamiento: d.calentamiento, estiramiento: d.estiramiento, cardio: d.cardio,
       ejercicios: d.plan_ejercicios.sort((a, b) => a.orden - b.orden).map(e => ({
         ejercicio_id: e.ejercicio_id, orden: e.orden, prioridad: e.prioridad, series: e.series, reps_min: e.reps_min, reps_max: e.reps_max,
-        unidad: e.unidad, rir: e.rir, descanso_seg: e.descanso_seg, carga_kg: e.carga_kg == null ? null : Number(e.carga_kg), nota: e.nota,
+        unidad: e.unidad, rir: rirEnEscala(e.rir), descanso_seg: e.descanso_seg, carga_kg: e.carga_kg == null ? null : Number(e.carga_kg), nota: e.nota,
         rango_extendido: e.rango_extendido, ...(e.superserie ? { superserie: e.superserie } : {}),
       })),
     })),

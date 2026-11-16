@@ -8,6 +8,7 @@ import { sincronizarDatosTelefono, limpiarProgresionSesion } from './datos-nube.
 import { revisarSesionEnCuenta, alReponerSesion } from './sesion-nube.js';
 import { hevyAlAbrir } from './hevy-auto.js';
 import { conPropios, idsPropios } from '../nucleo/propios.js';
+import { reservaEnEscala } from '../nucleo/esfuerzo.js';
 import { baseParaGuardar, conservarPlanLocal, MENSAJE_CONFLICTO } from '../nucleo/base-plan.js';
 import { C, E, guardar, R, esc, $, hoy, indice, mostrarMensaje, empezarDeNuevo, entrarEjemplo, salirEjemplo, modoEjemplo, errorGuardado, errorRetornoCuenta, activarCuenta, perfilDePrueba, recuperarCopia, claveSesionCuenta, marcarCuentaRecuperada, EXTRAS, asegurarExtras, usaExtras } from './comun.js';
 import { prepararSesion, unirSesiones } from '../nucleo/sincronizacion.js';
@@ -265,6 +266,8 @@ function ir(vista, extra) {
   if (VISTAS_CON_PLAN.includes(vista) && E.plan?.bloqueado) { vistaBloqueada(); return; }
   if (vista === 'plan' && E.plan?.libre) vista = 'inicio'; // sin plan todavía: armarlo o seguir sin plan
   if (E.vista === 'eleccion' && vista !== 'eleccion') E.eleccionInicio = hoy(); // ya eligió (o se fue a otra pestaña)
+  // Un plan guardado antes del tope de reserva (16 de noviembre de 2026) puede traer 5: se deja en la escala al abrirlo.
+  if (E.plan !== planConImagenes && reservaEnEscala(E.plan)) guardar();
   if (E.plan !== planConImagenes) { planConImagenes = E.plan; guardarImagenesDelPlan(); } // plan nuevo: sus dibujos, para verlos sin señal
   const anterior = E.vista;
   // La sesión es una pantalla aparte: llegar a 'hoy' sin sesión en curso ni pedirla (al abrir la app, después de un

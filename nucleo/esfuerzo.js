@@ -16,6 +16,18 @@ export const RIR_MAXIMO_ESCALA = 10 - ESCALA_RPE[0];
 /** Sube la reserva de un ejercicio sin pasar del tope de la escala. Una reserva que ya estaba sobre el tope no baja.
  *  Antes el tope era 5: un día liviano sobre una semana que ya pedía 3 dejaba RPE 5, que la app no deja anotar. */
 export const masReserva = (rir, extra) => (rir == null ? rir : Math.max(Number(rir), Math.min(RIR_MAXIMO_ESCALA, Number(rir) + extra)));
+/** La reserva de un ejercicio del plan, dentro de la escala: 5 o más pasa a 4 ("4 o más"). */
+export const rirEnEscala = rir => (rir == null || !Number.isFinite(Number(rir)) ? rir : Math.min(RIR_MAXIMO_ESCALA, Number(rir)));
+/**
+ * Deja en la escala la reserva de cada ejercicio de un plan ya guardado (lo cambia en el mismo objeto y lo devuelve).
+ * Los planes armados antes del 16 de noviembre de 2026 podían traer 5 de reserva, que es RPE 5: la app no deja anotarlo
+ * y los pesos en gris salían calculados para eso. Devuelve cuántos ejercicios cambió en `plan` (0 si ninguno).
+ */
+export function reservaEnEscala(plan) {
+  let cambiados = 0;
+  for (const d of plan?.dias || []) for (const e of d.ejercicios || []) if (Number(e.rir) > RIR_MAXIMO_ESCALA) { e.rir = RIR_MAXIMO_ESCALA; cambiados++; }
+  return cambiados;
+}
 /** El RPE que pide el plan para mostrar en gris: nunca bajo la escala (una descarga con 5 de reserva se ve como 6). */
 export const rpeDelPlan = rir => (rir == null ? null : Math.min(10, Math.max(ESCALA_RPE[0], 10 - Number(rir))));
 

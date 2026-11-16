@@ -7,6 +7,7 @@ import { calentamientoDeSesion, minutosCalentamiento } from './calentamiento-ses
 import { conFatigaPrevia } from './fatiga-sesion.js';
 import { grupos } from './superseries.js';
 import { nivelAlcanza, tieneEquipo, articulacionesBloqueadas, cargaZonaBloqueada, esAsistido } from './catalogo.js';
+import { RIR_MAXIMO_ESCALA } from './esfuerzo.js';
 
 // ── Plantillas de día ───────────────────────────────────────────────────────
 // Cada hueco es [patrón, prioridad]. Prioridad 1 va primero y es lo último que se salta si falta tiempo.
@@ -275,11 +276,11 @@ export function prescripcion(ej, prioridad, d) {
   // serie de 10 a 20 minutos. Los demás (saltos de tijera, patinador) van por segundos: 2 a 3 minutos, como al
   // agregarlos desde el banco (nucleo/editar-sesion.js). Sin descanso después.
   if (ej.tipo === 'cardio') return modoCardio({ ejercicio_id: ej.id })
-    ? { series: 1, reps_min: 10, reps_max: 20, unidad: 'reps', rir: Math.min(5, rir), descanso_seg: 0 }
-    : { series: 1, reps_min: 120, reps_max: 180, unidad: 'seg', rir: Math.min(5, rir), descanso_seg: 0 };
+    ? { series: 1, reps_min: 10, reps_max: 20, unidad: 'reps', rir: Math.min(RIR_MAXIMO_ESCALA, rir), descanso_seg: 0 }
+    : { series: 1, reps_min: 120, reps_max: 180, unidad: 'seg', rir: Math.min(RIR_MAXIMO_ESCALA, rir), descanso_seg: 0 };
   // Transporte con peso (caminata del granjero): se mide en metros, con descanso de accesorio.
-  if (ej.patron === 'transporte') return { series: suave ? 2 : 3, reps_min: 20, reps_max: 40, unidad: 'm', rir: Math.min(5, rir), descanso_seg: 90 };
-  return { series, reps_min: reps[0], reps_max: reps[1], unidad: porTiempo ? 'seg' : 'reps', rir: Math.min(5, rir), descanso_seg: descanso };
+  if (ej.patron === 'transporte') return { series: suave ? 2 : 3, reps_min: 20, reps_max: 40, unidad: 'm', rir: Math.min(RIR_MAXIMO_ESCALA, rir), descanso_seg: 90 };
+  return { series, reps_min: reps[0], reps_max: reps[1], unidad: porTiempo ? 'seg' : 'reps', rir: Math.min(RIR_MAXIMO_ESCALA, rir), descanso_seg: descanso };
 }
 
 /**
@@ -774,7 +775,7 @@ export function generarPlan({ derivados: d, respuestas: r, indice, hoy, historia
           ...zonasCalentar.map(z => CALENTAMIENTO_ZONA[z]).filter(Boolean),
         ],
         cardio: cardio(x, i),
-        ejercicios: x.ejercicios.map(e => (descarga ? comoDescarga(e) : { ...e, rir: Math.min(5, conservadora ? Math.max(e.rir, 3) : rirSemana(e)) })),
+        ejercicios: x.ejercicios.map(e => (descarga ? comoDescarga(e) : { ...e, rir: Math.min(RIR_MAXIMO_ESCALA, conservadora ? Math.max(e.rir, 3) : rirSemana(e)) })),
       });
     }
   }
@@ -874,7 +875,7 @@ export function juntarSuperseries(lista) {
 export const TEXTO_DESCARGA = 'Semana de descarga: la mitad de las series y más repeticiones de reserva, con los mismos ejercicios. Sirve para llegar fresco al próximo bloque.';
 
 /** Una semana normal pasada a descarga: la mitad de las series y 2 repeticiones más de reserva. */
-export const comoDescarga = e => ({ ...e, series: Math.max(1, Math.ceil(e.series / 2)), rir: Math.min(5, e.rir + 2) });
+export const comoDescarga = e => ({ ...e, series: Math.max(1, Math.ceil(e.series / 2)), rir: Math.min(RIR_MAXIMO_ESCALA, e.rir + 2) });
 
 function racional(x, descarga) {
   if (descarga) return TEXTO_DESCARGA;

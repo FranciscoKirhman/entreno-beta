@@ -1,6 +1,7 @@
 // Cambios a un plan pedidos desde afuera: la IA de la persona (ChatGPT, Claude o Gemini, por conector
 // o copiando y pegando) o el coach Pro. Siempre se aplican sobre una copia y después pasa el validador.
 import { cargaSugerida, registrosParaCarga } from './motor-plan.js';
+import { RIR_MAXIMO_ESCALA } from './esfuerzo.js';
 
 export const TIPOS = ['reemplazar_ejercicio', 'cambiar_prescripcion', 'agregar_ejercicio', 'quitar_ejercicio', 'mover_dia'];
 
@@ -77,7 +78,7 @@ export function aplicarCambios(plan, cambios, indice, { historial = [], lugares 
         d.ejercicios.push(conCarga({
           ejercicio_id: c.ejercicio, nombre: indice.porId.get(c.ejercicio).nombre, orden: d.ejercicios.length,
           prioridad: c.prioridad ?? 3, series: ajustarSeries(c.series ?? 3), reps_min: c.reps_min ?? 8, reps_max: c.reps_max ?? 12,
-          unidad: 'reps', rir: Math.min(5, (c.rir ?? 2) + (descarga ? 2 : 0)), descanso_seg: 90, carga_kg: c.carga_kg ?? null, nota: c.motivo,
+          unidad: 'reps', rir: Math.min(RIR_MAXIMO_ESCALA, (c.rir ?? 2) + (descarga ? 2 : 0)), descanso_seg: 90, carga_kg: c.carga_kg ?? null, nota: c.motivo,
         }, d));
         tocados++;
         continue;
@@ -90,7 +91,7 @@ export function aplicarCambios(plan, cambios, indice, { historial = [], lugares 
       else {
         for (const k of ['reps_min', 'reps_max', 'carga_kg', 'prioridad']) if (c[k] !== undefined) e[k] = c[k];
         if (c.series !== undefined) e.series = ajustarSeries(c.series);
-        if (c.rir !== undefined) e.rir = Math.min(5, c.rir + (descarga ? 2 : 0));
+        if (c.rir !== undefined) e.rir = Math.min(RIR_MAXIMO_ESCALA, c.rir + (descarga ? 2 : 0));
       }
       d.ejercicios.forEach((x, i) => { x.orden = i; });
       tocados++;
