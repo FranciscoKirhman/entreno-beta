@@ -11,6 +11,14 @@ const SIGNIFICADO = {
   7: ['Moderado', 'Salían 3 más'], 6: ['Liviano', 'Salían 4 o más'],
 };
 
+/** La reserva más alta que se pide al aliviar una sesión: 4 ("4 o más"), el extremo fácil de la escala (RPE 6). */
+export const RIR_MAXIMO_ESCALA = 10 - ESCALA_RPE[0];
+/** Sube la reserva de un ejercicio sin pasar del tope de la escala. Una reserva que ya estaba sobre el tope no baja.
+ *  Antes el tope era 5: un día liviano sobre una semana que ya pedía 3 dejaba RPE 5, que la app no deja anotar. */
+export const masReserva = (rir, extra) => (rir == null ? rir : Math.max(Number(rir), Math.min(RIR_MAXIMO_ESCALA, Number(rir) + extra)));
+/** El RPE que pide el plan para mostrar en gris: nunca bajo la escala (una descarga con 5 de reserva se ve como 6). */
+export const rpeDelPlan = rir => (rir == null ? null : Math.min(10, Math.max(ESCALA_RPE[0], 10 - Number(rir))));
+
 /** La preferencia: 'rpe' salvo que la persona elija 'rir'. */
 export const modoEsfuerzo = respuestas => (respuestas?.escala_esfuerzo === 'rir' ? 'rir' : 'rpe');
 /** Los valores que se eligen, de más fácil a más difícil (en RIR: 4 o más, 3, 2,5… 0). */

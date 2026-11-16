@@ -1,3 +1,4 @@
+import { masReserva } from './esfuerzo.js';
 // Check-in diario de bienestar ("¿cómo estás hoy?") y su efecto en la sesión del día y en los ciclos.
 // Ver contenido/evidencia/08-sueno-y-cansancio.md.
 
@@ -32,15 +33,15 @@ export function evaluarDia(b) {
 
 export const TEXTO_RECOMENDACION = {
   normal: 'Sesión normal.',
-  liviana: 'Sesión liviana: mismos ejercicios y series, con 2 repeticiones más de reserva.',
+  liviana: 'Sesión liviana: mismos ejercicios y series, con hasta 2 repeticiones más de reserva.',
   corta: 'Sesión corta: solo lo principal, con una repetición más de reserva.',
   descanso_activo: 'Descanso activo: 20 a 30 minutos de caminata o bicicleta suave y movilidad. La sesión se mueve.',
 };
 
 /** Aplica la recomendación a los ejercicios de la sesión de hoy. */
 export function ajustarSesion(ejercicios, recomendacion) {
-  if (recomendacion === 'liviana') return ejercicios.map(e => ({ ...e, rir: Math.min(5, e.rir + 2) }));
-  if (recomendacion === 'corta') return ejercicios.filter(e => e.prioridad === 1).map(e => ({ ...e, rir: Math.min(5, e.rir + 1) }));
+  if (recomendacion === 'liviana') return ejercicios.map(e => ({ ...e, rir: masReserva(e.rir, 2) }));
+  if (recomendacion === 'corta') return ejercicios.filter(e => e.prioridad === 1).map(e => ({ ...e, rir: masReserva(e.rir, 1) }));
   if (recomendacion === 'descanso_activo') return [];
   return ejercicios;
 }

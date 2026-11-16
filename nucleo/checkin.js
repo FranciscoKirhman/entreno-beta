@@ -2,6 +2,7 @@
 // Las respuestas rápidas son reglas: funcionan en los dos planes y no gastan IA.
 import { nivelAlcanza, tieneEquipo, cargaZonaBloqueada } from './catalogo.js';
 import { duracionEstimada } from './motor-plan.js';
+import { masReserva } from './esfuerzo.js';
 
 /**
  * Señales de alarma en las respuestas de un check-in.
@@ -51,7 +52,7 @@ export function alternativas(ejercicioId, { indice, equipamiento, bloqueadas = n
 }
 
 /** Versión liviana: mismas series con 2 repeticiones más de reserva. */
-export const versionLiviana = ejercicios => ejercicios.map(e => ({ ...e, rir: Math.min(5, e.rir + 2) }));
+export const versionLiviana = ejercicios => ejercicios.map(e => ({ ...e, rir: masReserva(e.rir, 2) }));
 
 /** Versión corta: solo lo de prioridad 1. */
 export const versionCorta = ejercicios => ejercicios.filter(e => e.prioridad === 1);

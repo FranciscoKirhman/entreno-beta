@@ -66,7 +66,7 @@ import { editarDuracionGuardada, camposDuracionHtml, enlazarCamposDuracion, erro
 import { mostrarMedalla } from './medalla.js';
 import { montarAnimaciones } from './animacion-ui.js';
 import { animacionDePaso } from '../nucleo/animaciones.js';
-import { modoEsfuerzo, escalaDe, aRpe, deRpe, rpeDeSerie, textoEsfuerzo, significado } from '../nucleo/esfuerzo.js';
+import { modoEsfuerzo, escalaDe, aRpe, deRpe, rpeDeSerie, textoEsfuerzo, significado, rpeDelPlan } from '../nucleo/esfuerzo.js';
 import { enlazarOrdenArrastre } from './ordenar-arrastre.js';
 import { editarSesion } from '../nucleo/editar-sesion.js';
 import { proponerEdicion, ordenarSesion } from './editar-sesion-ui.js';
@@ -816,7 +816,7 @@ function cardioHtml(texto) {
  *  Al tocarla se abre la hoja para elegirlo, como en Hevy (abrirEsfuerzo). */
 function cajaEsfuerzo(id, i, r, e, etiqueta) {
   const modo = modoEsfuerzo(R()), rpe = rpeDeSerie(r);
-  const valor = deRpe(rpe, modo), delPlan = e.rir != null ? deRpe(10 - e.rir, modo) : null;
+  const valor = deRpe(rpe, modo), delPlan = e.rir != null ? deRpe(rpeDelPlan(e.rir), modo) : null;
   const sigla = modo === 'rir' ? 'RIR' : 'RPE';
   return `<button type="button" class="caja-rir caja-esfuerzo" data-esfuerzo="${id}" data-i="${i}" aria-haspopup="dialog" aria-label="${esc(`${sigla} de la serie ${etiqueta}: ${valor != null ? textoEsfuerzo(valor, modo) : `sin anotar${delPlan != null ? `, el plan pide ${textoEsfuerzo(delPlan, modo)}` : ''}`}. Cambiar`)}">${valor == null && delPlan == null ? icono('medidor', 'icono icono-medidor') : `<span class="rir-valor${valor == null ? ' gris' : ''}" aria-hidden="true">${esc(textoEsfuerzo(valor ?? delPlan, modo))}</span>`}</button>`;
 }
@@ -1262,7 +1262,8 @@ function enlazar(ir, dia) {
   function guardarBienestarDia(datos, { mantenerAbierto = false } = {}) {
     const r = evaluarDia({ ...datos, dia_dificil_ciclo: Boolean(estadoCiclo(R(), f)?.dificil) });
     const { aviso_visto, motivos, puntaje, recomendacion, enCuenta, ...limpio } = datos;
-    E.bienestar[f] = { ...limpio, puntaje: r.puntaje, recomendacion: r.recomendacion, motivos: r.motivos };
+    // Si la recomendación no cambió y ya se respondió (ajustar o hacerla normal), no se vuelve a ofrecer: aplicarla dos veces sumaba reserva dos veces.
+    E.bienestar[f] = { ...limpio, puntaje: r.puntaje, recomendacion: r.recomendacion, motivos: r.motivos, ...(aviso_visto && recomendacion === r.recomendacion ? { aviso_visto } : {}) };
     if (!datos.sintomas_ciclo?.length) delete E.bienestar[f]?.sintomas_ciclo;
     if (!respondioAlgo(E.bienestar[f])) delete E.bienestar[f];
     // Con sueño, ánimo y energía respondidos, la tarjeta se pliega sola.
@@ -1491,7 +1492,7 @@ function enlazar(ir, dia) {
     const sigla = modo === 'rir' ? 'RIR' : 'RPE', etiq = etiquetas(filasDe(f, e, k))[i];
     const kgVer = r.kg ?? sugerencia(e, lista, i).kg, repsVer = r.reps ?? repsObjetivoDe(e, kgVer, f, dia);
     let elegido = deRpe(rpeDeSerie(r), modo);
-    const delPlan = e.rir != null ? deRpe(10 - e.rir, modo) : null;
+    const delPlan = e.rir != null ? deRpe(rpeDelPlan(e.rir), modo) : null;
     // La caja de debajo se vuelve a dibujar al guardar. El cierre debe enfocar la caja nueva, no el nodo retirado.
     const volverALaCaja = { focus: () => document.querySelector(`#vista-hoy [data-esfuerzo="${CSS.escape(id)}"][data-i="${i}"]`)?.focus({ preventScroll: true }) };
     const completarEsfuerzo = () => {
