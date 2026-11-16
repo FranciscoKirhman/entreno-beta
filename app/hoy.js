@@ -1955,24 +1955,25 @@ function enlazar(ir, dia) {
     const g = grupos(dia.ejercicios)[k];
     const desc = g ? descansoVuelta(dia.ejercicios, g) : descansoDe(e, k);
     const lesiones = (R().lesiones || []).filter(l => l.activa !== false).map(l => l.region);
-    // El orden del menú de Hevy (ordenar, reemplazar, superserie, quitar) y después lo propio de Entreno.
+    // Trece opciones juntas no se leen: van en cinco grupos cortos (el ejercicio como en Hevy, sus series, cómo se
+    // hace, tus notas y, al final, lo que quita), cada uno con lo más usado primero.
     abrirHoja({
       titulo: nombreDe(e), volver: b,
       opciones: [
-        ...(dia.ejercicios.length > 1 ? [{ valor: 'ordenar', icono: icono('ajustes'), nombre: 'Ordenar ejercicios' }] : []),
-        ...(ej ? [{ valor: 'cambiar', icono: icono('cambiar'), nombre: 'Reemplazar ejercicio' }] : []),
-        ...(ej ? [{ valor: 'superserie', icono: icono('cadena'), nombre: g ? `Superserie ${g.letra}: cambiar o sacar` : 'Agregar a superserie' }] : []),
-        { valor: 'quitar-hoy', icono: icono('basurero'), nombre: 'Quitar de esta sesión', peligro: true },
-        ...(ej ? [{ valor: 'ficha', icono: icono('libro'), nombre: 'Cómo se hace y por qué' }] : []),
-        { valor: 'calentar', icono: icono('fuego'), clase: 'tipo-calentamiento', nombre: 'Agregar series de calentamiento' },
-        ...(ej ? [{ valor: 'nota-fija', icono: icono('lapiz'), nombre: E.notasFijas?.[e.ejercicio_id] ? 'Editar mi nota (aparece siempre)' : 'Nota para mí (aparece siempre)' }] : []),
-        { valor: 'descanso', icono: icono('reloj'), nombre: `Descanso: ${mmss(desc)}${g ? ' (al terminar la vuelta)' : ''}` },
-        ...(ej && ajuste('discos') && ej.equipamiento.some(q => q === 'barra_rack' || q === 'smith') ? [{ valor: 'discos', icono: icono('pesa'), nombre: 'Calculadora de discos' }] : []),
-        { valor: 'como', icono: icono('lapiz'), nombre: 'Cómo te fue' },
-        ...(ej && porReps(e) ? [{ valor: 'prioriza', icono: icono('objetivo'), nombre: 'Si no me salen las repeticiones' }] : []),
-        ...(ej ? [{ valor: 'video', icono: icono('video'), nombre: 'Ver videos de técnica' }] : []),
-        { valor: 'preguntar', icono: icono('chat'), nombre: `Preguntar a ${nombreAsistente()}` },
-        ...(ej ? [{ valor: 'nunca', icono: icono('cerrar'), clase: 'quitar', nombre: 'No volver a hacer este ejercicio', peligro: true }] : []),
+        ...(dia.ejercicios.length > 1 ? [{ grupo: 1, valor: 'ordenar', icono: icono('ajustes'), nombre: 'Ordenar ejercicios' }] : []),
+        ...(ej ? [{ grupo: 1, valor: 'cambiar', icono: icono('cambiar'), nombre: 'Reemplazar ejercicio' }] : []),
+        ...(ej ? [{ grupo: 1, valor: 'superserie', icono: icono('cadena'), nombre: g ? `Superserie ${g.letra}: cambiar o sacar` : 'Agregar a superserie' }] : []),
+        { grupo: 2, valor: 'calentar', icono: icono('fuego'), clase: 'tipo-calentamiento', nombre: 'Agregar series de calentamiento' },
+        { grupo: 2, valor: 'descanso', icono: icono('reloj'), nombre: `Descanso: ${mmss(desc)}${g ? ' (al terminar la vuelta)' : ''}` },
+        ...(ej && ajuste('discos') && ej.equipamiento.some(q => q === 'barra_rack' || q === 'smith') ? [{ grupo: 2, valor: 'discos', icono: icono('pesa'), nombre: 'Calculadora de discos' }] : []),
+        ...(ej ? [{ grupo: 3, valor: 'ficha', icono: icono('libro'), nombre: 'Cómo se hace y por qué' }] : []),
+        ...(ej ? [{ grupo: 3, valor: 'video', icono: icono('video'), nombre: 'Ver videos de técnica' }] : []),
+        ...(ej && porReps(e) ? [{ grupo: 3, valor: 'prioriza', icono: icono('objetivo'), nombre: 'Si no me salen las repeticiones' }] : []),
+        { grupo: 3, valor: 'preguntar', icono: icono('chat'), nombre: `Preguntar a ${nombreAsistente()}` },
+        { grupo: 4, valor: 'como', icono: icono('lapiz'), nombre: 'Cómo te fue' },
+        ...(ej ? [{ grupo: 4, valor: 'nota-fija', icono: icono('lapiz'), nombre: E.notasFijas?.[e.ejercicio_id] ? 'Editar mi nota (aparece siempre)' : 'Nota para mí (aparece siempre)' }] : []),
+        { grupo: 5, valor: 'quitar-hoy', icono: icono('basurero'), nombre: 'Quitar de esta sesión', peligro: true },
+        ...(ej ? [{ grupo: 5, valor: 'nunca', icono: icono('cerrar'), clase: 'quitar', nombre: 'No volver a hacer este ejercicio', peligro: true }] : []),
       ],
       alElegir: v => {
         if (v === 'ficha') ir('ejercicio', { id: e.ejercicio_id, desde: 'hoy' });

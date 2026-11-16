@@ -1,0 +1,70 @@
+/* Principios de movimiento y uso (va al final). Tiempos cortos, entrada y salida suaves, un resorte para lo que
+   llega a su lugar. Con "reducir movimiento" nada de esto se mueve. Los dibujos del asistente no se deforman. */
+:root{--t-toque:110ms;--t-rapido:160ms;--t-medio:240ms;--t-lento:340ms;
+  --e-sale:cubic-bezier(.2,.7,.3,1);--e-entra-sale:cubic-bezier(.4,0,.2,1);--e-resorte:cubic-bezier(.3,1.45,.5,1)}
+
+@media (prefers-reduced-motion:no-preference){
+  /* Serie marcada: se encoge un poco (toma impulso), salta más allá de su tamaño y se asienta. */
+  #vista-hoy .check.recien{animation:marcar-serie .16s ease-out,saltar-visto var(--t-lento) var(--e-sale)}
+  @keyframes saltar-visto{0%{scale:1}22%{scale:.8 .86}58%{scale:1.16 1.2}80%{scale:.97}100%{scale:1}}
+
+  /* Pestaña elegida: la píldora se desliza hasta ella y se pasa un poco antes de quedar; su ícono da un salto corto. */
+  .nav-inferior::before{content:"";position:absolute;z-index:0;top:4px;bottom:4px;left:4px;width:calc((100% - 8px) / 4);border-radius:999px;
+    background:color-mix(in srgb,var(--ink) 9%,transparent);opacity:0;transition:translate var(--t-lento) var(--e-resorte),opacity var(--t-rapido)}
+  .nav-inferior:has(button[aria-current="true"])::before{opacity:1}
+  .nav-inferior:has(button:nth-child(2)[aria-current="true"])::before{translate:100% 0}
+  .nav-inferior:has(button:nth-child(3)[aria-current="true"])::before{translate:200% 0}
+  .nav-inferior:has(button:nth-child(4)[aria-current="true"])::before{translate:300% 0}
+  .nav-inferior button{position:relative;z-index:1}
+  .nav-inferior button[aria-current="true"]{background:none}
+  .nav-inferior button[aria-current="true"] svg{animation:salto-pestana var(--t-lento) var(--e-sale)}
+  @keyframes salto-pestana{0%{scale:1}30%{scale:1.08 .86}62%{scale:.95 1.12;translate:0 -2px}100%{scale:1}}
+  .nav-inferior button:active svg{scale:.9;transition:scale var(--t-toque)}
+
+  /* Medalla de récord: llega con resorte. */
+  .medalla-record{transition:opacity var(--t-medio) ease-out,translate var(--t-lento) var(--e-resorte)}
+}
+
+/* Zonas de toque de 44 px sin cambiar el tamaño que se ve. */
+.campana,.coach-enviar,.coach-plus,button.coach-avatar{position:relative}
+.campana::after{content:"";position:absolute;inset:-7px}
+.coach-enviar::after{content:"";position:absolute;inset:-6px}
+.coach-plus::after,button.coach-avatar::after{content:"";position:absolute;inset:-2px}
+.segmentos button{min-height:44px}
+#vista-hoy .serie :is(.tipo-serie,.check,.caja-esfuerzo){height:44px;min-height:44px}
+#vista-hoy .serie input{min-height:44px}
+.cab-sesion-principal{min-height:44px}
+.demo{position:relative;overflow:visible}
+.demo::after{content:"";position:absolute;inset:-11px -4px}
+
+/* La serie que sigue (app/principios.js): un solo lugar donde mirar. El visto toma el color de acción. */
+#vista-hoy .serie.sigue{background:color-mix(in srgb,var(--accent) 9%,transparent)}
+#vista-hoy .serie.sigue .check{background:var(--accent-soft);color:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent)}
+#vista-hoy .serie.sigue input{box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--accent) 55%,var(--border))}
+.cab-sesion-cifras strong{transform-origin:0 60%}
+
+/* Menús largos en grupos cortos: un espacio entre grupo y grupo, no trece filas seguidas. */
+.opciones-hoja li.grupo-nuevo{border-top:8px solid var(--bg)}
+
+/* Profundidad: lo que flota sobre la página tiene sombra según su altura; el botón principal tiene cuerpo y se
+   hunde al apretarlo. */
+:root{--alto-1:0 1px 2px rgba(0,0,0,.12),0 2px 6px rgba(0,0,0,.08);--alto-3:0 -6px 30px rgba(0,0,0,.22)}
+.boton.primario:not(:disabled),.cab-sesion-principal{box-shadow:var(--alto-1),inset 0 1px 0 rgba(255,255,255,.18)}
+.boton.primario:active:not(:disabled),.cab-sesion-principal:active{box-shadow:inset 0 1px 3px rgba(0,0,0,.22)}
+/* La hoja proyecta sombra y su fondo sigue hacia abajo, para que el rebote al abrir no deje ver lo de atrás. */
+.hoja-fondo.abierta .hoja{box-shadow:var(--alto-3),0 60px 0 var(--bg)}
+
+@media (prefers-reduced-motion:no-preference){
+  /* La hoja sube rápido, se pasa apenas y se asienta; al cerrar parte lento y acelera (como estaba). */
+  .hoja-fondo.abierta .hoja{transition:transform var(--t-lento) cubic-bezier(.22,1.18,.36,1)}
+  .hoja-fondo.cerrando .hoja{transition:transform .2s ease-in}
+  .boton.primario,.cab-sesion-principal{transition:box-shadow var(--t-toque) ease-out,background-color var(--t-rapido),filter var(--t-toque)}
+  /* Las barras de avance parten y llegan suave, no a velocidad pareja. */
+  .avance .medidor i,.cab-avance .medidor i{transition:width var(--t-lento) var(--e-entra-sale)}
+  .serie.sigue{transition:background-color var(--t-medio) var(--e-entra-sale)}
+  /* Lo que se abre con una flecha gira con un pequeño rebote. */
+  .carpeta-flecha,.banco-chevron{transition-timing-function:var(--e-resorte)}
+  /* Cargando: late despacio, para que se note que la app está viva antes de 400 ms. */
+  .cargando{animation:late-carga 1.2s var(--e-entra-sale) infinite alternate}
+  @keyframes late-carga{from{opacity:.45}to{opacity:1}}
+}

@@ -46,6 +46,7 @@ import * as nube from './nube.js';
 import { CONFIG } from './config.js';
 import { sinSenalHtml } from './estados-visuales.js';
 import { entrarVista, entrarPose, dibujarGraficos } from './movimiento.js';
+import './principios.js';
 import { instalarAtras, accionAtras, esVuelta, recordarPantalla, alturaDe, volviendoConGesto } from './atras.js';
 import { alOcultar } from './comun.js';
 import { fechaSesionActiva } from '../nucleo/sesion-activa.js';

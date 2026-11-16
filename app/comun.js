@@ -417,10 +417,13 @@ export async function cambiarPlan(plan, mensaje, nube) {
   }
 }
 
-/** Número escrito por la persona: acepta coma o punto ("42,5"). Vacío o inválido → null. */
+/** Número escrito por la persona. Recibe con manga ancha lo que la gente escribe de verdad: "42,5", "42.5", " 42,5 kg",
+ *  "1.250,5" o "1,250.5". Vacío o inválido → null. */
 export function numero(v) {
-  const t = String(v ?? '').trim().replace(',', '.');
+  let t = String(v ?? '').replace(/\s+/g, '').replace(/(kgs?|lbs?|min|km|reps?)\.?$/i, '');
   if (t === '') return null;
+  if (t.includes(',') && t.includes('.')) t = t.lastIndexOf(',') > t.lastIndexOf('.') ? t.replace(/\./g, '').replace(',', '.') : t.replace(/,/g, '');
+  else t = t.replace(',', '.');
   const n = Number(t);
   return Number.isFinite(n) ? n : null;
 }

@@ -30,8 +30,9 @@ export function mostrarMedalla(records, nombre) {
   requestAnimationFrame(() => {
     el.classList.add('visible');
     if (!sinMovimiento()) el.querySelector('.medalla-img')?.animate(
-      [{ translate: '0 0' }, { translate: '0 -12px', offset: 0.35 }, { translate: '0 0', offset: 0.7 }, { translate: '0 -4px', offset: 0.85 }, { translate: '0 0' }],
-      { duration: 500, delay: 80, easing: 'cubic-bezier(.2,.7,.3,1)' });
+      // Llega en arco desde la izquierda, girando, se pasa un poco y se asienta.
+      [{ translate: '-22px 8px', rotate: '-26deg', scale: '.7' }, { translate: '-7px -12px', rotate: '-8deg', scale: '1.12', offset: 0.42 }, { translate: '0 0', rotate: '3deg', scale: '1', offset: 0.72 }, { translate: '0 -3px', rotate: '0deg', offset: 0.86 }, { translate: '0 0', rotate: '0deg' }],
+      { duration: 560, delay: 60, easing: 'cubic-bezier(.2,.7,.3,1)' });
   });
   navigator.vibrate?.(15);
   cierre = setTimeout(() => quitar(el), 2200);

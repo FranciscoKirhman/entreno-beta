@@ -95,7 +95,7 @@ export function abrirHoja({ titulo, nota = '', notaOculta = false, contenido = '
     <h3 id="hoja-titulo">${esc(titulo)}${nota && notaOculta ? ' <button type="button" class="ayuda ayuda-titulo" data-ayuda-titulo aria-expanded="false" aria-label="¿Qué es?">?</button>' : ''}</h3>
     ${nota ? `<p class="nota-hoja pequeno${nota.length > 90 && !notaOculta ? ' larga' : ' suave'}"${notaOculta ? ' hidden' : ''}>${esc(nota)}</p>` : ''}
     ${contenido}
-    <ul class="opciones-hoja">${opciones.map(o => `<li>
+    <ul class="opciones-hoja">${opciones.map((o, i) => `<li${i && o.grupo !== opciones[i - 1].grupo ? ' class="grupo-nuevo"' : ''}>
       <div class="opcion-hoja">
         <button type="button" class="elegir${o.peligro ? ' peligro' : ''}" data-elegir="${esc(o.valor)}">${o.imagen ? `<img class="imagen-opcion" src="${esc(o.imagen)}" alt="" width="64" height="64">` : o.icono ? `<span class="letra icono-hoja ${esc(o.clase || '')}">${o.icono}</span>` : `<span class="letra ${esc(o.clase || '')}">${esc(o.letra)}</span>`}${o.detalle ? `<span class="opcion-textos"><span>${esc(o.nombre)}</span><small>${esc(o.detalle)}</small></span>` : esc(o.nombre)}</button>
         ${o.ayuda ? `<button type="button" class="ayuda" data-ayuda="${esc(o.valor)}" aria-expanded="false" aria-label="¿Qué es ${esc(o.nombre.toLowerCase())}?">?</button>` : ''}
